@@ -1,0 +1,39 @@
+# Render Infrastructure as Code (Blueprint)
+# https://render.com/docs/blueprint-spec
+# All future updates to this Blueprint file will be synced automatically on Render.
+
+services:
+  # Node.js Web Service (Full-stack server with /healthz check and SPA serving)
+  - type: web
+    name: nodex-terminal
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+  # Static Site Alternative (Zero-cost CDN static hosting option)
+  - type: web
+    name: nodex-terminal-static
+    runtime: static
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
