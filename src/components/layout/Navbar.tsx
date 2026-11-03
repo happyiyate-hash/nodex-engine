@@ -8,6 +8,7 @@ import {
   Radio,
   Zap,
 } from 'lucide-react';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 
 export const Navbar: React.FC = () => {
   const {
@@ -94,6 +95,9 @@ export const Navbar: React.FC = () => {
           {isStreamPaused ? <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" /> : <Pause className="w-3.5 h-3.5" />}
           <span className="hidden sm:inline">{isStreamPaused ? 'PAUSED' : 'LIVE'}</span>
         </button>
+
+        {/* PWA Install Button */}
+        <PWAInstallButton variant="nav" />
 
         {/* Quick Settings */}
         <button

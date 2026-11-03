@@ -13,6 +13,7 @@ import {
   Power,
   ShieldAlert,
 } from 'lucide-react';
+import { PWAInstallButton } from '../common/PWAInstallButton';
 
 export const MobileNav: React.FC = () => {
   const {
@@ -64,6 +65,11 @@ export const MobileNav: React.FC = () => {
               >
                 <X className="w-3.5 h-3.5" />
               </button>
+            </div>
+
+            {/* PWA Install Promotion in Mobile Drawer */}
+            <div className="py-1">
+              <PWAInstallButton variant="drawer" />
             </div>
 
             {/* Navigation links in drawer */}
