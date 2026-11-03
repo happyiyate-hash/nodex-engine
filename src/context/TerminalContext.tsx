@@ -503,11 +503,16 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSelectedToken(null);
   };
 
+  const navigateToTab = (tab: NavigationTab) => {
+    setSelectedToken(null);
+    setActiveTab(tab);
+  };
+
   return (
     <TerminalContext.Provider
       value={{
         activeTab,
-        setActiveTab,
+        setActiveTab: navigateToTab,
         engineStatus,
         summary,
         positions,

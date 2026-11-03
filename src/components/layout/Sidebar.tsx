@@ -31,6 +31,8 @@ export const Sidebar: React.FC = () => {
     toggleEngine,
     toggleStrategy,
     settings,
+    selectedToken,
+    closeTokenDetail,
   } = useTerminal();
 
   const openPositionsCount = positions.filter((p) => p.status === 'OPEN').length;
@@ -88,12 +90,15 @@ export const Sidebar: React.FC = () => {
         </div>
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeTab === item.id;
+          const isActive = activeTab === item.id && !selectedToken;
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-mono font-medium transition-all ${
+              onClick={() => {
+                closeTokenDetail();
+                setActiveTab(item.id);
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-mono font-medium cursor-pointer touch-manipulation active:scale-[0.98] transition-all ${
                 isActive
                   ? 'glass-card border-white/20 text-white shadow-sm'
                   : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.04]'

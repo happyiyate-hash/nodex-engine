@@ -16,13 +16,20 @@ export const Navbar: React.FC = () => {
     isStreamPaused,
     toggleStreamPause,
     setActiveTab,
+    closeTokenDetail,
   } = useTerminal();
 
   return (
     <header className="h-14 border-b border-white/[0.08] backdrop-blur-xl bg-[#0c0c0c]/80 px-4 md:px-6 flex items-center justify-between select-none shrink-0 z-30 sticky top-0 w-full">
       {/* Brand Zone */}
       <div className="flex items-center gap-3 shrink-0">
-        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('overview')}>
+        <div
+          className="flex items-center gap-2.5 cursor-pointer touch-manipulation"
+          onClick={() => {
+            closeTokenDetail();
+            setActiveTab('overview');
+          }}
+        >
           <div className="w-7 h-7 rounded-lg glass-icon flex items-center justify-center font-bold text-xs text-white font-mono shadow-inner">
             NX
           </div>
@@ -90,10 +97,13 @@ export const Navbar: React.FC = () => {
 
         {/* Quick Settings */}
         <button
-          onClick={() => setActiveTab('settings')}
+          onClick={() => {
+            closeTokenDetail();
+            setActiveTab('settings');
+          }}
           title="Engine Settings & Rust Backend Integration"
           aria-label="Engine Settings"
-          className="p-2 rounded-lg glass-icon text-[#8e8e93] hover:text-white transition-colors"
+          className="p-2 rounded-lg glass-icon text-[#8e8e93] hover:text-white transition-colors cursor-pointer touch-manipulation"
         >
           <Sliders className="w-4 h-4" />
         </button>
