@@ -1,9 +1,8 @@
-# Render Infrastructure as Code (Blueprint)
-# https://render.com/docs/blueprint-spec
-# All future updates to this Blueprint file will be synced automatically on Render.
+# Render Blueprint for the NodeX full-stack terminal.
+# This app runs an Express server and serves the Vite-built React frontend.
+# Keep this as one Web Service; do not add a Static Site for the same app.
 
 services:
-  # Node.js Web Service (Full-stack server with /healthz check and SPA serving)
   - type: web
     name: nodex-terminal
     runtime: node
@@ -15,24 +14,5 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
-
-  # Static Site Alternative (Zero-cost CDN static hosting option)
-  - type: web
-    name: nodex-terminal-static
-    runtime: static
-    plan: free
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: SAMEORIGIN
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+      - key: NODE_VERSION
+        value: 22
