@@ -1,0 +1,6 @@
+{
+  "name": "NodeX Terminal",
+  "description": "Institutional Solana token monitoring and automated paper-trading terminal with real-time event streaming and risk engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
