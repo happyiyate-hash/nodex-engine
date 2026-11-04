@@ -85,14 +85,14 @@ export const SettingsPage: React.FC = () => {
             </span>
           </div>
           <p className="text-xs font-mono text-[#737373] mt-0.5">
-            Configure Solana RPC endpoints, Axum WebSocket listeners, and execution invariants
+            Configure your deployed Rust API and WebSocket connection
           </p>
         </div>
 
         {savedNotice && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-950/40 border border-emerald-700/50 text-emerald-300 text-xs font-mono">
             <Check className="w-3.5 h-3.5" />
-            <span>Connection preferences updated</span>
+            <span>Connection URLs saved in this browser</span>
           </div>
         )}
       </div>
@@ -205,38 +205,37 @@ export const SettingsPage: React.FC = () => {
         {/* Inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
           <div className="space-y-1.5">
-            <label className="text-[#8e8e93] text-[11px] uppercase">REST API Base URL</label>
+            <label className="text-[#8e8e93] text-[11px] uppercase">Rust Backend HTTPS Base URL</label>
             <input
               type="text"
               value={backendUrl}
               onChange={(e) => setBackendUrl(e.target.value)}
-              placeholder="/api/v1 or http://localhost:8080/api/v1"
+              placeholder="https://your-backend.example.com"
               className="w-full glass-panel-subtle rounded-xl px-3 py-2 text-white focus:outline-none focus:border-white/20"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[#8e8e93] text-[11px] uppercase">WebSocket URL</label>
+            <label className="text-[#8e8e93] text-[11px] uppercase">Rust Backend WebSocket WSS URL</label>
             <input
               type="text"
               value={wsUrl}
               onChange={(e) => setWsUrl(e.target.value)}
-              placeholder="ws://localhost:8080/api/v1/ws"
+              placeholder="wss://your-backend.example.com/api/v1/ws"
               className="w-full glass-panel-subtle rounded-xl px-3 py-2 text-white focus:outline-none focus:border-white/20"
             />
           </div>
         </div>
 
-        {/* Masked Credentials Notice */}
-        <div className="p-3 rounded bg-[#141414] border border-[#262626] flex items-center justify-between text-xs font-mono">
-          <div className="flex items-center gap-2">
-            <Lock className="w-4 h-4 text-[#8e8e93]" />
-            <span className="text-[#a3a3a3]">Helius Geyser & Solana RPC Key:</span>
-            <span className="text-white font-mono">***[SERVER_INJECTED_ENV]***</span>
+        <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 p-3 text-[11px] font-mono leading-relaxed text-amber-100/80">
+          <div className="flex items-center gap-2 font-bold text-amber-300 mb-1">
+            <Lock className="w-3.5 h-3.5" />
+            Browser storage security
           </div>
-          <span className="text-[10px] text-emerald-400 uppercase font-semibold">Protected</span>
+          Only the public REST and WebSocket addresses are saved in this browser's local storage.
+          Do not enter Solana RPC keys, passwords, private keys, or other secrets here. Keep provider
+          credentials on the Rust backend server.
         </div>
-
         {/* Buttons */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <button
@@ -280,13 +279,13 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         <p className="text-[#737373] text-[11px] leading-relaxed">
-          NodeX is structured to plug into the following Axum router in your Rust core. If any endpoint is not yet mounted, the frontend handles fallback transparently:
+          These are backend routes currently used or planned. Routes not yet implemented are not queried by the frontend:
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
           <div className="p-2.5 rounded bg-[#141414] border border-[#222] space-y-1">
             <span className="text-emerald-400 font-bold">GET</span>{' '}
-            <span className="text-white">/api/v1/health</span>
+            <span className="text-white">/health</span>
             <div className="text-[10px] text-[#737373]">Engine heartbeat & uptime</div>
           </div>
 
