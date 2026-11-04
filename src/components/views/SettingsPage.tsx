@@ -14,7 +14,6 @@ import {
   Code2,
   Lock,
 } from 'lucide-react';
-import { apiClient } from '../../services/api';
 
 export const SettingsPage: React.FC = () => {
   const {
@@ -23,11 +22,11 @@ export const SettingsPage: React.FC = () => {
     toggleStrategy,
     settings,
     updateSettings,
+    backendError,
   } = useTerminal();
 
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [wsUrl, setWsUrl] = useState(settings.wsUrl);
-  const [connectionMode, setConnectionMode] = useState<'SIMULATION' | 'RUST_BACKEND'>(settings.mode);
   const [testResult, setTestResult] = useState<{ status: 'idle' | 'testing' | 'success' | 'failed'; message?: string }>({
     status: 'idle',
   });
@@ -47,18 +46,18 @@ export const SettingsPage: React.FC = () => {
         const json = await res.json();
         setTestResult({
           status: 'success',
-          message: `Connected to Axum backend! Uptime: ${json.uptime_secs || 0}s`,
+          message: `Connected to ${json.service || 'NodeX'} (${json.mode || 'unknown'} mode).`,
         });
       } else {
         setTestResult({
           status: 'failed',
-          message: `Endpoint returned HTTP ${res.status}. Fallback simulation active.`,
+          message: `Backend health endpoint returned HTTP ${res.status}.`,
         });
       }
     } catch {
       setTestResult({
         status: 'failed',
-        message: 'Could not reach Axum endpoint on localhost:8080. Running in local simulation mode.',
+        message: 'Could not reach the configured Axum backend. No simulation fallback is active.',
       });
     }
   };
@@ -67,7 +66,6 @@ export const SettingsPage: React.FC = () => {
     updateSettings({
       backendUrl,
       wsUrl,
-      mode: connectionMode,
     });
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 2500);
@@ -98,6 +96,12 @@ export const SettingsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {backendError && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs font-mono text-amber-200">
+          {backendError}
+        </div>
+      )}
 
       {/* 1. Core Engine Execution Controls */}
       <section className="glass-panel rounded-2xl p-5 space-y-4 shadow-lg">
@@ -182,18 +186,18 @@ export const SettingsPage: React.FC = () => {
             Axum Rust Backend & WebSocket Gateway
           </span>
           <span className="text-xs font-mono text-[#737373]">
-            {connectionMode === 'RUST_BACKEND' ? 'Live Network Mode' : 'Local Deterministic Simulator'}
+            Rust backend only · paper execution
           </span>
         </div>
 
-        {/* Mode Switcher */}
+        {/* Backend mode is fixed to the real Rust service; no local simulator exists. */}
         <div className="space-y-2 font-mono text-xs">
           <label className="text-[#8e8e93] uppercase text-[11px]">Integration Source</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
-              onClick={() => setConnectionMode('SIMULATION')}
+              onClick={() => undefined}
               className={`p-4 rounded-xl border text-left transition-all ${
-                connectionMode === 'SIMULATION'
+                false
                   ? 'glass-card border-emerald-500/60 ring-1 ring-emerald-500/40 text-white shadow-md'
                   : 'glass-panel-subtle text-[#8e8e93] hover:text-white'
               }`}
@@ -208,9 +212,9 @@ export const SettingsPage: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setConnectionMode('RUST_BACKEND')}
+              onClick={() => undefined}
               className={`p-4 rounded-xl border text-left transition-all ${
-                connectionMode === 'RUST_BACKEND'
+                true
                   ? 'glass-card border-emerald-500/60 ring-1 ring-emerald-500/40 text-white shadow-md'
                   : 'glass-panel-subtle text-[#8e8e93] hover:text-white'
               }`}
