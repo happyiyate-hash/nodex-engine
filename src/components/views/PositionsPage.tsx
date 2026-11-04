@@ -72,7 +72,7 @@ export const PositionsPage: React.FC = () => {
           </div>
 
           {/* Capital Deployed */}
-          <div className="p-3 sm:p-3.5">
+          <div className="p-2.5 sm:p-3.5 min-w-0">
             <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
               Capital Deployed
             </div>
@@ -85,7 +85,7 @@ export const PositionsPage: React.FC = () => {
           </div>
 
           {/* Unrealised P&L */}
-          <div className="p-3 sm:p-3.5">
+          <div className="p-2.5 sm:p-3.5 min-w-0">
             <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
               Unrealised P&L
             </div>
@@ -101,7 +101,7 @@ export const PositionsPage: React.FC = () => {
           </div>
 
           {/* Realised P&L */}
-          <div className="p-3 sm:p-3.5">
+          <div className="p-2.5 sm:p-3.5 min-w-0">
             <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
               Realised P&L
             </div>
