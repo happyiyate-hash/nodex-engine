@@ -54,7 +54,7 @@ const emptyStatus: EngineStatus = {
   solana_connected: false, rpc_endpoint: '', rpc_latency_ms: 0,
   ws_status: 'disconnected', ws_endpoint: '', provider_name: 'Not connected',
   last_heartbeat: '', incoming_event_rate: 0, reconnection_count: 0,
-  database_status: 'offline', tokens_detected_today: 0,
+  database_status: 'unknown', tokens_detected_today: 0,
   simulated_buys_count: 0, simulated_sells_count: 0, strategy_paused: true,
 };
 // These are form defaults only; the backend does not currently persist strategy settings.

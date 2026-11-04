@@ -50,7 +50,7 @@ export class NodeXApiClient {
       ws_endpoint: this.settings.wsUrl, provider_name: stream.provider || 'Solana RPC',
       last_heartbeat: stream.last_message_at || '', incoming_event_rate: 0,
       reconnection_count: Number(stream.reconnect_count || 0),
-      database_status: 'offline' as EngineStatus['database_status'],
+      database_status: 'unknown',
       tokens_detected_today: 0, simulated_buys_count: 0, simulated_sells_count: 0,
       strategy_paused: Boolean(raw.paused),
     };
