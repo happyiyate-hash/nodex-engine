@@ -212,6 +212,7 @@ export const EventMonitorPage: React.FC = () => {
 
                     <div className="text-white text-xs leading-relaxed font-mono">
                       {evt.message}
+                      {Number(evt.data?.repeated_count || 1) > 1 && <span className="ml-2 text-amber-300">(x{Number(evt.data.repeated_count)})</span>}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#737373]">
