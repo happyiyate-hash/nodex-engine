@@ -59,11 +59,11 @@ export const PositionsPage: React.FC = () => {
       <section className="w-full border-b border-white/[0.08] bg-[#090909]/60 backdrop-blur-md">
         <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
           {/* Active Holdings Value */}
-          <div className="p-3 sm:p-3.5">
+          <div className="p-2.5 sm:p-3.5 min-w-0">
             <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
               Active Holdings Value
             </div>
-            <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
+            <div className="text-base sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
               ${openValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[10px] font-mono text-[#737373] tabular-nums">
@@ -76,7 +76,7 @@ export const PositionsPage: React.FC = () => {
             <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
               Capital Deployed
             </div>
-            <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
+            <div className="text-base sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
               ${openInvested.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[10px] font-mono text-[#737373]">
@@ -89,7 +89,7 @@ export const PositionsPage: React.FC = () => {
             <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
               Unrealised P&L
             </div>
-            <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums flex items-center gap-1 ${
+            <div className={`text-base sm:text-xl font-bold font-mono tracking-tight tabular-nums flex items-center gap-1 ${
               unrealised >= 0 ? 'text-emerald-400' : 'text-red-400'
             }`}>
               {unrealised >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
@@ -105,7 +105,7 @@ export const PositionsPage: React.FC = () => {
             <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
               Realised P&L
             </div>
-            <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums ${
+            <div className={`text-base sm:text-xl font-bold font-mono tracking-tight tabular-nums ${
               summary.realised_pnl_usd >= 0 ? 'text-emerald-400' : 'text-red-400'
             }`}>
               {summary.realised_pnl_usd >= 0 ? '+' : ''}${summary.realised_pnl_usd.toFixed(2)}
@@ -118,10 +118,10 @@ export const PositionsPage: React.FC = () => {
       </section>
 
       {/* 2. COMPACT TOOLBAR (FILTER & SEARCH) */}
-      <div className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-4 lg:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-3 sm:px-4 lg:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 min-w-0">
           {/* Status Filters */}
-          <div className="flex items-center p-0.5 rounded-lg glass-panel-subtle text-xs font-mono">
+          <div className="flex items-center p-0.5 rounded-lg glass-panel-subtle text-xs font-mono w-full sm:w-auto overflow-x-auto whitespace-nowrap">
             {(
               [
                 { id: 'all', label: 'All' },
@@ -134,7 +134,7 @@ export const PositionsPage: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => setFilterMode(item.id)}
-                className={`px-2.5 py-0.5 rounded-md transition-all text-[11px] ${
+                className={`shrink-0 px-2.5 py-1 sm:py-0.5 rounded-md transition-all text-[11px] ${
                   filterMode === item.id
                     ? 'glass-card text-white font-medium shadow-sm'
                     : 'text-[#8e8e93] hover:text-white'
@@ -146,27 +146,106 @@ export const PositionsPage: React.FC = () => {
           </div>
 
           {/* Search */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="w-3 h-3 text-[#737373] absolute left-2.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search token or mint..."
-              className="glass-panel-subtle rounded-md pl-7 pr-3 py-1 text-xs font-mono text-white placeholder-[#525252] focus:outline-none focus:border-white/20 w-44 sm:w-56"
+              className="glass-panel-subtle rounded-md pl-8 pr-3 py-2 sm:py-1.5 text-xs font-mono text-white placeholder-[#525252] focus:outline-none focus:border-white/20 w-full sm:w-56"
             />
           </div>
         </div>
 
-        <div className="text-[11px] font-mono text-[#737373] flex items-center gap-1.5">
+        <div className="text-[10px] sm:text-[11px] font-mono text-[#737373] flex items-center gap-1.5">
           <span>Horizontal Scroll Table</span>
           <span className="text-[#404040]">·</span>
           <span>Showing {filteredPositions.length} positions</span>
         </div>
       </div>
 
+
+      {/* MOBILE POSITION CARDS — desktop table remains unchanged */}
+      <div className="md:hidden divide-y divide-white/[0.07]">
+        {filteredPositions.length === 0 ? (
+          <div className="py-16 text-center text-xs font-mono text-[#737373]">
+            No positions found matching your criteria.
+          </div>
+        ) : (
+          filteredPositions.map((pos) => {
+            const isProfit = pos.pnl_usd >= 0;
+            const isOpen = pos.status === 'OPEN';
+            return (
+              <article
+                key={pos.id}
+                onClick={() => openTokenDetailByMint(pos.mint)}
+                className="px-3 py-3 active:bg-white/[0.035] transition-colors"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-xl glass-icon flex items-center justify-center font-bold text-white text-[11px] shrink-0">
+                      {pos.symbol.slice(0, 3)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white truncate">{pos.symbol}/SOL</div>
+                      <div className="text-[10px] text-[#737373] truncate">{pos.name} · {pos.mint.slice(0, 4)}...{pos.mint.slice(-4)}</div>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-semibold font-mono text-white tabular-nums">
+                      ${pos.current_position_value_usd.toFixed(2)}
+                    </div>
+                    <div className={`text-xs font-mono font-semibold tabular-nums ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {isProfit ? '+' : ''}${pos.pnl_usd.toFixed(2)} ({isProfit ? '+' : ''}{pos.pnl_pct.toFixed(2)}%)
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-white/[0.025] border border-white/[0.06] px-2.5 py-2">
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-[#737373]">Entry</div>
+                    <div className="text-[11px] font-mono text-[#d4d4d4] tabular-nums">${pos.entry_price_usd.toFixed(6)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-[#737373]">Take profit</div>
+                    <div className="text-[11px] font-mono text-emerald-400">+{pos.take_profit_target_pct}%</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] uppercase tracking-wider text-[#737373]">Stop loss</div>
+                    <div className="text-[11px] font-mono text-red-400">-{pos.stop_loss_target_pct}%</div>
+                  </div>
+                </div>
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <span className={`text-[9px] font-mono tracking-wide px-2 py-1 rounded border ${isOpen
+                    ? 'text-emerald-300 bg-emerald-950/30 border-emerald-500/30'
+                    : 'text-[#a3a3a3] bg-white/[0.04] border-white/10'}`}>
+                    {pos.status}
+                  </span>
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => openTokenDetailByMint(pos.mint)}
+                      className="px-3 py-1.5 rounded-lg glass-icon text-[10px] text-white font-mono"
+                    >
+                      Details
+                    </button>
+                    {isOpen && (
+                      <button
+                        onClick={() => closePosition(pos.id, 100)}
+                        className="px-3 py-1.5 rounded-lg border border-red-500/25 bg-red-950/20 text-[10px] text-red-300 font-mono"
+                      >
+                        Close
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </article>
+            );
+          })
+        )}
+      </div>
+
       {/* 3. WIDE HORIZONTAL SCROLL DATASET (REDUCED ASSET SIZE, NO PADDING BLOAT, NO SCROLLBAR CORNER) */}
-      <div className="w-full overflow-x-auto">
+      <div className="hidden md:block w-full overflow-x-auto">
         {filteredPositions.length === 0 ? (
           <div className="py-20 text-center text-xs font-mono text-[#737373]">
             No positions found matching your criteria.
