@@ -141,10 +141,13 @@ export const LiveFeedPage: React.FC = () => {
   const launchPipeline = (mint: string) => {
     const related = events.filter((event) => event.token_mint === mint || event.data?.mint_address === mint);
     const scan = related.find((event) => event.event_type === 'token_scan_update');
+    const buy = related.find((event) => event.event_type === 'paper_buy_executed');
+    const buyFailed = related.find((event) => event.event_type === 'paper_buy_failed');
+    const strategyRejected = related.find((event) => event.event_type === 'strategy_rejected_token');
     const scanning = related.some((event) => event.event_type === 'token_scan_started') && !scan;
     const decision = String(scan?.data?.decision || scan?.data?.status || '').toUpperCase();
-    const status = decision === 'REJECTED' ? 'REJECTED' : decision === 'APPROVED' ? 'APPROVED' : scan ? 'UNVERIFIED' : scanning ? 'SCANNING' : 'DETECTED';
-    const reason = String(scan?.data?.decision_reason || scan?.data?.reason || scan?.data?.message || (scan ? 'Scan completed; review the report before trading.' : scanning ? 'Security checks are running.' : 'Token launch confirmed.'));
+    const status = buy ? 'BOUGHT PAPER' : buyFailed ? 'BUY FAILED' : strategyRejected || decision === 'REJECTED' ? 'REJECTED' : decision === 'APPROVED' ? 'APPROVED' : scan ? 'UNVERIFIED' : scanning ? 'SCANNING' : 'DETECTED';
+    const reason = buy ? String(buy.data?.amount_sol ? 'Paper buy completed: ' + buy.data.amount_sol + ' SOL' : 'Paper buy completed successfully.') : buyFailed ? String(buyFailed.data?.reason || buyFailed.data?.message || 'Paper buy failed.') : strategyRejected ? String(strategyRejected.data?.reason || strategyRejected.data?.message || 'Rejected by the strategy rules.') : String(scan?.data?.decision_reason || scan?.data?.reason || scan?.data?.message || (scan ? 'Scan completed; review the report before trading.' : scanning ? 'Security checks are running.' : 'Token launch confirmed.'));
     return { status, reason };
   };
 
