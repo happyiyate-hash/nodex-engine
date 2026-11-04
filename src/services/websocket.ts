@@ -78,6 +78,14 @@ export class NodeXWebSocketService {
         try {
           const raw=JSON.parse(String(message.data));
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
+          // The browser accepts only user-facing application events. Network-level
+          // Solana notifications and internal diagnostics never enter the UI feed.
+          const visibleTypes = new Set([
+            'connection_status','engine_state','launch_detected','token_scan_started',
+            'token_scan_update','market_price_update','paper_buy_executed',
+            'paper_buy_failed','strategy_rejected_token'
+          ]);
+          if(!visibleTypes.has(raw.type))return;
           const event=normalizeBackendEvent(raw);
           if(this.seen.has(event.event_id))return;
           this.seen.add(event.event_id);
