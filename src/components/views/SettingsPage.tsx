@@ -23,8 +23,8 @@ export const SettingsPage: React.FC = () => {
   const [savedNotice, setSavedNotice] = useState(false);
 
   const handleTestBackend = async () => {
-    const baseUrl = backendUrl.trim().replace(/\\/$/, '');
-    if (!/^https?:\\/\\//i.test(baseUrl)) {
+    const baseUrl = backendUrl.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(baseUrl)) {
       setTestResult({ status: 'failed', message: 'Enter a valid HTTPS backend URL.' });
       return;
     }
