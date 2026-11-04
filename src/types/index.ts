@@ -168,6 +168,7 @@ export type EventType =
   | 'token_metadata_updated'
   | 'buy_signal_generated'
   | 'paper_buy_executed'
+  | 'paper_buy_failed'
   | 'sell_signal_generated'
   | 'paper_sell_executed'
   | 'price_updated'
