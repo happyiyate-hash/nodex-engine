@@ -1,9 +1,11 @@
 import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot } from '../types';
 
-const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\/$/, '');
+const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\\/$/, '');
 const WS_URL = import.meta.env.VITE_NODEX_WS_URL || (API_URL
   ? API_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/ws'
   : (typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (typeof window !== 'undefined' ? window.location.host : 'localhost') + '/api/v1/ws');
+
+const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
 export interface ApiSettings {
   backendUrl: string; wsUrl: string; mode: 'RUST_BACKEND'; rpcUrl: string;
@@ -14,16 +16,56 @@ export const DEFAULT_SETTINGS: ApiSettings = {
   autoReconnection: true, heartbeatIntervalMs: 5000,
 };
 
-export class NodeXApiClient {
-  private settings: ApiSettings = { ...DEFAULT_SETTINGS };
-  public loadSettings(): ApiSettings { return { ...this.settings }; }
-  public saveSettings(update: Partial<ApiSettings>): ApiSettings {
-    this.settings = { ...this.settings, ...update, mode: 'RUST_BACKEND' }; return this.getSettings();
+function readStoredConnectionSettings(): Partial<ApiSettings> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(CONNECTION_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrl?: unknown };
+    return {
+      ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl } : {}),
+      ...(typeof parsed.wsUrl === 'string' ? { wsUrl: parsed.wsUrl } : {}),
+    };
+  } catch {
+    return {};
   }
+}
+
+export class NodeXApiClient {
+  private settings: ApiSettings = {
+    ...DEFAULT_SETTINGS,
+    ...readStoredConnectionSettings(),
+    mode: 'RUST_BACKEND',
+  };
+
+  public loadSettings(): ApiSettings { return { ...this.settings }; }
+
+  public saveSettings(update: Partial<ApiSettings>): ApiSettings {
+    this.settings = {
+      ...this.settings,
+      ...update,
+      backendUrl: (update.backendUrl ?? this.settings.backendUrl).trim().replace(/\\/$/, ''),
+      wsUrl: (update.wsUrl ?? this.settings.wsUrl).trim(),
+      mode: 'RUST_BACKEND',
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        // Only public service addresses are persisted. Never store API keys or passwords here.
+        window.localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
+          backendUrl: this.settings.backendUrl,
+          wsUrl: this.settings.wsUrl,
+        }));
+      } catch (error) {
+        console.warn('Unable to persist NodeX connection preferences in this browser.', error);
+      }
+    }
+    return this.getSettings();
+  }
+
   public getSettings(): ApiSettings { return { ...this.settings }; }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    if (!this.settings.backendUrl) throw new Error('Backend URL missing. Configure VITE_NODEX_API_URL.');
+    if (!this.settings.backendUrl) throw new Error('Backend URL missing. Enter your Rust backend URL in Settings.');
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10000);
     try {
