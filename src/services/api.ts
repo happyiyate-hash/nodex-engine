@@ -1,4 +1,4 @@
-import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision } from '../types';
+import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord } from '../types';
 
 const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\/$/, '');
 const WS_URL = import.meta.env.VITE_NODEX_WS_URL || (API_URL
@@ -56,7 +56,7 @@ export class NodeXApiClient {
     };
   }
   public getPaperWallet() { return this.request<any>('/api/v1/paper-wallet'); }
-  public getRecentTokens(limit=100) {
+  public getRecentTokens(limit=100): Promise<TokenLaunchRecord[]> {
     return this.request<any[]>(`/api/v1/tokens/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
   public scanToken(mint:string) {

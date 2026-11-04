@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   ConnectionStatus, DashboardSummary, DiscoveredToken, EngineStatus, NodeXEvent,
-  Position, StrategyConfig, StrategyDecision,
+  Position, StrategyConfig, StrategyDecision, TokenLaunchRecord,
 } from '../types';
 import { apiClient, ApiSettings } from '../services/api';
 import { wsService } from '../services/websocket';
@@ -17,6 +17,7 @@ interface TerminalContextType {
   summary: DashboardSummary;
   positions: Position[];
   tokens: DiscoveredToken[];
+  launches: TokenLaunchRecord[];
   events: NodeXEvent[];
   selectedEvent: NodeXEvent | null;
   setSelectedEvent: (event: NodeXEvent | null) => void;
@@ -76,6 +77,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [summary] = useState<DashboardSummary>(emptySummary);
   const [positions] = useState<Position[]>([]);
   const [tokens] = useState<DiscoveredToken[]>([]);
+  const [launches, setLaunches] = useState<TokenLaunchRecord[]>([]);
   const [events, setEvents] = useState<NodeXEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<NodeXEvent | null>(null);
   const [selectedToken, setSelectedToken] = useState<DiscoveredToken | null>(null);
@@ -89,6 +91,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     let active = true;
     wsService.connect();
+    apiClient.getRecentTokens(100).then((records) => {
+      if (active) setLaunches(records);
+    }).catch((error: unknown) => {
+      if (active) setBackendError(error instanceof Error ? error.message : 'Could not load recent token launches.');
+    });
     apiClient.getEngineStatus().then((status) => {
       if (active) {
         setEngineStatus((previous) => ({ ...previous, ...status, ws_status: wsService.getStatus().status }));
@@ -123,6 +130,16 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           strategy_paused: Boolean(event.data.paused), operating_mode: 'PAPER',
         }));
       } else if (event.event_type === 'launch_detected') {
+        const launch = event.data as Partial<TokenLaunchRecord>;
+        if (typeof launch.mint_address === 'string' && typeof launch.signature === 'string') {
+          const record: TokenLaunchRecord = {
+            id: String(launch.id || launch.signature), mint_address: launch.mint_address,
+            creator_address: launch.creator_address || null, source: launch.source || 'unknown',
+            signature: launch.signature, slot: Number(launch.slot || 0),
+            detected_at: launch.detected_at || event.timestamp,
+          };
+          setLaunches((previous) => [record, ...previous.filter((item) => item.signature !== record.signature)].slice(0, 500));
+        }
         setEngineStatus((previous) => ({
           ...previous, tokens_detected_today: previous.tokens_detected_today + 1,
         }));
@@ -167,7 +184,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <TerminalContext.Provider value={{
       activeTab, setActiveTab: navigateToTab, engineStatus, summary, positions, tokens,
-      events, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
+      events, launches, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
       openTokenDetailByMint, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,

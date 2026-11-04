@@ -10,6 +10,16 @@ export type PositionStatus = 'OPEN' | 'CLOSED_PROFIT' | 'CLOSED_LOSS' | 'STOP_LO
 export type SafetyRating = 'verified' | 'warning' | 'danger';
 export type QualificationStatus = 'newly_detected' | 'under_analysis' | 'qualified' | 'rejected' | 'bought_paper';
 
+export interface TokenLaunchRecord {
+  id: string;
+  mint_address: string;
+  creator_address: string | null;
+  source: string;
+  signature: string;
+  slot: number;
+  detected_at: string;
+}
+
 export interface EngineStatus {
   running: boolean;
   operating_mode: OperatingMode;
