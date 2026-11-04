@@ -38,8 +38,8 @@ export class NodeXWebSocketService {
             timestamp,token_mint:mint,message:data.message||this.describe(raw.type,data),
             processing_status:raw.type==='diagnostic'?'failed':'processed',
             tx_signature:data.signature,data};
-          if(raw.type==='connection_status'&&data.solana_stream)
-            this.setStatus(data.solana_stream.connected?'connected':'disconnected',0);
+          // Browser-to-backend WebSocket health is independent from the backend's
+          // upstream Solana RPC stream health. TerminalContext tracks both separately.
           this.dispatch(event);
         } catch(error){
           console.warn('Unable to parse NodeX WebSocket message',error);
