@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { TradingChart } from '../common/TradingChart';
 import {
   ArrowLeft,
   Copy,
@@ -46,8 +45,6 @@ export const TokenDetailPage: React.FC = () => {
   const safety = selectedToken.safety_details;
 
   // The backend does not currently expose historical price candles or position P&L history.
-  const chartData: Array<{ time: string; value: number }> = [];
-  const isPositive = true;
 
   return (
     <div className="w-full text-white select-none">

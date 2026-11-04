@@ -23,7 +23,7 @@ export interface EngineStatus {
   last_heartbeat: string;
   incoming_event_rate: number; // events/sec
   reconnection_count: number;
-  database_status: 'healthy' | 'degraded' | 'offline';
+  database_status: 'healthy' | 'degraded' | 'offline' | 'unknown';
   tokens_detected_today: number;
   simulated_buys_count: number;
   simulated_sells_count: number;

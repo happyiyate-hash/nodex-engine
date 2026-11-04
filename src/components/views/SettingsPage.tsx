@@ -193,40 +193,11 @@ export const SettingsPage: React.FC = () => {
         {/* Backend mode is fixed to the real Rust service; no local simulator exists. */}
         <div className="space-y-2 font-mono text-xs">
           <label className="text-[#8e8e93] uppercase text-[11px]">Integration Source</label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              onClick={() => undefined}
-              className={`p-4 rounded-xl border text-left transition-all ${
-                false
-                  ? 'glass-card border-emerald-500/60 ring-1 ring-emerald-500/40 text-white shadow-md'
-                  : 'glass-panel-subtle text-[#8e8e93] hover:text-white'
-              }`}
-            >
-              <div className="font-bold flex items-center justify-between">
-                <span>Standalone Simulation Engine (Active)</span>
-                {connectionMode === 'SIMULATION' && <Check className="w-4 h-4 text-emerald-400" />}
-              </div>
-              <div className="text-[11px] text-[#737373] mt-1">
-                Generates authentic Solana token discoveries, real-time price ticks, and paper orders without requiring an external process.
-              </div>
-            </button>
-
-            <button
-              onClick={() => undefined}
-              className={`p-4 rounded-xl border text-left transition-all ${
-                true
-                  ? 'glass-card border-emerald-500/60 ring-1 ring-emerald-500/40 text-white shadow-md'
-                  : 'glass-panel-subtle text-[#8e8e93] hover:text-white'
-              }`}
-            >
-              <div className="font-bold flex items-center justify-between">
-                <span>Custom Axum Rust Backend</span>
-                {connectionMode === 'RUST_BACKEND' && <Check className="w-4 h-4 text-emerald-400" />}
-              </div>
-              <div className="text-[11px] text-[#737373] mt-1">
-                Connects directly to your compiled NodeX Rust binary running on localhost:8080 or custom server URL.
-              </div>
-            </button>
+          <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/10 text-white">
+            <div className="font-bold">Custom Axum Rust Backend · PAPER ONLY</div>
+            <div className="text-[11px] text-[#737373] mt-1">
+              Connects to the configured NodeX Rust service. Local simulation and live transaction execution are disabled.
+            </div>
           </div>
         </div>
 
