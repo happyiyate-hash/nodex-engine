@@ -169,7 +169,7 @@ export const PositionsPage: React.FC = () => {
       <div className="md:hidden divide-y divide-white/[0.07]">
         {filteredPositions.length === 0 ? (
           <div className="py-16 text-center text-xs font-mono text-[#737373]">
-            No positions found matching your criteria.
+            No paper positions yet. This page will populate only after the backend confirms a successful paper buy. Detected or approved tokens are not positions.
           </div>
         ) : (
           filteredPositions.map((pos) => {

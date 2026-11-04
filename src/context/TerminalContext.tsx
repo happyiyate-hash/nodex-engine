@@ -94,27 +94,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let active = true;
     wsService.connect();
 
-    // Restore persisted backend events after a page refresh or a temporary
-    // browser WebSocket disconnect, then periodically backfill missed events.
-    const loadEventHistory = () => {
-      apiClient.getRecentEvents(300).then((records) => {
-        if (!active) return;
-        const historical = records.map((record) =>
-          normalizeBackendEvent(record.event, record.received_at)
-        );
-        setEvents((previous) => {
-          const merged = new Map<string, NodeXEvent>();
-          [...historical, ...previous].forEach((event) => merged.set(event.event_id, event));
-          return Array.from(merged.values())
-            .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-            .slice(0, 500);
-        });
-      }).catch((error: unknown) => {
-        console.warn('Could not restore persisted NodeX backend events.', error);
-      });
-    };
-    loadEventHistory();
-    const eventHistoryTimer = window.setInterval(loadEventHistory, 15000);
+    // Raw Solana notifications are backend-internal and are deliberately not
+    // restored into the browser event feed. The feed is driven by curated live
+    // application events only.
 
     apiClient.getPaperWallet().then((wallet) => {
       if (active) setPaperWallet(wallet);
@@ -206,7 +188,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
     return () => {
       active = false;
-      window.clearInterval(eventHistoryTimer);
       unsubscribeStatus();
       unsubscribeEvents();
     };
