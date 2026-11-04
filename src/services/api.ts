@@ -1,214 +1,75 @@
-/**
- * NodeX API Service Layer
- * Connects to the Rust Axum backend with transparent fallback to local paper engine when offline.
- */
+import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision } from '../types';
 
-import {
-  DashboardSummary,
-  DiscoveredToken,
-  EngineStatus,
-  NodeXEvent,
-  Position,
-  StrategyConfig,
-  StrategyDecision,
-} from '../types';
-import {
-  INITIAL_DECISIONS,
-  INITIAL_ENGINE_STATUS,
-  INITIAL_EVENTS,
-  INITIAL_POSITIONS,
-  INITIAL_STRATEGY_CONFIG,
-  INITIAL_SUMMARY,
-  INITIAL_TOKENS,
-} from './mockData';
-
-// Storage keys
-const SETTINGS_KEY = 'nodex_settings_config';
-const STRATEGY_KEY = 'nodex_strategy_config';
+const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\/$/, '');
+const WS_URL = import.meta.env.VITE_NODEX_WS_URL || (API_URL
+  ? API_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/ws'
+  : (typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (typeof window !== 'undefined' ? window.location.host : 'localhost') + '/api/v1/ws');
 
 export interface ApiSettings {
-  backendUrl: string;
-  wsUrl: string;
-  mode: 'SIMULATION' | 'RUST_BACKEND';
-  rpcUrl: string;
-  autoReconnection: boolean;
-  heartbeatIntervalMs: number;
+  backendUrl: string; wsUrl: string; mode: 'RUST_BACKEND'; rpcUrl: string;
+  autoReconnection: boolean; heartbeatIntervalMs: number;
 }
-
 export const DEFAULT_SETTINGS: ApiSettings = {
-  backendUrl: '/api/v1',
-  wsUrl: 'ws://localhost:8080/api/v1/ws',
-  mode: 'SIMULATION',
-  rpcUrl: 'https://mainnet.helius-rpc.com/?api-key=***[SERVER-INJECTED]',
-  autoReconnection: true,
-  heartbeatIntervalMs: 5000,
+  backendUrl: API_URL, wsUrl: WS_URL, mode: 'RUST_BACKEND', rpcUrl: '',
+  autoReconnection: true, heartbeatIntervalMs: 5000,
 };
 
 export class NodeXApiClient {
-  private settings: ApiSettings;
-
-  constructor() {
-    this.settings = this.loadSettings();
+  private settings: ApiSettings = { ...DEFAULT_SETTINGS };
+  public loadSettings(): ApiSettings { return { ...this.settings }; }
+  public saveSettings(update: Partial<ApiSettings>): ApiSettings {
+    this.settings = { ...this.settings, ...update, mode: 'RUST_BACKEND' }; return this.getSettings();
   }
+  public getSettings(): ApiSettings { return { ...this.settings }; }
 
-  public loadSettings(): ApiSettings {
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    if (!this.settings.backendUrl) throw new Error('Backend URL missing. Configure VITE_NODEX_API_URL.');
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
     try {
-      const stored = localStorage.getItem(SETTINGS_KEY);
-      if (stored) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
-      }
-    } catch {
-      // Fallback
-    }
-    return DEFAULT_SETTINGS;
+      const response = await fetch(this.settings.backendUrl + path, {
+        ...options, headers: { Accept: 'application/json',
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
+        signal: controller.signal,
+      });
+      const body = await response.text();
+      if (!response.ok) throw new Error(`NodeX API ${response.status}: ${body || response.statusText}`);
+      return (body ? JSON.parse(body) : undefined) as T;
+    } finally { window.clearTimeout(timeout); }
   }
 
-  public saveSettings(newSettings: Partial<ApiSettings>): ApiSettings {
-    this.settings = { ...this.settings, ...newSettings };
-    try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.settings));
-    } catch (e) {
-      console.warn('Failed to persist settings:', e);
-    }
-    return this.settings;
-  }
-
-  public getSettings(): ApiSettings {
-    return this.settings;
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<{ data: T; source: 'rust_backend' | 'simulated_feed'; ok: boolean }> {
-    if (this.settings.mode === 'RUST_BACKEND') {
-      try {
-        const url = `${this.settings.backendUrl.replace(/\/$/, '')}/${endpoint.replace(/^\//, '')}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-        const res = await fetch(url, {
-          ...options,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            ...(options.headers || {}),
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const json = await res.json();
-          return { data: json, source: 'rust_backend', ok: true };
-        }
-      } catch (err) {
-        console.warn(`Rust backend request to ${endpoint} failed, falling back to local simulation engine.`, err);
-      }
-    }
-
-    return { data: null as unknown as T, source: 'simulated_feed', ok: false };
-  }
-
-  // GET /api/v1/health
-  public async getHealth(): Promise<{ status: string; uptime_secs: number; source: string }> {
-    const res = await this.request<{ status: string; uptime_secs: number }>('/health');
-    if (res.ok && res.data) {
-      return { ...res.data, source: res.source };
-    }
-    return {
-      status: 'healthy',
-      uptime_secs: 48320,
-      source: 'simulated_feed',
-    };
-  }
-
-  // GET /api/v1/engine/status
+  public getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
   public async getEngineStatus(): Promise<EngineStatus> {
-    const res = await this.request<EngineStatus>('/engine/status');
-    if (res.ok && res.data) {
-      return res.data;
-    }
-    return INITIAL_ENGINE_STATUS;
-  }
-
-  // GET /api/v1/dashboard/summary
-  public async getDashboardSummary(): Promise<DashboardSummary> {
-    const res = await this.request<DashboardSummary>('/dashboard/summary');
-    if (res.ok && res.data) {
-      return res.data;
-    }
-    return INITIAL_SUMMARY;
-  }
-
-  // GET /api/v1/positions
-  public async getPositions(): Promise<Position[]> {
-    const res = await this.request<Position[]>('/positions');
-    if (res.ok && res.data) {
-      return res.data;
-    }
-    return INITIAL_POSITIONS;
-  }
-
-  // GET /api/v1/tokens
-  public async getTokens(): Promise<DiscoveredToken[]> {
-    const res = await this.request<DiscoveredToken[]>('/tokens');
-    if (res.ok && res.data) {
-      return res.data;
-    }
-    return INITIAL_TOKENS;
-  }
-
-  // GET /api/v1/tokens/:mint
-  public async getToken(mint: string): Promise<DiscoveredToken | null> {
-    const res = await this.request<DiscoveredToken>(`/tokens/${mint}`);
-    if (res.ok && res.data) {
-      return res.data;
-    }
-    const local = INITIAL_TOKENS.find((t) => t.mint === mint);
-    return local || null;
-  }
-
-  // GET /api/v1/events
-  public async getEvents(limit = 100): Promise<NodeXEvent[]> {
-    const res = await this.request<NodeXEvent[]>(`/events?limit=${limit}`);
-    if (res.ok && res.data) {
-      return res.data;
-    }
-    return INITIAL_EVENTS;
-  }
-
-  // GET /api/v1/strategy
-  public async getStrategy(): Promise<{ config: StrategyConfig; decisions: StrategyDecision[] }> {
-    const res = await this.request<{ config: StrategyConfig; decisions: StrategyDecision[] }>('/strategy');
-    if (res.ok && res.data) {
-      return res.data;
-    }
-    try {
-      const saved = localStorage.getItem(STRATEGY_KEY);
-      if (saved) {
-        return { config: JSON.parse(saved), decisions: INITIAL_DECISIONS };
-      }
-    } catch {
-      // ignore
-    }
-    return { config: INITIAL_STRATEGY_CONFIG, decisions: INITIAL_DECISIONS };
-  }
-
-  // PUT /api/v1/strategy
-  public async updateStrategy(config: StrategyConfig): Promise<{ success: boolean; config: StrategyConfig; source: string }> {
-    const res = await this.request<StrategyConfig>('/strategy', {
-      method: 'PUT',
-      body: JSON.stringify(config),
-    });
-    try {
-      localStorage.setItem(STRATEGY_KEY, JSON.stringify(config));
-    } catch (e) {
-      console.warn('Failed to cache strategy:', e);
-    }
+    const raw = await this.request<any>('/api/v1/engine/status');
+    const stream = raw.solana_stream || {};
     return {
-      success: true,
-      config: res.ok && res.data ? res.data : config,
-      source: res.source,
+      running: !raw.paused, operating_mode: 'PAPER', network: 'mainnet-beta',
+      solana_connected: Boolean(stream.connected), rpc_endpoint: '',
+      rpc_latency_ms: Number(stream.latency_ms || 0),
+      ws_status: stream.connected ? 'connected' : 'disconnected',
+      ws_endpoint: this.settings.wsUrl, provider_name: stream.provider || 'Solana RPC',
+      last_heartbeat: stream.last_message_at || '', incoming_event_rate: 0,
+      reconnection_count: Number(stream.reconnect_count || 0),
+      database_status: 'offline' as EngineStatus['database_status'],
+      tokens_detected_today: 0, simulated_buys_count: 0, simulated_sells_count: 0,
+      strategy_paused: Boolean(raw.paused),
     };
   }
-}
+  public getPaperWallet() { return this.request<any>('/api/v1/paper-wallet'); }
+  public getRecentTokens(limit=100) {
+    return this.request<any[]>(`/api/v1/tokens/recent?limit=${Math.min(500,Math.max(1,limit))}`);
+  }
+  public scanToken(mint:string) {
+    return this.request<any>(`/api/v1/tokens/${encodeURIComponent(mint)}/scan`);
+  }
+  public getTokenAccountRent() { return this.request<any>('/api/v1/fees/token-account-rent'); }
 
+  public async getDashboardSummary(): Promise<never> { throw new Error('Dashboard summary route is not implemented by the Rust backend.'); }
+  public async getPositions(): Promise<never> { throw new Error('Paper positions route is not implemented by the Rust backend.'); }
+  public async getTokens(): Promise<DiscoveredToken[]> { throw new Error('Use getRecentTokens(): the backend does not yet return complete token dossiers.'); }
+  public async getToken(_mint:string): Promise<DiscoveredToken|null> { throw new Error('Complete token detail route is not implemented.'); }
+  public async getEvents(_limit=100): Promise<NodeXEvent[]> { throw new Error('Historical events route is not implemented. Live events use WebSocket.'); }
+  public async getStrategy(): Promise<{config:StrategyConfig;decisions:StrategyDecision[]}> { throw new Error('Strategy persistence route is not implemented.'); }
+  public async updateStrategy(_config:StrategyConfig): Promise<never> { throw new Error('Strategy update route is not implemented.'); }
+}
 export const apiClient = new NodeXApiClient();
