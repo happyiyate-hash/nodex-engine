@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   ConnectionStatus,
   DashboardSummary,
@@ -66,6 +66,7 @@ const TerminalContext = createContext<TerminalContextType | null>(null);
 
 export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
+  const eventCountRef = useRef(0);
   const [engineStatus, setEngineStatus] = useState<EngineStatus>(INITIAL_ENGINE_STATUS);
   const [summary, setSummary] = useState<DashboardSummary>(INITIAL_SUMMARY);
   const [positions, setPositions] = useState<Position[]>(INITIAL_POSITIONS);
@@ -109,6 +110,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Listen to incoming WebSocket events
   useEffect(() => {
     const unsub = wsService.subscribe((incomingEvent: NodeXEvent) => {
+      eventCountRef.current += 1;
       // 1. Add to events list (keep newest 200)
       setEvents((prev) => [incomingEvent, ...prev.slice(0, 199)]);
 
@@ -219,6 +221,25 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             tokens_detected_today: prev.tokens_detected_today + 1,
           }));
         }
+      } else if (incomingEvent.event_type === 'liquidity_updated') {
+        const data = incomingEvent.data;
+        if (data.token_mint) {
+          setTokens((prev) => prev.map((token) => {
+            if (token.mint !== data.token_mint) return token;
+            const change = Number(data.change_pct || 0) / 100;
+            const liquidity = Math.max(100, token.liquidity_usd * (1 + change));
+            const volumeIncrease = Math.max(10, liquidity * (0.001 + Math.random() * 0.002));
+            const buys = Math.random() > 0.42;
+            return {
+              ...token,
+              liquidity_usd: Number(liquidity.toFixed(2)),
+              volume_5m_usd: Number((token.volume_5m_usd + volumeIncrease).toFixed(2)),
+              volume_1h_usd: Number((token.volume_1h_usd + volumeIncrease).toFixed(2)),
+              tx_buys_5m: token.tx_buys_5m + (buys ? 1 : 0),
+              tx_sells_5m: token.tx_sells_5m + (buys ? 0 : 1),
+            };
+          }));
+        }
       } else if (incomingEvent.event_type === 'paper_buy_executed') {
         const data = incomingEvent.data;
         if (data.token_mint) {
@@ -263,6 +284,20 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     return unsub;
   }, [summary.sol_price_usd, strategyConfig]);
+
+  // Measure incoming stream throughput independently from price/portfolio updates.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const eventsPerSecond = eventCountRef.current;
+      eventCountRef.current = 0;
+      setEngineStatus((prev) => ({
+        ...prev,
+        incoming_event_rate: eventsPerSecond,
+        last_heartbeat: new Date().toISOString(),
+      }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Dynamically recalculate summary figures based on positions
   useEffect(() => {
