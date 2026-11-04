@@ -101,6 +101,12 @@ export class NodeXApiClient {
   public getRecentTokens(limit=100): Promise<TokenLaunchRecord[]> {
     return this.request<any[]>(`/api/v1/tokens/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
+  public getRecentEvents(limit=200): Promise<Array<{
+    id: number; signature: string | null; slot: number | null;
+    received_at: string; event: Record<string, any>;
+  }>> {
+    return this.request(`/api/v1/events/recent?limit=${Math.min(500,Math.max(1,limit))}`);
+  }
   public scanToken(mint:string) {
     return this.request<any>(`/api/v1/tokens/${encodeURIComponent(mint)}/scan`);
   }
