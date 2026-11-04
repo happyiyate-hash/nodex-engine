@@ -22,9 +22,11 @@ export function normalizeBackendEvent(raw:any, receivedAt?:string):NodeXEvent {
   }:(raw?.data&&typeof raw.data==='object'?raw.data:raw);
   const mint=data.mint_address||data.token_mint||data.base_mint;
   const signature=data.signature||null;
-  const eventId=isSolanaLog
-    ? [rawType,data.program_id||raw?.nodex_program_id||'',signature||'',data.slot??''].join(':')
-    : [rawType,signature||data.pool_address||mint||'',data.event_index??'',timestamp].join(':');
+  const eventId=typeof raw?.event_id==='string' && raw.event_id.length > 0
+    ? raw.event_id
+    : isSolanaLog
+      ? [rawType,data.program_id||raw?.nodex_program_id||'',signature||'',data.slot??''].join(':')
+      : [rawType,signature||data.pool_address||mint||'',data.event_index??'',timestamp].join(':');
   let message=data.message;
   if(!message){
     switch(rawType){
