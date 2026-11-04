@@ -83,7 +83,7 @@ export class NodeXWebSocketService {
           const visibleTypes = new Set([
             'connection_status','engine_state','launch_detected','token_scan_started',
             'token_scan_update','market_price_update','paper_buy_executed',
-            'paper_buy_failed','strategy_rejected_token'
+            'paper_buy_failed','strategy_rejected_token','stream_warning'
           ]);
           if(!visibleTypes.has(raw.type))return;
           const event=normalizeBackendEvent(raw);

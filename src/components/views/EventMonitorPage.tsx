@@ -54,7 +54,7 @@ export const EventMonitorPage: React.FC = () => {
       if (typeFilter === 'SAFETY' && !evt.event_type.includes('safety') && !evt.event_type.includes('rejected')) return false;
       if (typeFilter === 'PRICES' && !evt.event_type.includes('price') && !evt.event_type.includes('liquidity')) return false;
       if (typeFilter === 'DIAGNOSTICS' && !['diagnostic','stream_warning','engine_warning','engine_error','websocket_disconnected'].includes(evt.event_type) && !['warning','error'].includes(String(evt.data?.severity || '').toLowerCase())) return false;
-      if (typeFilter === 'SOLANA' && evt.event_type !== 'solana_logs_notification') return false;
+      if (typeFilter === 'SYSTEM' && !['connection_status','engine_state','stream_warning','diagnostic'].includes(evt.event_type)) return false;
     }
 
     if (searchQuery.trim()) {
@@ -91,7 +91,7 @@ export const EventMonitorPage: React.FC = () => {
             </span>
           </div>
           <p className="text-[11px] font-mono text-[#737373] mt-0.5">
-            Persisted backend history, live on-chain telemetry, raw Solana logs, and connection diagnostics
+            Curated engine events, token decisions, paper-trade events, and stream warnings
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] font-mono">
             <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 ${engineStatus.ws_status === 'connected' ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-800/60 bg-amber-950/30 text-amber-300'}`}>
@@ -155,7 +155,7 @@ export const EventMonitorPage: React.FC = () => {
             { id: 'SAFETY', label: 'Safety & Risk' },
             { id: 'PRICES', label: 'Price Ticks' },
             { id: 'DIAGNOSTICS', label: 'Diagnostics & Errors' },
-            { id: 'SOLANA', label: 'Raw Solana Logs' },
+            { id: 'SYSTEM', label: 'System & Stream' },
           ] as const
         ).map((t) => (
           <button

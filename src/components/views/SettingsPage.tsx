@@ -1,325 +1,169 @@
 import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import {
-  Sliders,
-  Power,
-  ShieldAlert,
-  Server,
-  Radio,
-  Wifi,
-  Database,
-  Check,
-  AlertCircle,
-  RefreshCw,
-  Code2,
-  Lock,
-} from 'lucide-react';
+import { Check, AlertCircle, RefreshCw, Lock, Server, Radio, Database, ChevronDown } from 'lucide-react';
+
+type HealthResult = { status: 'idle' | 'testing' | 'success' | 'failed'; message?: string };
+
+const implementedRoutes = [
+  ['GET', '/health', 'HTTP health response'],
+  ['GET', '/api/v1/engine/status', 'Engine pause state and Solana stream status'],
+  ['GET', '/api/v1/paper-wallet', 'Persistent personal paper wallet'],
+  ['GET', '/api/v1/tokens/recent', 'Persisted confirmed token launches'],
+  ['GET', '/api/v1/events/recent', 'Persisted raw-event history (internal; not browser feed)'],
+  ['GET', '/api/v1/tokens/:mint/scan', 'On-demand token security scan'],
+  ['GET', '/api/v1/fees/token-account-rent', 'Solana token-account rent estimate'],
+  ['WS', '/api/v1/ws', 'Curated application events and engine commands'],
+] as const;
 
 export const SettingsPage: React.FC = () => {
-  const {
-    engineStatus,
-    toggleEngine,
-    toggleStrategy,
-    settings,
-    updateSettings,
-    backendError,
-  } = useTerminal();
-
+  const { engineStatus, toggleEngine, settings, updateSettings, backendError } = useTerminal();
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [wsUrl, setWsUrl] = useState(settings.wsUrl);
-  const [testResult, setTestResult] = useState<{ status: 'idle' | 'testing' | 'success' | 'failed'; message?: string }>({
-    status: 'idle',
-  });
+  const [testResult, setTestResult] = useState<HealthResult>({ status: 'idle' });
   const [savedNotice, setSavedNotice] = useState(false);
 
   const handleTestBackend = async () => {
-    setTestResult({ status: 'testing' });
+    const baseUrl = backendUrl.trim().replace(/\/$/, '');
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      setTestResult({ status: 'failed', message: 'Enter a valid HTTPS backend URL.' });
+      return;
+    }
+    setTestResult({ status: 'testing', message: 'Checking the Rust health endpoint…' });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 10000);
     try {
-      const url = `${backendUrl.replace(/\/$/, '')}/health`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const json = await res.json();
-        setTestResult({
-          status: 'success',
-          message: `Connected to ${json.service || 'NodeX'} (${json.mode || 'unknown'} mode).`,
-        });
-      } else {
-        setTestResult({
-          status: 'failed',
-          message: `Backend health endpoint returned HTTP ${res.status}.`,
-        });
-      }
-    } catch {
-      setTestResult({
-        status: 'failed',
-        message: 'Could not reach the configured Axum backend. No simulation fallback is active.',
+      const response = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+        cache: 'no-store',
       });
+      const body = await response.text();
+      if (!response.ok) {
+        setTestResult({ status: 'failed', message: `Health endpoint returned HTTP ${response.status}: ${body.slice(0, 180)}` });
+        return;
+      }
+      let health: { status?: string; mode?: string; service?: string };
+      try { health = JSON.parse(body); } catch {
+        setTestResult({ status: 'failed', message: 'The server responded, but /health did not return valid JSON.' });
+        return;
+      }
+      if (health.status !== 'ok') {
+        setTestResult({ status: 'failed', message: `Server responded, but reported status: ${health.status || 'unknown'}.` });
+        return;
+      }
+      setTestResult({ status: 'success', message: `API reachable · ${health.service || 'NodeX'} · ${health.mode || 'mode unknown'} mode` });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setTestResult({ status: 'failed', message: 'Health check timed out after 10 seconds. The server did not answer in time.' });
+      } else if (error instanceof TypeError) {
+        setTestResult({ status: 'failed', message: 'Browser could not read the response. Check HTTPS/TLS and backend CORS settings.' });
+      } else {
+        setTestResult({ status: 'failed', message: error instanceof Error ? error.message : 'Health check failed unexpectedly.' });
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   };
 
   const handleSaveSettings = () => {
-    updateSettings({
-      backendUrl,
-      wsUrl,
-    });
+    updateSettings({ backendUrl: backendUrl.trim(), wsUrl: wsUrl.trim() });
     setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 2500);
+    window.setTimeout(() => setSavedNotice(false), 2500);
   };
 
-  return (
-    <div className="space-y-6 pb-16">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-[#262626]">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-mono font-bold text-white tracking-wide uppercase">
-              Engine Controls & Backend Architecture
-            </h1>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#1f1f1f] text-emerald-400 border border-[#333]">
-              RUST AXUM SPEC
-            </span>
-          </div>
-          <p className="text-xs font-mono text-[#737373] mt-0.5">
-            Configure your deployed Rust API and WebSocket connection
-          </p>
-        </div>
+  const streamActive = !engineStatus.strategy_paused;
 
-        {savedNotice && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-950/40 border border-emerald-700/50 text-emerald-300 text-xs font-mono">
-            <Check className="w-3.5 h-3.5" />
-            <span>Connection URLs saved in this browser</span>
-          </div>
-        )}
-      </div>
+  return (
+    <div className="mx-auto w-full max-w-5xl space-y-4 px-3 py-4 pb-28 sm:px-5 lg:px-6 lg:py-6">
+      <header className="space-y-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">Controls & Connection</h1>
+          <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[10px] font-mono text-amber-300">PAPER ONLY</span>
+        </div>
+        <p className="text-xs text-neutral-500">Private NodeX workstation · Rust Axum backend</p>
+      </header>
 
       {backendError && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs font-mono text-amber-200">
-          {backendError}
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 text-xs leading-relaxed text-amber-200">
+          <div className="mb-1 font-semibold">Backend notice</div>{backendError}
         </div>
       )}
 
-      {/* 1. Core Engine Execution Controls */}
-      <section className="glass-panel rounded-2xl p-5 space-y-4 shadow-lg">
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
-          <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-            Engine State & Process Controls
-          </span>
-          <span className="text-[10px] font-mono text-amber-400 px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30">
-            DEFAULT: PAPER TRADING (NON-CUSTODIAL)
-          </span>
+      <section className="rounded-2xl border border-white/10 bg-[#101010] p-3.5 sm:p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-white"><Server className="h-4 w-4 text-neutral-400" /> Runtime status</div>
+          <span className="text-[10px] font-mono text-neutral-500">LIVE STATE</span>
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
-          <div className="p-4 rounded-xl glass-card space-y-2">
-            <div className="text-[#8e8e93] text-[11px] uppercase">Engine Status</div>
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${engineStatus.running ? 'bg-emerald-400' : 'bg-red-400'}`} />
-              <span className="text-base font-bold text-white">
-                {engineStatus.running ? 'RUNNING' : 'STOPPED'}
-              </span>
-            </div>
-            <button
-              onClick={toggleEngine}
-              className={`w-full py-2 rounded-xl text-xs font-medium border transition-all ${
-                engineStatus.running
-                  ? 'bg-red-950/40 text-red-300 border-red-800/40 hover:bg-red-900/50'
-                  : 'bg-emerald-950/40 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/50'
-              }`}
-            >
-              {engineStatus.running ? 'Stop Engine' : 'Start Engine'}
-            </button>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+            <div className="text-[10px] uppercase tracking-wide text-neutral-500">Engine stream</div>
+            <div className={`mt-1 text-sm font-semibold ${streamActive ? 'text-emerald-400' : 'text-amber-300'}`}>{streamActive ? 'ACTIVE' : 'PAUSED'}</div>
+            <button onClick={toggleEngine} className="mt-2 w-full rounded-lg border border-white/10 bg-white/[0.06] px-2 py-2 text-[11px] font-medium text-white active:scale-[.98]">{streamActive ? 'Pause stream' : 'Resume stream'}</button>
           </div>
-
-          <div className="p-4 rounded-xl glass-card space-y-2">
-            <div className="text-[#8e8e93] text-[11px] uppercase">Strategy Dispatcher</div>
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${!engineStatus.strategy_paused ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              <span className="text-base font-bold text-white">
-                {engineStatus.strategy_paused ? 'PAUSED' : 'ACTIVE'}
-              </span>
-            </div>
-            <button
-              disabled title="Strategy control API is not implemented yet"
-              onClick={toggleStrategy}
-              className={`w-full py-2 rounded-xl text-xs font-medium border transition-all opacity-50 cursor-not-allowed ${
-                engineStatus.strategy_paused
-                  ? 'bg-emerald-950/40 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/50'
-                  : 'bg-amber-950/40 text-amber-300 border-amber-800/40 hover:bg-amber-900/50'
-              }`}
-            >
-              {engineStatus.strategy_paused ? 'Resume Strategy' : 'Pause Strategy'}
-            </button>
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+            <div className="text-[10px] uppercase tracking-wide text-neutral-500">WebSocket</div>
+            <div className={`mt-1 text-sm font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-400' : 'text-amber-300'}`}>{engineStatus.ws_status.toUpperCase()}</div>
+            <div className="mt-2 text-[10px] text-neutral-500">Browser ↔ Axum</div>
           </div>
-
-          <div className="p-4 rounded-xl glass-card space-y-2">
-            <div className="text-[#8e8e93] text-[11px] uppercase">Operating Mode</div>
-            <div className="text-base font-bold text-amber-400 flex items-center gap-1.5">
-              <Lock className="w-4 h-4" />
-              <span>PAPER TRADING</span>
-            </div>
-            <p className="text-[10px] text-[#737373] leading-relaxed">
-              Paper mode is permanently enforced in this release to prevent accidental real fund exposure.
-            </p>
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+            <div className="text-[10px] uppercase tracking-wide text-neutral-500">Solana stream</div>
+            <div className={`mt-1 text-sm font-semibold ${engineStatus.solana_connected ? 'text-emerald-400' : 'text-red-300'}`}>{engineStatus.solana_connected ? 'CONNECTED' : 'DISCONNECTED'}</div>
+            <div className="mt-2 text-[10px] text-neutral-500">Upstream RPC</div>
           </div>
-
-          <div className="p-4 rounded-xl glass-card space-y-2">
-            <div className="text-[#8e8e93] text-[11px] uppercase">Database Status</div>
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-emerald-400" />
-              <span className="text-base font-bold text-emerald-400">HEALTHY</span>
-            </div>
-            <p className="text-[10px] text-[#737373]">
-              SQLite / PostgreSQL ledger synched
-            </p>
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+            <div className="text-[10px] uppercase tracking-wide text-neutral-500">Database</div>
+            <div className="mt-1 text-sm font-semibold text-neutral-300">NOT REPORTED</div>
+            <div className="mt-2 text-[10px] text-neutral-500">No DB health field in API</div>
           </div>
         </div>
+        <p className="mt-3 flex items-start gap-2 text-[11px] leading-relaxed text-neutral-500"><Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Real transaction signing and submission remain disabled. The stream control pauses/resumes processing; it does not start or stop the Linux service.</p>
       </section>
 
-      {/* 2. Backend & Connection Configuration */}
-      <section className="glass-panel rounded-2xl p-5 space-y-5 shadow-lg">
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
-          <span className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-            Axum Rust Backend & WebSocket Gateway
-          </span>
-          <span className="text-xs font-mono text-[#737373]">
-            Rust backend only · paper execution
-          </span>
-        </div>
-
-        {/* Backend mode is fixed to the real Rust service; no local simulator exists. */}
-        <div className="space-y-2 font-mono text-xs">
-          <label className="text-[#8e8e93] uppercase text-[11px]">Integration Source</label>
-          <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-950/10 text-white">
-            <div className="font-bold">Custom Axum Rust Backend · PAPER ONLY</div>
-            <div className="text-[11px] text-[#737373] mt-1">
-              Connects to the configured NodeX Rust service. Local simulation and live transaction execution are disabled.
+      <section className="rounded-2xl border border-white/10 bg-[#101010] p-3.5 sm:p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white"><Radio className="h-4 w-4 text-neutral-400" /> Backend connection</div>
+        <div className="space-y-3">
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-neutral-400">HTTPS base URL</span>
+            <input value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} inputMode="url" autoCapitalize="none" spellCheck={false} placeholder="https://your-backend.example.com" className="w-full min-w-0 rounded-xl border border-white/10 bg-[#080808] px-3 py-3 text-xs text-white outline-none focus:border-white/30" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-neutral-400">WebSocket URL</span>
+            <input value={wsUrl} onChange={(e) => setWsUrl(e.target.value)} inputMode="url" autoCapitalize="none" spellCheck={false} placeholder="wss://your-backend.example.com/api/v1/ws" className="w-full min-w-0 rounded-xl border border-white/10 bg-[#080808] px-3 py-3 text-xs text-white outline-none focus:border-white/30" />
+          </label>
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-[11px] leading-relaxed text-neutral-500">
+            Only public service addresses are saved in this browser. Never put RPC keys, passwords, seed phrases, or private keys here.
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+            <button onClick={handleSaveSettings} className="rounded-xl bg-white px-4 py-3 text-xs font-semibold text-black active:scale-[.99]">{savedNotice ? 'Saved' : 'Save connection'}</button>
+            <button onClick={handleTestBackend} disabled={testResult.status === 'testing'} className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-xs font-medium text-white disabled:opacity-50">
+              <RefreshCw className={`h-3.5 w-3.5 ${testResult.status === 'testing' ? 'animate-spin' : ''}`} /> Test API health
+            </button>
+          </div>
+          {testResult.status !== 'idle' && (
+            <div className={`flex items-start gap-2 rounded-xl border p-3 text-xs leading-relaxed ${testResult.status === 'success' ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-300' : testResult.status === 'failed' ? 'border-red-500/20 bg-red-500/[0.06] text-red-200' : 'border-white/10 bg-white/[0.03] text-neutral-300'}`}>
+              {testResult.status === 'success' ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+              <span>{testResult.message || 'Checking…'}</span>
             </div>
-          </div>
-        </div>
-
-        {/* Inputs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 font-mono text-xs">
-          <div className="space-y-1.5">
-            <label className="text-[#8e8e93] text-[11px] uppercase">Rust Backend HTTPS Base URL</label>
-            <input
-              type="text"
-              value={backendUrl}
-              onChange={(e) => setBackendUrl(e.target.value)}
-              placeholder="https://your-backend.example.com"
-              className="w-full glass-panel-subtle rounded-xl px-3 py-2 text-white focus:outline-none focus:border-white/20"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[#8e8e93] text-[11px] uppercase">Rust Backend WebSocket WSS URL</label>
-            <input
-              type="text"
-              value={wsUrl}
-              onChange={(e) => setWsUrl(e.target.value)}
-              placeholder="wss://your-backend.example.com/api/v1/ws"
-              className="w-full glass-panel-subtle rounded-xl px-3 py-2 text-white focus:outline-none focus:border-white/20"
-            />
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-amber-500/20 bg-amber-950/10 p-3 text-[11px] font-mono leading-relaxed text-amber-100/80">
-          <div className="flex items-center gap-2 font-bold text-amber-300 mb-1">
-            <Lock className="w-3.5 h-3.5" />
-            Browser storage security
-          </div>
-          Only the public REST and WebSocket addresses are saved in this browser's local storage.
-          Do not enter Solana RPC keys, passwords, private keys, or other secrets here. Keep provider
-          credentials on the Rust backend server.
-        </div>
-        {/* Buttons */}
-        <div className="flex flex-wrap items-center gap-3 pt-2">
-          <button
-            onClick={handleSaveSettings}
-            className="px-4 py-2 rounded bg-white hover:bg-neutral-200 text-black text-xs font-mono font-bold transition-colors"
-          >
-            Save Connection Preferences
-          </button>
-
-          <button
-            onClick={handleTestBackend}
-            disabled={testResult.status === 'testing'}
-            className="px-4 py-2 rounded bg-[#1e1e1e] hover:bg-[#262626] text-white text-xs font-mono font-medium border border-[#333] transition-colors flex items-center gap-1.5"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${testResult.status === 'testing' ? 'animate-spin' : ''}`} />
-            <span>Test Backend Health</span>
-          </button>
-
-          {testResult.status === 'success' && (
-            <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
-              <Check className="w-3.5 h-3.5" />
-              <span>{testResult.message}</span>
-            </span>
-          )}
-          {testResult.status === 'failed' && (
-            <span className="text-xs font-mono text-amber-400 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>{testResult.message}</span>
-            </span>
           )}
         </div>
       </section>
 
-      {/* 3. Axum Backend Endpoint Specification */}
-      <section className="bg-[#111111] border border-[#292929] rounded-lg p-5 space-y-3 font-mono text-xs">
-        <div className="flex items-center gap-2 pb-2 border-b border-[#222]">
-          <Code2 className="w-4 h-4 text-[#8e8e93]" />
-          <span className="font-bold text-white uppercase tracking-wider">
-            Rust Axum API Contract Specification
-          </span>
+      <details className="group rounded-2xl border border-white/10 bg-[#101010]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-sm font-semibold text-white">
+          <span className="flex items-center gap-2"><Database className="h-4 w-4 text-neutral-400" /> API routes and event contract</span>
+          <ChevronDown className="h-4 w-4 text-neutral-500 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-2 border-t border-white/[0.07] p-3">
+          <p className="text-[11px] leading-relaxed text-neutral-500">These are the routes present in the current Rust router. Planned dashboard-summary and positions routes are deliberately not listed as available.</p>
+          {implementedRoutes.map(([method, path, description]) => (
+            <div key={path} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-bold text-emerald-400">{method}</span><code className="break-all text-[11px] text-white">{path}</code></div>
+              <p className="mt-1 text-[10px] text-neutral-500">{description}</p>
+            </div>
+          ))}
         </div>
-
-        <p className="text-[#737373] text-[11px] leading-relaxed">
-          These are backend routes currently used or planned. Routes not yet implemented are not queried by the frontend:
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
-          <div className="p-2.5 rounded bg-[#141414] border border-[#222] space-y-1">
-            <span className="text-emerald-400 font-bold">GET</span>{' '}
-            <span className="text-white">/health</span>
-            <div className="text-[10px] text-[#737373]">Engine heartbeat & uptime</div>
-          </div>
-
-          <div className="p-2.5 rounded bg-[#141414] border border-[#222] space-y-1">
-            <span className="text-emerald-400 font-bold">GET</span>{' '}
-            <span className="text-white">/api/v1/engine/status</span>
-            <div className="text-[10px] text-[#737373]">RPC latency, network, throughput</div>
-          </div>
-
-          <div className="p-2.5 rounded bg-[#141414] border border-[#222] space-y-1">
-            <span className="text-emerald-400 font-bold">GET</span>{' '}
-            <span className="text-white">/api/v1/dashboard/summary</span>
-            <div className="text-[10px] text-[#737373]">Financial metrics, realised/unrealised P&L</div>
-          </div>
-
-          <div className="p-2.5 rounded bg-[#141414] border border-[#222] space-y-1">
-            <span className="text-emerald-400 font-bold">GET</span>{' '}
-            <span className="text-white">/api/v1/positions</span>
-            <div className="text-[10px] text-[#737373]">Open & closed paper positions list</div>
-          </div>
-
-          <div className="p-2.5 rounded bg-[#141414] border border-[#222] space-y-1">
-            <span className="text-emerald-400 font-bold">GET</span>{' '}
-            <span className="text-white">/api/v1/tokens</span>
-            <div className="text-[10px] text-[#737373]">Discovered Solana tokens & bonding curves</div>
-          </div>
-
-          <div className="p-2.5 rounded bg-[#141414] border border-[#222] space-y-1">
-            <span className="text-purple-400 font-bold">WS</span>{' '}
-            <span className="text-white">/api/v1/ws</span>
-            <div className="text-[10px] text-[#737373]">Bi-directional JSON event broadcast channel</div>
-          </div>
-        </div>
-      </section>
+      </details>
     </div>
   );
 };

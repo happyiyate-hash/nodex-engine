@@ -77,6 +77,14 @@ export class NodeXApiClient {
       const body = await response.text();
       if (!response.ok) throw new Error(`NodeX API ${response.status}: ${body || response.statusText}`);
       return (body ? JSON.parse(body) : undefined) as T;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error(`NodeX request timed out after 10 seconds: ${path}`);
+      }
+      if (error instanceof TypeError) {
+        throw new Error(`Could not reach the NodeX API at ${this.settings.backendUrl}. Check the server, TLS certificate, and browser CORS permission.`);
+      }
+      throw error;
     } finally { window.clearTimeout(timeout); }
   }
 
