@@ -4,7 +4,7 @@ import {
   Position, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot,
 } from '../types';
 import { apiClient, ApiSettings } from '../services/api';
-import { wsService } from '../services/websocket';
+import { normalizeBackendEvent, wsService } from '../services/websocket';
 
 export type NavigationTab =
   | 'overview' | 'positions' | 'live_feed' | 'event_monitor'
@@ -93,6 +93,29 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     let active = true;
     wsService.connect();
+
+    // Restore persisted backend events after a page refresh or a temporary
+    // browser WebSocket disconnect, then periodically backfill missed events.
+    const loadEventHistory = () => {
+      apiClient.getRecentEvents(300).then((records) => {
+        if (!active) return;
+        const historical = records.map((record) =>
+          normalizeBackendEvent(record.event, record.received_at)
+        );
+        setEvents((previous) => {
+          const merged = new Map<string, NodeXEvent>();
+          [...historical, ...previous].forEach((event) => merged.set(event.event_id, event));
+          return Array.from(merged.values())
+            .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+            .slice(0, 500);
+        });
+      }).catch((error: unknown) => {
+        console.warn('Could not restore persisted NodeX backend events.', error);
+      });
+    };
+    loadEventHistory();
+    const eventHistoryTimer = window.setInterval(loadEventHistory, 15000);
+
     apiClient.getPaperWallet().then((wallet) => {
       if (active) setPaperWallet(wallet);
     }).catch((error: unknown) => {
@@ -154,7 +177,12 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setBackendError(typeof event.data.message === 'string' ? event.data.message : 'Backend diagnostic received.');
       }
     });
-    return () => { active = false; unsubscribeStatus(); unsubscribeEvents(); };
+    return () => {
+      active = false;
+      window.clearInterval(eventHistoryTimer);
+      unsubscribeStatus();
+      unsubscribeEvents();
+    };
   }, []);
 
   const sendPause = useCallback((pause: boolean) => {

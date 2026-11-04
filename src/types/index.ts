@@ -185,7 +185,9 @@ export type EventType =
   | 'market_monitor_status'
   | 'market_subscription_active'
   | 'provider_status'
-  | 'reconnect_recovery_status';
+  | 'reconnect_recovery_status'
+  | 'solana_logs_notification'
+  | 'unknown_event';
 
 export interface NodeXEvent {
   event_id: string;

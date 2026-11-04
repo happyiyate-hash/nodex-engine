@@ -3,6 +3,55 @@ import { apiClient } from './api';
 type EventListener=(event:NodeXEvent)=>void;
 type StatusListener=(status:ConnectionStatus,latencyMs:number)=>void;
 
+export function normalizeBackendEvent(raw:any, receivedAt?:string):NodeXEvent {
+  const isSolanaLog=raw?.method==='logsNotification';
+  const rawType=typeof raw?.type==='string'?raw.type:(isSolanaLog?'solana_logs_notification':'unknown_event');
+  const value=raw?.params?.result?.value||{};
+  const timestamp=String(
+    raw?.data?.received_at||raw?.data?.detected_at||receivedAt||new Date().toISOString()
+  );
+  const data:Record<string,any>=isSolanaLog?{
+    component:'solana_logs',
+    program_id:raw?.nodex_program_id||null,
+    signature:value.signature||null,
+    slot:raw?.params?.result?.context?.slot??null,
+    transaction_error:value.err??null,
+    log_messages:Array.isArray(value.logs)?value.logs:[],
+    raw_notification:raw,
+    received_at:timestamp,
+  }:(raw?.data&&typeof raw.data==='object'?raw.data:raw);
+  const mint=data.mint_address||data.token_mint||data.base_mint;
+  const signature=data.signature||null;
+  const eventId=isSolanaLog
+    ? [rawType,data.program_id||raw?.nodex_program_id||'',signature||'',data.slot??''].join(':')
+    : [rawType,signature||data.pool_address||mint||'',data.event_index??'',timestamp].join(':');
+  let message=data.message;
+  if(!message){
+    switch(rawType){
+      case 'solana_logs_notification': message=`Raw Solana logs received from ${data.program_id||'program'} (${data.log_messages.length} log lines).`; break;
+      case 'launch_detected': message=`New Pump.fun launch detected: ${data.mint_address||'mint unavailable'}`; break;
+      case 'pumpswap_activity': message=`PumpSwap ${data.event_type||'activity'}: ${data.pool_address||'pool unresolved'}`; break;
+      case 'pumpswap_volume_update': message=`PumpSwap volume updated for pool ${data.pool_address||'unknown'}`; break;
+      case 'token_scan_started': message=`Security scan started: ${data.mint_address||'unknown mint'}`; break;
+      case 'token_scan_update': message=`Security scan updated: ${data.mint_address||'unknown mint'}`; break;
+      case 'diagnostic': message='Backend diagnostic'; break;
+      case 'connection_status': message='Connected to NodeX backend event stream'; break;
+      case 'engine_state': message=`Engine ${data.paused?'paused':'running'} in ${data.mode||'paper'} mode`; break;
+      default: message=rawType.replace(/_/g,' ');
+    }
+  }
+  return {
+    event_id:eventId,
+    event_type:rawType as NodeXEvent['event_type'],
+    timestamp,
+    token_mint:mint,
+    message:String(message),
+    processing_status:rawType==='diagnostic'?'failed':'processed',
+    tx_signature:signature||undefined,
+    data,
+  };
+}
+
 export class NodeXWebSocketService {
   private ws:WebSocket|null=null; private status:ConnectionStatus='disconnected';
   private latencyMs=0; private listeners=new Set<EventListener>();
@@ -27,17 +76,10 @@ export class NodeXWebSocketService {
         try {
           const raw=JSON.parse(String(message.data));
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
-          const data=raw.data&&typeof raw.data==='object'?raw.data:raw;
-          const timestamp=data.received_at||data.detected_at||new Date().toISOString();
-          const mint=data.mint_address||data.token_mint||data.base_mint;
-          const id=[raw.type,data.signature||data.pool_address||mint||'',data.event_index??'',timestamp].join(':');
-          if(this.seen.has(id))return;
-          this.seen.add(id);
+          const event=normalizeBackendEvent(raw);
+          if(this.seen.has(event.event_id))return;
+          this.seen.add(event.event_id);
           if(this.seen.size>3000)this.seen.delete(this.seen.values().next().value as string);
-          const event:NodeXEvent={event_id:id,event_type:raw.type as NodeXEvent['event_type'],
-            timestamp,token_mint:mint,message:data.message||this.describe(raw.type,data),
-            processing_status:raw.type==='diagnostic'?'failed':'processed',
-            tx_signature:data.signature,data};
           // Browser-to-backend WebSocket health is independent from the backend's
           // upstream Solana RPC stream health. TerminalContext tracks both separately.
           this.dispatch(event);
@@ -79,19 +121,6 @@ export class NodeXWebSocketService {
       processing_status:severity==='error'?'failed':'processed',
       data:{...data,severity,component,received_at:timestamp,source:'frontend'}
     });
-  }
-  private describe(type:string,data:any):string {
-    switch(type){
-      case 'launch_detected':return `New Pump.fun launch detected: ${data.mint_address||'mint unavailable'}`;
-      case 'pumpswap_activity':return `PumpSwap ${data.event_type||'activity'}: ${data.pool_address||'pool unresolved'}`;
-      case 'pumpswap_volume_update':return `PumpSwap volume updated for pool ${data.pool_address||'unknown'}`;
-      case 'token_scan_started':return `Security scan started: ${data.mint_address||'unknown mint'}`;
-      case 'token_scan_update':return `Security scan updated: ${data.mint_address||'unknown mint'}`;
-      case 'diagnostic':return data.message||'Backend diagnostic';
-      case 'connection_status':return 'Connected to NodeX backend event stream';
-      case 'engine_state':return `Engine ${data.paused?'paused':'running'} in ${data.mode||'paper'} mode`;
-      default:return type.replace(/_/g,' ');
-    }
   }
   private scheduleReconnect():void {
     if(this.manuallyClosed||this.reconnectTimer)return;

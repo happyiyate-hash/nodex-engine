@@ -54,13 +54,15 @@ export const EventMonitorPage: React.FC = () => {
       if (typeFilter === 'SAFETY' && !evt.event_type.includes('safety') && !evt.event_type.includes('rejected')) return false;
       if (typeFilter === 'PRICES' && !evt.event_type.includes('price') && !evt.event_type.includes('liquidity')) return false;
       if (typeFilter === 'DIAGNOSTICS' && !['diagnostic','stream_warning','engine_warning','engine_error','websocket_disconnected'].includes(evt.event_type) && !['warning','error'].includes(String(evt.data?.severity || '').toLowerCase())) return false;
+      if (typeFilter === 'SOLANA' && evt.event_type !== 'solana_logs_notification') return false;
     }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchType = evt.event_type.toLowerCase().includes(q);
       const matchMsg = evt.message.toLowerCase().includes(q);
-      return matchType || matchMsg;
+      const matchPayload = JSON.stringify(evt.data || {}).toLowerCase().includes(q);
+      return matchType || matchMsg || matchPayload;
     }
     return true;
   });
@@ -89,7 +91,7 @@ export const EventMonitorPage: React.FC = () => {
             </span>
           </div>
           <p className="text-[11px] font-mono text-[#737373] mt-0.5">
-            Live backend diagnostics, on-chain telemetry, paper-trading events, and connection traces
+            Persisted backend history, live on-chain telemetry, raw Solana logs, and connection diagnostics
           </p>
           <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] font-mono">
             <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 ${engineStatus.ws_status === 'connected' ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-800/60 bg-amber-950/30 text-amber-300'}`}>
@@ -153,6 +155,7 @@ export const EventMonitorPage: React.FC = () => {
             { id: 'SAFETY', label: 'Safety & Risk' },
             { id: 'PRICES', label: 'Price Ticks' },
             { id: 'DIAGNOSTICS', label: 'Diagnostics & Errors' },
+            { id: 'SOLANA', label: 'Raw Solana Logs' },
           ] as const
         ).map((t) => (
           <button
