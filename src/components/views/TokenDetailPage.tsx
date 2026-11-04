@@ -371,7 +371,7 @@ export const TokenDetailPage: React.FC = () => {
         {/* Paper Trade Execution Form */}
         <div className="pt-2 flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg glass-panel-subtle text-xs font-mono">
           <div className="flex items-center gap-2">
-            <span className="text-[#8e8e93] text-xs">Execute Simulated Paper Buy:</span>
+            <span className="text-[#8e8e93] text-xs">Paper order execution</span>
             <div className="flex items-center gap-1.5">
               {[0.5, 1.0, 2.0, 5.0].map((amt) => (
                 <button
@@ -393,7 +393,7 @@ export const TokenDetailPage: React.FC = () => {
             className="px-4 py-1.5 rounded-lg glass-card border-emerald-500/30 text-emerald-300 hover:text-white hover:bg-emerald-950/40 font-mono font-medium text-xs transition-all flex items-center gap-1.5"
           >
             <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Simulate Buy ({paperBuySol} SOL)</span>
+            <span>Paper orders unavailable ({paperBuySol} SOL)</span>
           </button>
         </div>
       </div>
