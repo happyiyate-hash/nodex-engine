@@ -21,6 +21,7 @@ import {
 export const EventMonitorPage: React.FC = () => {
   const {
     events,
+    settings,
     selectedEvent,
     setSelectedEvent,
     isStreamPaused,
@@ -82,7 +83,7 @@ export const EventMonitorPage: React.FC = () => {
               Event Stream & JSON Inspector
             </h1>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded glass-icon text-emerald-400">
-              AXUM RUST WEBSOCKET
+              {settings.mode === 'RUST_BACKEND' ? 'AXUM RUST WEBSOCKET' : 'SIMULATED DEMO STREAM'}
             </span>
           </div>
           <p className="text-[11px] font-mono text-[#737373] mt-0.5">
