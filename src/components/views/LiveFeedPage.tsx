@@ -16,6 +16,7 @@ import {
 export const LiveFeedPage: React.FC = () => {
   const {
     tokens,
+    settings,
     openTokenDetailByMint,
     executeManualPaperBuy,
   } = useTerminal();
@@ -147,7 +148,7 @@ export const LiveFeedPage: React.FC = () => {
               Live Token Discovery Feed
             </h1>
             <span className="text-[10px] font-mono text-emerald-400 font-semibold glass-icon px-2 py-0.5 rounded-full">
-              GEYSER RPC STREAM
+              {settings.mode === 'RUST_BACKEND' ? 'RUST BACKEND STREAM' : 'SIMULATED DEMO STREAM'}
             </span>
           </div>
           <p className="text-[11px] font-mono text-[#737373] mt-0.5">
