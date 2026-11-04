@@ -1,6 +1,6 @@
 import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot } from '../types';
 
-const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\\/$/, '');
+const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\/$/, '');
 const WS_URL = import.meta.env.VITE_NODEX_WS_URL || (API_URL
   ? API_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/ws'
   : (typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (typeof window !== 'undefined' ? window.location.host : 'localhost') + '/api/v1/ws');
@@ -44,7 +44,7 @@ export class NodeXApiClient {
     this.settings = {
       ...this.settings,
       ...update,
-      backendUrl: (update.backendUrl ?? this.settings.backendUrl).trim().replace(/\\/$/, ''),
+      backendUrl: (update.backendUrl ?? this.settings.backendUrl).trim().replace(/\/$/, ''),
       wsUrl: (update.wsUrl ?? this.settings.wsUrl).trim(),
       mode: 'RUST_BACKEND',
     };
