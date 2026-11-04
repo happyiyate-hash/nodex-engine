@@ -18,7 +18,11 @@ export class NodeXWebSocketService {
     this.setStatus(this.reconnectAttempts?'reconnecting':'disconnected',0);
     try {
       const socket=new WebSocket(url); this.ws=socket;
-      socket.onopen=()=>{this.reconnectAttempts=0;this.setStatus('connected',0);};
+      socket.onopen=()=>{
+        this.reconnectAttempts=0;
+        this.setStatus('connected',0);
+        this.emitLocalEvent('websocket_connected','info','frontend_websocket','Browser WebSocket connected to the NodeX backend.',{url});
+      };
       socket.onmessage=(message)=>{
         try {
           const raw=JSON.parse(String(message.data));
@@ -34,14 +38,47 @@ export class NodeXWebSocketService {
             timestamp,token_mint:mint,message:data.message||this.describe(raw.type,data),
             processing_status:raw.type==='diagnostic'?'failed':'processed',
             tx_signature:data.signature,data};
-          if(raw.type==='connection_status'&&data.solana_stream)
-            this.setStatus(data.solana_stream.connected?'connected':'disconnected',0);
+          // Browser-to-backend WebSocket health is independent from the backend's
+          // upstream Solana RPC stream health. TerminalContext tracks both separately.
           this.dispatch(event);
-        } catch(error){console.warn('Unable to parse NodeX WebSocket message',error);}
+        } catch(error){
+          console.warn('Unable to parse NodeX WebSocket message',error);
+          this.emitLocalEvent('diagnostic','warning','frontend_websocket','Received a WebSocket message that could not be parsed as NodeX JSON.',{
+            error:error instanceof Error?error.message:String(error)
+          });
+        }
       };
-      socket.onerror=()=>this.setStatus('reconnecting',0);
-      socket.onclose=()=>{if(this.ws===socket)this.ws=null;this.setStatus('disconnected',0);this.scheduleReconnect();};
-    } catch {this.setStatus('disconnected',0);this.scheduleReconnect();}
+      socket.onerror=()=>{
+        this.setStatus('reconnecting',0);
+        this.emitLocalEvent('diagnostic','error','frontend_websocket','The browser reported a WebSocket transport error. Check the backend URL, TLS/WSS proxy, network access, and backend logs.',{url});
+      };
+      socket.onclose=(event)=>{
+        if(this.ws===socket)this.ws=null;
+        this.setStatus('disconnected',0);
+        if(!this.manuallyClosed){
+          this.emitLocalEvent('diagnostic','warning','frontend_websocket','WebSocket connection closed; automatic reconnection will be attempted.',{
+            url,close_code:event.code,close_reason:event.reason||null,was_clean:event.wasClean,
+            reconnect_attempt:this.reconnectAttempts+1
+          });
+        }
+        this.scheduleReconnect();
+      };
+    } catch(error) {
+      this.setStatus('disconnected',0);
+      this.emitLocalEvent('diagnostic','error','frontend_websocket',error instanceof Error?error.message:'Could not create the backend WebSocket connection.',{url});
+      this.scheduleReconnect();
+    }
+  }
+  private emitLocalEvent(type:NodeXEvent['event_type'],severity:string,component:string,message:string,data:Record<string,any>={}):void {
+    const timestamp=new Date().toISOString();
+    this.dispatch({
+      event_id:`client-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+      event_type:type,
+      timestamp,
+      message,
+      processing_status:severity==='error'?'failed':'processed',
+      data:{...data,severity,component,received_at:timestamp,source:'frontend'}
+    });
   }
   private describe(type:string,data:any):string {
     switch(type){

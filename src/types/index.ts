@@ -179,7 +179,13 @@ export type EventType =
   | 'rpc_disconnected'
   | 'websocket_reconnected'
   | 'engine_warning'
-  | 'engine_error';
+  | 'engine_error'
+  | 'websocket_connected'
+  | 'websocket_disconnected'
+  | 'market_monitor_status'
+  | 'market_subscription_active'
+  | 'provider_status'
+  | 'reconnect_recovery_status';
 
 export interface NodeXEvent {
   event_id: string;
