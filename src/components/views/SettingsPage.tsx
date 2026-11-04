@@ -144,8 +144,9 @@ export const SettingsPage: React.FC = () => {
               </span>
             </div>
             <button
+              disabled title="Strategy control API is not implemented yet"
               onClick={toggleStrategy}
-              className={`w-full py-2 rounded-xl text-xs font-medium border transition-all ${
+              className={`w-full py-2 rounded-xl text-xs font-medium border transition-all opacity-50 cursor-not-allowed ${
                 engineStatus.strategy_paused
                   ? 'bg-emerald-950/40 text-emerald-300 border-emerald-700/50 hover:bg-emerald-900/50'
                   : 'bg-amber-950/40 text-amber-300 border-amber-800/40 hover:bg-amber-900/50'

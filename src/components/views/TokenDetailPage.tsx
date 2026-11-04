@@ -116,7 +116,7 @@ export const TokenDetailPage: React.FC = () => {
               <span className="text-[#737373]">· Paper Execution</span>
             </div>
             <button
-              onClick={() => closePosition(activePosition.id, 100)}
+              disabled title="Paper close endpoint is not implemented yet"
               className="px-2.5 py-0.5 rounded bg-red-950/40 text-red-300 hover:text-white border border-red-500/30 text-[10px] font-medium transition-all"
             >
               Close / Sell 100% Position
@@ -194,9 +194,9 @@ export const TokenDetailPage: React.FC = () => {
             <span className="text-white">NOT CURRENTLY HELD</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Simulate Buy:</span>
+            <span className="text-[#737373]">Paper order:</span>
             <button
-              onClick={() => executeManualPaperBuy(selectedToken.mint, 1.0)}
+              disabled title="Paper order endpoint is not implemented yet"
               className="px-2.5 py-0.5 rounded glass-icon text-emerald-400 hover:text-white text-xs font-medium"
             >
               + Buy 1.0 SOL
@@ -389,7 +389,7 @@ export const TokenDetailPage: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => executeManualPaperBuy(selectedToken.mint, paperBuySol)}
+            disabled title="Paper order endpoint is not implemented yet"
             className="px-4 py-1.5 rounded-lg glass-card border-emerald-500/30 text-emerald-300 hover:text-white hover:bg-emerald-950/40 font-mono font-medium text-xs transition-all flex items-center gap-1.5"
           >
             <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
