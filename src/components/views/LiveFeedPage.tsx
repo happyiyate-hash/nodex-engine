@@ -17,6 +17,7 @@ export const LiveFeedPage: React.FC = () => {
   const {
     tokens,
     launches,
+    events,
     openTokenDetailByMint,
   } = useTerminal();
 
@@ -137,6 +138,16 @@ export const LiveFeedPage: React.FC = () => {
     }
   };
 
+  const launchPipeline = (mint: string) => {
+    const related = events.filter((event) => event.token_mint === mint || event.data?.mint_address === mint);
+    const scan = related.find((event) => event.event_type === 'token_scan_update');
+    const scanning = related.some((event) => event.event_type === 'token_scan_started') && !scan;
+    const decision = String(scan?.data?.decision || scan?.data?.status || '').toUpperCase();
+    const status = decision === 'REJECTED' ? 'REJECTED' : decision === 'APPROVED' ? 'APPROVED' : scan ? 'UNVERIFIED' : scanning ? 'SCANNING' : 'DETECTED';
+    const reason = String(scan?.data?.decision_reason || scan?.data?.reason || scan?.data?.message || (scan ? 'Scan completed; review the report before trading.' : scanning ? 'Security checks are running.' : 'Token launch confirmed.'));
+    return { status, reason };
+  };
+
   return (
     <div className="w-full text-white select-none">
       {/* 1. Header Strip (Full Width) */}
@@ -151,7 +162,7 @@ export const LiveFeedPage: React.FC = () => {
             </span>
           </div>
           <p className="text-[11px] font-mono text-[#737373] mt-0.5">
-            Live Pump.fun launch records from the Rust backend. Market metrics and full token dossiers are not yet exposed.
+            Confirmed token launches and their latest real security-scan status. Internal Solana network notifications are hidden.
           </p>
         </div>
 
@@ -181,15 +192,15 @@ export const LiveFeedPage: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[11px] font-mono">
               <thead className="text-[#737373] uppercase border-b border-white/[0.08]">
-                <tr><th className="py-2 pr-3">Mint address</th><th className="py-2 px-3">Creator</th><th className="py-2 px-3">Source</th><th className="py-2 px-3">Slot</th><th className="py-2 px-3">Detected</th><th className="py-2 pl-3 text-right">Transaction</th></tr>
+                <tr><th className="py-2 pr-3">Mint address</th><th className="py-2 px-3">Creator</th><th className="py-2 px-3">Pipeline status</th><th className="py-2 px-3">Scan result / reason</th><th className="py-2 px-3">Detected</th><th className="py-2 pl-3 text-right">Transaction</th></tr>
               </thead>
               <tbody>
                 {launches.map((launch) => (
                   <tr key={launch.id} className="border-b border-white/[0.05] hover:bg-white/[0.02]">
                     <td className="py-2.5 pr-3 text-white break-all max-w-[240px]">{launch.mint_address}</td>
                     <td className="py-2.5 px-3 text-[#a3a3a3] break-all max-w-[180px]">{launch.creator_address || 'Not supplied'}</td>
-                    <td className="py-2.5 px-3 text-[#a3a3a3]">{launch.source}</td>
-                    <td className="py-2.5 px-3 tabular-nums text-[#a3a3a3]">{launch.slot.toLocaleString()}</td>
+                    <td className="py-2.5 px-3"><span className="inline-flex px-2 py-1 rounded border border-white/10 bg-white/[0.04] text-[#d4d4d4] text-[10px] font-semibold">{launchPipeline(launch.mint_address).status}</span></td>
+                    <td className="py-2.5 px-3 text-[#a3a3a3] max-w-[320px] whitespace-normal">{launchPipeline(launch.mint_address).reason}</td>
                     <td className="py-2.5 px-3 text-[#a3a3a3] whitespace-nowrap">{new Date(launch.detected_at).toLocaleString()}</td>
                     <td className="py-2.5 pl-3 text-right"><a className="text-cyan-400 hover:text-white" href={`https://solscan.io/tx/${launch.signature}`} target="_blank" rel="noopener noreferrer">View TX ↗</a></td>
                   </tr>
