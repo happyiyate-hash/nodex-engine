@@ -17,7 +17,6 @@ export const PositionsPage: React.FC = () => {
     positions,
     summary,
     openTokenDetailByMint,
-    closePosition,
   } = useTerminal();
 
   const [filterMode, setFilterMode] = useState<'all' | 'open' | 'closed' | 'profitable' | 'losing'>('all');
@@ -230,8 +229,8 @@ export const PositionsPage: React.FC = () => {
                     </button>
                     {isOpen && (
                       <button
-                        onClick={() => closePosition(pos.id, 100)}
-                        className="px-3 py-1.5 rounded-lg border border-red-500/25 bg-red-950/20 text-[10px] text-red-300 font-mono"
+                        disabled title="Paper close endpoint is not implemented yet"
+                        className="px-3 py-1.5 rounded-lg border border-white/10 bg-[#151515] text-[10px] text-[#737373] font-mono opacity-50 cursor-not-allowed"
                       >
                         Close
                       </button>
@@ -376,8 +375,8 @@ export const PositionsPage: React.FC = () => {
                         </button>
                         {isOpen && (
                           <button
-                            onClick={() => closePosition(pos.id, 100)}
-                            className="px-2 py-0.5 rounded glass-icon text-[10px] text-red-300 hover:text-white bg-red-950/20 hover:bg-red-900/40 border-red-500/25 transition-all"
+                            disabled title="Paper close endpoint is not implemented yet"
+                            className="px-2 py-0.5 rounded glass-icon text-[10px] text-[#737373] border-white/10 transition-all opacity-50 cursor-not-allowed"
                           >
                             Close
                           </button>

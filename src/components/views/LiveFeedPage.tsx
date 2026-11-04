@@ -16,9 +16,8 @@ import {
 export const LiveFeedPage: React.FC = () => {
   const {
     tokens,
-    settings,
+    launches,
     openTokenDetailByMint,
-    executeManualPaperBuy,
   } = useTerminal();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,11 +147,11 @@ export const LiveFeedPage: React.FC = () => {
               Live Token Discovery Feed
             </h1>
             <span className="text-[10px] font-mono text-emerald-400 font-semibold glass-icon px-2 py-0.5 rounded-full">
-              {settings.mode === 'RUST_BACKEND' ? 'RUST BACKEND STREAM' : 'SIMULATED DEMO STREAM'}
+              RUST BACKEND STREAM
             </span>
           </div>
           <p className="text-[11px] font-mono text-[#737373] mt-0.5">
-            Streaming on-chain bonding curve deployments, liquidity pool launches, and safety evaluations
+            Live Pump.fun launch records from the Rust backend. Market metrics and full token dossiers are not yet exposed.
           </p>
         </div>
 
@@ -168,6 +167,38 @@ export const LiveFeedPage: React.FC = () => {
           />
         </div>
       </div>
+
+      <section className="px-4 lg:px-6 py-4 border-b border-white/[0.08] bg-[#0b0b0b]/40">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Confirmed launch records</h2>
+          <span className="text-[10px] font-mono text-[#737373]">{launches.length} records loaded</span>
+        </div>
+        {launches.length === 0 ? (
+          <div className="py-8 text-center text-xs font-mono text-[#737373]">
+            No launch records received yet. This list populates from the backend database and live launch events.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[11px] font-mono">
+              <thead className="text-[#737373] uppercase border-b border-white/[0.08]">
+                <tr><th className="py-2 pr-3">Mint address</th><th className="py-2 px-3">Creator</th><th className="py-2 px-3">Source</th><th className="py-2 px-3">Slot</th><th className="py-2 px-3">Detected</th><th className="py-2 pl-3 text-right">Transaction</th></tr>
+              </thead>
+              <tbody>
+                {launches.map((launch) => (
+                  <tr key={launch.id} className="border-b border-white/[0.05] hover:bg-white/[0.02]">
+                    <td className="py-2.5 pr-3 text-white break-all max-w-[240px]">{launch.mint_address}</td>
+                    <td className="py-2.5 px-3 text-[#a3a3a3] break-all max-w-[180px]">{launch.creator_address || 'Not supplied'}</td>
+                    <td className="py-2.5 px-3 text-[#a3a3a3]">{launch.source}</td>
+                    <td className="py-2.5 px-3 tabular-nums text-[#a3a3a3]">{launch.slot.toLocaleString()}</td>
+                    <td className="py-2.5 px-3 text-[#a3a3a3] whitespace-nowrap">{new Date(launch.detected_at).toLocaleString()}</td>
+                    <td className="py-2.5 pl-3 text-right"><a className="text-cyan-400 hover:text-white" href={`https://solscan.io/tx/${launch.signature}`} target="_blank" rel="noopener noreferrer">View TX ↗</a></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {/* 2. Filter Bar (Full Width) */}
       <div className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
@@ -384,12 +415,11 @@ export const LiveFeedPage: React.FC = () => {
                   {/* Action */}
                   <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <button
-                      onClick={() => executeManualPaperBuy(t.mint, 0.5)}
-                      title="Simulate 0.5 SOL Paper Buy"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg glass-icon text-xs text-white hover:border-emerald-500/40 hover:text-emerald-400 transition-all font-mono"
+                      disabled title="Paper order endpoint is not implemented yet"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg glass-icon text-xs text-[#737373] opacity-50 cursor-not-allowed font-mono"
                     >
                       <ShoppingBag className="w-3 h-3 text-emerald-400" />
-                      <span>Buy 0.5S</span>
+                      <span>Orders unavailable</span>
                     </button>
                   </td>
                 </tr>

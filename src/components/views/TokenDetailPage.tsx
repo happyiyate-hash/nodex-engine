@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { TradingChart } from '../common/TradingChart';
-import { INITIAL_HISTORICAL_DATA } from '../../services/mockData';
 import {
   ArrowLeft,
   Copy,
@@ -33,7 +31,6 @@ export const TokenDetailPage: React.FC = () => {
 
   const [copiedMint, setCopiedMint] = useState(false);
   const [paperBuySol, setPaperBuySol] = useState(1.0);
-  const [timeframe, setTimeframe] = useState<'1H' | '4H' | '24H' | '7D' | '30D' | 'ALL'>('24H');
   const [chartMetric, setChartMetric] = useState<'price' | 'pnl'>('price');
 
   if (!selectedToken) return null;
@@ -47,34 +44,7 @@ export const TokenDetailPage: React.FC = () => {
   const activePosition = positions.find((p) => p.mint === selectedToken.mint && p.status === 'OPEN');
   const safety = selectedToken.safety_details;
 
-  // Generate chart data based on timeframe and metric
-  const historicalSeed = INITIAL_HISTORICAL_DATA[timeframe] || INITIAL_HISTORICAL_DATA['24H'];
-  const basePrice = selectedToken.current_price_usd;
-
-  const chartData = historicalSeed.map((pt, idx) => {
-    if (chartMetric === 'pnl' && activePosition) {
-      const priceVariationRatio = pt.portfolio_value / 25000;
-      const simPrice = activePosition.entry_price_usd * priceVariationRatio;
-      const pnl = (simPrice - activePosition.entry_price_usd) * activePosition.amount_tokens;
-      return {
-        time: pt.time,
-        value: pnl,
-      };
-    }
-
-    // Default: Price trajectory
-    const variation = (pt.portfolio_value / 25000) * 0.15;
-    const priceVal = basePrice * (0.85 + variation);
-    return {
-      time: pt.time,
-      value: priceVal,
-    };
-  });
-
-  const isPositive =
-    chartData.length > 1
-      ? chartData[chartData.length - 1].value >= chartData[0].value
-      : true;
+  // The backend does not currently expose historical price candles or position P&L history.
 
   return (
     <div className="w-full text-white select-none">
@@ -146,7 +116,7 @@ export const TokenDetailPage: React.FC = () => {
               <span className="text-[#737373]">· Paper Execution</span>
             </div>
             <button
-              onClick={() => closePosition(activePosition.id, 100)}
+              disabled title="Paper close endpoint is not implemented yet"
               className="px-2.5 py-0.5 rounded bg-red-950/40 text-red-300 hover:text-white border border-red-500/30 text-[10px] font-medium transition-all"
             >
               Close / Sell 100% Position
@@ -224,9 +194,9 @@ export const TokenDetailPage: React.FC = () => {
             <span className="text-white">NOT CURRENTLY HELD</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[#737373]">Simulate Buy:</span>
+            <span className="text-[#737373]">Paper order:</span>
             <button
-              onClick={() => executeManualPaperBuy(selectedToken.mint, 1.0)}
+              disabled title="Paper order endpoint is not implemented yet"
               className="px-2.5 py-0.5 rounded glass-icon text-emerald-400 hover:text-white text-xs font-medium"
             >
               + Buy 1.0 SOL
@@ -284,34 +254,13 @@ export const TokenDetailPage: React.FC = () => {
               )}
             </div>
 
-            {/* Timeframe Buttons */}
-            <div className="flex items-center p-0.5 rounded-lg glass-panel-subtle text-[11px]">
-              {(['1H', '4H', '24H', '7D', '30D', 'ALL'] as const).map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setTimeframe(tf)}
-                  className={`px-2 py-0.5 rounded transition-all ${
-                    timeframe === tf
-                      ? 'glass-card text-white font-bold shadow-sm'
-                      : 'text-[#8e8e93] hover:text-white'
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
+
           </div>
         </div>
 
         {/* 100% Full-Width Chart Canvas with Pump.fun Live Pulsing Beacon Dot */}
-        <div className="w-full">
-          <TradingChart
-            data={chartData}
-            height={360}
-            isPositive={isPositive}
-            valuePrefix="$"
-            showLivePulseDot={true}
-          />
+        <div className="w-full min-h-[220px] flex items-center justify-center text-center text-xs font-mono text-[#737373]">
+          Historical price data is not available from the backend yet. No synthetic chart is displayed.
         </div>
       </section>
 
@@ -422,7 +371,7 @@ export const TokenDetailPage: React.FC = () => {
         {/* Paper Trade Execution Form */}
         <div className="pt-2 flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg glass-panel-subtle text-xs font-mono">
           <div className="flex items-center gap-2">
-            <span className="text-[#8e8e93] text-xs">Execute Simulated Paper Buy:</span>
+            <span className="text-[#8e8e93] text-xs">Paper order execution</span>
             <div className="flex items-center gap-1.5">
               {[0.5, 1.0, 2.0, 5.0].map((amt) => (
                 <button
@@ -440,11 +389,11 @@ export const TokenDetailPage: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => executeManualPaperBuy(selectedToken.mint, paperBuySol)}
+            disabled title="Paper order endpoint is not implemented yet"
             className="px-4 py-1.5 rounded-lg glass-card border-emerald-500/30 text-emerald-300 hover:text-white hover:bg-emerald-950/40 font-mono font-medium text-xs transition-all flex items-center gap-1.5"
           >
             <ShoppingBag className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Simulate Buy ({paperBuySol} SOL)</span>
+            <span>Paper orders unavailable ({paperBuySol} SOL)</span>
           </button>
         </div>
       </div>

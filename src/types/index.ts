@@ -10,6 +10,27 @@ export type PositionStatus = 'OPEN' | 'CLOSED_PROFIT' | 'CLOSED_LOSS' | 'STOP_LO
 export type SafetyRating = 'verified' | 'warning' | 'danger';
 export type QualificationStatus = 'newly_detected' | 'under_analysis' | 'qualified' | 'rejected' | 'bought_paper';
 
+export interface PaperWalletSnapshot {
+  starting_balance_lamports: number;
+  available_balance_lamports: number;
+  invested_balance_lamports: number;
+  locked_rent_lamports: number;
+  total_network_fees_lamports: number;
+  total_priority_fees_lamports: number;
+  total_swap_fees_lamports: number;
+  total_rent_refunded_lamports: number;
+}
+
+export interface TokenLaunchRecord {
+  id: string;
+  mint_address: string;
+  creator_address: string | null;
+  source: string;
+  signature: string;
+  slot: number;
+  detected_at: string;
+}
+
 export interface EngineStatus {
   running: boolean;
   operating_mode: OperatingMode;
@@ -23,7 +44,7 @@ export interface EngineStatus {
   last_heartbeat: string;
   incoming_event_rate: number; // events/sec
   reconnection_count: number;
-  database_status: 'healthy' | 'degraded' | 'offline';
+  database_status: 'healthy' | 'degraded' | 'offline' | 'unknown';
   tokens_detected_today: number;
   simulated_buys_count: number;
   simulated_sells_count: number;
@@ -129,6 +150,20 @@ export interface DiscoveredToken {
 }
 
 export type EventType =
+  | 'launch_detected'
+  | 'token_scan_started'
+  | 'token_scan_update'
+  | 'creator_history_started'
+  | 'creator_history_update'
+  | 'pumpswap_activity'
+  | 'pumpswap_volume_update'
+  | 'market_price_update'
+  | 'market_subscription_requested'
+  | 'diagnostic'
+  | 'connection_status'
+  | 'engine_state'
+  | 'stream_warning'
+  | 'command_rejected'
   | 'new_token_detected'
   | 'token_metadata_updated'
   | 'buy_signal_generated'
