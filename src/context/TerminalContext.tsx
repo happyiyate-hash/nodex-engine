@@ -139,7 +139,34 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setEngineStatus((previous) => ({ ...previous, ws_status: status }));
     });
     const unsubscribeEvents = wsService.subscribe((event) => {
-      setEvents((previous) => [event, ...previous].slice(0, 500));
+      setEvents((previous) => {
+        const severity = String(event.data?.severity || '').toLowerCase();
+        const isRepeatableDiagnostic =
+          (event.event_type === 'diagnostic' || event.event_type === 'stream_warning') &&
+          (severity === 'warning' || severity === 'error');
+        if (isRepeatableDiagnostic) {
+          const component = String(event.data?.component || 'unknown');
+          const duplicateIndex = previous.findIndex((item) =>
+            (item.event_type === 'diagnostic' || item.event_type === 'stream_warning') &&
+            String(item.data?.component || 'unknown') === component &&
+            item.message === event.message &&
+            Math.abs(Date.parse(event.timestamp) - Date.parse(item.timestamp)) <= 5000
+          );
+          if (duplicateIndex >= 0) {
+            const duplicate = previous[duplicateIndex];
+            const updated = {
+              ...duplicate,
+              data: {
+                ...duplicate.data,
+                repeated_count: Number(duplicate.data?.repeated_count || 1) + 1,
+                last_seen_at: event.timestamp,
+              },
+            };
+            return [updated, ...previous.filter((_, index) => index !== duplicateIndex)].slice(0, 200);
+          }
+        }
+        return [event, ...previous].slice(0, 200);
+      });
       if (event.event_type === 'connection_status') {
         const stream = event.data.solana_stream || {};
         const engine = event.data.engine || {};
