@@ -215,7 +215,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             ],
           };
 
-          setTokens((prev) => [newToken, ...prev.filter((t) => t.mint !== data.token_mint)]);
+          setTokens((prev) => [newToken, ...prev.filter((t) => t.mint !== data.token_mint)].slice(0, 100));
           setEngineStatus((prev) => ({
             ...prev,
             tokens_detected_today: prev.tokens_detected_today + 1,
