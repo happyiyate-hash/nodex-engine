@@ -23,6 +23,7 @@ export const OverviewPage: React.FC = () => {
     openTokenDetailByMint,
     setSelectedEvent,
     backendError,
+    paperWallet,
   } = useTerminal();
 
 
@@ -147,6 +148,23 @@ export const OverviewPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="px-4 lg:px-6 py-3 border-b border-white/[0.08] bg-[#0b0b0b]/40">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-[10px] font-mono uppercase tracking-wider text-[#8e8e93]">Backend paper wallet · SOL units</h2>
+          <span className="text-[10px] font-mono text-[#737373]">Live REST snapshot</span>
+        </div>
+        {paperWallet ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+            <div><div className="text-[#737373]">Available</div><div className="text-white font-semibold">{(paperWallet.available_balance_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
+            <div><div className="text-[#737373]">Invested</div><div className="text-white font-semibold">{(paperWallet.invested_balance_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
+            <div><div className="text-[#737373]">Locked rent</div><div className="text-white font-semibold">{(paperWallet.locked_rent_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
+            <div><div className="text-[#737373]">Starting balance</div><div className="text-white font-semibold">{(paperWallet.starting_balance_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
+          </div>
+        ) : (
+          <div className="text-xs font-mono text-[#737373]">Paper wallet snapshot unavailable until the backend responds.</div>
+        )}
       </section>
 
       {/* 2. TELEMETRY & ENGINE STATUS STRIP */}

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import {
   ConnectionStatus, DashboardSummary, DiscoveredToken, EngineStatus, NodeXEvent,
-  Position, StrategyConfig, StrategyDecision, TokenLaunchRecord,
+  Position, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot,
 } from '../types';
 import { apiClient, ApiSettings } from '../services/api';
 import { wsService } from '../services/websocket';
@@ -18,6 +18,7 @@ interface TerminalContextType {
   positions: Position[];
   tokens: DiscoveredToken[];
   launches: TokenLaunchRecord[];
+  paperWallet: PaperWalletSnapshot | null;
   events: NodeXEvent[];
   selectedEvent: NodeXEvent | null;
   setSelectedEvent: (event: NodeXEvent | null) => void;
@@ -78,6 +79,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [positions] = useState<Position[]>([]);
   const [tokens] = useState<DiscoveredToken[]>([]);
   const [launches, setLaunches] = useState<TokenLaunchRecord[]>([]);
+  const [paperWallet, setPaperWallet] = useState<PaperWalletSnapshot | null>(null);
   const [events, setEvents] = useState<NodeXEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<NodeXEvent | null>(null);
   const [selectedToken, setSelectedToken] = useState<DiscoveredToken | null>(null);
@@ -91,6 +93,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     let active = true;
     wsService.connect();
+    apiClient.getPaperWallet().then((wallet) => {
+      if (active) setPaperWallet(wallet);
+    }).catch((error: unknown) => {
+      if (active) setBackendError(error instanceof Error ? error.message : 'Could not load paper wallet.');
+    });
     apiClient.getRecentTokens(100).then((records) => {
       if (active) setLaunches(records);
     }).catch((error: unknown) => {
@@ -184,7 +191,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <TerminalContext.Provider value={{
       activeTab, setActiveTab: navigateToTab, engineStatus, summary, positions, tokens,
-      events, launches, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
+      events, launches, paperWallet, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
       openTokenDetailByMint, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
