@@ -22,6 +22,7 @@ export const EventMonitorPage: React.FC = () => {
   const {
     events,
     settings,
+    engineStatus,
     selectedEvent,
     setSelectedEvent,
     isStreamPaused,
@@ -52,6 +53,7 @@ export const EventMonitorPage: React.FC = () => {
       if (typeFilter === 'DISCOVERY' && !evt.event_type.includes('detected') && !evt.event_type.includes('pool') && !evt.event_type.includes('migration')) return false;
       if (typeFilter === 'SAFETY' && !evt.event_type.includes('safety') && !evt.event_type.includes('rejected')) return false;
       if (typeFilter === 'PRICES' && !evt.event_type.includes('price') && !evt.event_type.includes('liquidity')) return false;
+      if (typeFilter === 'DIAGNOSTICS' && !['diagnostic','stream_warning','engine_warning','engine_error','websocket_disconnected'].includes(evt.event_type) && !['warning','error'].includes(String(evt.data?.severity || '').toLowerCase())) return false;
     }
 
     if (searchQuery.trim()) {
@@ -87,8 +89,19 @@ export const EventMonitorPage: React.FC = () => {
             </span>
           </div>
           <p className="text-[11px] font-mono text-[#737373] mt-0.5">
-            Low-latency on-chain telemetry, paper trade executions, and qualification traces
+            Live backend diagnostics, on-chain telemetry, paper-trading events, and connection traces
           </p>
+          <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] font-mono">
+            <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 ${engineStatus.ws_status === 'connected' ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-800/60 bg-amber-950/30 text-amber-300'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${engineStatus.ws_status === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              BACKEND WS: {engineStatus.ws_status.toUpperCase()}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 ${engineStatus.solana_connected ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300' : 'border-red-900/60 bg-red-950/20 text-red-300'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${engineStatus.solana_connected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+              SOLANA RPC: {engineStatus.solana_connected ? 'CONNECTED' : 'DISCONNECTED'}
+            </span>
+            <span className="text-[#737373]">RETRIES: {engineStatus.reconnection_count}</span>
+          </div>
         </div>
 
         {/* Toolbar */}
@@ -139,6 +152,7 @@ export const EventMonitorPage: React.FC = () => {
             { id: 'DISCOVERY', label: 'Token Discovery' },
             { id: 'SAFETY', label: 'Safety & Risk' },
             { id: 'PRICES', label: 'Price Ticks' },
+            { id: 'DIAGNOSTICS', label: 'Diagnostics & Errors' },
           ] as const
         ).map((t) => (
           <button
@@ -197,6 +211,11 @@ export const EventMonitorPage: React.FC = () => {
                       {evt.message}
                     </div>
 
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#737373]">
+                      {evt.data?.component && <span>COMPONENT: {String(evt.data.component)}</span>}
+                      {evt.data?.severity && <span className={String(evt.data.severity).toLowerCase() === 'error' ? 'text-red-400' : String(evt.data.severity).toLowerCase() === 'warning' ? 'text-amber-300' : 'text-[#737373]'}>SEVERITY: {String(evt.data.severity).toUpperCase()}</span>}
+                    </div>
+
                     <div className="flex items-center gap-3 text-[10px] text-[#737373] pt-0.5">
                       <span>ID: {evt.event_id}</span>
                       {evt.tx_signature && (
@@ -240,6 +259,11 @@ export const EventMonitorPage: React.FC = () => {
 
                 <div className="text-white font-mono text-xs leading-relaxed">
                   {selectedEvent.message}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-[#8e8e93]">
+                  {selectedEvent.data?.component && <span>COMPONENT: {String(selectedEvent.data.component)}</span>}
+                  {selectedEvent.data?.severity && <span className={String(selectedEvent.data.severity).toLowerCase() === 'error' ? 'text-red-400' : String(selectedEvent.data.severity).toLowerCase() === 'warning' ? 'text-amber-300' : 'text-emerald-300'}>SEVERITY: {String(selectedEvent.data.severity).toUpperCase()}</span>}
+                  {selectedEvent.data?.reconnect_count !== undefined && <span>RECONNECT: {String(selectedEvent.data.reconnect_count)}</span>}
                 </div>
 
                 {selectedEvent.tx_signature && (
