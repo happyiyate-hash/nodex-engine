@@ -17,9 +17,7 @@ export const LiveFeedPage: React.FC = () => {
   const {
     tokens,
     launches,
-    settings,
     openTokenDetailByMint,
-    executeManualPaperBuy,
   } = useTerminal();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -418,7 +416,6 @@ export const LiveFeedPage: React.FC = () => {
                   <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                     <button
                       disabled title="Paper order endpoint is not implemented yet"
-                      title="Paper order endpoint is not implemented yet"
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg glass-icon text-xs text-[#737373] opacity-50 cursor-not-allowed font-mono"
                     >
                       <ShoppingBag className="w-3 h-3 text-emerald-400" />
