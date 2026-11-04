@@ -19,7 +19,15 @@ export class NodeXWebSocketService {
   private processedEventIds: Set<string> = new Set();
   private reconnectTimer: any = null;
   private heartbeatTimer: any = null;
-  private simulationTimer: any = null;
+  private simulationTimers: any[] = [];
+  private simulatedAssets = [
+    { sym: 'NSOL', mint: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU', price: 0.03896 },
+    { sym: 'AURA', mint: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM', price: 0.07952 },
+    { sym: 'CYBER', mint: '3uV91KbxPZqm4ErtJvL8Fz9Mkw77YtQwXbNm21VfPtLq', price: 0.0142 },
+    { sym: 'QDOGE', mint: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo', price: 0.00804 },
+    { sym: 'VELO', mint: '6jLq88PfWvZb33TrNm44KxJp99QrLt22MkWx88Vb55Yt', price: 0.0048 },
+    { sym: 'SMTX', mint: '5oNDL3swdJJF1g9DA6JwguL1pnTXjg9bfjgUjF42UWJb', price: 0.0563 },
+  ];
   private reconnectAttempts = 0;
   private isPaused = false;
 
@@ -142,84 +150,123 @@ export class NodeXWebSocketService {
   }
 
   private startSimulationStream(): void {
-    if (this.simulationTimer) clearInterval(this.simulationTimer);
+    this.stopSimulation();
 
-    // Emit live events periodically
-    let tickCount = 0;
-    this.simulationTimer = setInterval(() => {
-      if (this.isPaused) return;
-      tickCount++;
+    // Independent demo streams: price ticks, discovery, and system activity
+    // run on separate clocks so one slow stream never blocks another.
+    this.simulationTimers.push(setInterval(() => {
+      if (!this.isPaused) this.simulatePriceTick();
+    }, 850));
 
-      // Every 3 seconds: Price tick on an active position or token
-      if (tickCount % 2 === 0) {
-        this.simulatePriceTick();
+    this.simulationTimers.push(setInterval(() => {
+      if (!this.isPaused) this.simulateTokenDiscovery();
+    }, 5200));
+
+    this.simulationTimers.push(setInterval(() => {
+      if (!this.isPaused) this.simulateActivityEvent();
+    }, 1350));
+
+    this.simulationTimers.push(setInterval(() => {
+      if (!this.isPaused) {
+        this.setStatus('connected', 10 + Math.floor(Math.random() * 18));
       }
-
-      // Every 9 seconds: New Solana token discovered
-      if (tickCount % 5 === 0) {
-        this.simulateTokenDiscovery();
-      }
-    }, 1800);
+    }, 2400));
   }
 
   private simulatePriceTick(): void {
-    const symbols = [
-      { sym: 'NSOL', mint: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU', basePrice: 0.03896 },
-      { sym: 'AURA', mint: '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM', basePrice: 0.07952 },
-      { sym: 'CYBER', mint: '3uV91KbxPZqm4ErtJvL8Fz9Mkw77YtQwXbNm21VfPtLq', basePrice: 0.0142 },
-      { sym: 'QDOGE', mint: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo', basePrice: 0.00804 },
-    ];
-
-    const pick = symbols[Math.floor(Math.random() * symbols.length)];
-    const deltaPct = (Math.random() * 4 - 1.8) / 100; // -1.8% to +2.2%
-    const newPrice = Number(Math.max(0.0001, pick.basePrice * (1 + deltaPct)).toFixed(6));
+    if (this.simulatedAssets.length === 0) return;
+    const asset = this.simulatedAssets[Math.floor(Math.random() * this.simulatedAssets.length)];
+    const oldPrice = asset.price;
+    const deltaPct = (Math.random() * 0.7) - 0.32;
+    const newPrice = Math.max(0.0000001, oldPrice * (1 + deltaPct));
+    asset.price = Number(newPrice.toPrecision(8));
 
     const event: NodeXEvent = {
-      event_id: `evt_tick_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      event_id: 'evt_tick_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
       event_type: 'price_updated',
       timestamp: new Date().toISOString(),
-      token_mint: pick.mint,
-      message: `${pick.sym} price tick: $${newPrice} (${deltaPct >= 0 ? '+' : ''}${(deltaPct * 100).toFixed(2)}%)`,
+      token_mint: asset.mint,
+      message: asset.sym + ' price tick: $' + asset.price.toFixed(7) + ' (' + (deltaPct >= 0 ? '+' : '') + (deltaPct * 100).toFixed(2) + '%)',
       processing_status: 'processed',
       data: {
-        symbol: pick.sym,
-        token_mint: pick.mint,
-        new_price_usd: newPrice,
-        price_change_pct: Number((deltaPct * 100).toFixed(2)),
+        symbol: asset.sym,
+        token_mint: asset.mint,
+        old_price_usd: oldPrice,
+        new_price_usd: asset.price,
+        price_change_pct: Number((deltaPct * 100).toFixed(3)),
         venue: 'pump.fun',
-        slot: 309482000 + Math.floor(Math.random() * 500),
+        slot: 309482000 + Math.floor(Math.random() * 5000),
+        simulated: true,
       },
     };
+    this.dispatch(event);
+  }
 
+  private simulateActivityEvent(): void {
+    if (this.simulatedAssets.length === 0) return;
+    const asset = this.simulatedAssets[Math.floor(Math.random() * this.simulatedAssets.length)];
+    const roll = Math.random();
+    const now = new Date().toISOString();
+    let event: NodeXEvent;
+
+    if (roll < 0.55) {
+      const liquidityChange = (Math.random() * 1.4 - 0.65) / 100;
+      event = {
+        event_id: 'evt_liq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        event_type: 'liquidity_updated',
+        timestamp: now,
+        token_mint: asset.mint,
+        message: asset.sym + ' liquidity pool update: ' + (liquidityChange >= 0 ? '+' : '') + (liquidityChange * 100).toFixed(2) + '%',
+        processing_status: 'processed',
+        data: { symbol: asset.sym, token_mint: asset.mint, change_pct: Number((liquidityChange * 100).toFixed(2)), simulated: true },
+      };
+    } else if (roll < 0.82) {
+      event = {
+        event_id: 'evt_safety_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        event_type: 'safety_check_completed',
+        timestamp: now,
+        token_mint: asset.mint,
+        message: asset.sym + ' periodic safety monitor check completed',
+        processing_status: 'processed',
+        data: { symbol: asset.sym, token_mint: asset.mint, safety_score: 80 + Math.floor(Math.random() * 20), simulated: true },
+      };
+    } else {
+      event = {
+        event_id: 'evt_signal_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        event_type: 'buy_signal_generated',
+        timestamp: now,
+        token_mint: asset.mint,
+        message: 'Momentum monitor refreshed for $' + asset.sym + ' — paper strategy evaluating entry conditions',
+        processing_status: 'analyzing',
+        data: { symbol: asset.sym, token_mint: asset.mint, confidence_score: Number((0.65 + Math.random() * 0.3).toFixed(2)), simulated: true },
+      };
+    }
     this.dispatch(event);
   }
 
   private simulateTokenDiscovery(): void {
-    const prefixes = ['Sol', 'Hyper', 'Nova', 'Apex', 'Neon', 'Aura', 'Zero', 'Alpha'];
-    const suffixes = ['AI', 'X', 'Vault', 'Pump', 'Bot', 'Speed', 'Core', 'Net'];
+    const prefixes = ['Sol', 'Hyper', 'Nova', 'Apex', 'Neon', 'Aura', 'Zero', 'Alpha', 'Quantum', 'Vertex'];
+    const suffixes = ['AI', 'X', 'Vault', 'Pump', 'Bot', 'Speed', 'Core', 'Net', 'Labs', 'Chain'];
     const p = prefixes[Math.floor(Math.random() * prefixes.length)];
     const s = suffixes[Math.floor(Math.random() * suffixes.length)];
-    const name = `${p} ${s}`;
-    const symbol = `${p.substring(0, 3).toUpperCase()}${s.substring(0, 2).toUpperCase()}`;
-
-    // Realistic Solana base58-like mint
+    const name = p + ' ' + s;
+    const symbol = (p.substring(0, 3) + s.substring(0, 2)).toUpperCase();
     const randChars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
     let mint = '';
-    for (let i = 0; i < 44; i++) {
-      mint += randChars.charAt(Math.floor(Math.random() * randChars.length));
-    }
+    for (let i = 0; i < 44; i++) mint += randChars.charAt(Math.floor(Math.random() * randChars.length));
 
-    const price = Number((Math.random() * 0.04 + 0.005).toFixed(6));
+    const price = Number((Math.random() * 0.04 + 0.005).toFixed(7));
     const liquidity = Math.round(10000 + Math.random() * 45000);
     const score = Math.round(45 + Math.random() * 52);
-    const isClean = score >= 80;
+    this.simulatedAssets.push({ sym: symbol, mint, price });
+    if (this.simulatedAssets.length > 60) this.simulatedAssets.splice(6, 1);
 
     const event: NodeXEvent = {
-      event_id: `evt_disc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      event_id: 'evt_disc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
       event_type: 'new_token_detected',
       timestamp: new Date().toISOString(),
       token_mint: mint,
-      message: `Detected $${symbol} [${name}] via Pump.fun on-chain bonding curve`,
+      message: 'DEMO DISCOVERY: detected $' + symbol + ' [' + name + '] via simulated Pump.fun stream',
       processing_status: 'analyzing',
       data: {
         name,
@@ -230,46 +277,16 @@ export class NodeXWebSocketService {
         safety_score: score,
         venue: 'pump.fun',
         bonding_curve_progress_pct: Math.round(Math.random() * 40 + 5),
-        creator_wallet: `${mint.substring(0, 6)}...${mint.substring(mint.length - 4)}`,
+        creator_wallet: mint.substring(0, 6) + '...' + mint.substring(mint.length - 4),
+        simulated: true,
       },
     };
-
     this.dispatch(event);
-
-    // If it's a high scoring token, trigger simulated buy signal shortly after
-    if (isClean && Math.random() > 0.4) {
-      setTimeout(() => {
-        if (this.isPaused) return;
-        const buyEvent: NodeXEvent = {
-          event_id: `evt_buy_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          event_type: 'paper_buy_executed',
-          timestamp: new Date().toISOString(),
-          token_mint: mint,
-          message: `Simulated paper buy: $${symbol} for 1.25 SOL ($223.38)`,
-          processing_status: 'executed',
-          tx_signature: `${mint.substring(0, 10)}...${mint.substring(mint.length - 6)}`,
-          data: {
-            symbol,
-            token_mint: mint,
-            entry_price_usd: price,
-            amount_sol: 1.25,
-            amount_tokens: Math.round(223.38 / price),
-            slippage_pct: 0.9,
-            execution_latency_ms: 19,
-            venue: 'pump.fun',
-            status: 'success',
-          },
-        };
-        this.dispatch(buyEvent);
-      }, 1200);
-    }
   }
 
   private stopSimulation(): void {
-    if (this.simulationTimer) {
-      clearInterval(this.simulationTimer);
-      this.simulationTimer = null;
-    }
+    this.simulationTimers.forEach((timer) => clearInterval(timer));
+    this.simulationTimers = [];
   }
 
   public send(payload: any): void {
