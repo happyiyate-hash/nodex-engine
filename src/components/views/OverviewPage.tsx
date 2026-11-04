@@ -22,17 +22,18 @@ export const OverviewPage: React.FC = () => {
     setActiveTab,
     openTokenDetailByMint,
     setSelectedEvent,
+    backendError,
   } = useTerminal();
 
-  const isOverallProfit = summary.total_pnl_usd >= 0;
-  const isRealisedProfit = summary.realised_pnl_usd >= 0;
-  const isUnrealisedProfit = summary.unrealised_pnl_usd >= 0;
 
   const openPositions = positions.filter((p) => p.status === 'OPEN');
   const recentEvents = events.slice(0, 8);
 
   return (
     <div className="w-full text-white select-none">
+      {backendError && <div className="mx-4 mt-3 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs font-mono text-amber-200">{backendError}</div>}
+
+      {/* Financial figures are withheld until backend paper-accounting endpoints exist. */}
       {/* 1. PRIMARY BALANCE & FINANCIAL SUMMARY STRIP (FULL WIDTH ON MAIN BACKGROUND) */}
       <section className="w-full border-b border-white/[0.08] bg-[#090909]/60 backdrop-blur-md">
         <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
@@ -42,10 +43,10 @@ export const OverviewPage: React.FC = () => {
               Total Portfolio
             </div>
             <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              ${summary.total_portfolio_value_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              —
             </div>
             <div className="text-[10px] font-mono text-[#737373] tabular-nums">
-              {summary.total_portfolio_value_sol.toFixed(2)} SOL
+              Not provided by backend
             </div>
           </div>
 
@@ -55,10 +56,10 @@ export const OverviewPage: React.FC = () => {
               Invested Capital
             </div>
             <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              ${summary.total_invested_capital_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              —
             </div>
             <div className="text-[10px] font-mono text-[#737373]">
-              Simulated pool
+              Waiting for paper-wallet valuation API
             </div>
           </div>
 
@@ -68,11 +69,10 @@ export const OverviewPage: React.FC = () => {
               Open Positions
             </div>
             <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums flex items-baseline gap-1.5">
-              <span>{summary.open_positions_count}</span>
-              <span className="text-xs text-[#737373] font-normal">/ 8 max</span>
+              <span>—</span>
             </div>
             <div className="text-[10px] font-mono text-emerald-400">
-              Active tracking
+              Positions API not implemented
             </div>
           </div>
 
@@ -82,13 +82,12 @@ export const OverviewPage: React.FC = () => {
               Realised P&L
             </div>
             <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums flex items-center gap-1 ${
-              isRealisedProfit ? 'text-emerald-400' : 'text-red-400'
+              'text-[#737373]'
             }`}>
-              {isRealisedProfit ? <TrendingUp className="w-3.5 h-3.5 shrink-0" /> : <TrendingDown className="w-3.5 h-3.5 shrink-0" />}
-              <span>{isRealisedProfit ? '+' : ''}${Math.abs(summary.realised_pnl_usd).toFixed(2)}</span>
+              <span>—</span>
             </div>
-            <div className={`text-[10px] font-mono tabular-nums ${isRealisedProfit ? 'text-emerald-500' : 'text-red-500'}`}>
-              {isRealisedProfit ? '+' : ''}{summary.realised_pnl_pct.toFixed(2)}%
+            <div className={`text-[10px] font-mono tabular-nums ${'text-[#737373]'}`}>
+              Not available
             </div>
           </div>
 
@@ -98,12 +97,12 @@ export const OverviewPage: React.FC = () => {
               Unrealised P&L
             </div>
             <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums ${
-              isUnrealisedProfit ? 'text-emerald-400' : 'text-red-400'
+              'text-[#737373]'
             }`}>
-              {isUnrealisedProfit ? '+' : ''}${summary.unrealised_pnl_usd.toFixed(2)}
+              —
             </div>
-            <div className={`text-[10px] font-mono tabular-nums ${isUnrealisedProfit ? 'text-emerald-500' : 'text-red-500'}`}>
-              {isUnrealisedProfit ? '+' : ''}{summary.unrealised_pnl_pct.toFixed(2)}%
+            <div className={`text-[10px] font-mono tabular-nums ${'text-[#737373]'}`}>
+              Not available
             </div>
           </div>
 
@@ -113,12 +112,12 @@ export const OverviewPage: React.FC = () => {
               Total Net P&L
             </div>
             <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums ${
-              isOverallProfit ? 'text-emerald-400' : 'text-red-400'
+              'text-[#737373]'
             }`}>
-              {isOverallProfit ? '+' : ''}${summary.total_pnl_usd.toFixed(2)}
+              —
             </div>
-            <div className={`text-[10px] font-mono tabular-nums ${isOverallProfit ? 'text-emerald-500' : 'text-red-500'}`}>
-              {isOverallProfit ? '+' : ''}{summary.total_pnl_pct.toFixed(2)}% Net
+            <div className={`text-[10px] font-mono tabular-nums ${'text-[#737373]'}`}>
+              Not available
             </div>
           </div>
 
@@ -128,10 +127,10 @@ export const OverviewPage: React.FC = () => {
               Win Rate
             </div>
             <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              {summary.win_rate_pct.toFixed(1)}%
+              —
             </div>
             <div className="text-[10px] font-mono text-[#737373]">
-              Simulated hits
+              Trade history API not implemented
             </div>
           </div>
 
@@ -141,10 +140,10 @@ export const OverviewPage: React.FC = () => {
               Trades Closed
             </div>
             <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              {summary.completed_trades_count}
+              —
             </div>
             <div className="text-[10px] font-mono text-[#737373]">
-              Roundtrips
+              Trade history API not implemented
             </div>
           </div>
         </div>
@@ -214,7 +213,7 @@ export const OverviewPage: React.FC = () => {
 
         {openPositions.length === 0 ? (
           <div className="py-10 px-4 text-center text-xs font-mono text-[#737373]">
-            No active open paper positions. Strategy is actively scanning live Solana tokens on Pump.fun & PumpSwap.
+            No paper positions are available yet. The backend does not expose a positions endpoint.
           </div>
         ) : (
           <div className="w-full overflow-x-auto">
