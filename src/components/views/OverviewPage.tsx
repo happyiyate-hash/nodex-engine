@@ -451,9 +451,9 @@ export const OverviewPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-full w-full bg-black">
+    <div className="flex min-h-[calc(100dvh-96px)] w-full flex-col bg-black">
       <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
-      <section aria-label="Overview workspace" className="relative flex h-[82dvh] min-h-[560px] w-full flex-col overflow-hidden rounded-b-[30px] rounded-t-[30px] border border-white/[0.13] border-b-white/[0.22] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.07)] sm:h-[84dvh] sm:rounded-[34px]">
+      <section aria-label="Overview controls" className="relative flex w-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.07)] sm:rounded-[30px]">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.16] to-transparent" />
 
         <div className="shrink-0 px-3 pt-3 sm:px-4 sm:pt-4">
@@ -505,7 +505,7 @@ export const OverviewPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-4 flex min-h-0 flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
+        <div className="mt-4 flex shrink-0 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <div>
               <h2 className="text-[12px] font-semibold text-white">Token discoveries</h2>
@@ -530,7 +530,11 @@ export const OverviewPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border border-white/[0.055] bg-[#090909]">
+        </div>
+      </section>
+
+      <div className="mt-2 flex min-h-[280px] flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
+          <div className="min-h-[240px] flex-1 overflow-y-auto overscroll-contain bg-transparent">
             {filteredLaunches.length === 0 ? (
               <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]">
@@ -583,8 +587,7 @@ export const OverviewPage: React.FC = () => {
             <span>{filteredLaunches.length} shown · {launches.length} loaded</span>
             <span className="inline-flex items-center gap-1"><Circle className="h-1.5 w-1.5 fill-current" /> Backend event-driven</span>
           </div>
-        </div>
-      </section>
+      </div>
     </div>
   );
 };
