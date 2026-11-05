@@ -543,10 +543,11 @@ export const OverviewPage: React.FC = () => {
               <div className="divide-y divide-white/[0.055]">
                 {filteredLaunches.map((item) => {
                   const { launch, status, reason, updatedAt } = item;
-                  const demo = 'demo' in item && item.demo;
+                  const demoItem = 'demo' in item && item.demo ? item : null;
+                  const demo = Boolean(demoItem);
                   const demoSeed = demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === launch.mint_address.split('-')[1]) : null;
                   return (
-                  <article key={demo ? item.arrivalKey : launch.id || launch.signature} className={`px-3 py-3 transition-colors hover:bg-white/[0.018] ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}>
+                  <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`px-3 py-3 transition-colors hover:bg-white/[0.018] ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}>
                     <div className="flex items-start gap-2.5">
                       <div className={`relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border ${status === 'ANALYZING' ? 'border-amber-500/20 bg-amber-500/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
                         {status === 'ANALYZING' ? <LoaderCircle className="h-4 w-4 animate-spin text-[#d2b47c]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
@@ -563,7 +564,7 @@ export const OverviewPage: React.FC = () => {
                           <span>{timeAgo(launch.detected_at)}</span>
                         </div>
                         <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-white/45">{reason}</p>
-                        {demo && status === 'ANALYZING' && <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-[#d2b47c] transition-[width] duration-300 ease-out" style={{ width: `${item.progress}%` }} /></div>}
+                        {demo && status === 'ANALYZING' && <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-[#d2b47c] transition-[width] duration-300 ease-out" style={{ width: `${demoItem?.progress ?? 0}%` }} /></div>}
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <span className="text-[8px] text-white/25">Updated {timeAgo(updatedAt)}</span>
                           <div className="flex items-center gap-3">
