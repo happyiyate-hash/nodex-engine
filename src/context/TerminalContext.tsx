@@ -32,6 +32,7 @@ interface TerminalContextType {
   isStreamPaused: boolean;
   toggleStreamPause: () => void;
   clearEvents: () => void;
+  clearBrowserHistory: () => void;
   toggleEngine: () => void;
   toggleStrategy: () => void;
   closePosition: (positionId: string, percentage: number) => void;
@@ -202,6 +203,13 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const toggleEngine = () => sendPause(engineStatus.running);
   const toggleStrategy = () => setBackendError('Strategy controls are unavailable until the backend strategy-control API is implemented.');
   const clearEvents = () => { setEvents([]); setSelectedEvent(null); };
+  const clearBrowserHistory = () => {
+    setEvents([]);
+    setLaunches([]);
+    setSelectedEvent(null);
+    setSelectedToken(null);
+    setBackendError(null);
+  };
   const closePosition = () => setBackendError('Paper position closing is unavailable: no backend paper-order endpoint exists yet.');
   const executeManualPaperBuy = () => setBackendError('Paper buying is disabled until a real backend paper-order endpoint is implemented.');
   const updatePositionRisk = () => setBackendError('Position risk updates are unavailable until the backend provides persistent position endpoints.');
@@ -229,7 +237,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       activeTab, setActiveTab: navigateToTab, engineStatus, summary, positions, tokens,
       events, launches, paperWallet, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
       openTokenDetailByMint, closeTokenDetail, strategyConfig, strategyDecisions,
-      settings, isStreamPaused, toggleStreamPause, clearEvents, toggleEngine,
+      settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
       saveStrategyConfig, updateSettings, isMobilePreview, setIsMobilePreview, backendError,
     }}>
