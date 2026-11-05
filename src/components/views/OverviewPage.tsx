@@ -225,6 +225,14 @@ const DEMO_ENTRY_PRICES = [0.00042, 0.00115, 0.00078, 0.0024, 0.00063, 0.0018, 0
 const DEMO_PRICE_PATHS = [
   [2.4, 1.7, 3.1, -2.8], [1.2, 2.9, 1.8, -3.4], [3.2, 1.1, 2.2, -2.5],
   [1.6, 2.1, 3.4, -3.1], [2.8, 1.4, 1.9, -2.7], [1.1, 3.3, 2.0, -3.6],
+  [2.1, 1.5, 2.7, -2.9], [1.4, 3.0, 1.6, -3.2], [2.9, 1.3, 2.4, -2.6],
+  [1.8, 2.6, 1.2, -3.5], [3.1, 1.6, 2.1, -2.4], [1.3, 2.4, 3.0, -3.3],
+  [2.6, 1.2, 2.8, -2.7], [1.7, 3.2, 1.5, -3.1], [2.3, 1.9, 2.6, -3.7],
+  [1.5, 2.8, 1.4, -2.6], [3.0, 1.4, 2.3, -3.2], [1.9, 2.2, 3.1, -2.9],
+  [2.7, 1.1, 1.8, -3.4], [1.6, 3.1, 2.0, -2.5], [2.2, 1.7, 2.9, -3.6],
+  [1.3, 2.5, 1.7, -2.8], [3.3, 1.2, 2.4, -3.1], [1.8, 2.7, 1.3, -3.5],
+  [2.5, 1.6, 3.2, -2.7], [1.4, 2.3, 1.9, -3.3], [2.8, 1.5, 2.1, -2.6],
+  [1.7, 3.4, 1.2, -3.8], [2.0, 1.8, 2.7, -3.0], [3.1, 1.3, 2.2, -3.4],
 ];
 
 interface DemoLaunchView extends LaunchView {
@@ -373,8 +381,6 @@ export const OverviewPage: React.FC = () => {
   const [demoPositions, setDemoPositions] = useState<DemoPosition[]>([]);
   const [tradeNotices, setTradeNotices] = useState<TradeNotice[]>([]);
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
-  const simulationRef = useRef<SimulationState | null>(null);
-
   useEffect(() => {
     const simulation: SimulationState = {
       startedAt: Date.now(),
@@ -384,7 +390,6 @@ export const OverviewPage: React.FC = () => {
       notices: [],
       nextNoticeId: 1,
     };
-    simulationRef.current = simulation;
     const timer = setInterval(() => {
       const now = Date.now();
       const elapsed = now - simulation.startedAt;
@@ -501,7 +506,7 @@ export const OverviewPage: React.FC = () => {
       setBalanceDirection(pnl >= 0 ? 'up' : 'down');
       setPortfolioFlash(pnl >= 0 ? 'up' : 'down');
     }, 200);
-    return () => { clearInterval(timer); simulationRef.current = null; };
+    return () => { clearInterval(timer); };
   }, []);
 
   const realLaunchViews = useMemo(
