@@ -226,15 +226,15 @@ export const MobileNav: React.FC = () => {
 
       {/* Floating Frosted Glass Bottom Navigation Card for Mobile */}
       {/* Positioned comfortably higher (bottom-5 sm:bottom-6) with height h-14 (56px) and vertical stacked icon + text */}
-      <div className="fixed bottom-5 sm:bottom-6 inset-x-4 max-w-sm sm:max-w-md mx-auto z-40 select-none pointer-events-auto">
-        <nav className="h-14 px-1.5 glass-nav-float rounded-2xl flex items-center justify-between gap-1 shadow-2xl">
+      <div className="fixed bottom-1.5 sm:bottom-2 inset-x-2 max-w-none mx-auto z-40 select-none pointer-events-auto">
+        <nav className="h-14 px-1.5 glass-nav-float rounded-xl flex items-center justify-between gap-1 shadow-2xl">
           {/* 1. Overview */}
           <button
             onClick={() => handleSelectTab('overview')}
             aria-label="Overview"
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 px-1 rounded-xl cursor-pointer touch-manipulation active:scale-95 transition-all ${
               activeTab === 'overview' && !selectedToken
-                ? 'bg-white/[0.12] border border-white/20 text-white shadow-sm'
+                ? 'bg-white/[0.09] text-white'
                 : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.04]'
             }`}
           >
@@ -248,7 +248,7 @@ export const MobileNav: React.FC = () => {
             aria-label="Positions"
             className={`relative flex flex-col items-center justify-center flex-1 h-full py-1 px-1 rounded-xl cursor-pointer touch-manipulation active:scale-95 transition-all ${
               activeTab === 'positions' && !selectedToken
-                ? 'bg-white/[0.12] border border-white/20 text-emerald-400 shadow-sm'
+                ? 'bg-white/[0.09] text-emerald-400'
                 : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.04]'
             }`}
           >
@@ -267,7 +267,7 @@ export const MobileNav: React.FC = () => {
             aria-label="Live Feed"
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 px-1 rounded-xl cursor-pointer touch-manipulation active:scale-95 transition-all ${
               activeTab === 'live_feed' && !selectedToken
-                ? 'bg-white/[0.12] border border-white/20 text-amber-400 shadow-sm'
+                ? 'bg-white/[0.09] text-amber-400'
                 : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.04]'
             }`}
           >
@@ -281,7 +281,7 @@ export const MobileNav: React.FC = () => {
             aria-label="Events"
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 px-1 rounded-xl cursor-pointer touch-manipulation active:scale-95 transition-all ${
               activeTab === 'event_monitor' && !selectedToken
-                ? 'bg-white/[0.12] border border-white/20 text-purple-400 shadow-sm'
+                ? 'bg-white/[0.09] text-purple-400'
                 : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.04]'
             }`}
           >
