@@ -694,11 +694,17 @@ export const OverviewPage: React.FC = () => {
                       <div className="mt-1 text-[8px] text-white/30">{position.status === 'CLOSED' ? `Exit: ${position.exitReason || 'Stop reached'}` : position.trailingActivated ? 'Take-profit armed · tracking peak with 8% trailing stop' : 'Initial 8% stop · trailing activates after +10%'}</div>
                     </article>)}
                     {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0"><div className="truncate text-[10px] font-semibold text-white">{item.launch.mint_address.slice(0, 8)}…{item.launch.mint_address.slice(-5)}</div><div className="mt-0.5 text-[8px] text-white/35">PAPER POSITION · {item.launch.source || 'Solana'}</div></div>
-                        <span className="rounded-md border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[8px] font-semibold text-[#83b982]">BOUGHT</span>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.09] bg-[#242424]">
+                          <span className="text-[11px] font-semibold text-white/70">S</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[10px] font-semibold text-white">{item.launch.mint_address.slice(0, 8)}…{item.launch.mint_address.slice(-5)}</div>
+                          <div className="mt-0.5 text-[8px] text-white/35">PAPER POSITION · {item.launch.source || 'Solana'}</div>
+                        </div>
+                        <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-2 py-1 text-[8px] font-semibold text-[#83b982]">BOUGHT</span>
                       </div>
-                      <div className="mt-2 text-[8px] text-white/45">Mint: {item.launch.mint_address}</div>
+                      <div className="mt-2 border-t border-white/[0.055] pt-2 text-[8px] text-white/45">Mint: {item.launch.mint_address}</div>
                     </article>)}
                   </>
                 )}
