@@ -778,7 +778,7 @@ export const OverviewPage: React.FC = () => {
                           const shortName = String(activeCheck?.name || 'Security').replace(/_/g, ' ').replace(/ authority/gi, '').replace(/-pull/gi, '');
                           return <div className="flex min-h-[22px] items-center gap-2">
                             <RefreshCw className={`h-4 w-4 shrink-0 animate-spin ${hasRisk ? 'text-amber-400' : passed ? 'text-emerald-400' : 'text-[#d2b47c]'}`} />
-                            <span key={`${activeIndex}-${Math.floor(scanClock / 1250)}`} className={`animate-[scan-label-in_260ms_ease-out] text-[10px] font-medium tracking-wide ${hasRisk ? 'text-amber-300' : passed ? 'text-[#83b982]' : 'text-white/70'}`}>
+                            <span key={`${activeIndex}-${Math.floor(scanClock / 1250)}`} className={`animate-pulse text-[10px] font-medium tracking-wide ${hasRisk ? 'text-amber-300' : passed ? 'text-[#83b982]' : 'text-white/70'}`}>
                               {shortName}{hasRisk ? ' · RISK DETECTED' : passed ? ' · CLEAR' : ' · CHECKING'}
                             </span>
                             <span className="ml-auto text-[8px] text-white/30">LIVE SCAN</span>
