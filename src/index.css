@@ -146,7 +146,7 @@ html {
   min-height: 100%;
   min-height: 100dvh;
   background: #000000;
-  overscroll-behavior-y: auto;
+  overscroll-behavior: none;
 }
 body, #root {
   min-height: 100%;
@@ -154,9 +154,11 @@ body, #root {
   background: #000000;
 }
 body {
+  padding-top: env(safe-area-inset-top, 0px);
   padding-right: env(safe-area-inset-right, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   overscroll-behavior-y: auto;
+  overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
 }
