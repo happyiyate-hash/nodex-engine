@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent } from '../../types';
-import { Activity, Circle, Copy, ExternalLink, KeyRound, Search, ScanSearch, ShieldCheck, ShieldX, Users, Globe } from 'lucide-react';
+import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 
 type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'detected' | 'qualified' | 'positions';
@@ -778,7 +778,7 @@ export const OverviewPage: React.FC = () => {
             ))}
           </div>
                     <div className="mt-2 flex shrink-0 items-center justify-between text-[8px] text-white/25">
-            <span>{filteredLaunches.length} shown · {launches.length} loaded</span>
+            <span>{filter === 'positions' ? filteredPositions.length + backendPaperEntries.length : filteredLaunches.length} shown · {launches.length} loaded</span>
             <span className="inline-flex items-center gap-1"><Circle className="h-1.5 w-1.5 fill-current" /> Backend event-driven</span>
           </div>
       </div>
