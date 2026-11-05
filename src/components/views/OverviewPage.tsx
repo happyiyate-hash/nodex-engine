@@ -616,7 +616,7 @@ export const OverviewPage: React.FC = () => {
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <div>
               <h2 className="text-[12px] font-semibold text-white">Token discoveries</h2>
-              <p className="mt-0.5 text-[9px] text-white/35">Newest launches first · Demo stream active</p>
+              <p className="mt-0.5 text-[9px] text-white/35">{demoLaunches.length}/30 demo tokens · {demoLaunches.length >= 30 ? 'Batch complete' : 'Scanning batch'}</p>
             </div>
             <div className="relative w-[42%] max-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
