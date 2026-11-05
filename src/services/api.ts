@@ -9,11 +9,11 @@ const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
 export interface ApiSettings {
   backendUrl: string; wsUrl: string; mode: 'RUST_BACKEND'; rpcUrl: string;
-  autoReconnection: boolean; heartbeatIntervalMs: number;
+  autoReconnection: boolean; heartbeatIntervalMs: number; adminApiKey: string;
 }
 export const DEFAULT_SETTINGS: ApiSettings = {
   backendUrl: API_URL, wsUrl: WS_URL, mode: 'RUST_BACKEND', rpcUrl: '',
-  autoReconnection: true, heartbeatIntervalMs: 5000,
+  autoReconnection: true, heartbeatIntervalMs: 5000, adminApiKey: '',
 };
 
 function readStoredConnectionSettings(): Partial<ApiSettings> {
@@ -21,10 +21,11 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
   try {
     const raw = window.localStorage.getItem(CONNECTION_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrl?: unknown };
+    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrl?: unknown; adminApiKey?: unknown };
     return {
       ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl } : {}),
       ...(typeof parsed.wsUrl === 'string' ? { wsUrl: parsed.wsUrl } : {}),
+      ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: parsed.adminApiKey } : {}),
     };
   } catch {
     return {};
@@ -54,6 +55,7 @@ export class NodeXApiClient {
         window.localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
           backendUrl: this.settings.backendUrl,
           wsUrl: this.settings.wsUrl,
+          adminApiKey: this.settings.adminApiKey,
         }));
       } catch (error) {
         console.warn('Unable to persist NodeX connection preferences in this browser.', error);
@@ -86,6 +88,16 @@ export class NodeXApiClient {
       }
       throw error;
     } finally { window.clearTimeout(timeout); }
+  }
+
+  public async issueWebSocketTicket(): Promise<string> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Operator API key is not saved on this device. Open Settings and save it to receive live data.');
+    const result = await this.request<{ ticket: string; expires_in_seconds: number }>('/api/v1/ws-ticket', {
+      method: 'POST', headers: { 'X-NodeX-Admin-Key': key },
+    });
+    if (!result.ticket) throw new Error('Backend did not return a WebSocket ticket.');
+    return result.ticket;
   }
 
   public getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
