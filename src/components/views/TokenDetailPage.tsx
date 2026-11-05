@@ -208,7 +208,7 @@ export const TokenDetailPage: React.FC = () => {
       {/* 3. FULL-WIDTH TRADING CHART VIEWPORT (TIME FILTERS & PUMP.FUN PULSING BEACON DOT) */}
       <section className="w-full border-b border-white/[0.08] bg-black">
         {/* Chart Header Bar: Full-Width with Timeframe & Metric Toggles */}
-        <div className="px-4 lg:px-6 py-2.5 border-b border-white/[0.06] flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-[#0a0a0a]/30">
+        <div className="px-4 lg:px-6 py-2.5 border-b border-white/[0.06] flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-black">
           <div className="flex items-center gap-2.5">
             <div>
               <div className="flex items-center gap-2 text-xs font-mono">
