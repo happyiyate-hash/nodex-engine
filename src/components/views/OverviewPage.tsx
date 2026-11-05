@@ -540,7 +540,7 @@ export const OverviewPage: React.FC = () => {
   const counts = useMemo(() => ({
     detected: launchViews.filter((item) => item.status === 'DETECTED' || item.status === 'ANALYZING').length,
     qualified: launchViews.filter((item) => item.status === 'QUALIFIED').length,
-    positions: demoPositions.filter((position) => position.status === 'OPEN').length + launchViews.filter((item) => item.status === 'PAPER ENTRY' && !('demo' in item && item.demo)).length,
+    positions: demoPositions.length + launchViews.filter((item) => item.status === 'PAPER ENTRY' && !('demo' in item && item.demo)).length,
   }), [launchViews, demoPositions]);
 
   const query = search.trim().toLowerCase();
@@ -558,7 +558,7 @@ export const OverviewPage: React.FC = () => {
       (item.launch.source || '').toLowerCase().includes(query) ||
       Boolean(seed && (seed.name.toLowerCase().includes(query) || seed.symbol.toLowerCase().includes(query)));
   });
-  const filteredPositions = demoPositions.filter((position) => position.status === 'OPEN' &&
+  const filteredPositions = demoPositions.filter((position) =>
     (!query || [position.name, position.symbol, position.mint].some((value) => value.toLowerCase().includes(query))));
   const filteredPaperLaunches = launchViews.filter((item) =>
     activeCategory === 'positions' && item.status === 'PAPER ENTRY' && !('demo' in item && item.demo) &&
@@ -654,7 +654,7 @@ export const OverviewPage: React.FC = () => {
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-[11px] font-semibold text-white">{position.name} <span className="text-white/40">{position.symbol}</span></div>
-                        <div className="mt-0.5 text-[9px] text-white/35">PAPER BUY · {position.quantity.toLocaleString('en-US', { maximumFractionDigits: 2 })} tokens</div>
+                        <div className="mt-0.5 text-[9px] text-white/35">PAPER BUY · {position.status} · {position.quantity.toLocaleString('en-US', { maximumFractionDigits: 2 })} tokens</div>
                       </div>
                       <div className={`shrink-0 text-right text-[10px] font-semibold tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
                         {position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}
