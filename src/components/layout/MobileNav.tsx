@@ -14,16 +14,12 @@ function HomeNavIcon({ className }: { className?: string }) {
 const MAIN_ITEMS: { tab: NavigationTab; label: string; icon: React.ElementType }[] = [
   { tab: 'overview', label: 'Overview', icon: HomeNavIcon },
   { tab: 'live_feed', label: 'Live Feed', icon: RadioTower },
-  { tab: 'logs', label: 'Logs', icon: FileJson },
+  { tab: 'event_monitor', label: 'Logs', icon: FileJson },
 ];
 
 export const MobileNav: React.FC = () => {
   const { activeTab, setActiveTab, closeTokenDetail, selectedToken } = useTerminal();
-
-  const select = (tab: NavigationTab) => {
-    closeTokenDetail();
-    setActiveTab(tab);
-  };
+  const select = (tab: NavigationTab) => { closeTokenDetail(); setActiveTab(tab); };
 
   return (
     <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 flex items-stretch gap-2 select-none pointer-events-auto">
@@ -41,7 +37,6 @@ export const MobileNav: React.FC = () => {
           })}
         </div>
       </nav>
-
       <button type="button" onClick={() => select('settings')} aria-label="Settings" title="Settings"
         aria-current={activeTab === 'settings' && !selectedToken ? 'page' : undefined}
         className={`grid size-[60px] shrink-0 place-items-center rounded-full border border-white/20 bg-secondary/65 text-muted-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.22),0_-6px_24px_rgba(0,0,0,0.28)] backdrop-blur-2xl transition-colors ${activeTab === 'settings' && !selectedToken ? 'text-foreground' : 'hover:text-foreground'}`}>
