@@ -14,7 +14,6 @@ import { installFetchLogger } from './services/engineLogs';
 installFetchLogger();
 
 const REFRESH_TRIGGER_DISTANCE = 72;
-const TOP_EDGE_START_ZONE = 28;
 const getResistedPull = (fingerDistance: number) =>
   116 * (1 - Math.exp(-Math.max(0, fingerDistance) / 145));
 
@@ -33,6 +32,7 @@ const MainLayout: React.FC = () => {
   const { activeTab, selectedToken } = useTerminal();
   const mainRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const refreshScroller = useRef<HTMLElement | null>(null);
   const pullDistanceRef = useRef(0);
   const pullingRef = useRef(false);
   const refreshingRef = useRef(false);
@@ -59,6 +59,7 @@ const MainLayout: React.FC = () => {
 
     const resetPull = () => {
       touchStartY.current = null;
+      refreshScroller.current = null;
       pullingRef.current = false;
       pullDistanceRef.current = 0;
       setPullDistance(0);
@@ -71,21 +72,29 @@ const MainLayout: React.FC = () => {
       }
 
       const touch = event.touches[0];
-      // Refresh is deliberately restricted to a deliberate gesture beginning
-      // at the physical top edge of the screen, never from the bottom/content.
-      if (touch.clientY > TOP_EDGE_START_ZONE || main.scrollTop > 1) {
+      // Allow pull-to-refresh from the Overview master card, or from the
+      // token feed only when that feed is already at its top boundary. Avoid
+      // the physical screen edge so Android's notification shade is not caught.
+      const target = event.target instanceof Element ? event.target : null;
+      const masterCard = target?.closest('[aria-label="Overview controls"]');
+      const nestedScroller = getScrollableAncestor(event.target, main);
+      const isOverview = activeTab === 'overview' && !selectedToken;
+      const startedInMaster = Boolean(masterCard);
+      const startedInFeed = Boolean(nestedScroller && isOverview);
+      if (isOverview && !startedInMaster && !startedInFeed) {
         resetPull();
         return;
       }
-
-      const nestedScroller = getScrollableAncestor(event.target, main);
-      // If the finger starts inside a nested feed/list that can still scroll
-      // toward its top, leave the gesture entirely to that list.
       if (nestedScroller && nestedScroller.scrollTop > 1) {
         resetPull();
         return;
       }
+      if (!isOverview && main.scrollTop > 1) {
+        resetPull();
+        return;
+      }
 
+      refreshScroller.current = nestedScroller;
       touchStartY.current = touch.clientY;
       pullingRef.current = false;
       pullDistanceRef.current = 0;
@@ -95,7 +104,11 @@ const MainLayout: React.FC = () => {
     const onTouchMove = (event: TouchEvent) => {
       if (touchStartY.current === null || refreshingRef.current || event.touches.length !== 1) return;
 
-      if (main.scrollTop > 1) {
+      if (refreshScroller.current && refreshScroller.current.scrollTop > 1) {
+        resetPull();
+        return;
+      }
+      if (!refreshScroller.current && activeTab !== 'overview' && main.scrollTop > 1) {
         resetPull();
         return;
       }
@@ -111,12 +124,6 @@ const MainLayout: React.FC = () => {
 
       // Upward movement and ordinary scrolling never activate the indicator.
       if (delta <= 0) return;
-
-      const nestedScroller = getScrollableAncestor(event.target, main);
-      if (nestedScroller && nestedScroller.scrollTop > 1) {
-        resetPull();
-        return;
-      }
 
       pullingRef.current = true;
       event.preventDefault();
