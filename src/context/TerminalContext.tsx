@@ -201,11 +201,13 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           ? {
               ...previous,
               pumpswap_connected: Boolean(event.data.connected),
+              pumpswap_reconnection_count: Number(event.data.reconnect_count ?? previous.pumpswap_reconnection_count),
               pumpswap_last_error: event.data.connected ? '' : String(event.data.reason || previous.pumpswap_last_error),
             }
           : {
               ...previous,
               solana_connected: Boolean(event.data.connected),
+              reconnection_count: Number(event.data.reconnect_count ?? previous.reconnection_count),
               solana_last_error: event.data.connected ? '' : String(event.data.reason || previous.solana_last_error),
             });
       } else if (event.event_type === 'diagnostic') {
