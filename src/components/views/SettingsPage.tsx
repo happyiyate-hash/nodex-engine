@@ -21,6 +21,7 @@ export const SettingsPage: React.FC = () => {
   const { engineStatus, toggleEngine, settings, updateSettings, backendError, clearBrowserHistory } = useTerminal();
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [wsUrl, setWsUrl] = useState(settings.wsUrl);
+  const [operatorKey, setOperatorKey] = useState(settings.adminApiKey || '');
   const [testResult, setTestResult] = useState<HealthResult>({ status: 'idle' });
   const [savedNotice, setSavedNotice] = useState(false);
   const [adminKey, setAdminKey] = useState('');
@@ -73,7 +74,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleSaveSettings = () => {
-    updateSettings({ backendUrl: backendUrl.trim(), wsUrl: wsUrl.trim() });
+    updateSettings({ backendUrl: backendUrl.trim(), wsUrl: wsUrl.trim(), adminApiKey: operatorKey.trim() });
     setSavedNotice(true);
     window.setTimeout(() => setSavedNotice(false), 2500);
   };
@@ -175,8 +176,12 @@ export const SettingsPage: React.FC = () => {
             <span className="text-[11px] font-medium text-neutral-400">WebSocket URL</span>
             <input value={wsUrl} onChange={(e) => setWsUrl(e.target.value)} inputMode="url" autoCapitalize="none" spellCheck={false} placeholder="wss://your-backend.example.com/api/v1/ws" className="w-full min-w-0 rounded-xl border border-white/10 bg-[#080808] px-3 py-3 text-xs text-white outline-none focus:border-white/30" />
           </label>
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-neutral-400">Personal NodeX operator API key</span>
+            <input type="password" value={operatorKey} onChange={(e) => setOperatorKey(e.target.value)} autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="Paste NODEX_ADMIN_API_KEY" className="w-full min-w-0 rounded-xl border border-white/10 bg-[#080808] px-3 py-3 text-xs text-white outline-none focus:border-white/30" />
+          </label>
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-[11px] leading-relaxed text-neutral-500">
-            Only public service addresses are saved in this browser. Never put RPC keys, passwords, seed phrases, or private keys here.
+            This is your private, single-operator dashboard. The backend URL, WebSocket URL, and operator key are saved in this browser's local storage on this device. On another device, enter the same URLs and key once. The key is sent only over HTTPS to request a short-lived, single-use WebSocket ticket; it is never placed in the WebSocket URL. Anyone with access to this browser profile can read the saved key, so use this only on your own trusted devices.
           </div>
           <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             <button onClick={handleSaveSettings} className="rounded-xl bg-white px-4 py-3 text-xs font-semibold text-black active:scale-[.99]">{savedNotice ? 'Saved' : 'Save connection'}</button>
@@ -202,7 +207,7 @@ export const SettingsPage: React.FC = () => {
         </p>
         <div className="space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
           <div className="text-xs font-semibold text-white">1. Clear browser local storage</div>
-          <p className="text-[11px] leading-relaxed text-neutral-500">Clears NodeX browser display history and NodeX-prefixed local-storage entries. Your saved backend and WebSocket URLs are kept. This does not delete backend database records.</p>
+          <p className="text-[11px] leading-relaxed text-neutral-500">Clears NodeX browser display history and NodeX-prefixed local-storage entries. Your saved connection details and operator key are kept. This does not delete backend database records.</p>
           <button onClick={handleClearLocalStorage} className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-semibold text-white active:scale-[.99]">Clear local browser data</button>
           {localClearMessage && <p className="text-[11px] leading-relaxed text-neutral-400">{localClearMessage}</p>}
         </div>
