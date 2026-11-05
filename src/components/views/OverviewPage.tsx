@@ -451,7 +451,7 @@ export const OverviewPage: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-[calc(100dvh-96px)] w-full flex-col bg-black">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
       <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
       <section aria-label="Overview controls" className="relative flex w-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.07)] sm:rounded-[30px]">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.16] to-transparent" />
@@ -533,8 +533,8 @@ export const OverviewPage: React.FC = () => {
         </div>
       </section>
 
-      <div className="mt-2 flex min-h-[280px] flex-1 flex-col px-3 pb-3 sm:px-4 sm:pb-4">
-          <div className="min-h-[240px] flex-1 overflow-y-auto overscroll-contain bg-transparent">
+      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-24 sm:px-4 sm:pb-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
             {filteredLaunches.length === 0 ? (
               <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]">
