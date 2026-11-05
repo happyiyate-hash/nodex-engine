@@ -5,7 +5,6 @@ import {
   Layers,
   Flame,
   Terminal,
-  Menu,
   X,
   ShieldCheck,
   Cpu,
