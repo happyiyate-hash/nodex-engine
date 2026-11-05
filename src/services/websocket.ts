@@ -60,84 +60,68 @@ export class NodeXWebSocketService {
   private statusListeners=new Set<StatusListener>();
   private reconnectTimer:ReturnType<typeof setTimeout>|null=null;
   private heartbeatWatchdog:ReturnType<typeof setInterval>|null=null;
-  private lastMessageAt=0;
+  private lastMessageAt=0; private connecting=false;
   private reconnectAttempts=0; private manuallyClosed=false; private seen=new Set<string>();
   constructor(){this.connect();}
   public connect():void {
     this.manuallyClosed=false;
     if(this.ws&&(this.ws.readyState===WebSocket.OPEN||this.ws.readyState===WebSocket.CONNECTING))return;
-    const url=apiClient.getSettings().wsUrl;
-    if(!url){this.setStatus('disconnected',0);return;}
+    if(this.connecting)return;
+    const settings=apiClient.getSettings();
+    if(!settings.wsUrl){this.setStatus('disconnected',0);return;}
+    if(!settings.adminApiKey.trim()){
+      this.setStatus('disconnected',0);
+      this.emitLocalEvent('diagnostic','warning','frontend_websocket','Operator API key is not saved on this device. Enter it in Settings to receive live data.',{url:settings.wsUrl});
+      return;
+    }
     this.setStatus(this.reconnectAttempts?'reconnecting':'disconnected',0);
-    try {
-      const socket=new WebSocket(url); this.ws=socket;
+    this.connecting=true;
+    void apiClient.issueWebSocketTicket().then((ticket)=>{
+      this.connecting=false;
+      if(this.manuallyClosed)return;
+      const separator=settings.wsUrl.includes('?')?'&':'?';
+      const socket=new WebSocket(settings.wsUrl+separator+'ticket='+encodeURIComponent(ticket));
+      this.ws=socket;
       socket.onopen=()=>{
-        this.reconnectAttempts=0;
-        this.lastMessageAt=Date.now();
+        this.reconnectAttempts=0;this.lastMessageAt=Date.now();
         if(this.heartbeatWatchdog)clearInterval(this.heartbeatWatchdog);
         this.heartbeatWatchdog=setInterval(()=>{
-          if(this.ws===socket && socket.readyState===WebSocket.OPEN && Date.now()-this.lastMessageAt>45000){
-            socket.close(4000,'NodeX server heartbeat timeout');
-          }
+          if(this.ws===socket&&socket.readyState===WebSocket.OPEN&&Date.now()-this.lastMessageAt>45000)socket.close(4000,'NodeX server heartbeat timeout');
         },10000);
         this.setStatus('connected',0);
-        this.emitLocalEvent('websocket_connected','info','frontend_websocket','Browser WebSocket connected to the NodeX backend.',{url});
+        this.emitLocalEvent('websocket_connected','info','frontend_websocket','Authenticated browser WebSocket connected to the NodeX backend.',{url:settings.wsUrl});
       };
       socket.onmessage=(message)=>{
         try {
           const raw=JSON.parse(String(message.data));
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
-          this.lastMessageAt=Date.now();
-          // Heartbeats are transport health signals, not feed events.
-          if(raw.type==='heartbeat')return;
-          // Keep operational and market events visible while still excluding raw
-          // upstream logs notifications and unknown internal payloads.
-          const visibleTypes = new Set([
-            'connection_status','engine_state','launch_detected','launch_snapshot',
-            'token_scan_started','token_scan_update','market_price_update',
-            'paper_buy_executed','paper_buy_failed','strategy_rejected_token',
-            'diagnostic','provider_status','market_account_update','market_curve_completed',
-            'market_monitor_status','market_subscription_requested','market_subscription_active',
-            'creator_history_started','creator_history_update','stream_warning',
-            'reconnect_recovery_status','pumpswap_activity','pumpswap_volume_update',
-            'command_rejected'
-          ]);
+          this.lastMessageAt=Date.now();if(raw.type==='heartbeat')return;
+          const visibleTypes=new Set(['connection_status','engine_state','launch_detected','launch_snapshot','token_scan_started','token_scan_update','market_price_update','paper_buy_executed','paper_buy_failed','strategy_rejected_token','diagnostic','provider_status','market_account_update','market_curve_completed','market_monitor_status','market_subscription_requested','market_subscription_active','creator_history_started','creator_history_update','stream_warning','reconnect_recovery_status','pumpswap_activity','pumpswap_volume_update','command_rejected']);
           if(!visibleTypes.has(raw.type))return;
-          const event=normalizeBackendEvent(raw);
-          if(this.seen.has(event.event_id))return;
-          this.seen.add(event.event_id);
-          if(this.seen.size>3000)this.seen.delete(this.seen.values().next().value as string);
-          // Browser-to-backend WebSocket health is independent from the backend's
-          // upstream Solana RPC stream health. TerminalContext tracks both separately.
+          const event=normalizeBackendEvent(raw);if(this.seen.has(event.event_id))return;
+          this.seen.add(event.event_id);if(this.seen.size>3000)this.seen.delete(this.seen.values().next().value as string);
           this.dispatch(event);
-        } catch(error){
+        }catch(error){
           console.warn('Unable to parse NodeX WebSocket message',error);
-          this.emitLocalEvent('diagnostic','warning','frontend_websocket','Received a WebSocket message that could not be parsed as NodeX JSON.',{
-            error:error instanceof Error?error.message:String(error)
-          });
+          this.emitLocalEvent('diagnostic','warning','frontend_websocket','Received a WebSocket message that could not be parsed as NodeX JSON.',{error:error instanceof Error?error.message:String(error)});
         }
       };
       socket.onerror=()=>{
         this.setStatus('reconnecting',0);
-        this.emitLocalEvent('diagnostic','error','frontend_websocket','The browser reported a WebSocket transport error. Check the backend URL, TLS/WSS proxy, network access, and backend logs.',{url});
+        this.emitLocalEvent('diagnostic','error','frontend_websocket','WebSocket transport error. Check the backend URL, TLS/WSS proxy, and network access.',{url:settings.wsUrl});
       };
       socket.onclose=(event)=>{
         if(this.heartbeatWatchdog){clearInterval(this.heartbeatWatchdog);this.heartbeatWatchdog=null;}
-        if(this.ws===socket)this.ws=null;
-        this.setStatus('disconnected',0);
-        if(!this.manuallyClosed){
-          this.emitLocalEvent('diagnostic','warning','frontend_websocket','WebSocket connection closed; automatic reconnection will be attempted.',{
-            url,close_code:event.code,close_reason:event.reason||null,was_clean:event.wasClean,
-            reconnect_attempt:this.reconnectAttempts+1
-          });
-        }
+        if(this.ws===socket)this.ws=null;this.setStatus('disconnected',0);
+        if(!this.manuallyClosed)this.emitLocalEvent('diagnostic','warning','frontend_websocket','Authenticated WebSocket closed; a fresh single-use ticket will be requested on reconnect.',{url:settings.wsUrl,close_code:event.code,close_reason:event.reason||null,reconnect_attempt:this.reconnectAttempts+1});
         this.scheduleReconnect();
       };
-    } catch(error) {
-      this.setStatus('disconnected',0);
-      this.emitLocalEvent('diagnostic','error','frontend_websocket',error instanceof Error?error.message:'Could not create the backend WebSocket connection.',{url});
-      this.scheduleReconnect();
-    }
+    }).catch((error)=>{
+      this.connecting=false;this.setStatus('disconnected',0);
+      this.emitLocalEvent('diagnostic','error','frontend_websocket',error instanceof Error?error.message:'Could not obtain an authenticated WebSocket ticket.',{url:settings.wsUrl});
+      // Do not hammer the server when the key is missing or rejected.
+      if(!/API key|401|403|operator/i.test(error instanceof Error?error.message:''))this.scheduleReconnect();
+    });
   }
   private emitLocalEvent(type:NodeXEvent['event_type'],severity:string,component:string,message:string,data:Record<string,any>={}):void {
     const timestamp=new Date().toISOString();
@@ -157,7 +141,7 @@ export class NodeXWebSocketService {
     this.reconnectTimer=setTimeout(()=>{this.reconnectTimer=null;this.connect();},delay);
   }
   public disconnect():void {
-    this.manuallyClosed=true;if(this.reconnectTimer)clearTimeout(this.reconnectTimer);
+    this.manuallyClosed=true;this.connecting=false;if(this.reconnectTimer)clearTimeout(this.reconnectTimer);
     if(this.heartbeatWatchdog)clearInterval(this.heartbeatWatchdog);
     this.heartbeatWatchdog=null;this.reconnectTimer=null;this.ws?.close();this.ws=null;this.setStatus('disconnected',0);
   }
