@@ -453,10 +453,10 @@ export const OverviewPage: React.FC = () => {
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
       <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
-      <section aria-label="Overview controls" className="relative flex w-full shrink-0 flex-col overflow-hidden rounded-[26px] border border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.07)] sm:rounded-[30px]">
-        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.16] to-transparent" />
+      <section aria-label="Overview controls" className="relative -mx-3 flex w-[calc(100%+24px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x-0 border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:-mx-4 sm:w-[calc(100%+32px)] sm:rounded-b-[30px]">
+        
 
-        <div className="shrink-0 px-3 pt-3 sm:px-4 sm:pt-4">
+        <div className="shrink-0 px-3 pt-5 sm:px-4 sm:pt-6">
           <div className="flex min-h-[82px] items-center rounded-xl bg-[#181818] px-3.5 py-3 sm:min-h-[94px] sm:px-5">
             <div className="w-[34%] min-w-0 pr-2">
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
