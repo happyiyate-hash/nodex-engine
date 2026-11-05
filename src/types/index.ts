@@ -192,7 +192,6 @@ export type EventType =
   | 'market_subscription_active'
   | 'market_account_update'
   | 'market_curve_completed'
-  | 'market_subscription_requested'
   | 'provider_status'
   | 'launch_snapshot'
   | 'reconnect_recovery_status'
