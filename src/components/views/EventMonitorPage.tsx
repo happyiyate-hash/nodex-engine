@@ -38,27 +38,25 @@ export const EventMonitorPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-full w-full px-2 pb-8 pt-2 sm:px-4">
-      <div className="sticky top-2 z-20 mb-3 flex justify-start">
-        <div className="glass-nav-float inline-flex h-10 items-center gap-1 rounded-xl px-1.5">
+    <div className="relative min-h-full w-full px-2 pb-8 pt-16 sm:px-4">
+      <div className="pointer-events-none fixed right-3 top-3 z-50 sm:right-5 sm:top-5">
+        <div className="glass-event-controls pointer-events-auto flex h-11 items-center gap-1 rounded-2xl p-1">
           <button
             onClick={toggleStreamPause}
             title={isStreamPaused ? 'Resume event stream' : 'Pause event stream'}
             aria-label={isStreamPaused ? 'Resume event stream' : 'Pause event stream'}
-            className="flex h-8 items-center gap-2 rounded-lg px-3 text-[10px] font-mono text-neutral-200 transition hover:bg-white/[0.08]"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-200 transition-colors hover:bg-white/[0.10] active:bg-white/[0.14]"
           >
-            {isStreamPaused ? <Play className="h-3.5 w-3.5 text-amber-300" /> : <Pause className="h-3.5 w-3.5" />}
-            {isStreamPaused ? 'RESUME' : 'PAUSE'}
+            {isStreamPaused ? <Play className="h-4 w-4 text-amber-300" /> : <Pause className="h-4 w-4" />}
           </button>
-          <span className="h-4 w-px bg-white/[0.1]" />
+          <span className="h-5 w-px bg-white/[0.12]" />
           <button
             onClick={clearEvents}
             title="Clear events"
             aria-label="Clear events"
-            className="flex h-8 items-center gap-2 rounded-lg px-3 text-[10px] font-mono text-neutral-400 transition hover:bg-white/[0.08] hover:text-red-300"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-neutral-300 transition-colors hover:bg-red-400/[0.12] hover:text-red-300 active:bg-red-400/[0.18]"
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            CLEAR
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </div>
