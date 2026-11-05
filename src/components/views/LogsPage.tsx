@@ -82,11 +82,11 @@ export const LogsPage: React.FC = () => {
         </div>
         {!selected ? (
           <div className="mt-3 flex items-center gap-2">
-            <div className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-xl border border-white/[0.07] bg-[#111113] p-1">
-              <button onClick={() => setFilter('requests')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'requests' ? 'bg-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,.08)]' : 'text-zinc-500'}`}><FileJson className="size-3.5" />Requests <span className="text-[10px] opacity-70">{requests.length}</span></button>
-              <button onClick={() => setFilter('events')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'events' ? 'bg-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,.08)]' : 'text-zinc-500'}`}><RadioTower className="size-3.5" />Live events <span className="text-[10px] opacity-70">{events.length}</span></button>
+            <div className="glass-panel grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-2xl p-1">
+              <button onClick={() => setFilter('requests')} className={`flex h-9 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium transition-all duration-200 ${filter === 'requests' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-zinc-200'}`}><FileJson className="size-3.5" />Requests <span className="text-[10px] opacity-70">{requests.length}</span></button>
+              <button onClick={() => setFilter('events')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'events' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-zinc-200'}`}><RadioTower className="size-3.5" />Live events <span className="text-[10px] opacity-70">{events.length}</span></button>
             </div>
-            <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.10] bg-[#111113] px-2.5 text-[11px] font-medium text-zinc-400"><span className={`size-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-zinc-500'}`} />{connected ? 'Live' : 'Offline'}</span>
+            <span className="glass-panel flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[11px] font-medium text-zinc-300"><span className={`size-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-zinc-500'}`} />{connected ? 'Live' : 'Offline'}</span>
           </div>
         ) : (
           <p className="mt-2 text-[11px] text-zinc-500">Complete captured request / response JSON</p>
