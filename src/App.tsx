@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { TerminalProvider, useTerminal } from './context/TerminalContext';
 import { MobileNav } from './components/layout/MobileNav';
 import { OverviewPage } from './components/views/OverviewPage';
@@ -13,18 +13,19 @@ import { installFetchLogger } from './services/engineLogs';
 
 installFetchLogger();
 
-const REFRESH_TRIGGER_DISTANCE = 76;
-const MAX_PULL_DISTANCE = 112;
+const REFRESH_TRIGGER_DISTANCE = 72;
+
+// The pull has no hard stop: it keeps extending with increasing spring resistance.
+const getResistedPull = (fingerDistance: number) => 116 * (1 - Math.exp(-fingerDistance / 145));
 
 const MainLayout: React.FC = () => {
-  const { activeTab, selectedToken, refreshData } = useTerminal();
+  const { activeTab, selectedToken } = useTerminal();
   const mainRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
   const pullDistanceRef = useRef(0);
   const refreshingRef = useRef(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState(false);
 
   const renderActiveView = () => {
     if (selectedToken) return <TokenDetailPage />;
@@ -41,24 +42,7 @@ const MainLayout: React.FC = () => {
     }
   };
 
-  const runRefresh = useCallback(async () => {
-    if (refreshingRef.current) return;
-    refreshingRef.current = true;
-    setIsRefreshing(true);
-    setRefreshError(false);
-    try {
-      await refreshData();
-    } catch {
-      setRefreshError(true);
-    } finally {
-      window.setTimeout(() => {
-        refreshingRef.current = false;
-        setIsRefreshing(false);
-        setPullDistance(0);
-        pullDistanceRef.current = 0;
-      }, 450);
-    }
-  }, [refreshData]);
+
 
   useEffect(() => {
     const main = mainRef.current;
@@ -78,7 +62,7 @@ const MainLayout: React.FC = () => {
         return;
       }
       event.preventDefault();
-      const distance = Math.min(MAX_PULL_DISTANCE, delta * 0.62);
+      const distance = getResistedPull(delta);
       pullDistanceRef.current = distance;
       setPullDistance(distance);
     };
@@ -86,7 +70,10 @@ const MainLayout: React.FC = () => {
     const onTouchEnd = () => {
       touchStartY.current = null;
       if (pullDistanceRef.current >= REFRESH_TRIGGER_DISTANCE) {
-        void runRefresh();
+        refreshingRef.current = true;
+        setIsRefreshing(true);
+        setPullDistance(REFRESH_TRIGGER_DISTANCE);
+        window.setTimeout(() => window.location.reload(), 320);
       } else {
         pullDistanceRef.current = 0;
         setPullDistance(0);
@@ -103,10 +90,10 @@ const MainLayout: React.FC = () => {
       main.removeEventListener('touchend', onTouchEnd);
       main.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [runRefresh]);
+  }, []);
 
   const indicatorVisible = pullDistance > 0 || isRefreshing;
-  const indicatorProgress = Math.min(1, pullDistance / REFRESH_TRIGGER_DISTANCE);
+  const indicatorRotation = Math.min(300, (pullDistance / REFRESH_TRIGGER_DISTANCE) * 300);
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20">
@@ -117,25 +104,19 @@ const MainLayout: React.FC = () => {
       >
         <div
           aria-live="polite"
-          aria-label={isRefreshing ? 'Refreshing NodeX data' : refreshError ? 'Refresh failed' : 'Pull down to refresh'}
-          className="pointer-events-none absolute left-1/2 top-3 z-50 flex -translate-x-1/2 items-center justify-center"
+          aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
+          className="pointer-events-none absolute left-1/2 top-0 z-50 flex items-center justify-center"
           style={{
             opacity: indicatorVisible ? 1 : 0,
-            transform: `translate(-50%, ${indicatorVisible ? Math.max(8, pullDistance - 42) : -48}px)`,
-            transition: isRefreshing ? 'transform 180ms ease, opacity 180ms ease' : 'opacity 120ms ease',
+            transform: `translate(-50%, ${indicatorVisible ? pullDistance + 12 : -44}px)`,
+            transition: isRefreshing ? 'transform 180ms cubic-bezier(.2,.8,.2,1), opacity 120ms ease' : 'opacity 100ms linear',
           }}
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-[#111111] shadow-[0_5px_24px_rgba(0,0,0,.55)]">
-            <svg
-              viewBox="0 0 24 24"
-              className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`}
-              style={!isRefreshing ? { transform: `rotate(${indicatorProgress * 270}deg)` } : undefined}
-              fill="none"
-            >
-              <path d="M20 11a8 8 0 1 0 1 4" stroke={refreshError ? '#f87171' : 'white'} strokeWidth="2.2" strokeLinecap="round" opacity=".28" />
-              <path d="M20 4v7h-7" stroke={refreshError ? '#f87171' : 'white'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
+          <svg viewBox="0 0 24 24" className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none">
+            <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.18)" strokeWidth="2.4" />
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="white" strokeWidth="2.4" strokeLinecap="round"
+              transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`} />
+          </svg>
         </div>
         {renderActiveView()}
       </main>
