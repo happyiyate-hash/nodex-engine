@@ -544,14 +544,14 @@ export const OverviewPage: React.FC = () => {
     [demoLaunches, realLaunchViews]
   );
   const counts = useMemo(() => ({
-    detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'REJECTED', 'BUY FAILED'].includes(item.status)).length,
-    qualified: launchViews.filter((item) => item.status === 'QUALIFIED').length,
+    detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'BUY FAILED'].includes(item.status)).length,
+    qualified: launchViews.filter((item) => ['QUALIFIED', 'PAPER ENTRY'].includes(item.status)).length,
     positions: demoPositions.length + launchViews.filter((item) => item.status === 'PAPER ENTRY' && !('demo' in item && item.demo)).length,
   }), [launchViews, demoPositions]);
 
   const filteredLaunches = launchViews.filter((item) => {
-    if (filter === 'detected' && !['DETECTED', 'ANALYZING', 'REJECTED', 'BUY FAILED'].includes(item.status)) return false;
-    if (filter === 'qualified' && item.status !== 'QUALIFIED') return false;
+    if (filter === 'detected' && !['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'BUY FAILED'].includes(item.status)) return false;
+    if (filter === 'qualified' && !['QUALIFIED', 'PAPER ENTRY'].includes(item.status)) return false;
     if (filter === 'positions') return false;
     if (search.trim()) {
       const query = search.trim().toLowerCase();
@@ -735,7 +735,7 @@ export const OverviewPage: React.FC = () => {
                   const marketCap = Number(tokenData.market_cap ?? tokenData.market_cap_usd ?? report?.market_cap_usd);
                   const cardName = demoSeed?.name || tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
                   const cardSymbol = demoSeed?.symbol || tokenData.symbol || tokenData.token_symbol || '';
-                  const isQualified = filter === 'qualified';
+                  const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
                   const demoCheck = demoItem?.scanStage || 'Waiting for scan result';
                   const checkRows = checks.length > 0 ? checks : [
                     { name: 'Mint authority', status: demo ? (demoCheck.toLowerCase().includes('mint') ? 'CHECKING' : 'PENDING') : 'PENDING' },
