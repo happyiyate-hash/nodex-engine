@@ -826,7 +826,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               </div>
             )}
           </div>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-12 bg-gradient-to-t from-black via-black/65 to-transparent" />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-4 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
 
       </div>
     </div>
