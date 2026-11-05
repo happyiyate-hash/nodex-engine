@@ -38,6 +38,9 @@ const MainLayout: React.FC = () => {
   const refreshingRef = useRef(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isImmersive, setIsImmersive] = useState(false);
+  const lastEmptyTap = useRef(0);
+  const tapStart = useRef<{ x: number; y: number } | null>(null);
 
   const renderActiveView = () => {
     if (selectedToken) return <TokenDetailPage />;
@@ -65,6 +68,7 @@ const MainLayout: React.FC = () => {
     };
 
     const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length === 1) tapStart.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
       if (refreshingRef.current || event.touches.length !== 1) {
         resetPull();
         return;
@@ -125,7 +129,24 @@ const MainLayout: React.FC = () => {
       setPullDistance(distance);
     };
 
-    const onTouchEnd = () => {
+    const onTouchEnd = (event: TouchEvent) => {
+      const start = tapStart.current;
+      tapStart.current = null;
+      const target = event.target instanceof Element ? event.target : null;
+      const isEmptySurface = Boolean(target && !target.closest('button,a,input,textarea,select,[role="button"],article,nav,.overflow-y-auto'));
+      if (start && event.changedTouches.length === 1 && isEmptySurface) {
+        const touch = event.changedTouches[0];
+        const moved = Math.hypot(touch.clientX - start.x, touch.clientY - start.y);
+        if (moved < 12) {
+          const now = Date.now();
+          if (now - lastEmptyTap.current < 330) {
+            setIsImmersive((current) => !current);
+            lastEmptyTap.current = 0;
+          } else {
+            lastEmptyTap.current = now;
+          }
+        }
+      }
       touchStartY.current = null;
       if (pullingRef.current && pullDistanceRef.current >= REFRESH_TRIGGER_DISTANCE) {
         pullingRef.current = false;
@@ -158,7 +179,7 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20">
-      <main ref={mainRef} className="relative z-10 h-full w-full overflow-y-auto overscroll-y-none pb-24 focus:outline-none">
+      <main ref={mainRef} className={`relative z-10 h-full w-full overflow-y-auto overscroll-y-none focus:outline-none ${isImmersive ? "pb-0" : "pb-24"}`}>
         <div
           aria-live="polite"
           aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
@@ -176,7 +197,7 @@ const MainLayout: React.FC = () => {
         </div>
         {renderActiveView()}
       </main>
-      {activeTab !== 'event_monitor' && <MobileNav />}
+      {activeTab !== 'event_monitor' && <MobileNav hidden={isImmersive} />}
     </div>
   );
 };
