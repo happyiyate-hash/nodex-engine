@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent } from '../../types';
-import { Activity, CheckCircle2, Circle, Copy, ExternalLink, LoaderCircle, Search, ShieldAlert, ShieldCheck, ShieldX, XCircle } from 'lucide-react';
+import { Activity, Circle, Copy, ExternalLink, LoaderCircle, Search, ShieldCheck, ShieldX } from 'lucide-react';
 
 type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'all' | 'analyzing' | 'qualified' | 'paper';
