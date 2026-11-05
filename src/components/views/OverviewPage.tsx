@@ -369,6 +369,8 @@ export const OverviewPage: React.FC = () => {
   const [profitLossPct, setProfitLossPct] = useState(0);
   const [availableBalance, setAvailableBalance] = useState(DEMO_STARTING_BALANCE);
   const [investedBalance, setInvestedBalance] = useState(0);
+  const [openPositionCount, setOpenPositionCount] = useState(0);
+  const [hourlyProfitLoss, setHourlyProfitLoss] = useState(0);
   const [portfolioFlash, setPortfolioFlash] = useState<ChangeDirection>(null);
   const [balanceDirection, setBalanceDirection] = useState<ChangeDirection>(null);
   const [filter, setFilter] = useState<FeedFilter>('all');
@@ -384,6 +386,7 @@ export const OverviewPage: React.FC = () => {
       positions: new Map(),
     };
     let previousPortfolioValue = DEMO_STARTING_BALANCE;
+    const portfolioHistory: Array<{ timestamp: number; value: number }> = [{ timestamp: simulation.startedAt, value: DEMO_STARTING_BALANCE }];
     const timer = setInterval(() => {
       const now = Date.now();
       const elapsed = now - simulation.startedAt;
@@ -503,6 +506,12 @@ export const OverviewPage: React.FC = () => {
       setDemoPositions(positionList);
       setAvailableBalance(simulation.cash);
       setInvestedBalance(invested);
+      setOpenPositionCount(openPositions.length);
+      portfolioHistory.push({ timestamp: now, value: totalValue });
+      const hourCutoff = now - 60 * 60 * 1000;
+      while (portfolioHistory.length > 2 && portfolioHistory[1].timestamp <= hourCutoff) portfolioHistory.shift();
+      const hourBaseline = portfolioHistory[0]?.value ?? totalValue;
+      setHourlyProfitLoss(totalValue - hourBaseline);
       setPortfolioValue(totalValue);
       setProfitLoss(pnl);
       setProfitLossPct((pnl / DEMO_STARTING_BALANCE) * 100);
@@ -601,18 +610,19 @@ export const OverviewPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
-            <div className="rounded-lg bg-[#121212] px-3 py-2.5">
-              <div className="text-[19px] font-semibold leading-none tabular-nums text-white">{counts.detected}</div>
-              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Detected</div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
+              <div className="text-[19px] font-semibold leading-none tabular-nums text-white">{openPositionCount}</div>
+              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Open positions</div>
             </div>
-            <div className="rounded-lg bg-[#121212] px-3 py-2.5">
-              <div className="text-[19px] font-semibold leading-none tabular-nums text-[#d2b47c]">{counts.analyzing}</div>
-              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Analyzing</div>
-            </div>
-            <div className="rounded-lg bg-[#121212] px-3 py-2.5">
-              <div className="text-[19px] font-semibold leading-none tabular-nums text-[#83b982]">{counts.qualified}</div>
-              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Qualified</div>
+            <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
+              <div className={`truncate text-[19px] font-semibold leading-none tabular-nums ${hourlyProfitLoss >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
+                {hourlyProfitLoss >= 0 ? '+' : '−'}${formatUsd(Math.abs(hourlyProfitLoss))}
+              </div>
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <span className="text-[9px] uppercase tracking-[0.09em] text-white/40">P&L · 1H</span>
+                <span className="text-[8px] text-white/25">Rolling hour</span>
+              </div>
             </div>
           </div>
         </div>
