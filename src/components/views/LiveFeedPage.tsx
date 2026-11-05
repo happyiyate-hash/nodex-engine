@@ -154,7 +154,7 @@ export const LiveFeedPage: React.FC = () => {
   return (
     <div className="w-full text-white select-none">
       {/* 1. Header Strip (Full Width) */}
-      <div className="w-full border-b border-white/[0.08] bg-[#090909]/60 backdrop-blur-md px-4 lg:px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="w-full border-b border-white/[0.08] bg-black backdrop-blur-md px-4 lg:px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-sm sm:text-base font-mono font-bold text-white tracking-wide uppercase">
@@ -182,7 +182,7 @@ export const LiveFeedPage: React.FC = () => {
         </div>
       </div>
 
-      <section className="px-4 lg:px-6 py-4 border-b border-white/[0.08] bg-[#0b0b0b]/40">
+      <section className="px-4 lg:px-6 py-4 border-b border-white/[0.08] bg-black">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Confirmed launch records</h2>
           <span className="text-[10px] font-mono text-[#737373]">{launches.length} records loaded</span>
@@ -215,7 +215,7 @@ export const LiveFeedPage: React.FC = () => {
       </section>
 
       {/* 2. Filter Bar (Full Width) */}
-      <div className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+      <div className="w-full border-b border-white/[0.08] bg-black backdrop-blur-sm px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           {/* Venue filter */}
           <div className="flex items-center gap-1.5">
