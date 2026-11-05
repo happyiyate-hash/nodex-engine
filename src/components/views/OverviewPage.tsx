@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent } from '../../types';
-import { Activity, Circle, Copy, ExternalLink, LoaderCircle, Search, ShieldCheck, ShieldX } from 'lucide-react';
+import { Activity, Circle, Copy, ExternalLink, KeyRound, Search, ScanSearch, ShieldCheck, ShieldX, Users, Globe } from 'lucide-react';
 
 type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'all' | 'analyzing' | 'qualified' | 'paper';
@@ -453,7 +453,7 @@ export const OverviewPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } } @keyframes border-travel { to { stroke-dashoffset: -320; } }`}</style>
+      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
       <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
@@ -551,12 +551,16 @@ export const OverviewPage: React.FC = () => {
                   const demoItem = 'demo' in item && item.demo ? item : null;
                   const demo = Boolean(demoItem);
                   const demoSeed = demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === launch.mint_address.split('-')[1]) : null;
+                  const scanEvent = events.filter((event) => event.event_type === 'token_scan_progress' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address)).slice(-1)[0];
+                  const scanPercent = demo ? (demoItem?.progress ?? 0) : Math.max(0, Math.min(100, Number(scanEvent?.data?.progress ?? 0)));
+                  const scanMessage = demo ? (demoItem?.scanStage ?? 'Scanning token') : String(scanEvent?.data?.message || 'Security scan running');
+                  const scanStage = demo ? (demoItem?.scanStage ?? '') : String(scanEvent?.data?.stage || '');
+                  const StageIcon = scanStage === 'authorities' ? KeyRound : scanStage === 'holder_distribution' ? Users : scanStage === 'rugcheck' ? Globe : ScanSearch;
                   return (
                   <article
                     key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature}
                     className={`relative mb-1 overflow-hidden rounded-xl border bg-white/[0.025] backdrop-blur-xl transition-all duration-300 ${status === 'ANALYZING' ? 'border-amber-400/20 shadow-[0_0_14px_rgba(210,180,124,0.07)]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/15' : 'border-white/[0.07]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}
                   >
-                    {status === 'ANALYZING' && <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 60" preserveAspectRatio="none"><rect x="0.75" y="0.75" width="98.5" height="58.5" rx="9" fill="none" stroke="rgba(210,180,124,0.75)" strokeWidth="1.2" strokeDasharray="24 296" className="animate-[border-travel_5s_linear_infinite]" /></svg>}
                     <button
                       type="button"
                       onClick={() => setExpandedScans((current) => current.includes(launch.mint_address) ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])}
@@ -564,7 +568,7 @@ export const OverviewPage: React.FC = () => {
                       aria-expanded={expandedScans.includes(launch.mint_address)}
                     >
                       <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.07]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
-                        {status === 'ANALYZING' ? <LoaderCircle className="h-4 w-4 animate-spin text-[#d2b47c]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
+                        {status === 'ANALYZING' ? <StageIcon className="h-4 w-4 text-[#b79a63]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
@@ -576,7 +580,17 @@ export const OverviewPage: React.FC = () => {
                       <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[8px] font-semibold tracking-wide ${statusStyle[status]}`}>{status}</span>
                       <span className="ml-0.5 text-[10px] text-white/30">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
                     </button>
-                    {status === 'ANALYZING' && demo && <div className="mx-2.5 mb-1 h-[2px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-[#d2b47c] transition-[width] duration-300" style={{ width: `${demoItem?.progress ?? 0}%` }} /></div>}
+                    {status === 'ANALYZING' && (
+                      <div className="px-2 pb-2 pt-0.5">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="truncate text-[8px] text-[#b79a63]/80">{scanMessage}</span>
+                          <span className="shrink-0 text-[8px] tabular-nums text-white/30">{scanPercent}%</span>
+                        </div>
+                        <div className="h-[3px] overflow-hidden rounded-full bg-white/[0.07]">
+                          <div className="h-full rounded-full bg-[#8c754c] transition-[width] duration-500 ease-out" style={{ width: `${scanPercent}%` }} />
+                        </div>
+                      </div>
+                    )}
                     {expandedScans.includes(launch.mint_address) && (
                       <div className="relative border-t border-white/[0.06] px-2 py-1.5">
                         <p className="text-[9px] leading-relaxed text-white/55">{reason}</p>
