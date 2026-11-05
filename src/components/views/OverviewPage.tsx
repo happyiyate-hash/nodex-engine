@@ -4,7 +4,7 @@ import { TokenLaunchRecord, NodeXEvent } from '../../types';
 import { Activity, Circle, Copy, ExternalLink, KeyRound, Search, ScanSearch, ShieldCheck, ShieldX, Users, Globe } from 'lucide-react';
 
 type ChangeDirection = 'up' | 'down' | null;
-type FeedFilter = 'all' | 'analyzing' | 'qualified' | 'paper';
+type FeedFilter = 'detected' | 'qualified' | 'positions';
 
 interface RollingDigitProps {
   digit: string;
@@ -373,7 +373,7 @@ export const OverviewPage: React.FC = () => {
   const [hourlyProfitLoss, setHourlyProfitLoss] = useState(0);
   const [portfolioFlash, setPortfolioFlash] = useState<ChangeDirection>(null);
   const [balanceDirection, setBalanceDirection] = useState<ChangeDirection>(null);
-  const [filter, setFilter] = useState<FeedFilter>('all');
+  const [filter, setFilter] = useState<FeedFilter>('detected');
   const [search, setSearch] = useState('');
   const [demoLaunches, setDemoLaunches] = useState<DemoLaunchView[]>([]);
   const [demoPositions, setDemoPositions] = useState<DemoPosition[]>([]);
@@ -539,25 +539,35 @@ export const OverviewPage: React.FC = () => {
     [demoLaunches, realLaunchViews]
   );
   const counts = useMemo(() => ({
-    detected: launchViews.length,
-    analyzing: launchViews.filter((item) => item.status === 'ANALYZING').length,
+    detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'REJECTED', 'BUY FAILED'].includes(item.status)).length,
     qualified: launchViews.filter((item) => item.status === 'QUALIFIED').length,
-    paper: launchViews.filter((item) => item.status === 'PAPER ENTRY').length,
-  }), [launchViews]);
+    positions: demoPositions.length + launchViews.filter((item) => item.status === 'PAPER ENTRY' && !('demo' in item && item.demo)).length,
+  }), [launchViews, demoPositions]);
 
   const filteredLaunches = launchViews.filter((item) => {
-    if (filter === 'analyzing' && item.status !== 'ANALYZING') return false;
+    if (filter === 'detected' && !['DETECTED', 'ANALYZING', 'REJECTED', 'BUY FAILED'].includes(item.status)) return false;
     if (filter === 'qualified' && item.status !== 'QUALIFIED') return false;
-    if (filter === 'paper' && item.status !== 'PAPER ENTRY') return false;
+    if (filter === 'positions') return false;
     if (search.trim()) {
       const query = search.trim().toLowerCase();
+      const demoSeed = 'demo' in item && item.demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === item.launch.mint_address.split('-')[1]) : null;
       return item.launch.mint_address.toLowerCase().includes(query) ||
         (item.launch.creator_address || '').toLowerCase().includes(query) ||
-        item.launch.source.toLowerCase().includes(query) ||
-        ('demo' in item && item.demo && DEMO_TOKEN_SEEDS.some((seed) => seed.name.toLowerCase().includes(query) || seed.symbol.toLowerCase().includes(query)));
+        String(item.launch.source || '').toLowerCase().includes(query) ||
+        Boolean(demoSeed && (demoSeed.name.toLowerCase().includes(query) || demoSeed.symbol.toLowerCase().includes(query)));
     }
     return true;
   });
+
+  const filteredPositions = demoPositions.filter((position) => {
+    if (!search.trim()) return true;
+    const query = search.trim().toLowerCase();
+    return position.name.toLowerCase().includes(query) || position.symbol.toLowerCase().includes(query) || position.mint.toLowerCase().includes(query);
+  });
+  const backendPaperEntries = launchViews.filter((item) => item.status === 'PAPER ENTRY' && !('demo' in item && item.demo) && (
+    !search.trim() || item.launch.mint_address.toLowerCase().includes(search.trim().toLowerCase()) ||
+    String(item.launch.source || '').toLowerCase().includes(search.trim().toLowerCase())
+  ));
 
   const connected = engineStatus.ws_status === 'connected' && engineStatus.running;
   const engineLabel = !engineStatus.running ? 'ENGINE PAUSED' : engineStatus.ws_status === 'connected' ? 'ENGINE ONLINE' : 'RECONNECTING';
@@ -635,21 +645,8 @@ export const OverviewPage: React.FC = () => {
             </div>
             <div className="relative w-[42%] max-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mint..." aria-label="Search detected tokens" className="h-8 w-full rounded-lg border border-white/[0.07] bg-[#101010] pl-8 pr-2 text-[10px] text-white placeholder:text-white/25 outline-none focus:border-white/20" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mint..." aria-label="Search tokens in selected category" className="h-8 w-full rounded-lg border border-white/[0.07] bg-[#101010] pl-8 pr-2 text-[10px] text-white placeholder:text-white/25 outline-none focus:border-white/20" />
             </div>
-          </div>
-
-          <div className="mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1">
-            {([
-              ['all', 'All'],
-              ['analyzing', 'Analyzing'],
-              ['qualified', 'Qualified'],
-              ['paper', 'Paper'],
-            ] as [FeedFilter, string][]).map(([value, label]) => (
-              <button key={value} onClick={() => setFilter(value)} className={`shrink-0 rounded-md px-3 py-1.5 text-[10px] transition-colors ${filter === value ? 'bg-[#242424] text-white' : 'text-white/40 hover:text-white/75'}`}>
-                {label}{value === 'all' ? ` · ${counts.detected}` : value === 'analyzing' ? ` · ${counts.analyzing}` : value === 'qualified' ? ` · ${counts.qualified}` : ` · ${counts.paper}`}
-              </button>
-            ))}
           </div>
 
         </div>
@@ -657,122 +654,130 @@ export const OverviewPage: React.FC = () => {
 
       <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 sm:px-4 sm:pb-0">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
-            {filteredLaunches.length === 0 ? (
+            {filter === 'positions' ? (
+              <div className="space-y-1.5 pb-2">
+                {filteredPositions.length === 0 && backendPaperEntries.length === 0 ? (
+                  <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]"><Activity className="h-4 w-4 text-white/35" /></div>
+                    <div className="text-[11px] font-medium text-white/75">No purchased tokens yet</div>
+                    <p className="mt-1.5 max-w-[230px] text-[10px] leading-relaxed text-white/35">Paper positions will appear here after a buy is executed.</p>
+                  </div>
+                ) : (
+                  <>
+                    {filteredPositions.map((position) => <article key={position.id} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0"><div className="truncate text-[10px] font-semibold text-white">{position.name} <span className="text-white/35">{position.symbol}</span></div><div className="mt-0.5 text-[8px] text-white/35">{position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'} · {position.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} tokens</div></div>
+                        <div className="text-right"><div className={`text-[10px] font-semibold tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>{position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}</div><div className="text-[8px] text-white/35">{position.pnlPct >= 0 ? '+' : ''}{position.pnlPct.toFixed(2)}%</div></div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-[8px]">
+                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 text-white/75">${position.entryPrice.toFixed(6)}</div></div>
+                        <div><div className="text-white/30">Current</div><div className="mt-0.5 text-white/75">${position.currentPrice.toFixed(6)}</div></div>
+                        <div><div className="text-white/30">Value</div><div className="mt-0.5 text-white/75">${formatUsd(position.value)}</div></div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
+                        <div><div className="text-white/30">Peak P&L</div><div className="mt-0.5 text-[#83b982]">+{position.peakPnlPct.toFixed(2)}%</div></div>
+                        <div><div className="text-white/30">Stop level</div><div className="mt-0.5 text-white/75">${position.trailingStopPrice.toFixed(6)}</div></div>
+                        <div><div className="text-white/30">Strategy</div><div className="mt-0.5 text-white/65">{position.status === 'CLOSED' ? (position.exitReason || 'Closed') : position.trailingActivated ? 'TRAILING' : 'PROTECTING'}</div></div>
+                      </div>
+                      <div className="mt-1 text-[8px] text-white/30">{position.status === 'CLOSED' ? `Exit: ${position.exitReason || 'Stop reached'}` : position.trailingActivated ? 'Take-profit armed · tracking peak with 8% trailing stop' : 'Initial 8% stop · trailing activates after +10%'}</div>
+                    </article>)}
+                    {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0"><div className="truncate text-[10px] font-semibold text-white">{item.launch.mint_address.slice(0, 8)}…{item.launch.mint_address.slice(-5)}</div><div className="mt-0.5 text-[8px] text-white/35">PAPER POSITION · {item.launch.source || 'Solana'}</div></div>
+                        <span className="rounded-md border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[8px] font-semibold text-[#83b982]">BOUGHT</span>
+                      </div>
+                      <div className="mt-2 text-[8px] text-white/45">Mint: {item.launch.mint_address}</div>
+                    </article>)}
+                  </>
+                )}
+              </div>
+            ) : filteredLaunches.length === 0 ? (
               <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]">
-                  <Activity className="h-4 w-4 text-white/35" />
-                </div>
-                <div className="text-[11px] font-medium text-white/75">{launches.length === 0 ? 'Waiting for token discoveries' : 'No tokens match this filter'}</div>
-                <p className="mt-1.5 max-w-[230px] text-[10px] leading-relaxed text-white/35">{launches.length === 0 ? 'New Solana launches will appear here as soon as the backend confirms them.' : 'Try another status filter or search term.'}</p>
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]"><Activity className="h-4 w-4 text-white/35" /></div>
+                <div className="text-[11px] font-medium text-white/75">{filter === 'qualified' ? 'No qualified tokens yet' : 'Waiting for token discoveries'}</div>
+                <p className="mt-1.5 max-w-[230px] text-[10px] leading-relaxed text-white/35">{filter === 'qualified' ? 'Tokens will appear here after passing the security and strategy checks.' : 'New Solana launches will appear here as soon as the backend confirms them.'}</p>
               </div>
             ) : (
-              <div className="divide-y divide-white/[0.055]">
+              <div className="space-y-1.5 pb-2">
                 {filteredLaunches.map((item) => {
                   const { launch, status, reason, updatedAt } = item;
                   const demoItem = 'demo' in item && item.demo ? item : null;
                   const demo = Boolean(demoItem);
                   const demoSeed = demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === launch.mint_address.split('-')[1]) : null;
-                  const scanEvent = events.filter((event) => event.event_type === 'token_scan_progress' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address)).slice(-1)[0];
-                  const scanPercent = demo ? (demoItem?.progress ?? 0) : Math.max(0, Math.min(100, Number(scanEvent?.data?.progress ?? 0)));
-                  const scanMessage = demo ? (demoItem?.scanStage ?? 'Scanning token') : String(scanEvent?.data?.message || 'Security scan running');
-                  const scanStage = demo ? (demoItem?.scanStage ?? '') : String(scanEvent?.data?.stage || '');
-                  const StageIcon = scanStage === 'authorities' ? KeyRound : scanStage === 'holder_distribution' ? Users : scanStage === 'rugcheck' ? Globe : ScanSearch;
+                  const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
+                  const report = reportEvent?.data;
+                  const checks = Array.isArray(report?.checks) ? report.checks : [];
+                  const tokenData = launch as any;
+                  const price = Number(tokenData.current_price ?? tokenData.price_usd ?? tokenData.price ?? report?.price_usd ?? report?.current_price);
+                  const marketCap = Number(tokenData.market_cap ?? tokenData.market_cap_usd ?? report?.market_cap_usd);
+                  const cardName = demoSeed?.name || tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
+                  const cardSymbol = demoSeed?.symbol || tokenData.symbol || tokenData.token_symbol || '';
+                  const isQualified = filter === 'qualified';
+                  const demoCheck = demoItem?.scanStage || 'Waiting for scan result';
+                  const checkRows = checks.length > 0 ? checks : [
+                    { name: 'Mint authority', status: demo ? (demoCheck.toLowerCase().includes('mint') ? 'CHECKING' : 'PENDING') : 'PENDING' },
+                    { name: 'Freeze authority', status: demo ? (demoCheck.toLowerCase().includes('freeze') ? 'CHECKING' : 'PENDING') : 'PENDING' },
+                    { name: 'Rug-pull risk', status: demo ? (demoCheck.toLowerCase().includes('risk') || demoCheck.toLowerCase().includes('holder') ? 'CHECKING' : 'PENDING') : 'PENDING' },
+                    { name: 'Risk score', status: status === 'QUALIFIED' ? 'PASSED' : 'PENDING' },
+                  ];
                   return (
-                  <article
-                    key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature}
-                    className={`relative mb-1 overflow-hidden rounded-xl border bg-white/[0.025] backdrop-blur-xl transition-all duration-300 ${status === 'ANALYZING' ? 'border-amber-400/20 shadow-[0_0_14px_rgba(210,180,124,0.07)]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/15' : 'border-white/[0.07]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setExpandedScans((current) => current.includes(launch.mint_address) ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])}
-                      className="relative flex min-h-[50px] w-full items-center gap-2 px-2 py-1 text-left"
-                      aria-expanded={expandedScans.includes(launch.mint_address)}
-                    >
-                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.07]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
-                        {status === 'ANALYZING' ? <StageIcon className="h-4 w-4 text-[#b79a63]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate text-[11px] font-semibold text-white">{demoSeed ? demoSeed.name : `${launch.mint_address.slice(0, 6)}…${launch.mint_address.slice(-5)}`}</span>
-                          {demoSeed && <span className="shrink-0 text-[8px] text-white/35">{demoSeed.symbol}</span>}
-                        </div>
-                        <div className="mt-0.5 truncate text-[9px] text-white/35">{demo ? 'SIMULATED EXAMPLE' : launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
-                      </div>
-                      <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[8px] font-semibold tracking-wide ${statusStyle[status]}`}>{status}</span>
-                      <span className="ml-0.5 text-[10px] text-white/30">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
-                    </button>
-                    {(status === 'ANALYZING' || status === 'QUALIFIED' || status === 'PAPER ENTRY' || status === 'REJECTED' || status === 'BUY FAILED') && (
-                      <div className="px-2 pb-2 pt-0.5">
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className={`truncate text-[8px] ${status === 'ANALYZING' ? 'text-[#b79a63]/80' : status === 'REJECTED' || status === 'BUY FAILED' ? 'text-[#c77b7b]/80' : 'text-[#83b982]/80'}`}>{status === 'ANALYZING' ? scanMessage : status === 'REJECTED' || status === 'BUY FAILED' ? 'Security checks rejected' : 'Security checks completed'}</span>
-                          <span className="shrink-0 text-[8px] tabular-nums text-white/30">{status === 'ANALYZING' ? scanPercent : 100}%</span>
-                        </div>
-                        <div className="h-[3px] overflow-hidden rounded-full bg-white/[0.07]">
-                          <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${status === 'ANALYZING' ? 'bg-[#8c754c]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'bg-[#a34e4e]' : 'bg-[#4f8d62]'}`} style={{ width: `${status === 'ANALYZING' ? scanPercent : 100}%` }} />
-                        </div>
-                      </div>
-                    )}
-                    {expandedScans.includes(launch.mint_address) && (
-                      <div className="relative border-t border-white/[0.06] px-2 py-1.5">
-                        <p className="text-[9px] leading-relaxed text-white/55">{reason}</p>
-                        {!demo && (() => {
-                          const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
-                          const report = reportEvent?.data;
-                          const checks = Array.isArray(report?.checks) ? report.checks : [];
-                          return (
-                            <div className="mt-2 space-y-1.5">
-                              {checks.length > 0 ? checks.map((check: any, index: number) => (
-                                <div key={check.name || index} className="flex items-start justify-between gap-3 text-[9px]">
-                                  <span className="min-w-0 text-white/45">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
-                                  <span className={`shrink-0 font-medium ${String(check.status).toLowerCase() === 'passed' || String(check.status).toLowerCase() === 'ok' ? 'text-emerald-300' : String(check.status).toLowerCase() === 'failed' ? 'text-red-300' : 'text-amber-200'}`}>{String(check.status || 'unverified').toUpperCase()}</span>
-                                </div>
-                              )) : <div className="text-[9px] text-white/35">{status === 'ANALYZING' ? 'Backend scanner is running. Individual check results have not arrived yet.' : 'No detailed scan report is available for this launch.'}</div>}
-                              {report && <div className="mt-2 border-t border-white/[0.06] pt-2 text-[9px] text-white/40">Mint authority: {report.mint_authority ? 'Present' : 'None reported'} · Freeze authority: {report.freeze_authority ? 'Present' : 'None reported'}</div>}
-                              {report?.decision_reason && <p className="mt-1 text-[9px] text-white/55">{String(report.decision_reason)}</p>}
-                            </div>
-                          );
-                        })()}
-                        {demo && <span className="mt-1 inline-block text-[8px] text-white/25">Illustrative demo state — not a live security result</span>}
-                        <div className="mt-2 flex items-center justify-between gap-2">
-                          <span className="text-[8px] text-white/25">Updated {timeAgo(updatedAt)}</span>
-                          <div className="flex items-center gap-3">
-                            {demo ? <span className="text-[8px] text-white/25">DEMO ONLY</span> : <><button onClick={(event) => copyMint(event, launch.mint_address)} className="inline-flex items-center gap-1 text-[9px] text-white/40"><Copy className="h-3 w-3" /> Copy</button><a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] text-white/40">Inspect <ExternalLink className="h-3 w-3" /></a></>}
+                    <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`overflow-hidden rounded-xl border bg-[#101010] px-2.5 py-2 ${isQualified ? 'border-emerald-400/20' : 'border-white/[0.08]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : ''}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-[11px] font-semibold text-white">{cardName}</span>
+                            {cardSymbol && <span className="shrink-0 text-[8px] text-white/40">{cardSymbol}</span>}
                           </div>
+                          <div className="mt-0.5 truncate text-[8px] text-white/35">{launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
+                        </div>
+                        {isQualified ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-2 py-1 text-[8px] font-semibold text-[#83b982]"><ShieldCheck className="h-3 w-3" /> VERIFIED</span> : <span className={`rounded-full border px-2 py-1 text-[8px] font-semibold ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>{status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}</span>}
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
+                        <div><div className="text-white/30">Current price</div><div className="mt-0.5 text-[10px] font-medium tabular-nums text-white/80">{Number.isFinite(price) && price > 0 ? `$${price.toFixed(8)}` : 'Price unavailable'}</div></div>
+                        <div><div className="text-white/30">Market cap</div><div className="mt-0.5 text-[10px] font-medium tabular-nums text-white/80">{Number.isFinite(marketCap) && marketCap > 0 ? `$${marketCap.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—'}</div></div>
+                      </div>
+                      {isQualified ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/[0.055] pt-2 text-[8px] text-white/45">
+                          <span>Security checks passed</span><span>Strategy eligible</span><span>{reason}</span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-white/[0.055] pt-2">
+                          {checkRows.map((check: any, index: number) => {
+                            const result = String(check.status || 'PENDING').toUpperCase();
+                            const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
+                            const failed = ['FAILED', 'FAIL', 'REJECTED', 'RISKY'].includes(result);
+                            return <div key={check.name || index} className="flex min-w-0 items-center justify-between gap-1 text-[8px]">
+                              <span className="truncate text-white/40">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
+                              <span className={`shrink-0 font-semibold ${passed ? 'text-[#83b982]' : failed ? 'text-[#c77b7b]' : 'text-[#d2b47c]'}`}>{result}</span>
+                            </div>;
+                          })}
+                        </div>
+                      )}
+                      <div className="mt-2 flex items-center justify-between border-t border-white/[0.055] pt-2 text-[8px] text-white/30">
+                        <span>{demo ? 'DEMO DATA' : `Mint ${launch.mint_address.slice(0, 6)}…${launch.mint_address.slice(-5)}`}</span>
+                        <div className="flex items-center gap-3">
+                          <button onClick={(event) => copyMint(event, launch.mint_address)} className="inline-flex items-center gap-1 text-[9px] text-white/45"><Copy className="h-3 w-3" /> Copy</button>
+                          {!demo && <a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] text-white/45">Inspect <ExternalLink className="h-3 w-3" /></a>}
                         </div>
                       </div>
-                    )}
-                  </article>
+                    </article>
                   );
                 })}
               </div>
             )}
-            <section className="mt-4 mb-3">
-              <div className="mb-2 flex items-center justify-between">
-                <div><h2 className="text-[12px] font-semibold text-white">Paper positions</h2><p className="mt-0.5 text-[9px] text-white/35">{demoPositions.filter((position) => position.status === 'OPEN').length} open · $50 per entry</p></div>
-                <span className="text-[9px] text-white/35">Demo portfolio</span>
-              </div>
-              {demoPositions.length === 0 ? <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 py-4 text-center text-[10px] text-white/35">Waiting for the first qualified paper entry…</div> : <div className="space-y-1.5">
-                {demoPositions.map((position) => <article key={position.id} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0"><div className="truncate text-[10px] font-semibold text-white">{position.name} <span className="text-white/35">{position.symbol}</span></div><div className="mt-0.5 text-[8px] text-white/35">{position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'} · {position.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} tokens</div></div>
-                    <div className="text-right"><div className={`text-[10px] font-semibold tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>{position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}</div><div className="text-[8px] text-white/35">{position.pnlPct >= 0 ? '+' : ''}{position.pnlPct.toFixed(2)}%</div></div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-[8px]">
-                    <div><div className="text-white/30">Entry</div><div className="mt-0.5 text-white/75">${position.entryPrice.toFixed(6)}</div></div>
-                    <div><div className="text-white/30">Current</div><div className="mt-0.5 text-white/75">${position.currentPrice.toFixed(6)}</div></div>
-                    <div><div className="text-white/30">Value</div><div className="mt-0.5 text-white/75">${formatUsd(position.value)}</div></div>
-                  </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
-                    <div><div className="text-white/30">Peak P&L</div><div className="mt-0.5 text-[#83b982]">+${position.peakPnlPct.toFixed(2)}%</div></div>
-                    <div><div className="text-white/30">Stop level</div><div className="mt-0.5 text-white/75">${position.trailingStopPrice.toFixed(6)}</div></div>
-                    <div><div className="text-white/30">Strategy</div><div className="mt-0.5 text-white/65">{position.status === 'CLOSED' ? (position.exitReason || 'Closed') : position.trailingActivated ? 'TRAILING' : 'PROTECTING'}</div></div>
-                  </div>
-                  <div className="mt-1 text-[8px] text-white/30">{position.status === 'CLOSED' ? `Exit: ${position.exitReason || 'Stop reached'}` : position.trailingActivated ? 'Take-profit armed · tracking peak with 8% trailing stop' : 'Initial 8% stop · trailing activates after +10%'}</div>
-                </article>)}
-              </div>}
-            </section>
           </div>
-          <div className="mt-2 flex shrink-0 items-center justify-between text-[8px] text-white/25">
+          <div className="mt-2 grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-[#090909] p-1">
+            {([
+              ['detected', 'Detected', counts.detected],
+              ['qualified', 'Qualified', counts.qualified],
+              ['positions', 'Position', counts.positions],
+            ] as [FeedFilter, string, number][]).map(([value, label, count]) => (
+              <button key={value} onClick={() => setFilter(value)} className={`flex min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[9px] font-semibold transition-colors ${filter === value ? 'bg-[#242424] text-white' : 'text-white/40 hover:text-white/75'}`}>
+                <span>{label}</span><span className="text-[8px] tabular-nums text-white/35">· {count}</span>
+              </button>
+            ))}
+          </div>
+                    <div className="mt-2 flex shrink-0 items-center justify-between text-[8px] text-white/25">
             <span>{filteredLaunches.length} shown · {launches.length} loaded</span>
             <span className="inline-flex items-center gap-1"><Circle className="h-1.5 w-1.5 fill-current" /> Backend event-driven</span>
           </div>
