@@ -91,6 +91,14 @@ export const OverviewPage: React.FC = () => {
         )}
       </section>
 
+      <button onClick={() => setActiveTab('positions')} className="flex w-full items-center justify-between border-t border-white/[0.06] py-3 text-left">
+        <span>
+          <span className="block text-[11px] font-medium text-neutral-300">Paper positions</span>
+          <span className="mt-0.5 block text-[9px] text-neutral-600">Open the positions page to inspect tracked holdings</span>
+        </span>
+        <span className="text-[10px] text-neutral-500">Open positions <ArrowUpRight className="ml-1 inline h-3 w-3" /></span>
+      </button>
+
       <button onClick={() => setActiveTab('event_monitor')} className="flex w-full items-center justify-between border-t border-white/[0.06] py-3 text-left">
         <span>
           <span className="block text-[11px] font-medium text-neutral-300">Engine activity</span>
