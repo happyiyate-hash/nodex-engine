@@ -24,7 +24,7 @@ interface TerminalContextType {
   setSelectedEvent: (event: NodeXEvent | null) => void;
   selectedToken: DiscoveredToken | null;
   setSelectedToken: (token: DiscoveredToken | null) => void;
-  openTokenDetailByMint: (mint: string) => void;
+  openTokenDetailByMint: (mint: string, fallback?: Partial<DiscoveredToken>) => void;
   closeTokenDetail: () => void;
   strategyConfig: StrategyConfig;
   strategyDecisions: StrategyDecision[];
@@ -253,10 +253,61 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wsService.connect();
     setBackendError(null);
   };
-  const openTokenDetailByMint = (mint: string) => {
-    const token = tokens.find((item) => item.mint === mint);
-    if (token) setSelectedToken(token);
-    else setBackendError('Complete token detail is not available yet. The backend currently exposes launch records and security scans.');
+  const openTokenDetailByMint = (mint: string, fallback: Partial<DiscoveredToken> = {}) => {
+    const existing = tokens.find((item) => item.mint === mint);
+    if (existing) {
+      setSelectedToken(existing);
+      setBackendError(null);
+      return;
+    }
+
+    const launch = launches.find((item) => item.mint_address === mint);
+    const relatedEvent = [...events].reverse().find((event) =>
+      event.token_mint === mint || event.data?.mint_address === mint
+    );
+    const metadata = relatedEvent?.data || {};
+    const venueValue = String(fallback.venue || metadata.venue || launch?.source || 'pump.fun').toLowerCase();
+    const venue = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
+    const safetyDetails = {
+      mint_authority: 'active' as const,
+      freeze_authority: 'active' as const,
+      top_10_holders_pct: 0,
+      liquidity_locked: false,
+      liquidity_locked_pct: 0,
+      honeypot_risk: 'low' as const,
+      dev_holding_pct: 0,
+      dev_sold_all: false,
+      bundled_snipers_detected: false,
+      risk_flags: [],
+      safety_score: 0,
+      holders_count: 0,
+      creator_reputation: 'first_deploy' as const,
+      largest_holders: [],
+      ...(fallback.safety_details || metadata.safety_details || {}),
+    };
+    const detailToken: DiscoveredToken = {
+      mint,
+      name: String(fallback.name || metadata.name || metadata.token_name || 'Unknown token'),
+      symbol: String(fallback.symbol || metadata.symbol || metadata.token_symbol || 'UNKNOWN'),
+      creator_wallet: String(fallback.creator_wallet || metadata.creator_wallet || metadata.creator_address || launch?.creator_address || ''),
+      launch_time: String(fallback.launch_time || launch?.detected_at || relatedEvent?.timestamp || new Date().toISOString()),
+      current_price_usd: Number(fallback.current_price_usd ?? metadata.current_price_usd ?? metadata.price_usd ?? 0),
+      current_price_sol: Number(fallback.current_price_sol ?? metadata.current_price_sol ?? 0),
+      market_cap_usd: Number(fallback.market_cap_usd ?? metadata.market_cap_usd ?? metadata.market_cap ?? 0),
+      liquidity_usd: Number(fallback.liquidity_usd ?? metadata.liquidity_usd ?? 0),
+      volume_5m_usd: Number(fallback.volume_5m_usd ?? metadata.volume_5m_usd ?? 0),
+      volume_1h_usd: Number(fallback.volume_1h_usd ?? metadata.volume_1h_usd ?? 0),
+      tx_buys_5m: Number(fallback.tx_buys_5m ?? metadata.tx_buys_5m ?? 0),
+      tx_sells_5m: Number(fallback.tx_sells_5m ?? metadata.tx_sells_5m ?? 0),
+      bonding_curve_progress_pct: Number(fallback.bonding_curve_progress_pct ?? metadata.bonding_curve_progress_pct ?? 0),
+      venue,
+      safety_status: fallback.safety_status || 'warning',
+      qualification_status: fallback.qualification_status || 'bought_paper',
+      safety_details: safetyDetails,
+      price_history_5m: fallback.price_history_5m || [],
+    };
+    setSelectedToken(detailToken);
+    setBackendError(null);
   };
   const closeTokenDetail = () => setSelectedToken(null);
   const navigateToTab = (tab: NavigationTab) => { setSelectedToken(null); setActiveTab(tab); };
