@@ -1,306 +1,94 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { EventType, NodeXEvent } from '../../types';
+import { NodeXEvent } from '../../types';
 import { JsonViewer } from '../common/JsonViewer';
-import {
-  Terminal,
-  Play,
-  Pause,
-  Trash2,
-  Search,
-  ExternalLink,
-  Copy,
-  Check,
-  ArrowLeft,
-  Activity,
-  Layers,
-  ShieldCheck,
-  Zap,
-} from 'lucide-react';
+import { ArrowLeft, Search, Trash2, Pause, Play, Terminal, Radio, Database, Copy, Check } from 'lucide-react';
 
 export const EventMonitorPage: React.FC = () => {
-  const {
-    events,
-    settings,
-    engineStatus,
-    selectedEvent,
-    setSelectedEvent,
-    isStreamPaused,
-    toggleStreamPause,
-    clearEvents,
-    openTokenDetailByMint,
-  } = useTerminal();
+  const { events, selectedEvent, setSelectedEvent, isStreamPaused, toggleStreamPause, clearEvents } = useTerminal();
+  const [source, setSource] = useState<'websocket' | 'rest'>('websocket');
+  const [search, setSearch] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | string>('ALL');
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  const [copiedTx, setCopiedTx] = useState(false);
+  const visibleEvents = useMemo(() => events.filter((event) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return event.event_type.toLowerCase().includes(q) || event.message.toLowerCase().includes(q) || JSON.stringify(event.data || {}).toLowerCase().includes(q);
+  }), [events, search]);
 
-  const handleCopyTx = (tx: string) => {
-    navigator.clipboard.writeText(tx);
-    setCopiedTx(true);
-    setTimeout(() => setCopiedTx(false), 2000);
+  const selectEvent = (event: NodeXEvent) => setSelectedEvent(event);
+  const copyPayload = async () => {
+    if (!selectedEvent) return;
+    await navigator.clipboard.writeText(JSON.stringify(selectedEvent.data || selectedEvent, null, 2));
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
   };
 
-  const handleSelectEvent = (evt: NodeXEvent) => {
-    setSelectedEvent(evt);
-    setMobileDetailOpen(true);
-  };
-
-  const filteredEvents = events.filter((evt) => {
-    if (typeFilter !== 'ALL') {
-      if (typeFilter === 'TRADES' && !evt.event_type.includes('buy') && !evt.event_type.includes('sell')) return false;
-      if (typeFilter === 'DISCOVERY' && !evt.event_type.includes('detected') && !evt.event_type.includes('pool') && !evt.event_type.includes('migration')) return false;
-      if (typeFilter === 'SAFETY' && !evt.event_type.includes('safety') && !evt.event_type.includes('rejected')) return false;
-      if (typeFilter === 'PRICES' && !evt.event_type.includes('price') && !evt.event_type.includes('liquidity')) return false;
-      if (typeFilter === 'DIAGNOSTICS' && !['diagnostic','stream_warning','engine_warning','engine_error','websocket_disconnected'].includes(evt.event_type) && !['warning','error'].includes(String(evt.data?.severity || '').toLowerCase())) return false;
-      if (typeFilter === 'SYSTEM' && !['connection_status','engine_state','stream_warning','diagnostic'].includes(evt.event_type)) return false;
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchType = evt.event_type.toLowerCase().includes(q);
-      const matchMsg = evt.message.toLowerCase().includes(q);
-      const matchPayload = JSON.stringify(evt.data || {}).toLowerCase().includes(q);
-      return matchType || matchMsg || matchPayload;
-    }
-    return true;
-  });
-
-  const getEventBadgeColor = (type: string) => {
-    if (type.includes('buy')) return 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40';
-    if (type.includes('sell')) return 'text-amber-400 bg-amber-950/40 border-amber-800/40';
-    if (type.includes('rejected') || type.includes('error')) return 'text-red-400 bg-red-950/40 border-red-800/40';
-    if (type.includes('warning')) return 'text-amber-400 bg-amber-950/40 border-amber-800/40';
-    if (type.includes('safety')) return 'text-purple-400 bg-purple-950/40 border-purple-800/40';
-    if (type.includes('migration') || type.includes('pool')) return 'text-cyan-400 bg-cyan-950/40 border-cyan-800/40';
-    return 'text-[#a3a3a3] bg-[#1a1a1a] border-[#333]';
-  };
+  if (selectedEvent) {
+    return (
+      <div className="flex min-h-[calc(100vh-8rem)] flex-col bg-[#080808] text-white">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.07] bg-[#080808]/95 px-4 py-3 backdrop-blur-xl">
+          <button onClick={() => setSelectedEvent(null)} className="flex items-center gap-2 text-xs text-neutral-400 transition hover:text-white"><ArrowLeft className="h-4 w-4" /> Events</button>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-neutral-500">Event payload</span>
+          <button onClick={copyPayload} className="flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-2 text-[10px] text-neutral-300 hover:bg-white/[0.1]">{copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}{copied ? 'Copied' : 'Copy JSON'}</button>
+        </header>
+        <div className="border-b border-white/[0.06] px-4 py-4">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-emerald-300">{selectedEvent.event_type.replace(/_/g, ' ')}</p>
+          <h1 className="mt-2 max-w-4xl text-sm leading-relaxed text-neutral-100">{selectedEvent.message}</h1>
+          <p className="mt-2 font-mono text-[10px] text-neutral-600">{new Date(selectedEvent.timestamp).toISOString()} · {selectedEvent.event_id}</p>
+        </div>
+        <main className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-6">
+          <div className="mb-3 text-[10px] font-mono uppercase tracking-wider text-neutral-600">Raw event data</div>
+          <JsonViewer data={selectedEvent.data || selectedEvent} />
+        </main>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full text-white select-none">
-      {/* 1. Full-Width Header & Stream Controls */}
-      <div className="w-full border-b border-white/[0.08] bg-[#090909]/60 backdrop-blur-md px-4 lg:px-6 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
+    <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-[1400px] flex-col px-3 pb-8 pt-4 sm:px-5 lg:px-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm sm:text-base font-mono font-bold text-white tracking-wide uppercase">
-              Event Stream & JSON Inspector
-            </h1>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded glass-icon text-emerald-400">
-              {settings.mode === 'RUST_BACKEND' ? 'AXUM RUST WEBSOCKET' : 'SIMULATED DEMO STREAM'}
-            </span>
-          </div>
-          <p className="text-[11px] font-mono text-[#737373] mt-0.5">
-            Curated engine events, token decisions, paper-trade events, and stream warnings
-          </p>
-          <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] font-mono">
-            <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 ${engineStatus.ws_status === 'connected' ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300' : 'border-amber-800/60 bg-amber-950/30 text-amber-300'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${engineStatus.ws_status === 'connected' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-              BACKEND WS: {engineStatus.ws_status.toUpperCase()}
-            </span>
-            <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-1 ${engineStatus.solana_connected ? 'border-emerald-800/60 bg-emerald-950/30 text-emerald-300' : 'border-red-900/60 bg-red-950/20 text-red-300'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${engineStatus.solana_connected ? 'bg-emerald-400' : 'bg-red-400'}`} />
-              SOLANA RPC: {engineStatus.solana_connected ? 'CONNECTED' : 'DISCONNECTED'}
-            </span>
-            <span className="text-[#737373]">RETRIES: {engineStatus.reconnection_count}</span>
-          </div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-neutral-500">Engine telemetry</p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-white sm:text-2xl">Events</h1>
         </div>
-
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Pause / Resume */}
-          <button
-            onClick={toggleStreamPause}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all ${
-              isStreamPaused
-                ? 'bg-amber-950/40 border border-amber-600/50 text-amber-300'
-                : 'glass-icon text-[#a3a3a3] hover:text-white'
-            }`}
-          >
-            {isStreamPaused ? <Play className="w-3.5 h-3.5 fill-amber-300 text-amber-300" /> : <Pause className="w-3.5 h-3.5" />}
-            <span>{isStreamPaused ? 'Resume' : 'Pause'}</span>
-          </button>
-
-          {/* Clear */}
-          <button
-            onClick={clearEvents}
-            title="Clear Event Log"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass-icon text-xs font-mono text-[#a3a3a3] hover:text-white transition-all"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear</span>
-          </button>
-
-          {/* Search */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-[#737373] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search event type..."
-              className="glass-panel-subtle rounded-lg pl-8 pr-3 py-1.5 text-xs font-mono text-white placeholder-[#525252] focus:outline-none focus:border-white/20 w-48 sm:w-56"
-            />
-          </div>
+        <div className="flex items-center gap-2">
+          <button onClick={toggleStreamPause} className="rounded-lg bg-white/[0.06] p-2.5 text-neutral-300 hover:bg-white/[0.1]" title={isStreamPaused ? 'Resume stream' : 'Pause stream'}>{isStreamPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button>
+          <button onClick={clearEvents} className="rounded-lg bg-white/[0.06] p-2.5 text-neutral-400 hover:text-red-300" title="Clear events"><Trash2 className="h-4 w-4" /></button>
         </div>
       </div>
 
-      {/* 2. Full-Width Filter Tabs */}
-      <div className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-4 lg:px-6 py-2 flex flex-wrap items-center gap-1.5">
-        {(
-          [
-            { id: 'ALL', label: 'All Events' },
-            { id: 'TRADES', label: 'Paper Trades' },
-            { id: 'DISCOVERY', label: 'Token Discovery' },
-            { id: 'SAFETY', label: 'Safety & Risk' },
-            { id: 'PRICES', label: 'Price Ticks' },
-            { id: 'DIAGNOSTICS', label: 'Diagnostics & Errors' },
-            { id: 'SYSTEM', label: 'System & Stream' },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTypeFilter(t.id)}
-            className={`px-3 py-1 rounded-md text-xs font-mono transition-all ${
-              typeFilter === t.id
-                ? 'glass-card text-white font-medium shadow-sm'
-                : 'text-[#8e8e93] hover:text-white'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mt-5 flex items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.025] p-1">
+        <button onClick={() => setSource('websocket')} className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs transition ${source === 'websocket' ? 'bg-white/[0.1] text-white shadow-inner' : 'text-neutral-500 hover:text-neutral-300'}`}><Radio className="h-3.5 w-3.5" /> WebSocket <span className="text-[10px] opacity-60">{events.length}</span></button>
+        <button onClick={() => setSource('rest')} className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs transition ${source === 'rest' ? 'bg-white/[0.1] text-white shadow-inner' : 'text-neutral-500 hover:text-neutral-300'}`}><Database className="h-3.5 w-3.5" /> REST</button>
       </div>
 
-      {/* 3. Full-Width Split-Panel: Left Event Stream + Right JSON Inspector */}
-      <div className="w-full grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.08] min-h-[calc(100vh-12rem)]">
-        {/* Left Column: Event Stream List */}
-        <div className={`lg:col-span-6 xl:col-span-7 flex flex-col h-[calc(100vh-12rem)] overflow-hidden ${
-          mobileDetailOpen ? 'hidden lg:flex' : 'flex'
-        }`}>
-          <div className="px-4 lg:px-6 py-2 text-[11px] font-mono text-[#737373] border-b border-white/[0.06] flex items-center justify-between bg-white/[0.01]">
-            <span>LIVE EVENT STREAM ({filteredEvents.length})</span>
-            <span>CLICK EVENT TO INSPECT JSON</span>
+      {source === 'websocket' ? (
+        <>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+            <Search className="h-4 w-4 shrink-0 text-neutral-600" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search event type or message…" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-neutral-600" />
+            <span className="whitespace-nowrap font-mono text-[10px] text-neutral-600">{visibleEvents.length} events</span>
           </div>
-
-          <div className="overflow-y-auto flex-1 divide-y divide-white/[0.04]">
-            {filteredEvents.length === 0 ? (
-              <div className="py-24 text-center text-xs font-mono text-[#737373]">
-                No events received matching current filters.
-              </div>
-            ) : (
-              filteredEvents.map((evt) => {
-                const isSelected = selectedEvent?.event_id === evt.event_id;
-                return (
-                  <div
-                    key={evt.event_id}
-                    onClick={() => handleSelectEvent(evt)}
-                    className={`px-4 lg:px-6 py-3 cursor-pointer transition-colors text-xs font-mono space-y-1.5 ${
-                      isSelected
-                        ? 'bg-white/[0.06] border-l-2 border-emerald-400'
-                        : 'hover:bg-white/[0.03]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold border ${getEventBadgeColor(evt.event_type)}`}>
-                        {evt.event_type.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-[#737373] tabular-nums">
-                        {new Date(evt.timestamp).toLocaleTimeString()}.{String(new Date(evt.timestamp).getMilliseconds()).padStart(3, '0')}
-                      </span>
-                    </div>
-
-                    <div className="text-white text-xs leading-relaxed font-mono">
-                      {evt.message}
-                      {Number(evt.data?.repeated_count || 1) > 1 && <span className="ml-2 text-amber-300">(x{Number(evt.data.repeated_count)})</span>}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-[#737373]">
-                      {evt.data?.component && <span>COMPONENT: {String(evt.data.component)}</span>}
-                      {evt.data?.severity && <span className={String(evt.data.severity).toLowerCase() === 'error' ? 'text-red-400' : String(evt.data.severity).toLowerCase() === 'warning' ? 'text-amber-300' : 'text-[#737373]'}>SEVERITY: {String(evt.data.severity).toUpperCase()}</span>}
-                    </div>
-
-                    <div className="flex items-center gap-3 text-[10px] text-[#737373] pt-0.5">
-                      <span>ID: {evt.event_id}</span>
-                      {evt.tx_signature && (
-                        <span className="text-emerald-400">SIG: {evt.tx_signature.slice(0, 8)}...</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+          <div className="mt-3 flex-1 overflow-hidden rounded-2xl border border-white/[0.07] bg-white/[0.018]">
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-neutral-500"><span>Live WebSocket stream</span><span>{isStreamPaused ? 'Paused' : 'Listening'}</span></div>
+            <div className="h-full max-h-[calc(100vh-18rem)] overflow-y-auto divide-y divide-white/[0.045]">
+              {visibleEvents.length === 0 ? <div className="px-5 py-16 text-center"><Terminal className="mx-auto h-6 w-6 text-neutral-700" /><p className="mt-3 text-sm text-neutral-400">No WebSocket events to display</p><p className="mt-1 text-xs text-neutral-600">Engine detections, scan results and errors will appear here.</p></div> : visibleEvents.map((event) => (
+                <button key={event.event_id} onClick={() => selectEvent(event)} className="block w-full px-4 py-3.5 text-left transition hover:bg-white/[0.045]">
+                  <div className="flex items-center justify-between gap-3"><span className={`font-mono text-[10px] font-semibold uppercase tracking-wide ${event.event_type.includes('error') || event.event_type.includes('rejected') ? 'text-red-300' : event.event_type.includes('warning') ? 'text-amber-300' : 'text-emerald-300'}`}>{event.event_type.replace(/_/g, ' ')}</span><time className="shrink-0 font-mono text-[10px] text-neutral-600">{new Date(event.timestamp).toLocaleTimeString()}</time></div>
+                  <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-neutral-300">{event.message}</p>
+                  <div className="mt-2 flex items-center gap-3 text-[9px] uppercase tracking-wider text-neutral-600"><span>{event.processing_status}</span>{event.token_mint && <span>{event.token_mint.slice(0, 6)}…{event.token_mint.slice(-5)}</span>}</div>
+                </button>
+              ))}</div>
           </div>
+        </>
+      ) : (
+        <div className="mt-3 flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] px-6 py-16 text-center">
+          <Database className="h-6 w-6 text-neutral-700" />
+          <p className="mt-3 text-sm text-neutral-300">REST event history is not available</p>
+          <p className="mt-1 max-w-sm text-xs leading-relaxed text-neutral-600">The current backend streams engine events over WebSocket. A REST event-history endpoint has not been connected, so no REST records are shown here.</p>
         </div>
-
-        {/* Right Column: Full JSON Inspector & Event Telemetry */}
-        <div className={`lg:col-span-6 xl:col-span-5 flex flex-col h-[calc(100vh-12rem)] overflow-hidden bg-[#090909]/40 ${
-          mobileDetailOpen ? 'flex' : 'hidden lg:flex'
-        }`}>
-          {/* Back button for mobile */}
-          <div className="lg:hidden p-3 border-b border-white/[0.08] flex items-center gap-2">
-            <button
-              onClick={() => setMobileDetailOpen(false)}
-              className="px-2.5 py-1 rounded-lg glass-icon flex items-center gap-1.5 text-xs font-mono text-white"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to Event Feed</span>
-            </button>
-          </div>
-
-          {selectedEvent ? (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Event Metadata Header */}
-              <div className="p-4 lg:p-5 border-b border-white/[0.08] space-y-2 bg-white/[0.01]">
-                <div className="flex items-center justify-between">
-                  <span className={`px-2.5 py-1 rounded text-xs uppercase font-bold border ${getEventBadgeColor(selectedEvent.event_type)}`}>
-                    {selectedEvent.event_type}
-                  </span>
-                  <span className="text-xs font-mono text-[#8e8e93] tabular-nums">
-                    {new Date(selectedEvent.timestamp).toISOString()}
-                  </span>
-                </div>
-
-                <div className="text-white font-mono text-xs leading-relaxed">
-                  {selectedEvent.message}
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-[#8e8e93]">
-                  {selectedEvent.data?.component && <span>COMPONENT: {String(selectedEvent.data.component)}</span>}
-                  {selectedEvent.data?.severity && <span className={String(selectedEvent.data.severity).toLowerCase() === 'error' ? 'text-red-400' : String(selectedEvent.data.severity).toLowerCase() === 'warning' ? 'text-amber-300' : 'text-emerald-300'}>SEVERITY: {String(selectedEvent.data.severity).toUpperCase()}</span>}
-                  {selectedEvent.data?.reconnect_count !== undefined && <span>RECONNECT: {String(selectedEvent.data.reconnect_count)}</span>}
-                </div>
-
-                {selectedEvent.tx_signature && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <span className="text-[11px] font-mono text-[#737373]">Signature:</span>
-                    <span className="text-[11px] font-mono text-emerald-400 truncate max-w-[200px]">
-                      {selectedEvent.tx_signature}
-                    </span>
-                    <button
-                      onClick={() => handleCopyTx(selectedEvent.tx_signature!)}
-                      className="p-1 rounded glass-icon text-[#8e8e93] hover:text-white"
-                    >
-                      {copiedTx ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* JSON Code Viewer */}
-              <div className="flex-1 overflow-y-auto p-4 lg:p-5">
-                <div className="text-[11px] font-mono text-[#737373] uppercase mb-2">
-                  Payload JSON Tree
-                </div>
-                <JsonViewer data={selectedEvent.data || selectedEvent} />
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-8 text-center text-xs font-mono text-[#737373]">
-              Select an event from the stream to inspect its raw JSON payload and signature.
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 };
