@@ -665,19 +665,31 @@ export const OverviewPage: React.FC = () => {
                 ) : (
                   <>
                     {filteredPositions.map((position) => <article key={position.id} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0"><div className="truncate text-[10px] font-semibold text-white">{position.name} <span className="text-white/35">{position.symbol}</span></div><div className="mt-0.5 text-[8px] text-white/35">{position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'} · {position.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} tokens</div></div>
-                        <div className="text-right"><div className={`text-[10px] font-semibold tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>{position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}</div><div className="text-[8px] text-white/35">{position.pnlPct >= 0 ? '+' : ''}{position.pnlPct.toFixed(2)}%</div></div>
-                      </div>
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-[8px]">
-                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 text-white/75">${position.entryPrice.toFixed(6)}</div></div>
-                        <div><div className="text-white/30">Current</div><div className="mt-0.5 text-white/75">${position.currentPrice.toFixed(6)}</div></div>
-                        <div><div className="text-white/30">Value</div><div className="mt-0.5 text-white/75">${formatUsd(position.value)}</div></div>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.09] bg-[#242424]">
+                          <span className="text-[12px] font-semibold text-white/75">{String(position.symbol || position.name).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-[11px] font-semibold text-white">{position.name}</span>
+                            <span className="shrink-0 text-[8px] font-medium text-white/40">${position.symbol}</span>
+                          </div>
+                          <div className="mt-0.5 text-[8px] text-white/35">{position.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} tokens · {position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'}</div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className={`text-[16px] font-bold leading-none tracking-tight tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>{position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}</div>
+                          <div className={`mt-1 text-[9px] font-semibold tabular-nums ${position.pnlPct >= 0 ? 'text-[#83b982]/80' : 'text-[#c77b7b]/80'}`}>{position.pnlPct >= 0 ? '+' : ''}{position.pnlPct.toFixed(2)}%</div>
+                        </div>
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
-                        <div><div className="text-white/30">Peak P&L</div><div className="mt-0.5 text-[#83b982]">+{position.peakPnlPct.toFixed(2)}%</div></div>
-                        <div><div className="text-white/30">Stop level</div><div className="mt-0.5 text-white/75">${position.trailingStopPrice.toFixed(6)}</div></div>
-                        <div><div className="text-white/30">Strategy</div><div className="mt-0.5 text-white/65">{position.status === 'CLOSED' ? (position.exitReason || 'Closed') : position.trailingActivated ? 'TRAILING' : 'PROTECTING'}</div></div>
+                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.entryPrice.toFixed(6)}</div></div>
+                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.currentPrice.toFixed(6)}</div></div>
+                        <div><div className="text-white/30">Value</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${formatUsd(position.value)}</div></div>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[8px] text-white/35">
+                        <span>Peak <span className="font-medium text-[#83b982]">+{position.peakPnlPct.toFixed(2)}%</span></span>
+                        <span>Stop <span className="font-medium text-white/65">${position.trailingStopPrice.toFixed(6)}</span></span>
+                        <span>{position.status === 'CLOSED' ? (position.exitReason || 'Closed') : position.trailingActivated ? 'TRAILING' : 'PROTECTING'}</span>
                       </div>
                       <div className="mt-1 text-[8px] text-white/30">{position.status === 'CLOSED' ? `Exit: ${position.exitReason || 'Stop reached'}` : position.trailingActivated ? 'Take-profit armed · tracking peak with 8% trailing stop' : 'Initial 8% stop · trailing activates after +10%'}</div>
                     </article>)}
