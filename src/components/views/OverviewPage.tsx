@@ -22,23 +22,26 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
     const from = Number(previous);
     const to = Number(digit);
     let nextSequence: string[];
+    let rollDirection: 'up' | 'down';
 
     if (from === 9 && to === 0 && balanceDirection === 'up') {
       nextSequence = ['9', '0'];
+      rollDirection = 'up';
     } else if (from === 0 && to === 9 && balanceDirection === 'down') {
       nextSequence = ['0', '9'];
+      rollDirection = 'down';
     } else if (to > from) {
       nextSequence = Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+      rollDirection = 'up';
     } else if (to < from) {
       nextSequence = Array.from({ length: from - to + 1 }, (_, index) => String(from - index));
+      rollDirection = 'down';
     } else {
       return;
     }
 
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
 
-    // Keep each column exactly one digit tall. The track moves by whole em
-    // rows, so no percentage-of-track sizing gaps can appear.
     setSequence(nextSequence);
     setOffset(0);
     setIsRolling(false);
@@ -46,7 +49,8 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
     frameRef.current = requestAnimationFrame(() => {
       frameRef.current = requestAnimationFrame(() => {
         setIsRolling(true);
-        setOffset(nextSequence.length - 1);
+        // Incrementing digits travel upward; decrementing digits travel downward.
+        setOffset(rollDirection === 'up' ? -(nextSequence.length - 1) : nextSequence.length - 1);
         frameRef.current = null;
       });
     });
@@ -76,7 +80,7 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
         onTransitionEnd={finishRoll}
         className="flex flex-col will-change-transform"
         style={{
-          transform: `translate3d(0, -${offset}em, 0)`,
+          transform: `translate3d(0, ${offset}em, 0)`,
           transition: isRolling
             ? 'transform 360ms cubic-bezier(0.22, 0.72, 0.25, 1)'
             : 'none',
