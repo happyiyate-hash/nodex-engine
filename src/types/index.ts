@@ -36,6 +36,11 @@ export interface EngineStatus {
   operating_mode: OperatingMode;
   network: 'mainnet-beta' | 'devnet';
   solana_connected: boolean;
+  pumpswap_connected: boolean;
+  pumpswap_reconnection_count: number;
+  pumpswap_last_error: string;
+  solana_last_error: string;
+  solana_last_message_at: string;
   rpc_endpoint: string;
   rpc_latency_ms: number;
   ws_status: ConnectionStatus;
@@ -185,7 +190,11 @@ export type EventType =
   | 'websocket_disconnected'
   | 'market_monitor_status'
   | 'market_subscription_active'
+  | 'market_account_update'
+  | 'market_curve_completed'
+  | 'market_subscription_requested'
   | 'provider_status'
+  | 'launch_snapshot'
   | 'reconnect_recovery_status'
   | 'solana_logs_notification'
   | 'unknown_event';
