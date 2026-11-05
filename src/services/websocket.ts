@@ -59,6 +59,8 @@ export class NodeXWebSocketService {
   private latencyMs=0; private listeners=new Set<EventListener>();
   private statusListeners=new Set<StatusListener>();
   private reconnectTimer:ReturnType<typeof setTimeout>|null=null;
+  private heartbeatWatchdog:ReturnType<typeof setInterval>|null=null;
+  private lastMessageAt=0;
   private reconnectAttempts=0; private manuallyClosed=false; private seen=new Set<string>();
   constructor(){this.connect();}
   public connect():void {
@@ -71,6 +73,13 @@ export class NodeXWebSocketService {
       const socket=new WebSocket(url); this.ws=socket;
       socket.onopen=()=>{
         this.reconnectAttempts=0;
+        this.lastMessageAt=Date.now();
+        if(this.heartbeatWatchdog)clearInterval(this.heartbeatWatchdog);
+        this.heartbeatWatchdog=setInterval(()=>{
+          if(this.ws===socket && socket.readyState===WebSocket.OPEN && Date.now()-this.lastMessageAt>45000){
+            socket.close(4000,'NodeX server heartbeat timeout');
+          }
+        },10000);
         this.setStatus('connected',0);
         this.emitLocalEvent('websocket_connected','info','frontend_websocket','Browser WebSocket connected to the NodeX backend.',{url});
       };
@@ -78,12 +87,20 @@ export class NodeXWebSocketService {
         try {
           const raw=JSON.parse(String(message.data));
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
-          // The browser accepts only user-facing application events. Network-level
-          // Solana notifications and internal diagnostics never enter the UI feed.
+          this.lastMessageAt=Date.now();
+          // Heartbeats are transport health signals, not feed events.
+          if(raw.type==='heartbeat')return;
+          // Keep operational and market events visible while still excluding raw
+          // upstream logs notifications and unknown internal payloads.
           const visibleTypes = new Set([
-            'connection_status','engine_state','launch_detected','token_scan_started',
-            'token_scan_update','market_price_update','paper_buy_executed',
-            'paper_buy_failed','strategy_rejected_token','stream_warning'
+            'connection_status','engine_state','launch_detected','launch_snapshot',
+            'token_scan_started','token_scan_update','market_price_update',
+            'paper_buy_executed','paper_buy_failed','strategy_rejected_token',
+            'diagnostic','provider_status','market_account_update','market_curve_completed',
+            'market_monitor_status','market_subscription_requested','market_subscription_active',
+            'creator_history_started','creator_history_update','stream_warning',
+            'reconnect_recovery_status','pumpswap_activity','pumpswap_volume_update',
+            'command_rejected'
           ]);
           if(!visibleTypes.has(raw.type))return;
           const event=normalizeBackendEvent(raw);
@@ -105,6 +122,7 @@ export class NodeXWebSocketService {
         this.emitLocalEvent('diagnostic','error','frontend_websocket','The browser reported a WebSocket transport error. Check the backend URL, TLS/WSS proxy, network access, and backend logs.',{url});
       };
       socket.onclose=(event)=>{
+        if(this.heartbeatWatchdog){clearInterval(this.heartbeatWatchdog);this.heartbeatWatchdog=null;}
         if(this.ws===socket)this.ws=null;
         this.setStatus('disconnected',0);
         if(!this.manuallyClosed){
@@ -140,7 +158,8 @@ export class NodeXWebSocketService {
   }
   public disconnect():void {
     this.manuallyClosed=true;if(this.reconnectTimer)clearTimeout(this.reconnectTimer);
-    this.reconnectTimer=null;this.ws?.close();this.ws=null;this.setStatus('disconnected',0);
+    if(this.heartbeatWatchdog)clearInterval(this.heartbeatWatchdog);
+    this.heartbeatWatchdog=null;this.reconnectTimer=null;this.ws?.close();this.ws=null;this.setStatus('disconnected',0);
   }
   public sendCommand(command:'pause'|'resume'|'start'|'status'|'set_mode',mode?:'paper'):boolean {
     if(!this.ws||this.ws.readyState!==WebSocket.OPEN)return false;
