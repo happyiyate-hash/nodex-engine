@@ -657,7 +657,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         </div>
       </section>}
 
-      <div className={`${embeddedMode ? "flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 sm:px-4 sm:pb-0"}`}>
+      <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 sm:px-4 sm:pb-0"}`}>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
             {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
               <div className="space-y-1.5 pb-2">
@@ -826,6 +826,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               </div>
             )}
           </div>
+          {embeddedMode && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-12 bg-gradient-to-t from-[#080808] via-[#080808]/65 to-transparent" />}
           {!embeddedMode && <div className="mt-2 grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-[#090909] p-1">
             {([
               ['detected', 'Detected', counts.detected],
