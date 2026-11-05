@@ -30,46 +30,92 @@ export const SettingsPage: React.FC = () => {
   const [localClearMessage, setLocalClearMessage] = useState('');
 
   const handleTestBackend = async () => {
-    const baseUrl = backendUrl.trim().replace(/\/$/, '');
-    if (!/^https?:\/\//i.test(baseUrl)) {
-      setTestResult({ status: 'failed', message: 'Enter a valid HTTPS backend URL.' });
+    const baseUrl = backendUrl.trim().replace(/\\/$/, '');
+    const socketUrl = wsUrl.trim();
+    const key = operatorKey.trim();
+
+    if (!/^https:\\/\\//i.test(baseUrl)) {
+      setTestResult({ status: 'failed', message: 'Backend address is missing or invalid. Enter your HTTPS backend URL, then try again.' });
       return;
     }
-    setTestResult({ status: 'testing', message: 'Checking the Rust health endpoint…' });
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 10000);
+    if (!/^wss:\\/\\//i.test(socketUrl)) {
+      setTestResult({ status: 'failed', message: 'WebSocket address is missing or invalid. Use a WSS address for the secure connection.' });
+      return;
+    }
+    if (!key) {
+      setTestResult({ status: 'failed', message: 'Operator API key is missing. Paste your NODEX_ADMIN_API_KEY and save the connection first.' });
+      return;
+    }
+
+    setTestResult({ status: 'testing', message: 'Step 1 of 3 — contacting the NodeX API. This check has no artificial timeout; it will wait for the server to respond.' });
+    let socket: WebSocket | null = null;
     try {
-      const response = await fetch(`${baseUrl}/health`, {
+      const healthResponse = await fetch(`${baseUrl}/health`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
-        signal: controller.signal,
         cache: 'no-store',
       });
-      const body = await response.text();
-      if (!response.ok) {
-        setTestResult({ status: 'failed', message: `Health endpoint returned HTTP ${response.status}: ${body.slice(0, 180)}` });
-        return;
+      const healthBody = await healthResponse.text();
+      if (!healthResponse.ok) {
+        throw new Error(`API is reachable but /health returned HTTP ${healthResponse.status}: ${healthBody.slice(0, 180)}`);
       }
       let health: { status?: string; mode?: string; service?: string };
-      try { health = JSON.parse(body); } catch {
-        setTestResult({ status: 'failed', message: 'The server responded, but /health did not return valid JSON.' });
-        return;
+      try { health = JSON.parse(healthBody); } catch {
+        throw new Error('The server answered, but its /health response was not valid JSON.');
       }
       if (health.status !== 'ok') {
-        setTestResult({ status: 'failed', message: `Server responded, but reported status: ${health.status || 'unknown'}.` });
-        return;
+        throw new Error(`The API responded but is not healthy. Reported status: ${health.status || 'unknown'}.`);
       }
-      setTestResult({ status: 'success', message: `API reachable · ${health.service || 'NodeX'} · ${health.mode || 'mode unknown'} mode` });
+
+      setTestResult({ status: 'testing', message: 'Step 2 of 3 — API is responding. Verifying your operator API key…' });
+      const ticketResponse = await fetch(`${baseUrl}/api/v1/ws-ticket`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'X-NodeX-Admin-Key': key },
+        cache: 'no-store',
+      });
+      const ticketBody = await ticketResponse.text();
+      if (!ticketResponse.ok) {
+        if (ticketResponse.status === 401 || ticketResponse.status === 403) {
+          throw new Error('The API is running, but it rejected this operator key. Check that NODEX_ADMIN_API_KEY on the server exactly matches the key saved here.');
+        }
+        throw new Error(`The API is running, but ticket verification failed with HTTP ${ticketResponse.status}: ${ticketBody.slice(0, 180)}`);
+      }
+      let ticketData: { ticket?: string };
+      try { ticketData = JSON.parse(ticketBody); } catch {
+        throw new Error('The API accepted the request but did not return a valid WebSocket ticket response.');
+      }
+      if (!ticketData.ticket) throw new Error('The API did not provide a WebSocket ticket. The deployed backend may not include authenticated WebSocket support yet.');
+
+      setTestResult({ status: 'testing', message: 'Step 3 of 3 — operator key accepted. Opening the authenticated WebSocket connection…' });
+      const separator = socketUrl.includes('?') ? '&' : '?';
+      socket = new WebSocket(`${socketUrl}${separator}ticket=${encodeURIComponent(ticketData.ticket)}`);
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        socket!.onopen = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        socket!.onerror = () => {
+          if (settled) return;
+          settled = true;
+          reject(new Error('The API key was accepted, but the WebSocket transport failed. Check the WSS URL, TLS certificate, reverse-proxy WebSocket upgrade settings, and network access.'));
+        };
+        socket!.onclose = (event) => {
+          if (settled) return;
+          settled = true;
+          reject(new Error(`The WebSocket closed before connecting (code ${event.code}${event.reason ? `: ${event.reason}` : ''}). Check the backend WebSocket route and reverse proxy.`));
+        };
+      });
+      socket.close(1000, 'Connection test complete');
+      socket = null;
+      setTestResult({ status: 'success', message: `Connection verified: ${health.service || 'NodeX'} API is healthy, operator key is accepted, and the authenticated WebSocket opened successfully in ${health.mode || 'unknown'} mode.` });
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        setTestResult({ status: 'failed', message: 'Health check timed out after 10 seconds. The server did not answer in time.' });
-      } else if (error instanceof TypeError) {
-        setTestResult({ status: 'failed', message: 'Browser could not read the response. Check HTTPS/TLS and backend CORS settings.' });
-      } else {
-        setTestResult({ status: 'failed', message: error instanceof Error ? error.message : 'Health check failed unexpectedly.' });
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
+      socket?.close();
+      const message = error instanceof TypeError
+        ? 'The browser could not reach the API. Check the backend address, DNS, HTTPS certificate, CORS policy, and network connection.'
+        : error instanceof Error ? error.message : 'Connection test failed unexpectedly.';
+      setTestResult({ status: 'failed', message });
     }
   };
 
@@ -123,10 +169,10 @@ export const SettingsPage: React.FC = () => {
     <div className="mx-auto w-full max-w-5xl space-y-4 px-3 py-4 pb-28 sm:px-5 lg:px-6 lg:py-6">
       <header className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">Controls & Connection</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">Settings</h1>
           <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[10px] font-mono text-amber-300">PAPER ONLY</span>
         </div>
-        <p className="text-xs text-neutral-500">Private NodeX workstation · Rust Axum backend</p>
+        <p className="text-xs text-neutral-500">Manage your private NodeX connection and engine controls.</p>
       </header>
 
       {backendError && (
@@ -186,11 +232,11 @@ export const SettingsPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             <button onClick={handleSaveSettings} className="rounded-xl bg-white px-4 py-3 text-xs font-semibold text-black active:scale-[.99]">{savedNotice ? 'Saved' : 'Save connection'}</button>
             <button onClick={handleTestBackend} disabled={testResult.status === 'testing'} className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-xs font-medium text-white disabled:opacity-50">
-              <RefreshCw className={`h-3.5 w-3.5 ${testResult.status === 'testing' ? 'animate-spin' : ''}`} /> Test API health
+              <RefreshCw className={`h-3.5 w-3.5 ${testResult.status === 'testing' ? 'animate-spin' : ''}`} /> Test connection
             </button>
           </div>
           {testResult.status !== 'idle' && (
-            <div className={`flex items-start gap-2 rounded-xl border p-3 text-xs leading-relaxed ${testResult.status === 'success' ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-300' : testResult.status === 'failed' ? 'border-red-500/20 bg-red-500/[0.06] text-red-200' : 'border-white/10 bg-white/[0.03] text-neutral-300'}`}>
+            <div className={`flex items-start gap-3 rounded-xl border p-4 text-xs leading-relaxed ${testResult.status === 'success' ? 'border-emerald-500/25 bg-emerald-500/[0.07] text-emerald-200' : testResult.status === 'failed' ? 'border-red-500/25 bg-red-500/[0.07] text-red-200' : 'border-sky-500/20 bg-sky-500/[0.05] text-sky-100'}`}>
               {testResult.status === 'success' ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
               <span>{testResult.message || 'Checking…'}</span>
             </div>
