@@ -43,6 +43,7 @@ interface TerminalContextType {
   isMobilePreview: boolean;
   setIsMobilePreview: (value: boolean | ((prev: boolean) => boolean)) => void;
   backendError: string | null;
+  refreshData: () => Promise<void>;
 }
 
 const emptySummary: DashboardSummary = {
@@ -221,6 +222,57 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, []);
 
+
+  const refreshData = useCallback(async (): Promise<void> => {
+    const results = await Promise.allSettled([
+      apiClient.getEngineStatus(),
+      apiClient.getPaperWallet(),
+      apiClient.getRecentTokens(100),
+      apiClient.getRecentEvents(200),
+    ]);
+    let successCount = 0;
+    const failures: string[] = [];
+
+    if (results[0].status === 'fulfilled') {
+      const status = results[0].value;
+      setEngineStatus((previous) => ({ ...previous, ...status, ws_status: wsService.getStatus().status }));
+      setIsStreamPaused(status.strategy_paused);
+      successCount++;
+    } else failures.push(results[0].reason instanceof Error ? results[0].reason.message : 'Engine status refresh failed.');
+
+    if (results[1].status === 'fulfilled') {
+      setPaperWallet(results[1].value);
+      successCount++;
+    } else failures.push(results[1].reason instanceof Error ? results[1].reason.message : 'Paper wallet refresh failed.');
+
+    if (results[2].status === 'fulfilled') {
+      setLaunches(results[2].value);
+      successCount++;
+    } else failures.push(results[2].reason instanceof Error ? results[2].reason.message : 'Recent token refresh failed.');
+
+    if (results[3].status === 'fulfilled') {
+      const history = results[3].value.map((record) =>
+        normalizeBackendEvent(record.event, record.received_at)
+      );
+      setEvents((previous) => {
+        const merged = new Map<string, NodeXEvent>();
+        [...previous, ...history].forEach((event) => merged.set(event.event_id, event));
+        return Array.from(merged.values())
+          .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+          .slice(0, 200);
+      });
+      successCount++;
+    } else failures.push(results[3].reason instanceof Error ? results[3].reason.message : 'Recent event refresh failed.');
+
+    if (successCount === 0) {
+      const message = failures[0] || 'NodeX could not refresh data.';
+      setBackendError(message);
+      throw new Error(message);
+    }
+    if (failures.length > 0) setBackendError(failures.join(' '));
+    else setBackendError(null);
+  }, []);
+
   const sendPause = useCallback((pause: boolean) => {
     const sent = wsService.sendCommand(pause ? 'pause' : 'resume');
     if (!sent) setBackendError('Cannot change engine state: WebSocket is not connected.');
@@ -266,7 +318,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       openTokenDetailByMint, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
-      saveStrategyConfig, updateSettings, isMobilePreview, setIsMobilePreview, backendError,
+      saveStrategyConfig, updateSettings, isMobilePreview, setIsMobilePreview, backendError, refreshData,
     }}>
       {children}
     </TerminalContext.Provider>
