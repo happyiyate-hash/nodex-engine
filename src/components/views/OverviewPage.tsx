@@ -643,14 +643,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         </div>
 
         <div className="mt-3 flex shrink-0 flex-col px-3 pb-0 sm:px-4 sm:pb-0">
-          <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-            <div>
-              <h2 className="text-[12px] font-semibold text-white">Token discoveries</h2>
-              <p className="mt-0.5 text-[9px] text-white/35">{demoLaunches.length}/30 demo tokens · {demoLaunches.length >= 30 ? 'Batch complete' : 'Scanning batch'}</p>
+          <div className="mb-2 flex shrink-0 items-center gap-1.5">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mint..." aria-label="Search tokens" className="h-7 w-full rounded-md border border-white/[0.07] bg-[#101010] pl-7 pr-2 text-[9px] text-white placeholder:text-white/25 outline-none focus:border-white/20" />
             </div>
-            <div className="relative w-[42%] max-w-[180px]">
-              <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mint..." aria-label="Search tokens in selected category" className="h-8 w-full rounded-lg border border-white/[0.07] bg-[#101010] pl-8 pr-2 text-[10px] text-white placeholder:text-white/25 outline-none focus:border-white/20" />
+            <div className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/[0.07] bg-[#0d0d0d] p-0.5" role="group" aria-label="Token feed view">
+              <button type="button" onClick={() => setFilter('detected')} aria-pressed={filter === 'detected'} className={`rounded px-2 py-1 text-[8px] font-semibold transition-colors ${filter === 'detected' ? 'bg-[#292929] text-white' : 'text-white/40 hover:text-white/70'}`}>Detect</button>
+              <button type="button" onClick={() => setFilter('positions')} aria-pressed={filter === 'positions'} className={`rounded px-2 py-1 text-[8px] font-semibold transition-colors ${filter === 'positions' ? 'bg-[#292929] text-white' : 'text-white/40 hover:text-white/70'}`}>Position</button>
             </div>
           </div>
 
@@ -827,21 +827,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             )}
           </div>
           {embeddedMode && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-12 bg-gradient-to-t from-[#080808] via-[#080808]/65 to-transparent" />}
-          {!embeddedMode && <div className="mt-2 grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-[#090909] p-1">
-            {([
-              ['detected', 'Detected', counts.detected],
-              ['qualified', 'Qualified', counts.qualified],
-              ['positions', 'Position', counts.positions],
-            ] as [FeedFilter, string, number][]).map(([value, label, count]) => (
-              <button key={value} onClick={() => setFilter(value)} className={`flex min-w-0 items-center justify-center gap-1 rounded-lg px-1.5 py-2 text-[9px] font-semibold transition-colors ${filter === value ? 'bg-[#242424] text-white' : 'text-white/40 hover:text-white/75'}`}>
-                <span>{label}</span><span className="text-[8px] tabular-nums text-white/35">· {count}</span>
-              </button>
-            ))}
-          </div>}
-                    {!embeddedMode && <div className="mt-2 flex shrink-0 items-center justify-between text-[8px] text-white/25">
-            <span>{filter === 'positions' ? filteredPositions.length + backendPaperEntries.length : filteredLaunches.length} shown · {launches.length} loaded</span>
-            <span className="inline-flex items-center gap-1"><Circle className="h-1.5 w-1.5 fill-current" /> Backend event-driven</span>
-          </div>}
+
       </div>
     </div>
   );
