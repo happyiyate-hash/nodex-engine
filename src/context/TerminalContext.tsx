@@ -195,6 +195,19 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setEngineStatus((previous) => ({
           ...previous, tokens_detected_today: previous.tokens_detected_today + 1,
         }));
+      } else if (event.event_type === 'provider_status') {
+        const isPumpSwap = event.data.stream_name === 'pumpswap';
+        setEngineStatus((previous) => isPumpSwap
+          ? {
+              ...previous,
+              pumpswap_connected: Boolean(event.data.connected),
+              pumpswap_last_error: event.data.connected ? '' : String(event.data.reason || previous.pumpswap_last_error),
+            }
+          : {
+              ...previous,
+              solana_connected: Boolean(event.data.connected),
+              solana_last_error: event.data.connected ? '' : String(event.data.reason || previous.solana_last_error),
+            });
       } else if (event.event_type === 'diagnostic') {
         setBackendError(typeof event.data.message === 'string' ? event.data.message : 'Backend diagnostic received.');
       }
