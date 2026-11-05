@@ -14,8 +14,20 @@ import { installFetchLogger } from './services/engineLogs';
 installFetchLogger();
 
 const REFRESH_TRIGGER_DISTANCE = 72;
+const TOP_EDGE_START_ZONE = 28;
 const getResistedPull = (fingerDistance: number) =>
   116 * (1 - Math.exp(-Math.max(0, fingerDistance) / 145));
+
+const getScrollableAncestor = (target: EventTarget | null, boundary: HTMLElement): HTMLElement | null => {
+  let node = target instanceof HTMLElement ? target : null;
+  while (node && node !== boundary) {
+    const style = window.getComputedStyle(node);
+    const canScrollY = /(auto|scroll|overlay)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1;
+    if (canScrollY) return node;
+    node = node.parentElement;
+  }
+  return null;
+};
 
 const MainLayout: React.FC = () => {
   const { activeTab, selectedToken } = useTerminal();
@@ -29,7 +41,6 @@ const MainLayout: React.FC = () => {
 
   const renderActiveView = () => {
     if (selectedToken) return <TokenDetailPage />;
-
     switch (activeTab) {
       case 'overview': return <OverviewPage />;
       case 'positions': return <PositionsPage />;
@@ -59,8 +70,23 @@ const MainLayout: React.FC = () => {
         return;
       }
 
-      // Only arm the gesture when the scroll container is already at its top.
-      touchStartY.current = main.scrollTop <= 1 ? event.touches[0].clientY : null;
+      const touch = event.touches[0];
+      // Refresh is deliberately restricted to a deliberate gesture beginning
+      // at the physical top edge of the screen, never from the bottom/content.
+      if (touch.clientY > TOP_EDGE_START_ZONE || main.scrollTop > 1) {
+        resetPull();
+        return;
+      }
+
+      const nestedScroller = getScrollableAncestor(event.target, main);
+      // If the finger starts inside a nested feed/list that can still scroll
+      // toward its top, leave the gesture entirely to that list.
+      if (nestedScroller && nestedScroller.scrollTop > 1) {
+        resetPull();
+        return;
+      }
+
+      touchStartY.current = touch.clientY;
       pullingRef.current = false;
       pullDistanceRef.current = 0;
       setPullDistance(0);
@@ -69,15 +95,12 @@ const MainLayout: React.FC = () => {
     const onTouchMove = (event: TouchEvent) => {
       if (touchStartY.current === null || refreshingRef.current || event.touches.length !== 1) return;
 
-      if (main.scrollTop > 1 && !pullingRef.current) {
+      if (main.scrollTop > 1) {
         resetPull();
         return;
       }
 
       const delta = event.touches[0].clientY - touchStartY.current;
-
-      // Once a pull begins, keep tracking the same finger origin. Moving upward
-      // retracts the spinner and reverses its rotation; moving down again resumes it.
       if (pullingRef.current) {
         event.preventDefault();
         const distance = getResistedPull(delta);
@@ -86,8 +109,11 @@ const MainLayout: React.FC = () => {
         return;
       }
 
+      // Upward movement and ordinary scrolling never activate the indicator.
       if (delta <= 0) return;
-      if (main.scrollTop > 1) {
+
+      const nestedScroller = getScrollableAncestor(event.target, main);
+      if (nestedScroller && nestedScroller.scrollTop > 1) {
         resetPull();
         return;
       }
@@ -132,10 +158,7 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20">
-      <main
-        ref={mainRef}
-        className="relative z-10 h-full w-full overflow-y-auto overscroll-y-none pb-24 focus:outline-none"
-      >
+      <main ref={mainRef} className="relative z-10 h-full w-full overflow-y-auto overscroll-y-none pb-24 focus:outline-none">
         <div
           aria-live="polite"
           aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
@@ -148,27 +171,16 @@ const MainLayout: React.FC = () => {
         >
           <svg viewBox="0 0 24 24" className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none">
             <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.18)" strokeWidth="2.4" />
-            <path
-              d="M12 3a9 9 0 0 1 9 9"
-              stroke="white"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`}
-            />
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="white" strokeWidth="2.4" strokeLinecap="round" transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`} />
           </svg>
         </div>
         {renderActiveView()}
       </main>
-
       {activeTab !== 'event_monitor' && <MobileNav />}
     </div>
   );
 };
 
 export default function App() {
-  return (
-    <TerminalProvider>
-      <MainLayout />
-    </TerminalProvider>
-  );
+  return <TerminalProvider><MainLayout /></TerminalProvider>;
 };
