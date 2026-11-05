@@ -7,15 +7,16 @@ export const TokenDetailPage: React.FC = () => {
 
   return (
     <main className="h-full min-h-0 w-full overflow-hidden bg-[#080808] text-white">
-      <header className="sticky top-0 z-30 w-full bg-black/65 backdrop-blur-2xl">
-        <div className="flex h-11 items-center">
+      <header className="sticky top-0 z-30 h-[76px] w-full border-b border-white/[0.12] bg-[#080808]/75 px-3 pb-2 pt-3 shadow-[0_1px_0_rgba(255,255,255,0.025)] backdrop-blur-2xl sm:px-5">
+        <div className="flex h-full items-center">
           <button
             type="button"
             onClick={closeTokenDetail}
-            className="inline-flex h-full shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white"
+            aria-label="Go back"
+            title="Go back"
+            className="grid size-10 place-items-center rounded-full border border-white/[0.20] bg-white/[0.045] text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_3px_12px_rgba(0,0,0,0.28)] transition hover:border-white/[0.32] hover:bg-white/[0.09] hover:text-white active:scale-95"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Go back
+            <ArrowLeft className="size-[17px]" strokeWidth={2.1} />
           </button>
         </div>
       </header>
