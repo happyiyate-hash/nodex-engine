@@ -49,26 +49,11 @@ export const TokenDetailPage: React.FC = () => {
 
   return (
     <main className="h-full min-h-0 w-full overflow-y-auto bg-[#080808] text-white">
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] bg-[#080808]/95 px-4 py-3 backdrop-blur-xl sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <button type="button" onClick={closeTokenDetail} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.09] px-3 py-2 text-xs text-white/70 transition hover:text-white">
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
+      <header className="sticky top-0 z-30 w-full bg-[#080808]/65 backdrop-blur-2xl">
+        <div className="flex h-11 items-center px-4 sm:px-6">
+          <button type="button" onClick={closeTokenDetail} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/[0.1] hover:text-white">
+            <ArrowLeft className="h-3.5 w-3.5" /> Go back
           </button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold">{token.name}</span>
-              <span className="shrink-0 text-xs text-white/40">${token.symbol}</span>
-            </div>
-            <div className="mt-0.5 text-[10px] uppercase tracking-wider text-white/35">{token.venue}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={copyMint} title="Copy token mint" className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-2.5 py-2 text-[11px] text-white/60 hover:text-white">
-            {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-            {short(token.mint)}
-          </button>
-          <a href={'https://solscan.io/token/' + encodeURIComponent(token.mint)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-white/[0.09] px-2.5 py-2 text-[11px] text-white/60 hover:text-white">Solscan <ExternalLink className="h-3 w-3" /></a>
-          <a href={'https://dexscreener.com/solana/' + encodeURIComponent(token.mint)} target="_blank" rel="noopener noreferrer" className="hidden items-center gap-1 rounded-lg border border-white/[0.09] px-2.5 py-2 text-[11px] text-white/60 hover:text-white sm:inline-flex">DexScreener <ExternalLink className="h-3 w-3" /></a>
         </div>
       </header>
 
