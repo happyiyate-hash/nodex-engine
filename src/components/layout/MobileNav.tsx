@@ -92,7 +92,7 @@ export const MobileNav: React.FC = () => {
   return <>
     <style>{'@keyframes settings-heartbeat { 0%,100% { box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 0 0 rgba(255,255,255,0); } 35% { box-shadow: 0 0 0 2px rgba(255,255,255,.58), 0 0 24px 8px rgba(255,255,255,.30); } 65% { box-shadow: 0 0 0 1px rgba(255,255,255,.24), 0 0 10px 2px rgba(255,255,255,.12); } }'}</style>
     <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 flex items-center gap-2 select-none pointer-events-none">
-      <nav aria-label="Main navigation" className="glass-nav-float flex h-[60px] min-w-0 flex-1 items-center overflow-hidden rounded-full p-1.5 backdrop-blur-2xl pointer-events-auto"
+      <nav aria-label="Main navigation" className="glass-nav-float flex h-[60px] min-w-0 flex-1 items-center overflow-hidden rounded-full border border-white/[0.20] p-1.5 backdrop-blur-2xl shadow-[0_12px_34px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.16),0_0_0_1px_rgba(255,255,255,0.035)] pointer-events-auto"
         style={{ transform: collapsing ? 'translateX(34px) scaleX(.02)' : 'translateX(0) scaleX(1)', transformOrigin: 'right center', opacity: collapsing ? 0 : 1, flexBasis: collapsing ? '0%' : 'auto', transition: 'transform 420ms cubic-bezier(.7,0,.2,1), opacity 360ms ease, flex-basis 420ms cubic-bezier(.7,0,.2,1)' }}>
         <div className="grid h-full w-full min-w-[220px] grid-cols-3 items-center gap-1">
           {MAIN_ITEMS.map(({ tab, label, icon: Icon }) => {
@@ -108,7 +108,7 @@ export const MobileNav: React.FC = () => {
         onContextMenu={(event) => event.preventDefault()}
         onClick={() => { if (longPressTriggered.current) { longPressTriggered.current = false; return; } select('settings'); }}
         aria-label="Settings" title="Settings" aria-current={activeTab === 'settings' && !selectedToken ? 'page' : undefined}
-        className={'pointer-events-auto grid size-[60px] shrink-0 place-items-center rounded-full border border-white/20 bg-secondary/65 text-muted-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.06),inset_0_1px_0_rgba(255,255,255,0.22),0_-6px_24px_rgba(0,0,0,0.28)] backdrop-blur-2xl ' + (activeTab === 'settings' && !selectedToken ? 'text-foreground' : 'hover:text-foreground')}
+        className={'pointer-events-auto grid size-[60px] shrink-0 place-items-center rounded-full border border-white/[0.22] bg-secondary/70 text-muted-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.07),inset_0_1px_0_rgba(255,255,255,0.24),0_-6px_24px_rgba(0,0,0,0.3)] backdrop-blur-2xl ' + (activeTab === 'settings' && !selectedToken ? 'text-foreground' : 'hover:text-foreground')}
         style={{ opacity: collapsing ? 0 : 1, transform: collapsing ? 'scale(.05)' : 'scale(1)', animation: holding && phase === 'idle' ? 'settings-heartbeat .72s ease-in-out infinite' : 'none', transition: 'transform 420ms cubic-bezier(.7,0,.2,1), opacity 360ms ease' }}>
         <Settings className="size-[22px]" />
       </button>
