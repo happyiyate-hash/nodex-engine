@@ -191,16 +191,6 @@ interface DemoPosition {
   status: 'OPEN' | 'CLOSED';
   exitPrice?: number;
 }
-interface TradeNotice {
-  id: string;
-  type: 'BUY' | 'SELL';
-  symbol: string;
-  name: string;
-  amount: number;
-  price: number;
-  pnl?: number;
-  expiresAt: number;
-}
 interface SimToken {
   launch: TokenLaunchRecord;
   seed: typeof DEMO_TOKEN_SEEDS[number];
@@ -216,23 +206,41 @@ interface SimulationState {
   cash: number;
   tokens: Map<number, SimToken>;
   positions: Map<string, DemoPosition>;
-  notices: TradeNotice[];
-  nextNoticeId: number;
 }
 const DEMO_STARTING_BALANCE = 10000;
 const DEMO_TRADE_SIZE = 50;
 const DEMO_ENTRY_PRICES = [0.00042, 0.00115, 0.00078, 0.0024, 0.00063, 0.0018, 0.00095, 0.0031, 0.00054, 0.00135];
 const DEMO_PRICE_PATHS = [
-  [2.4, 1.7, 3.1, -2.8], [1.2, 2.9, 1.8, -3.4], [3.2, 1.1, 2.2, -2.5],
-  [1.6, 2.1, 3.4, -3.1], [2.8, 1.4, 1.9, -2.7], [1.1, 3.3, 2.0, -3.6],
-  [2.1, 1.5, 2.7, -2.9], [1.4, 3.0, 1.6, -3.2], [2.9, 1.3, 2.4, -2.6],
-  [1.8, 2.6, 1.2, -3.5], [3.1, 1.6, 2.1, -2.4], [1.3, 2.4, 3.0, -3.3],
-  [2.6, 1.2, 2.8, -2.7], [1.7, 3.2, 1.5, -3.1], [2.3, 1.9, 2.6, -3.7],
-  [1.5, 2.8, 1.4, -2.6], [3.0, 1.4, 2.3, -3.2], [1.9, 2.2, 3.1, -2.9],
-  [2.7, 1.1, 1.8, -3.4], [1.6, 3.1, 2.0, -2.5], [2.2, 1.7, 2.9, -3.6],
-  [1.3, 2.5, 1.7, -2.8], [3.3, 1.2, 2.4, -3.1], [1.8, 2.7, 1.3, -3.5],
-  [2.5, 1.6, 3.2, -2.7], [1.4, 2.3, 1.9, -3.3], [2.8, 1.5, 2.1, -2.6],
-  [1.7, 3.4, 1.2, -3.8], [2.0, 1.8, 2.7, -3.0], [3.1, 1.3, 2.2, -3.4],
+  [1.2, 2.6, 4.3, -1.8],
+  [1.4, 2.9, 4.8, -2.1],
+  [1.1, 2.4, 4.1, -1.7],
+  [1.6, 3.1, 5, -2.3],
+  [1.3, 2.7, 4.5, -1.9],
+  [1.5, 3.2, 5.2, -2.4],
+  [1.2, 2.8, 4.6, -2],
+  [1.7, 3.3, 5.4, -2.5],
+  [1.1, 2.5, 4.2, -1.8],
+  [1.4, 3, 4.9, -2.2],
+  [1.6, 3.4, 5.5, -2.6],
+  [1.3, 2.9, 4.7, -2.1],
+  [1.5, 3.1, 5.1, -2.3],
+  [1.2, 2.6, 4.4, -1.9],
+  [1.8, 3.5, 5.7, -2.7],
+  [1.1, 2.7, 4.5, -2],
+  [1.4, 3.2, 5.3, -2.4],
+  [1.7, 3.4, 5.6, -2.6],
+  [1.3, 2.8, 4.6, -2.1],
+  [1.6, 3.3, 5.4, -2.5],
+  [1.2, 2.5, 4.3, -1.8],
+  [1.5, 3, 4.9, -2.2],
+  [1.8, 3.6, 5.8, -2.8],
+  [1.1, 2.4, 4.2, -1.9],
+  [1.4, 2.9, 4.8, -2.2],
+  [1.7, 3.5, 5.6, -2.6],
+  [1.2, 2.7, 4.5, -2],
+  [1.6, 3.2, 5.2, -2.4],
+  [1.3, 2.8, 4.7, -2.1],
+  [1.5, 3.3, 5.4, -2.5]
 ];
 
 interface DemoLaunchView extends LaunchView {
@@ -379,7 +387,6 @@ export const OverviewPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [demoLaunches, setDemoLaunches] = useState<DemoLaunchView[]>([]);
   const [demoPositions, setDemoPositions] = useState<DemoPosition[]>([]);
-  const [tradeNotices, setTradeNotices] = useState<TradeNotice[]>([]);
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
   useEffect(() => {
     const simulation: SimulationState = {
@@ -387,8 +394,6 @@ export const OverviewPage: React.FC = () => {
       cash: DEMO_STARTING_BALANCE,
       tokens: new Map(),
       positions: new Map(),
-      notices: [],
-      nextNoticeId: 1,
     };
     const timer = setInterval(() => {
       const now = Date.now();
@@ -440,11 +445,6 @@ export const OverviewPage: React.FC = () => {
               token.positionId = positionId;
               token.status = 'PAPER ENTRY';
               token.scanStage = 'Paper buy executed';
-              simulation.notices.unshift({
-                id: String(simulation.nextNoticeId++), type: 'BUY',
-                symbol: token.seed.symbol, name: token.seed.name,
-                amount: quantity, price: entryPrice, expiresAt: now + 4800,
-              });
             } else {
               token.status = 'QUALIFIED'; token.scanStage = 'Qualified · balance limit reached';
             }
@@ -460,7 +460,7 @@ export const OverviewPage: React.FC = () => {
         const tokenIndex = Number(position.id.replace('paper-', ''));
         const path = DEMO_PRICE_PATHS[tokenIndex % DEMO_PRICE_PATHS.length];
         const age = now - position.openedAt;
-        const stepMs = 850 + ((tokenIndex * 613) % 2700);
+        const stepMs = 5000 + ((tokenIndex * 613) % 4000);
         const step = Math.floor(age / stepMs);
         if (step < 1) continue;
         const movement = path[Math.min(step - 1, path.length - 1)] / 100;
@@ -472,17 +472,14 @@ export const OverviewPage: React.FC = () => {
         if (position.currentPrice < previousPrice) {
           position.status = 'CLOSED';
           position.exitPrice = position.currentPrice;
-          simulation.cash += position.value;
-          simulation.notices.unshift({
-            id: String(simulation.nextNoticeId++), type: 'SELL',
-            symbol: position.symbol, name: position.name,
-            amount: position.quantity, price: position.currentPrice,
-            pnl: position.pnl, expiresAt: now + 5200,
-          });
+          const saleProceeds = position.quantity * position.exitPrice;
+          position.value = saleProceeds;
+          position.pnl = saleProceeds - position.invested;
+          position.pnlPct = (position.pnl / position.invested) * 100;
+          simulation.cash += saleProceeds;
         }
       }
 
-      simulation.notices = simulation.notices.filter((notice) => notice.expiresAt > now).slice(0, 4);
       const positionList = Array.from(simulation.positions.values()).sort((a, b) => b.openedAt - a.openedAt);
       const openPositions = positionList.filter((position) => position.status === 'OPEN');
       const invested = openPositions.reduce((sum, position) => sum + position.invested, 0);
@@ -497,7 +494,6 @@ export const OverviewPage: React.FC = () => {
         arrivalKey: token.launch.id,
       })));
       setDemoPositions(positionList);
-      setTradeNotices([...simulation.notices]);
       setAvailableBalance(simulation.cash);
       setInvestedBalance(invested);
       setPortfolioValue(totalValue);
@@ -551,14 +547,7 @@ export const OverviewPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      <style>{`@keyframes trade-notice-in { from { opacity: 0; transform: translate3d(0,-24px,0); } to { opacity: 1; transform: translate3d(0,0,0); } } @keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
-      <div className="pointer-events-none fixed left-3 right-3 top-3 z-[80] mx-auto flex max-w-md flex-col gap-2">
-        {tradeNotices.map((notice) => <div key={notice.id} className={`overflow-hidden rounded-xl border px-3 py-2.5 shadow-2xl backdrop-blur-xl animate-[trade-notice-in_320ms_cubic-bezier(0.2,0.75,0.25,1)] ${notice.type === 'BUY' ? 'border-emerald-400/25 bg-[#102016]/95' : 'border-red-400/25 bg-[#241313]/95'}`}>
-          <div className="flex items-center justify-between gap-2"><span className={`text-[9px] font-bold tracking-[0.12em] ${notice.type === 'BUY' ? 'text-emerald-300' : 'text-red-300'}`}>{notice.type === 'BUY' ? 'PAPER BUY EXECUTED' : 'PAPER SELL EXECUTED'}</span><span className="text-[8px] text-white/35">{notice.symbol}</span></div>
-          <div className="mt-1 text-[10px] text-white/85">{notice.type === 'BUY' ? 'Bought' : 'Sold'} {notice.amount.toLocaleString('en-US',{maximumFractionDigits:2})} {notice.symbol} · ${formatUsd(notice.type === 'BUY' ? DEMO_TRADE_SIZE : notice.amount * notice.price)}</div>
-          {notice.type === 'SELL' && <div className={`mt-0.5 text-[9px] ${(notice.pnl || 0) >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>Realized P&L: {(notice.pnl || 0) >= 0 ? '+' : '−'}${formatUsd(Math.abs(notice.pnl || 0))}</div>}
-        </div>)}
-      </div>
+      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
       <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
