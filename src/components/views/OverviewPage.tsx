@@ -174,6 +174,59 @@ const DEMO_TOKEN_SEEDS = [
   }
 ] as const;
 
+
+interface DemoPosition {
+  id: string;
+  mint: string;
+  name: string;
+  symbol: string;
+  entryPrice: number;
+  currentPrice: number;
+  quantity: number;
+  invested: number;
+  value: number;
+  pnl: number;
+  pnlPct: number;
+  openedAt: number;
+  status: 'OPEN' | 'CLOSED';
+  exitPrice?: number;
+}
+interface TradeNotice {
+  id: string;
+  type: 'BUY' | 'SELL';
+  symbol: string;
+  name: string;
+  amount: number;
+  price: number;
+  pnl?: number;
+  expiresAt: number;
+}
+interface SimToken {
+  launch: TokenLaunchRecord;
+  seed: typeof DEMO_TOKEN_SEEDS[number];
+  index: number;
+  detectedAt: number;
+  status: PipelineStatus;
+  progress: number;
+  scanStage: string;
+  positionId?: string;
+}
+interface SimulationState {
+  startedAt: number;
+  cash: number;
+  tokens: Map<number, SimToken>;
+  positions: Map<string, DemoPosition>;
+  notices: TradeNotice[];
+  nextNoticeId: number;
+}
+const DEMO_STARTING_BALANCE = 10000;
+const DEMO_TRADE_SIZE = 50;
+const DEMO_ENTRY_PRICES = [0.00042, 0.00115, 0.00078, 0.0024, 0.00063, 0.0018, 0.00095, 0.0031, 0.00054, 0.00135];
+const DEMO_PRICE_PATHS = [
+  [2.4, 1.7, 3.1, -2.8], [1.2, 2.9, 1.8, -3.4], [3.2, 1.1, 2.2, -2.5],
+  [1.6, 2.1, 3.4, -3.1], [2.8, 1.4, 1.9, -2.7], [1.1, 3.3, 2.0, -3.6],
+];
+
 interface DemoLaunchView extends LaunchView {
   demo: true;
   progress: number;
@@ -307,108 +360,148 @@ const statusStyle: Record<PipelineStatus, string> = {
 
 export const OverviewPage: React.FC = () => {
   const { launches, events, engineStatus } = useTerminal();
-  const [portfolioValue, setPortfolioValue] = useState(12840.56);
-  const [profitLoss, setProfitLoss] = useState(12.4);
+  const [portfolioValue, setPortfolioValue] = useState(DEMO_STARTING_BALANCE);
+  const [profitLoss, setProfitLoss] = useState(0);
+  const [profitLossPct, setProfitLossPct] = useState(0);
+  const [availableBalance, setAvailableBalance] = useState(DEMO_STARTING_BALANCE);
+  const [investedBalance, setInvestedBalance] = useState(0);
   const [portfolioFlash, setPortfolioFlash] = useState<ChangeDirection>(null);
   const [balanceDirection, setBalanceDirection] = useState<ChangeDirection>(null);
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [search, setSearch] = useState('');
   const [demoLaunches, setDemoLaunches] = useState<DemoLaunchView[]>([]);
+  const [demoPositions, setDemoPositions] = useState<DemoPosition[]>([]);
+  const [tradeNotices, setTradeNotices] = useState<TradeNotice[]>([]);
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
-  const updateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const simulationRef = useRef<SimulationState | null>(null);
 
   useEffect(() => {
-    const movements = [-18.75, 32.4, -41.2, 55.6, -22.3, 14.8, -35.5, 48.2, -9.6, 26.1];
-    let tick = 0;
-    let flashStart: ReturnType<typeof setTimeout> | null = null;
-    const scheduleUpdate = () => {
-      updateTimer.current = setTimeout(() => {
-        const change = movements[tick % movements.length];
-        tick += 1;
-        const direction: ChangeDirection = change >= 0 ? 'up' : 'down';
-        setBalanceDirection(direction);
-        setPortfolioValue((current) => Math.max(0, current + change));
-        setProfitLoss((current) => current + change);
-        setPortfolioFlash(null);
-        if (flashTimer.current) clearTimeout(flashTimer.current);
-        flashStart = setTimeout(() => setPortfolioFlash(direction), 16);
-        flashTimer.current = setTimeout(() => setPortfolioFlash(null), 190);
-        scheduleUpdate();
-      }, 300 + Math.floor(Math.random() * 1800));
+    const simulation: SimulationState = {
+      startedAt: Date.now(),
+      cash: DEMO_STARTING_BALANCE,
+      tokens: new Map(),
+      positions: new Map(),
+      notices: [],
+      nextNoticeId: 1,
     };
-    scheduleUpdate();
-    return () => {
-      if (updateTimer.current) clearTimeout(updateTimer.current);
-      if (flashTimer.current) clearTimeout(flashTimer.current);
-      if (flashStart) clearTimeout(flashStart);
-    };
-  }, []);
+    simulationRef.current = simulation;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - simulation.startedAt;
+      const arrivals = Math.min(30, Math.floor(elapsed / 900) + 1);
 
-  // Demo-only stream: 30 fixed sample tokens arrive one by one. Each token
-  // advances on its own clock so several scans overlap naturally.
-  useEffect(() => {
-    const startedAt = Date.now();
-    const arrivalInterval = 900;
-    const scanDuration = 5200;
-    const refresh = () => {
-      const elapsed = Date.now() - startedAt;
-      const totalArrivals = Math.floor(elapsed / arrivalInterval) + 1;
-      const firstArrival = Math.max(0, totalArrivals - 30);
-      const visible: DemoLaunchView[] = [];
-
-      for (let arrival = firstArrival; arrival < totalArrivals; arrival += 1) {
-        const seedIndex = arrival % DEMO_TOKEN_SEEDS.length;
-        const seed = DEMO_TOKEN_SEEDS[seedIndex];
-        const age = elapsed - arrival * arrivalInterval;
-        const cycle = Math.floor(arrival / DEMO_TOKEN_SEEDS.length);
-        const detectedAt = new Date(Date.now() - age).toISOString();
-        const status: PipelineStatus = age < 650
-          ? 'DETECTED'
-          : age < scanDuration
-            ? 'ANALYZING'
-            : seed.outcome;
-        const progress = status === 'DETECTED'
-          ? 0
-          : status === 'ANALYZING'
-            ? Math.min(94, Math.round(((age - 650) / (scanDuration - 650)) * 100))
-            : 100;
-        const scanStage = status === 'DETECTED'
-          ? 'New launch received'
-          : status === 'ANALYZING'
-            ? progress < 28 ? 'Checking token authorities' : progress < 55 ? 'Inspecting holder distribution' : progress < 82 ? 'Reviewing liquidity signals' : 'Finalizing risk assessment'
-            : status === 'QUALIFIED'
-              ? 'Passed demo strategy filters'
-              : 'Demo risk checks failed';
-
-        const mint = `DEMO-${seed.symbol}-${cycle}-${arrival}`;
-        const launch: TokenLaunchRecord = {
-          id: mint,
-          mint_address: mint,
-          creator_address: null,
-          source: 'pump.fun · demo',
-          signature: mint,
-          slot: 0,
-          detected_at: detectedAt,
-        };
-        visible.push({
-          launch,
-          status,
-          reason: scanStage,
-          updatedAt: new Date(Date.now() - Math.max(0, age - 650)).toISOString(),
-          scanStarted: age >= 650,
-          demo: true,
-          progress,
-          scanStage,
-          arrivalKey: mint,
+      for (let index = 0; index < arrivals; index += 1) {
+        if (simulation.tokens.has(index)) continue;
+        const seed = DEMO_TOKEN_SEEDS[index];
+        const mint = `DEMO-${seed.symbol}-${index + 1}`;
+        const detectedAt = simulation.startedAt + index * 900;
+        simulation.tokens.set(index, {
+          index, seed, detectedAt, status: 'DETECTED', progress: 0,
+          scanStage: 'New launch received',
+          launch: {
+            id: mint, mint_address: mint, creator_address: null,
+            source: 'Demo launch stream', signature: mint, slot: 0,
+            detected_at: new Date(detectedAt).toISOString(),
+          },
         });
       }
-      setDemoLaunches(visible.reverse());
-    };
 
-    refresh();
-    const timer = setInterval(refresh, 250);
-    return () => clearInterval(timer);
+      for (const token of simulation.tokens.values()) {
+        const age = now - token.detectedAt;
+        if (age < 650) {
+          token.status = 'DETECTED'; token.progress = 0; token.scanStage = 'New launch received';
+        } else if (age < 5200) {
+          token.status = 'ANALYZING';
+          token.progress = Math.min(94, Math.round(((age - 650) / 4550) * 100));
+          token.scanStage = token.progress < 28 ? 'Checking mint authority' : token.progress < 52 ? 'Checking freeze authority' : token.progress < 76 ? 'Inspecting holder distribution' : 'Reviewing final risk signals';
+        } else if (token.seed.outcome === 'REJECTED') {
+          token.status = 'REJECTED'; token.progress = 100; token.scanStage = 'Demo risk checks failed';
+        } else {
+          token.progress = 100;
+          const positionId = `paper-${token.index}`;
+          const existing = simulation.positions.get(positionId);
+          if (!existing) {
+            const entryPrice = DEMO_ENTRY_PRICES[token.index % DEMO_ENTRY_PRICES.length];
+            const quantity = DEMO_TRADE_SIZE / entryPrice;
+            if (simulation.cash >= DEMO_TRADE_SIZE) {
+              simulation.cash -= DEMO_TRADE_SIZE;
+              simulation.positions.set(positionId, {
+                id: positionId, mint: token.launch.mint_address,
+                name: token.seed.name, symbol: token.seed.symbol,
+                entryPrice, currentPrice: entryPrice, quantity,
+                invested: DEMO_TRADE_SIZE, value: DEMO_TRADE_SIZE,
+                pnl: 0, pnlPct: 0, openedAt: now, status: 'OPEN',
+              });
+              token.positionId = positionId;
+              token.status = 'PAPER ENTRY';
+              token.scanStage = 'Paper buy executed';
+              simulation.notices.unshift({
+                id: String(simulation.nextNoticeId++), type: 'BUY',
+                symbol: token.seed.symbol, name: token.seed.name,
+                amount: quantity, price: entryPrice, expiresAt: now + 4800,
+              });
+            } else {
+              token.status = 'QUALIFIED'; token.scanStage = 'Qualified · balance limit reached';
+            }
+          } else {
+            token.status = existing.status === 'OPEN' ? 'PAPER ENTRY' : 'QUALIFIED';
+            token.scanStage = existing.status === 'OPEN' ? 'Paper position open' : 'Paper position closed';
+          }
+        }
+      }
+
+      for (const position of simulation.positions.values()) {
+        if (position.status !== 'OPEN') continue;
+        const tokenIndex = Number(position.id.replace('paper-', ''));
+        const path = DEMO_PRICE_PATHS[tokenIndex % DEMO_PRICE_PATHS.length];
+        const age = now - position.openedAt;
+        const stepMs = 850 + ((tokenIndex * 613) % 2700);
+        const step = Math.floor(age / stepMs);
+        if (step < 1) continue;
+        const movement = path[Math.min(step - 1, path.length - 1)] / 100;
+        const previousPrice = position.currentPrice;
+        position.currentPrice = position.entryPrice * (1 + movement);
+        position.value = position.quantity * position.currentPrice;
+        position.pnl = position.value - position.invested;
+        position.pnlPct = (position.pnl / position.invested) * 100;
+        if (position.currentPrice < previousPrice) {
+          position.status = 'CLOSED';
+          position.exitPrice = position.currentPrice;
+          simulation.cash += position.value;
+          simulation.notices.unshift({
+            id: String(simulation.nextNoticeId++), type: 'SELL',
+            symbol: position.symbol, name: position.name,
+            amount: position.quantity, price: position.currentPrice,
+            pnl: position.pnl, expiresAt: now + 5200,
+          });
+        }
+      }
+
+      simulation.notices = simulation.notices.filter((notice) => notice.expiresAt > now).slice(0, 4);
+      const positionList = Array.from(simulation.positions.values()).sort((a, b) => b.openedAt - a.openedAt);
+      const openPositions = positionList.filter((position) => position.status === 'OPEN');
+      const invested = openPositions.reduce((sum, position) => sum + position.invested, 0);
+      const marketValue = openPositions.reduce((sum, position) => sum + position.value, 0);
+      const totalValue = simulation.cash + marketValue;
+      const pnl = totalValue - DEMO_STARTING_BALANCE;
+      setDemoLaunches(Array.from(simulation.tokens.values()).sort((a, b) => b.detectedAt - a.detectedAt).map((token) => ({
+        launch: token.launch, status: token.status,
+        reason: token.scanStage, updatedAt: new Date(now).toISOString(),
+        scanStarted: token.status !== 'DETECTED', demo: true,
+        progress: token.progress, scanStage: token.scanStage,
+        arrivalKey: token.launch.id,
+      })));
+      setDemoPositions(positionList);
+      setTradeNotices([...simulation.notices]);
+      setAvailableBalance(simulation.cash);
+      setInvestedBalance(invested);
+      setPortfolioValue(totalValue);
+      setProfitLoss(pnl);
+      setProfitLossPct((pnl / DEMO_STARTING_BALANCE) * 100);
+      setBalanceDirection(pnl >= 0 ? 'up' : 'down');
+      setPortfolioFlash(pnl >= 0 ? 'up' : 'down');
+    }, 200);
+    return () => { clearInterval(timer); simulationRef.current = null; };
   }, []);
 
   const realLaunchViews = useMemo(
@@ -453,7 +546,14 @@ export const OverviewPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
+      <style>{`@keyframes trade-notice-in { from { opacity: 0; transform: translate3d(0,-24px,0); } to { opacity: 1; transform: translate3d(0,0,0); } } @keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
+      <div className="pointer-events-none fixed left-3 right-3 top-3 z-[80] mx-auto flex max-w-md flex-col gap-2">
+        {tradeNotices.map((notice) => <div key={notice.id} className={`overflow-hidden rounded-xl border px-3 py-2.5 shadow-2xl backdrop-blur-xl animate-[trade-notice-in_320ms_cubic-bezier(0.2,0.75,0.25,1)] ${notice.type === 'BUY' ? 'border-emerald-400/25 bg-[#102016]/95' : 'border-red-400/25 bg-[#241313]/95'}`}>
+          <div className="flex items-center justify-between gap-2"><span className={`text-[9px] font-bold tracking-[0.12em] ${notice.type === 'BUY' ? 'text-emerald-300' : 'text-red-300'}`}>{notice.type === 'BUY' ? 'PAPER BUY EXECUTED' : 'PAPER SELL EXECUTED'}</span><span className="text-[8px] text-white/35">{notice.symbol}</span></div>
+          <div className="mt-1 text-[10px] text-white/85">{notice.type === 'BUY' ? 'Bought' : 'Sold'} {notice.amount.toLocaleString('en-US',{maximumFractionDigits:2})} {notice.symbol} · ${formatUsd(notice.type === 'BUY' ? DEMO_TRADE_SIZE : notice.amount * notice.price)}</div>
+          {notice.type === 'SELL' && <div className={`mt-0.5 text-[9px] ${(notice.pnl || 0) >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>Realized P&L: {(notice.pnl || 0) >= 0 ? '+' : '−'}${formatUsd(Math.abs(notice.pnl || 0))}</div>}
+        </div>)}
+      </div>
       <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
@@ -463,7 +563,7 @@ export const OverviewPage: React.FC = () => {
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
               <div aria-live="polite" className={`mt-1 flex items-center gap-1 truncate text-[14px] font-semibold tracking-tight tabular-nums sm:text-base ${isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
                 <span aria-hidden="true" className="text-[10px] leading-none">{isProfitable ? '▲' : '▼'}</span>
-                <span>{isProfitable ? '+' : '−'}${formatUsd(profitLoss)}</span>
+                <span>{isProfitable ? '+' : '−'}{formatUsd(Math.abs(profitLossPct))}%</span>
               </div>
             </div>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
@@ -474,6 +574,7 @@ export const OverviewPage: React.FC = () => {
                   ? <RollingDigit key={index} digit={character} balanceDirection={balanceDirection} />
                   : <span className="inline-block h-[1em] leading-[1em]" key={index}>{character}</span>)}
               </div>
+              <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available ${formatUsd(availableBalance)}</span><span>Invested ${formatUsd(investedBalance)}</span></div>
             </div>
           </div>
         </div>
@@ -625,6 +726,21 @@ export const OverviewPage: React.FC = () => {
                 })}
               </div>
             )}
+            <section className="mt-4 mb-3">
+              <div className="mb-2 flex items-center justify-between">
+                <div><h2 className="text-[12px] font-semibold text-white">Paper positions</h2><p className="mt-0.5 text-[9px] text-white/35">{demoPositions.filter((position) => position.status === 'OPEN').length} open · $50 per entry</p></div>
+                <span className="text-[9px] text-white/35">Demo portfolio</span>
+              </div>
+              {demoPositions.length === 0 ? <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 py-4 text-center text-[10px] text-white/35">Waiting for the first qualified paper entry…</div> : <div className="space-y-1.5">
+                {demoPositions.map((position) => <article key={position.id} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0"><div className="truncate text-[10px] font-semibold text-white">{position.name} <span className="text-white/35">{position.symbol}</span></div><div className="mt-0.5 text-[8px] text-white/35">{position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'} · {position.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} tokens</div></div>
+                    <div className="text-right"><div className={`text-[10px] font-semibold tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>{position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}</div><div className="text-[8px] text-white/35">{position.pnlPct >= 0 ? '+' : ''}{position.pnlPct.toFixed(2)}%</div></div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-[8px]"><div><div className="text-white/30">Entry</div><div className="mt-0.5 text-white/75">${position.entryPrice.toFixed(6)}</div></div><div><div className="text-white/30">Current</div><div className="mt-0.5 text-white/75">${position.currentPrice.toFixed(6)}</div></div><div><div className="text-white/30">Value</div><div className="mt-0.5 text-white/75">${formatUsd(position.value)}</div></div></div>
+                </article>)}
+              </div>}
+            </section>
           </div>
           <div className="mt-2 flex shrink-0 items-center justify-between text-[8px] text-white/25">
             <span>{filteredLaunches.length} shown · {launches.length} loaded</span>
