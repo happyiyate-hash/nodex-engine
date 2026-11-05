@@ -7,11 +7,14 @@ interface RollingDigitProps {
   balanceDirection: ChangeDirection;
 }
 
+const REEL_DIGITS = Array.from({ length: 50 }, (_, index) => String(index % 10));
+
 const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) => {
+  const initialIndex = 20 + Number(digit);
   const lastDigit = useRef(digit);
+  const targetIndex = useRef(initialIndex);
   const frameRef = useRef<number | null>(null);
-  const [sequence, setSequence] = useState<string[]>([digit]);
-  const [offset, setOffset] = useState(0);
+  const [reelIndex, setReelIndex] = useState(initialIndex);
   const [isRolling, setIsRolling] = useState(false);
 
   useLayoutEffect(() => {
@@ -21,36 +24,30 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
     lastDigit.current = digit;
     const from = Number(previous);
     const to = Number(digit);
-    let nextSequence: string[];
-    let rollDirection: 'up' | 'down';
+    if (from === to) return;
 
+    // The reel is repeated, so it can cross 9 -> 0 and 0 -> 9
+    // without reversing direction or reaching the end of the track.
+    let nextIndex = targetIndex.current;
     if (from === 9 && to === 0 && balanceDirection === 'up') {
-      nextSequence = ['9', '0'];
-      rollDirection = 'up';
+      nextIndex += 1;
     } else if (from === 0 && to === 9 && balanceDirection === 'down') {
-      nextSequence = ['0', '9'];
-      rollDirection = 'down';
+      nextIndex -= 1;
     } else if (to > from) {
-      nextSequence = Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
-      rollDirection = 'up';
-    } else if (to < from) {
-      nextSequence = Array.from({ length: from - to + 1 }, (_, index) => String(from - index));
-      rollDirection = 'down';
+      nextIndex += to - from;
     } else {
-      return;
+      nextIndex -= from - to;
     }
 
-    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    targetIndex.current = nextIndex;
 
-    setSequence(nextSequence);
-    setOffset(0);
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     setIsRolling(false);
 
     frameRef.current = requestAnimationFrame(() => {
       frameRef.current = requestAnimationFrame(() => {
         setIsRolling(true);
-        // Incrementing digits travel upward; decrementing digits travel downward.
-        setOffset(rollDirection === 'up' ? -(nextSequence.length - 1) : nextSequence.length - 1);
+        setReelIndex(nextIndex);
         frameRef.current = null;
       });
     });
@@ -65,29 +62,29 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
 
   const finishRoll = (event: React.TransitionEvent<HTMLSpanElement>) => {
     if (event.propertyName !== 'transform' || !isRolling) return;
+
+    // Re-center on the middle reel. Every ten rows are identical, so this
+    // changes no visible pixels and keeps plenty of travel in both directions.
+    const centeredIndex = 20 + Number(digit);
+    targetIndex.current = centeredIndex;
     setIsRolling(false);
-    setSequence([digit]);
-    setOffset(0);
+    setReelIndex(centeredIndex);
   };
 
-  if (sequence.length === 1) {
-    return <span className="inline-block h-[1em] leading-[1em]">{digit}</span>;
-  }
-
   return (
-    <span className="inline-block h-[1em] overflow-hidden align-bottom">
+    <span className="inline-block h-[1em] w-[0.62em] min-w-[0.62em] shrink-0 overflow-hidden align-bottom text-center">
       <span
         onTransitionEnd={finishRoll}
         className="flex flex-col will-change-transform"
         style={{
-          transform: `translate3d(0, ${offset}em, 0)`,
+          transform: `translate3d(0, -${reelIndex}em, 0)`,
           transition: isRolling
-            ? 'transform 360ms cubic-bezier(0.22, 0.72, 0.25, 1)'
+            ? 'transform 420ms cubic-bezier(0.22, 0.72, 0.25, 1)'
             : 'none',
         }}
       >
-        {sequence.map((value, index) => (
-          <span className="block h-[1em] shrink-0 leading-[1em]" key={index}>{value}</span>
+        {REEL_DIGITS.map((value, index) => (
+          <span className="block h-[1em] w-full shrink-0 leading-[1em]" key={index}>{value}</span>
         ))}
       </span>
     </span>
