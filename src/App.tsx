@@ -14,8 +14,6 @@ import { installFetchLogger } from './services/engineLogs';
 installFetchLogger();
 
 const REFRESH_TRIGGER_DISTANCE = 72;
-
-// The pull has no hard stop: it keeps extending with increasing spring resistance.
 const getResistedPull = (fingerDistance: number) => 116 * (1 - Math.exp(-fingerDistance / 145));
 
 const MainLayout: React.FC = () => {
@@ -23,6 +21,7 @@ const MainLayout: React.FC = () => {
   const mainRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
   const pullDistanceRef = useRef(0);
+  const pullingRef = useRef(false);
   const refreshingRef = useRef(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -42,25 +41,48 @@ const MainLayout: React.FC = () => {
     }
   };
 
-
-
   useEffect(() => {
     const main = mainRef.current;
     if (!main) return;
 
+    const resetPull = () => {
+      touchStartY.current = null;
+      pullingRef.current = false;
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+    };
+
     const onTouchStart = (event: TouchEvent) => {
-      if (refreshingRef.current || event.touches.length !== 1 || main.scrollTop > 0) return;
-      touchStartY.current = event.touches[0].clientY;
+      if (refreshingRef.current || event.touches.length !== 1) {
+        resetPull();
+        return;
+      }
+
+      // Arm refresh only when the main scroll area is already at its top edge.
+      // Normal upward finger movement remains native scrolling.
+      touchStartY.current = main.scrollTop <= 1 ? event.touches[0].clientY : null;
+      pullingRef.current = false;
       pullDistanceRef.current = 0;
     };
 
     const onTouchMove = (event: TouchEvent) => {
       if (touchStartY.current === null || refreshingRef.current || event.touches.length !== 1) return;
+
       const delta = event.touches[0].clientY - touchStartY.current;
-      if (delta <= 0 || main.scrollTop > 0) {
-        if (delta < 0) touchStartY.current = null;
+      if (delta <= 0) {
+        // The user is scrolling into the content, not pulling past the top.
+        if (pullingRef.current) resetPull();
+        else touchStartY.current = null;
         return;
       }
+
+      // If the page has moved away from the top, let the browser handle scrolling.
+      if (main.scrollTop > 1) {
+        resetPull();
+        return;
+      }
+
+      pullingRef.current = true;
       event.preventDefault();
       const distance = getResistedPull(delta);
       pullDistanceRef.current = distance;
@@ -69,26 +91,28 @@ const MainLayout: React.FC = () => {
 
     const onTouchEnd = () => {
       touchStartY.current = null;
-      if (pullDistanceRef.current >= REFRESH_TRIGGER_DISTANCE) {
+      if (pullingRef.current && pullDistanceRef.current >= REFRESH_TRIGGER_DISTANCE) {
+        pullingRef.current = false;
         refreshingRef.current = true;
         setIsRefreshing(true);
         setPullDistance(REFRESH_TRIGGER_DISTANCE);
         window.setTimeout(() => window.location.reload(), 320);
       } else {
-        pullDistanceRef.current = 0;
-        setPullDistance(0);
+        resetPull();
       }
     };
+
+    const onTouchCancel = () => resetPull();
 
     main.addEventListener('touchstart', onTouchStart, { passive: true });
     main.addEventListener('touchmove', onTouchMove, { passive: false });
     main.addEventListener('touchend', onTouchEnd, { passive: true });
-    main.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    main.addEventListener('touchcancel', onTouchCancel, { passive: true });
     return () => {
       main.removeEventListener('touchstart', onTouchStart);
       main.removeEventListener('touchmove', onTouchMove);
       main.removeEventListener('touchend', onTouchEnd);
-      main.removeEventListener('touchcancel', onTouchEnd);
+      main.removeEventListener('touchcancel', onTouchCancel);
     };
   }, []);
 
@@ -100,7 +124,6 @@ const MainLayout: React.FC = () => {
       <main
         ref={mainRef}
         className="relative z-10 h-full w-full overflow-y-auto overscroll-y-none pb-24 focus:outline-none"
-        style={{ touchAction: 'pan-x' }}
       >
         <div
           aria-live="polite"
