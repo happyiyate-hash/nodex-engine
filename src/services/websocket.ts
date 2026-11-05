@@ -1,5 +1,6 @@
 import { ConnectionStatus, NodeXEvent } from '../types';
 import { apiClient } from './api';
+import { recordLiveEvent } from './engineLogs';
 type EventListener=(event:NodeXEvent)=>void;
 type StatusListener=(status:ConnectionStatus,latencyMs:number)=>void;
 
@@ -96,6 +97,7 @@ export class NodeXWebSocketService {
           const raw=JSON.parse(String(message.data));
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
           this.lastMessageAt=Date.now();if(raw.type==='heartbeat')return;
+          recordLiveEvent(raw.type, raw);
           const visibleTypes=new Set(['connection_status','engine_state','launch_detected','launch_snapshot','token_scan_started','token_scan_update','market_price_update','paper_buy_executed','paper_buy_failed','strategy_rejected_token','diagnostic','provider_status','market_account_update','market_curve_completed','market_monitor_status','market_subscription_requested','market_subscription_active','creator_history_started','creator_history_update','stream_warning','reconnect_recovery_status','pumpswap_activity','pumpswap_volume_update','command_rejected']);
           if(!visibleTypes.has(raw.type))return;
           const event=normalizeBackendEvent(raw);if(this.seen.has(event.event_id))return;
