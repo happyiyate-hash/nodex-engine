@@ -1,447 +1,119 @@
 import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { DiscoveredToken, QualificationStatus, SafetyRating, Venue } from '../../types';
-import {
-  Search,
-  Copy,
-  Check,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldX,
-  Flame,
-  ArrowUpDown,
-  ShoppingBag,
-} from 'lucide-react';
+import { Search, Copy, Check, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 
 export const LiveFeedPage: React.FC = () => {
-  const {
-    tokens,
-    launches,
-    events,
-    openTokenDetailByMint,
-  } = useTerminal();
-
+  const { tokens, openTokenDetailByMint } = useTerminal();
   const [searchQuery, setSearchQuery] = useState('');
-  const [venueFilter, setVenueFilter] = useState<'ALL' | Venue>('ALL');
-  const [qualFilter, setQualFilter] = useState<'ALL' | QualificationStatus>('ALL');
-  const [safetyFilter, setSafetyFilter] = useState<'ALL' | SafetyRating>('ALL');
   const [copiedMint, setCopiedMint] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<'launch_time' | 'liquidity_usd' | 'bonding_curve_progress_pct'>('launch_time');
-  const [sortAsc, setSortAsc] = useState(false);
 
-  const handleCopy = (e: React.MouseEvent, text: string) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(text);
-    setCopiedMint(text);
-    setTimeout(() => setCopiedMint(null), 1800);
-  };
-
-  const filteredTokens = tokens.filter((t) => {
-    if (venueFilter !== 'ALL' && t.venue !== venueFilter) return false;
-    if (qualFilter !== 'ALL' && t.qualification_status !== qualFilter) return false;
-    if (safetyFilter !== 'ALL' && t.safety_status !== safetyFilter) return false;
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = t.name.toLowerCase().includes(q);
-      const matchSymbol = t.symbol.toLowerCase().includes(q);
-      const matchMint = t.mint.toLowerCase().includes(q);
-      const matchCreator = t.creator_wallet.toLowerCase().includes(q);
-      return matchName || matchSymbol || matchMint || matchCreator;
-    }
-    return true;
+  const filteredTokens = tokens.filter((token) => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    return token.name.toLowerCase().includes(query) ||
+      token.symbol.toLowerCase().includes(query) ||
+      token.mint.toLowerCase().includes(query) ||
+      token.creator_wallet.toLowerCase().includes(query);
   });
 
-  const sortedTokens = [...filteredTokens].sort((a, b) => {
-    if (sortField === 'liquidity_usd') {
-      return sortAsc ? a.liquidity_usd - b.liquidity_usd : b.liquidity_usd - a.liquidity_usd;
-    }
-    if (sortField === 'bonding_curve_progress_pct') {
-      return sortAsc
-        ? a.bonding_curve_progress_pct - b.bonding_curve_progress_pct
-        : b.bonding_curve_progress_pct - a.bonding_curve_progress_pct;
-    }
-    const timeA = new Date(a.launch_time).getTime();
-    const timeB = new Date(b.launch_time).getTime();
-    return sortAsc ? timeA - timeB : timeB - timeA;
-  });
-
-  const toggleSort = (field: typeof sortField) => {
-    if (sortField === field) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortField(field);
-      setSortAsc(false);
+  const copyMint = async (event: React.MouseEvent, mint: string) => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(mint);
+      setCopiedMint(mint);
+      window.setTimeout(() => setCopiedMint(null), 1600);
+    } catch {
+      setCopiedMint(null);
     }
   };
 
-  const renderSafetyBadge = (status: SafetyRating) => {
-    switch (status) {
-      case 'verified':
-        return (
-          <span className="flex items-center gap-1 text-emerald-400 font-mono text-[11px]">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>VERIFIED</span>
-          </span>
-        );
-      case 'warning':
-        return (
-          <span className="flex items-center gap-1 text-amber-400 font-mono text-[11px]">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span>WARNING</span>
-          </span>
-        );
-      case 'danger':
-      default:
-        return (
-          <span className="flex items-center gap-1 text-red-400 font-mono text-[11px]">
-            <ShieldX className="w-3.5 h-3.5" />
-            <span>HIGH RISK</span>
-          </span>
-        );
-    }
+  const safety = (status: string) => {
+    if (status === 'verified') return <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400"><ShieldCheck className="h-3 w-3" /> SAFE</span>;
+    if (status === 'warning') return <span className="inline-flex items-center gap-1 text-[9px] text-amber-400"><ShieldAlert className="h-3 w-3" /> WARNING</span>;
+    return <span className="inline-flex items-center gap-1 text-[9px] text-red-400"><ShieldX className="h-3 w-3" /> HIGH RISK</span>;
   };
 
-  const renderQualBadge = (status: QualificationStatus) => {
-    switch (status) {
-      case 'bought_paper':
-        return (
-          <span className="px-2 py-0.5 rounded bg-emerald-950/50 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-medium">
-            BOUGHT PAPER
-          </span>
-        );
-      case 'qualified':
-        return (
-          <span className="px-2 py-0.5 rounded bg-cyan-950/50 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono font-medium">
-            QUALIFIED
-          </span>
-        );
-      case 'under_analysis':
-        return (
-          <span className="px-2 py-0.5 rounded bg-[#1e1e1e] text-[#a3a3a3] border border-white/10 text-[10px] font-mono">
-            ANALYZING
-          </span>
-        );
-      case 'rejected':
-        return (
-          <span className="px-2 py-0.5 rounded bg-red-950/40 text-red-300 border border-red-800/40 text-[10px] font-mono">
-            REJECTED
-          </span>
-        );
-      case 'newly_detected':
-      default:
-        return (
-          <span className="px-2 py-0.5 rounded bg-[#1a1a1a] text-white border border-white/10 text-[10px] font-mono">
-            NEW
-          </span>
-        );
-    }
-  };
-
-  const launchPipeline = (mint: string) => {
-    const related = events.filter((event) => event.token_mint === mint || event.data?.mint_address === mint);
-    const scan = related.find((event) => event.event_type === 'token_scan_update');
-    const buy = related.find((event) => event.event_type === 'paper_buy_executed');
-    const buyFailed = related.find((event) => event.event_type === 'paper_buy_failed');
-    const strategyRejected = related.find((event) => event.event_type === 'strategy_rejected_token');
-    const scanning = related.some((event) => event.event_type === 'token_scan_started') && !scan;
-    const decision = String(scan?.data?.decision || scan?.data?.status || '').toUpperCase();
-    const status = buy ? 'BOUGHT PAPER' : buyFailed ? 'BUY FAILED' : strategyRejected || decision === 'REJECTED' ? 'REJECTED' : decision === 'APPROVED' ? 'APPROVED' : scan ? 'UNVERIFIED' : scanning ? 'SCANNING' : 'DETECTED';
-    const reason = buy ? String(buy.data?.amount_sol ? 'Paper buy completed: ' + buy.data.amount_sol + ' SOL' : 'Paper buy completed successfully.') : buyFailed ? String(buyFailed.data?.reason || buyFailed.data?.message || 'Paper buy failed.') : strategyRejected ? String(strategyRejected.data?.reason || strategyRejected.data?.message || 'Rejected by the strategy rules.') : String(scan?.data?.decision_reason || scan?.data?.reason || scan?.data?.message || (scan ? 'Scan completed; review the report before trading.' : scanning ? 'Security checks are running.' : 'Token launch confirmed.'));
-    return { status, reason };
+  const qualification = (status: string) => {
+    const styles: Record<string, string> = {
+      qualified: 'text-emerald-400',
+      bought_paper: 'text-emerald-300',
+      under_analysis: 'text-amber-300',
+      rejected: 'text-red-400',
+      newly_detected: 'text-white/45',
+    };
+    const labels: Record<string, string> = {
+      qualified: 'APPROVED',
+      bought_paper: 'PAPER ENTRY',
+      under_analysis: 'SCANNING',
+      rejected: 'REJECTED',
+      newly_detected: 'DETECTED',
+    };
+    return <span className={`text-[9px] font-semibold tracking-wide ${styles[status] || 'text-white/45'}`}>{labels[status] || status.replace(/_/g, ' ').toUpperCase()}</span>;
   };
 
   return (
-    <div className="w-full text-white select-none">
-      {/* 1. Header Strip (Full Width) */}
-      <div className="w-full border-b border-white/[0.08] bg-black backdrop-blur-md px-4 lg:px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm sm:text-base font-mono font-bold text-white tracking-wide uppercase">
-              Live Token Discovery Feed
-            </h1>
-            <span className="text-[10px] font-mono text-emerald-400 font-semibold glass-icon px-2 py-0.5 rounded-full">
-              RUST BACKEND STREAM
-            </span>
-          </div>
-          <p className="text-[11px] font-mono text-[#737373] mt-0.5">
-            Confirmed token launches and their latest real security-scan status. Internal Solana network notifications are hidden.
-          </p>
+    <main className="min-h-full w-full bg-[#080808] px-3 pb-5 pt-3 text-white sm:px-5">
+      <header className="mb-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[13px] font-semibold tracking-wide text-white">Live</h1>
+          <p className="mt-0.5 text-[9px] text-white/35">New token activity</p>
         </div>
+        <div className="shrink-0 text-[9px] tabular-nums text-white/40">{filteredTokens.length} TOKENS</div>
+      </header>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 text-[#737373] absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search mint, symbol, dev wallet..."
-            className="glass-panel-subtle rounded-lg pl-8 pr-3 py-1.5 text-xs font-mono text-white placeholder-[#525252] focus:outline-none focus:border-white/20 w-full sm:w-64"
-          />
-        </div>
+      <div className="relative mb-3">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/30" />
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search token or mint"
+          className="h-9 w-full rounded-lg border border-white/[0.07] bg-[#101010] pl-9 pr-3 text-[11px] text-white outline-none placeholder:text-white/25 focus:border-white/20"
+        />
       </div>
 
-      <section className="px-4 lg:px-6 py-4 border-b border-white/[0.08] bg-black">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-white">Confirmed launch records</h2>
-          <span className="text-[10px] font-mono text-[#737373]">{launches.length} records loaded</span>
+      {filteredTokens.length === 0 ? (
+        <div className="flex min-h-36 flex-col items-center justify-center rounded-lg border border-white/[0.06] bg-[#0d0d0d] px-4 text-center">
+          <p className="text-[11px] font-medium text-white/65">{searchQuery ? 'No matching tokens' : 'Waiting for live tokens'}</p>
+          <p className="mt-1 text-[9px] text-white/30">{searchQuery ? 'Try another name, symbol, or mint address.' : 'New discoveries will appear here automatically.'}</p>
         </div>
-        {launches.length === 0 ? (
-          <div className="py-8 text-center text-xs font-mono text-[#737373]">
-            No launch records received yet. This list populates from the backend database and live launch events.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-[11px] font-mono">
-              <thead className="text-[#737373] uppercase border-b border-white/[0.08]">
-                <tr><th className="py-2 pr-3">Mint address</th><th className="py-2 px-3">Creator</th><th className="py-2 px-3">Pipeline status</th><th className="py-2 px-3">Scan result / reason</th><th className="py-2 px-3">Detected</th><th className="py-2 pl-3 text-right">Transaction</th></tr>
-              </thead>
-              <tbody>
-                {launches.map((launch) => (
-                  <tr key={launch.id} className="border-b border-white/[0.05] hover:bg-white/[0.02]">
-                    <td className="py-2.5 pr-3 text-white break-all max-w-[240px]">{launch.mint_address}</td>
-                    <td className="py-2.5 px-3 text-[#a3a3a3] break-all max-w-[180px]">{launch.creator_address || 'Not supplied'}</td>
-                    <td className="py-2.5 px-3"><span className="inline-flex px-2 py-1 rounded border border-white/10 bg-white/[0.04] text-[#d4d4d4] text-[10px] font-semibold">{launchPipeline(launch.mint_address).status}</span></td>
-                    <td className="py-2.5 px-3 text-[#a3a3a3] max-w-[320px] whitespace-normal">{launchPipeline(launch.mint_address).reason}</td>
-                    <td className="py-2.5 px-3 text-[#a3a3a3] whitespace-nowrap">{new Date(launch.detected_at).toLocaleString()}</td>
-                    <td className="py-2.5 pl-3 text-right"><a className="text-cyan-400 hover:text-white" href={`https://solscan.io/tx/${launch.signature}`} target="_blank" rel="noopener noreferrer">View TX ↗</a></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* 2. Filter Bar (Full Width) */}
-      <div className="w-full border-b border-white/[0.08] bg-black backdrop-blur-sm px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          {/* Venue filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[#737373] text-[11px] uppercase">Venue:</span>
-            <div className="flex items-center p-0.5 rounded-lg glass-panel-subtle">
-              {(['ALL', 'pump.fun', 'raydium', 'pumpswap'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setVenueFilter(v)}
-                  className={`px-2 py-0.5 rounded-md text-[11px] transition-all ${
-                    venueFilter === v ? 'glass-card text-white font-medium shadow-sm' : 'text-[#8e8e93] hover:text-white'
-                  }`}
-                >
-                  {v === 'ALL' ? 'All Venues' : v}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Qualification status filter */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[#737373] text-[11px] uppercase">Strategy:</span>
-            <div className="flex items-center p-0.5 rounded-lg glass-panel-subtle">
-              {(['ALL', 'qualified', 'bought_paper', 'rejected', 'under_analysis'] as const).map((q) => (
-                <button
-                  key={q}
-                  onClick={() => setQualFilter(q)}
-                  className={`px-2 py-0.5 rounded-md text-[11px] transition-all ${
-                    qualFilter === q ? 'glass-card text-white font-medium shadow-sm' : 'text-[#8e8e93] hover:text-white'
-                  }`}
-                >
-                  {q === 'ALL' ? 'All' : q.replace('_', ' ')}
-                </button>
-              ))}
-            </div>
-          </div>
+      ) : (
+        <div className="space-y-1.5">
+          {filteredTokens.map((token) => (
+            <article
+              key={token.mint}
+              onClick={() => openTokenDetailByMint(token.mint)}
+              className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-white/[0.06] bg-[#101010] px-2.5 py-2 transition-colors hover:border-white/[0.12] hover:bg-[#141414]"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-[#202020] text-[10px] font-semibold text-white/75">
+                {token.symbol.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-[11px] font-semibold text-white">{token.name}</span>
+                  <span className="shrink-0 text-[9px] text-white/35">${token.symbol}</span>
+                </div>
+                <div className="mt-1 flex min-w-0 items-center gap-2">
+                  {qualification(token.qualification_status)}
+                  <span className="truncate text-[8px] text-white/25">{token.venue}</span>
+                  {safety(token.safety_status)}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-[10px] font-medium tabular-nums text-white">${token.current_price_usd.toFixed(6)}</div>
+                <div className="mt-1 text-[8px] tabular-nums text-white/35">MC ${token.market_cap_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+              </div>
+              <button
+                type="button"
+                onClick={(event) => copyMint(event, token.mint)}
+                aria-label="Copy mint address"
+                className="ml-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/75"
+              >
+                {copiedMint === token.mint ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              </button>
+            </article>
+          ))}
         </div>
-
-        {/* Total found */}
-        <div className="text-[#737373] text-xs tabular-nums">
-          Showing <span className="text-white font-bold">{sortedTokens.length}</span> tokens
-        </div>
-      </div>
-
-      {/* 3. Full-Width Edge-to-Edge Data Table (Directly on Main Background) */}
-      <div className="w-full overflow-x-auto">
-        <table className="w-full text-left text-xs font-mono">
-          <thead>
-            <tr className="text-[#8e8e93] bg-white/[0.02] border-b border-white/[0.08] uppercase text-[11px] select-none">
-              <th className="py-3 px-4 font-semibold">Token / Mint</th>
-              <th className="py-3 px-3 font-semibold">Creator Wallet</th>
-              <th
-                className="py-3 px-3 font-semibold cursor-pointer hover:text-white"
-                onClick={() => toggleSort('launch_time')}
-              >
-                <div className="flex items-center gap-1">
-                  <span>Age / Launch</span>
-                  <ArrowUpDown className="w-3 h-3 text-[#525252]" />
-                </div>
-              </th>
-              <th className="py-3 px-3 font-semibold text-right">Price (USD)</th>
-              <th className="py-3 px-3 font-semibold text-right">Market Cap</th>
-              <th
-                className="py-3 px-3 font-semibold text-right cursor-pointer hover:text-white"
-                onClick={() => toggleSort('liquidity_usd')}
-              >
-                <div className="flex items-center justify-end gap-1">
-                  <span>Liquidity</span>
-                  <ArrowUpDown className="w-3 h-3 text-[#525252]" />
-                </div>
-              </th>
-              <th className="py-3 px-3 font-semibold text-right">5m Volume</th>
-              <th className="py-3 px-3 font-semibold text-center">Buys / Sells</th>
-              <th
-                className="py-3 px-3 font-semibold text-right cursor-pointer hover:text-white"
-                onClick={() => toggleSort('bonding_curve_progress_pct')}
-              >
-                <div className="flex items-center justify-end gap-1">
-                  <span>Bonding Curve</span>
-                  <ArrowUpDown className="w-3 h-3 text-[#525252]" />
-                </div>
-              </th>
-              <th className="py-3 px-3 font-semibold">Venue</th>
-              <th className="py-3 px-3 font-semibold">Safety</th>
-              <th className="py-3 px-3 font-semibold">Strategy</th>
-              <th className="py-3 px-4 font-semibold text-right">Quick Buy</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.04]">
-            {sortedTokens.map((t) => {
-              const launchAgoSec = Math.floor((Date.now() - new Date(t.launch_time).getTime()) / 1000);
-              const isRecent = launchAgoSec < 120;
-
-              return (
-                <tr
-                  key={t.mint}
-                  onClick={() => openTokenDetailByMint(t.mint)}
-                  className="hover:bg-white/[0.04] transition-colors cursor-pointer group"
-                >
-                  {/* Token identity */}
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-lg glass-icon flex items-center justify-center font-bold text-white text-[11px] relative">
-                        {t.symbol.slice(0, 3)}
-                        {isRecent && (
-                          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-black" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-bold text-white text-xs flex items-center gap-1.5">
-                          <span>${t.symbol}</span>
-                          {t.bonding_curve_progress_pct >= 85 && (
-                            <span className="flex items-center text-amber-400 text-[10px]" title="Near Raydium Migration!">
-                              <Flame className="w-3 h-3 fill-amber-400" />
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-[#737373] truncate max-w-[110px]">{t.name}</div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Creator */}
-                  <td className="py-3.5 px-3 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-[#8e8e93] text-[11px]">
-                      <span>{t.creator_wallet.slice(0, 4)}...{t.creator_wallet.slice(-4)}</span>
-                      <button
-                        onClick={(e) => handleCopy(e, t.creator_wallet)}
-                        title="Copy creator address"
-                        className="p-1 hover:text-white rounded hover:bg-white/10"
-                      >
-                        {copiedMint === t.creator_wallet ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <Copy className="w-3 h-3 text-[#525252]" />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-
-                  {/* Launch age */}
-                  <td className="py-3.5 px-3 whitespace-nowrap text-[#a3a3a3] tabular-nums">
-                    {launchAgoSec < 60
-                      ? `${launchAgoSec}s ago`
-                      : `${Math.floor(launchAgoSec / 60)}m ${launchAgoSec % 60}s ago`}
-                  </td>
-
-                  {/* Current price */}
-                  <td className="py-3.5 px-3 text-right tabular-nums font-semibold text-white whitespace-nowrap">
-                    ${t.current_price_usd.toFixed(6)}
-                  </td>
-
-                  {/* Market cap */}
-                  <td className="py-3.5 px-3 text-right tabular-nums text-[#a3a3a3] whitespace-nowrap">
-                    ${t.market_cap_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </td>
-
-                  {/* Liquidity */}
-                  <td className="py-3.5 px-3 text-right tabular-nums text-white whitespace-nowrap font-medium">
-                    ${t.liquidity_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </td>
-
-                  {/* Volume */}
-                  <td className="py-3.5 px-3 text-right tabular-nums text-[#a3a3a3] whitespace-nowrap">
-                    ${t.volume_5m_usd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </td>
-
-                  {/* Buys / Sells */}
-                  <td className="py-3.5 px-3 text-center tabular-nums whitespace-nowrap text-[11px]">
-                    <span className="text-emerald-400 font-semibold">{t.tx_buys_5m}</span>
-                    <span className="text-[#525252] mx-1">/</span>
-                    <span className="text-red-400">{t.tx_sells_5m}</span>
-                  </td>
-
-                  {/* Bonding curve */}
-                  <td className="py-3.5 px-3 text-right tabular-nums whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="w-14 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            t.bonding_curve_progress_pct > 80
-                              ? 'bg-amber-400'
-                              : 'bg-emerald-400'
-                          }`}
-                          style={{ width: `${Math.min(100, t.bonding_curve_progress_pct)}%` }}
-                        />
-                      </div>
-                      <span className="text-white font-medium text-[11px]">
-                        {t.bonding_curve_progress_pct.toFixed(0)}%
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Venue */}
-                  <td className="py-3.5 px-3 whitespace-nowrap">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] glass-icon font-mono uppercase text-[#a3a3a3]">
-                      {t.venue}
-                    </span>
-                  </td>
-
-                  {/* Safety */}
-                  <td className="py-3.5 px-3 whitespace-nowrap">
-                    {renderSafetyBadge(t.safety_status)}
-                  </td>
-
-                  {/* Strategy */}
-                  <td className="py-3.5 px-3 whitespace-nowrap">
-                    {renderQualBadge(t.qualification_status)}
-                  </td>
-
-                  {/* Action */}
-                  <td className="py-3.5 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      disabled title="Paper order endpoint is not implemented yet"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg glass-icon text-xs text-[#737373] opacity-50 cursor-not-allowed font-mono"
-                    >
-                      <ShoppingBag className="w-3 h-3 text-emerald-400" />
-                      <span>Orders unavailable</span>
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      )}
+    </main>
   );
 };
