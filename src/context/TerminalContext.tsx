@@ -54,7 +54,9 @@ const emptySummary: DashboardSummary = {
 };
 const emptyStatus: EngineStatus = {
   running: false, operating_mode: 'PAPER', network: 'mainnet-beta',
-  solana_connected: false, rpc_endpoint: '', rpc_latency_ms: 0,
+  solana_connected: false, pumpswap_connected: false, pumpswap_reconnection_count: 0,
+  pumpswap_last_error: '', solana_last_error: '', solana_last_message_at: '',
+  rpc_endpoint: '', rpc_latency_ms: 0,
   ws_status: 'disconnected', ws_endpoint: '', provider_name: 'Not connected',
   last_heartbeat: '', incoming_event_rate: 0, reconnection_count: 0,
   database_status: 'unknown', tokens_detected_today: 0,
@@ -122,6 +124,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setEngineStatus((previous) => ({ ...previous, ws_status: status }));
     });
     const unsubscribeEvents = wsService.subscribe((event) => {
+      if (event.event_type === 'launch_snapshot') {
+        const snapshot = Array.isArray(event.data.launches) ? event.data.launches : [];
+        setLaunches(snapshot as TokenLaunchRecord[]);
+        return;
+      }
       setEvents((previous) => {
         const severity = String(event.data?.severity || '').toLowerCase();
         const isRepeatableDiagnostic =
@@ -156,6 +163,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setEngineStatus((previous) => ({
           ...previous,
           solana_connected: Boolean(stream.connected),
+          pumpswap_connected: Boolean(event.data.solana_streams?.pumpswap?.connected),
+          pumpswap_reconnection_count: Number(event.data.solana_streams?.pumpswap?.reconnect_count || 0),
+          pumpswap_last_error: String(event.data.solana_streams?.pumpswap?.last_error || ''),
+          solana_last_error: String(stream.last_error || ''),
+          solana_last_message_at: String(stream.last_message_at || ''),
           running: !Boolean(engine.paused),
           strategy_paused: Boolean(engine.paused),
           operating_mode: 'PAPER',
