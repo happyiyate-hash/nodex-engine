@@ -21,6 +21,166 @@ interface LaunchView {
   scanStarted: boolean;
 }
 
+const DEMO_TOKEN_SEEDS = [
+  {
+    "name": "Aether",
+    "symbol": "AETH",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Nova Protocol",
+    "symbol": "NOVA",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Velora",
+    "symbol": "VLR",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Orbit Labs",
+    "symbol": "ORBT",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Nebula",
+    "symbol": "NEB",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Solstice",
+    "symbol": "SOLT",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Kairo",
+    "symbol": "KAI",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Prism",
+    "symbol": "PRSM",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Vertex",
+    "symbol": "VRTX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Lumen",
+    "symbol": "LMN",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Driftwood",
+    "symbol": "DRFT",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Axiom",
+    "symbol": "AXM",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Monarch",
+    "symbol": "MNCH",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Helix",
+    "symbol": "HLX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Aurora",
+    "symbol": "AURA",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Quanta",
+    "symbol": "QNT",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Solis",
+    "symbol": "SOLS",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Cipher",
+    "symbol": "CIPH",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Flux",
+    "symbol": "FLUX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Zenith",
+    "symbol": "ZEN",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Mirage",
+    "symbol": "MRG",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Atlas",
+    "symbol": "ATLS",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Onyx",
+    "symbol": "ONYX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Pulse",
+    "symbol": "PLS",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Cinder",
+    "symbol": "CNDR",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Echo",
+    "symbol": "ECHO",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Vanta",
+    "symbol": "VNT",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Sable",
+    "symbol": "SABL",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Lyra",
+    "symbol": "LYRA",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Astra",
+    "symbol": "ASTR",
+    "outcome": "QUALIFIED"
+  }
+] as const;
+
+interface DemoLaunchView extends LaunchView {
+  demo: true;
+  progress: number;
+  scanStage: string;
+  arrivalKey: string;
+}
+
 const REEL_DIGITS = Array.from({ length: 50 }, (_, index) => String(index % 10));
 
 const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) => {
@@ -153,6 +313,7 @@ export const OverviewPage: React.FC = () => {
   const [balanceDirection, setBalanceDirection] = useState<ChangeDirection>(null);
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [search, setSearch] = useState('');
+  const [demoLaunches, setDemoLaunches] = useState<DemoLaunchView[]>([]);
   const updateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -183,9 +344,79 @@ export const OverviewPage: React.FC = () => {
     };
   }, []);
 
-  const launchViews = useMemo(
-    () => launches.map((launch) => getLaunchView(launch, events)),
+  // Demo-only stream: 30 fixed sample tokens arrive one by one. Each token
+  // advances on its own clock so several scans overlap naturally.
+  useEffect(() => {
+    const startedAt = Date.now();
+    const arrivalInterval = 900;
+    const scanDuration = 5200;
+    const refresh = () => {
+      const elapsed = Date.now() - startedAt;
+      const totalArrivals = Math.floor(elapsed / arrivalInterval) + 1;
+      const firstArrival = Math.max(0, totalArrivals - 30);
+      const visible: DemoLaunchView[] = [];
+
+      for (let arrival = firstArrival; arrival < totalArrivals; arrival += 1) {
+        const seedIndex = arrival % DEMO_TOKEN_SEEDS.length;
+        const seed = DEMO_TOKEN_SEEDS[seedIndex];
+        const age = elapsed - arrival * arrivalInterval;
+        const cycle = Math.floor(arrival / DEMO_TOKEN_SEEDS.length);
+        const detectedAt = new Date(Date.now() - age).toISOString();
+        const status: PipelineStatus = age < 650
+          ? 'DETECTED'
+          : age < scanDuration
+            ? 'ANALYZING'
+            : seed.outcome;
+        const progress = status === 'DETECTED'
+          ? 0
+          : status === 'ANALYZING'
+            ? Math.min(94, Math.round(((age - 650) / (scanDuration - 650)) * 100))
+            : 100;
+        const scanStage = status === 'DETECTED'
+          ? 'New launch received'
+          : status === 'ANALYZING'
+            ? progress < 28 ? 'Checking token authorities' : progress < 55 ? 'Inspecting holder distribution' : progress < 82 ? 'Reviewing liquidity signals' : 'Finalizing risk assessment'
+            : status === 'QUALIFIED'
+              ? 'Passed demo strategy filters'
+              : 'Demo risk checks failed';
+
+        const mint = `DEMO-${seed.symbol}-${cycle}-${arrival}`;
+        const launch: TokenLaunchRecord = {
+          id: mint,
+          mint_address: mint,
+          creator_address: null,
+          source: 'pump.fun · demo',
+          signature: mint,
+          slot: 0,
+          detected_at: detectedAt,
+        };
+        visible.push({
+          launch,
+          status,
+          reason: scanStage,
+          updatedAt: new Date(Date.now() - Math.max(0, age - 650)).toISOString(),
+          scanStarted: age >= 650,
+          demo: true,
+          progress,
+          scanStage,
+          arrivalKey: mint,
+        });
+      }
+      setDemoLaunches(visible.reverse());
+    };
+
+    refresh();
+    const timer = setInterval(refresh, 250);
+    return () => clearInterval(timer);
+  }, []);
+
+  const realLaunchViews = useMemo(
+    () => launches.map((launch) => ({ ...getLaunchView(launch, events), demo: false as const, progress: 0, scanStage: '', arrivalKey: launch.id || launch.signature })),
     [launches, events]
+  );
+  const launchViews = useMemo(
+    () => [...demoLaunches, ...realLaunchViews].sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
+    [demoLaunches, realLaunchViews]
   );
   const counts = useMemo(() => ({
     detected: launchViews.length,
@@ -202,7 +433,8 @@ export const OverviewPage: React.FC = () => {
       const query = search.trim().toLowerCase();
       return item.launch.mint_address.toLowerCase().includes(query) ||
         (item.launch.creator_address || '').toLowerCase().includes(query) ||
-        item.launch.source.toLowerCase().includes(query);
+        item.launch.source.toLowerCase().includes(query) ||
+        ('demo' in item && item.demo && DEMO_TOKEN_SEEDS.some((seed) => seed.name.toLowerCase().includes(query) || seed.symbol.toLowerCase().includes(query)));
     }
     return true;
   });
@@ -220,6 +452,7 @@ export const OverviewPage: React.FC = () => {
 
   return (
     <div className="min-h-full w-full bg-black">
+      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
       <section aria-label="Overview workspace" className="relative flex h-[82dvh] min-h-[560px] w-full flex-col overflow-hidden rounded-b-[30px] rounded-t-[30px] border border-white/[0.13] border-b-white/[0.22] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.07)] sm:h-[84dvh] sm:rounded-[34px]">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.16] to-transparent" />
 
@@ -276,7 +509,7 @@ export const OverviewPage: React.FC = () => {
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <div>
               <h2 className="text-[12px] font-semibold text-white">Token discoveries</h2>
-              <p className="mt-0.5 text-[9px] text-white/35">Newest launches first</p>
+              <p className="mt-0.5 text-[9px] text-white/35">Newest launches first · Demo stream active</p>
             </div>
             <div className="relative w-[42%] max-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
@@ -308,8 +541,12 @@ export const OverviewPage: React.FC = () => {
               </div>
             ) : (
               <div className="divide-y divide-white/[0.055]">
-                {filteredLaunches.map(({ launch, status, reason, updatedAt }) => (
-                  <article key={launch.id || launch.signature} className="px-3 py-3 transition-colors hover:bg-white/[0.018]">
+                {filteredLaunches.map((item) => {
+                  const { launch, status, reason, updatedAt } = item;
+                  const demo = 'demo' in item && item.demo;
+                  const demoSeed = demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === launch.mint_address.split('-')[1]) : null;
+                  return (
+                  <article key={demo ? item.arrivalKey : launch.id || launch.signature} className={`px-3 py-3 transition-colors hover:bg-white/[0.018] ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}>
                     <div className="flex items-start gap-2.5">
                       <div className={`relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border ${status === 'ANALYZING' ? 'border-amber-500/20 bg-amber-500/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
                         {status === 'ANALYZING' ? <LoaderCircle className="h-4 w-4 animate-spin text-[#d2b47c]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
@@ -317,30 +554,27 @@ export const OverviewPage: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 items-center justify-between gap-2">
-                          <div className="truncate text-[11px] font-semibold tracking-wide text-white">{launch.mint_address.slice(0, 6)}…{launch.mint_address.slice(-5)}</div>
+                          <div className="flex min-w-0 items-center gap-1.5"><div className="truncate text-[11px] font-semibold tracking-wide text-white">{demoSeed ? demoSeed.name : `${launch.mint_address.slice(0, 6)}…${launch.mint_address.slice(-5)}`}</div>{demoSeed && <span className="shrink-0 text-[8px] text-white/30">{demoSeed.symbol}</span>}</div>
                           <span className={`shrink-0 rounded-md border px-1.5 py-1 text-[8px] font-semibold tracking-[0.04em] ${statusStyle[status]}`}>{status}</span>
                         </div>
                         <div className="mt-1 flex items-center gap-1.5 text-[9px] text-white/35">
-                          <span>{launch.source || 'Solana'}</span>
+                          <span>{demo ? 'SIMULATED LAUNCH' : launch.source || 'Solana'}</span>
                           <span className="text-white/15">·</span>
                           <span>{timeAgo(launch.detected_at)}</span>
                         </div>
                         <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-white/45">{reason}</p>
+                        {demo && status === 'ANALYZING' && <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-[#d2b47c] transition-[width] duration-300 ease-out" style={{ width: `${item.progress}%` }} /></div>}
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <span className="text-[8px] text-white/25">Updated {timeAgo(updatedAt)}</span>
                           <div className="flex items-center gap-3">
-                            <button onClick={(event) => copyMint(event, launch.mint_address)} className="inline-flex items-center gap-1 text-[9px] text-white/40 hover:text-white/80" aria-label="Copy token mint">
-                              <Copy className="h-3 w-3" /> Copy mint
-                            </button>
-                            <a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] text-white/40 hover:text-white/80">
-                              Inspect <ExternalLink className="h-3 w-3" />
-                            </a>
+                            {demo ? <span className="text-[8px] font-medium tracking-[0.08em] text-white/25">DEMO ONLY</span> : <><button onClick={(event) => copyMint(event, launch.mint_address)} className="inline-flex items-center gap-1 text-[9px] text-white/40 hover:text-white/80" aria-label="Copy token mint"><Copy className="h-3 w-3" /> Copy mint</button><a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] text-white/40 hover:text-white/80">Inspect <ExternalLink className="h-3 w-3" /></a></>}
                           </div>
                         </div>
                       </div>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
