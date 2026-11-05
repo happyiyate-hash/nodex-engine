@@ -580,14 +580,14 @@ export const OverviewPage: React.FC = () => {
                       <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[8px] font-semibold tracking-wide ${statusStyle[status]}`}>{status}</span>
                       <span className="ml-0.5 text-[10px] text-white/30">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
                     </button>
-                    {status === 'ANALYZING' && (
+                    {(status === 'ANALYZING' || status === 'QUALIFIED' || status === 'PAPER ENTRY' || status === 'REJECTED' || status === 'BUY FAILED') && (
                       <div className="px-2 pb-2 pt-0.5">
                         <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="truncate text-[8px] text-[#b79a63]/80">{scanMessage}</span>
-                          <span className="shrink-0 text-[8px] tabular-nums text-white/30">{scanPercent}%</span>
+                          <span className={`truncate text-[8px] ${status === 'ANALYZING' ? 'text-[#b79a63]/80' : status === 'REJECTED' || status === 'BUY FAILED' ? 'text-[#c77b7b]/80' : 'text-[#83b982]/80'}`}>{status === 'ANALYZING' ? scanMessage : status === 'REJECTED' || status === 'BUY FAILED' ? 'Security checks rejected' : 'Security checks completed'}</span>
+                          <span className="shrink-0 text-[8px] tabular-nums text-white/30">{status === 'ANALYZING' ? scanPercent : 100}%</span>
                         </div>
                         <div className="h-[3px] overflow-hidden rounded-full bg-white/[0.07]">
-                          <div className="h-full rounded-full bg-[#8c754c] transition-[width] duration-500 ease-out" style={{ width: `${scanPercent}%` }} />
+                          <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${status === 'ANALYZING' ? 'bg-[#8c754c]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'bg-[#a34e4e]' : 'bg-[#4f8d62]'}`} style={{ width: `${status === 'ANALYZING' ? scanPercent : 100}%` }} />
                         </div>
                       </div>
                     )}
