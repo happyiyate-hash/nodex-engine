@@ -42,7 +42,7 @@ const MainLayout: React.FC = () => {
         {renderActiveView()}
       </main>
 
-      <MobileNav />
+      {activeTab !== 'event_monitor' && <MobileNav />}
     </div>
   );
 };
