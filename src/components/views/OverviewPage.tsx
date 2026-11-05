@@ -15,7 +15,7 @@ export const OverviewPage: React.FC = () => {
         </div>
       )}
 
-      <section className="glass-panel rounded-xl px-3 py-2.5 sm:px-4">
+      <section className="glass-panel rounded-2xl px-3 py-3 sm:px-4 sm:py-3.5">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-neutral-400">
             <Activity className="h-3.5 w-3.5 text-emerald-400" /> Engine
@@ -65,7 +65,7 @@ export const OverviewPage: React.FC = () => {
         </div>
 
         {launches.length === 0 ? (
-          <div className="rounded-xl border border-white/[0.07] px-4 py-8 text-center">
+          <div className="glass-panel rounded-2xl px-4 py-8 text-center">
             <Layers className="mx-auto h-5 w-5 text-neutral-700" />
             <p className="mt-2 text-xs text-neutral-400">No token launches received yet</p>
             <p className="mt-1 text-[10px] text-neutral-600">New detections will appear here.</p>
@@ -73,7 +73,7 @@ export const OverviewPage: React.FC = () => {
         ) : (
           <div className="flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-1">
             {launches.map((launch) => (
-              <article key={launch.id} className="w-[220px] shrink-0 snap-start rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5">
+              <article key={launch.id} className="w-[220px] shrink-0 snap-start glass-card rounded-2xl px-3 py-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] font-mono uppercase text-emerald-300">Detected</span>
                   <span className="text-[9px] text-neutral-600">Slot {launch.slot || '—'}</span>
