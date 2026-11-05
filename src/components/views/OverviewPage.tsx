@@ -607,6 +607,7 @@ export const OverviewPage: React.FC = () => {
                       </div>
                     )}
                   </article>
+                  );
                 })}
               </div>
             )}
