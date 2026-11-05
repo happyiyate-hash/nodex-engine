@@ -22,6 +22,7 @@ export const PositionsPage: React.FC = () => {
   const [filterMode, setFilterMode] = useState<'all' | 'open' | 'closed' | 'profitable' | 'losing'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedMint, setCopiedMint] = useState<string | null>(null);
+  const [expandedPositions, setExpandedPositions] = useState<string[]>([]);
 
   const handleCopyMint = (e: React.MouseEvent, mint: string) => {
     e.stopPropagation();
@@ -176,67 +177,35 @@ export const PositionsPage: React.FC = () => {
             const isProfit = pos.pnl_usd >= 0;
             const isOpen = pos.status === 'OPEN';
             return (
-              <article
-                key={pos.id}
-                onClick={() => openTokenDetailByMint(pos.mint)}
-                className="px-3 py-3 active:bg-white/[0.035] transition-colors"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-9 h-9 rounded-xl glass-icon flex items-center justify-center font-bold text-white text-[11px] shrink-0">
-                      {pos.symbol.slice(0, 3)}
+              <article key={pos.id} className="border-b border-white/[0.055] px-2.5 py-2">
+                <button type="button" onClick={() => setExpandedPositions((current) => current.includes(pos.id) ? current.filter((id) => id !== pos.id) : [...current, pos.id])} className="flex min-h-[52px] w-full items-center gap-2.5 text-left" aria-expanded={expandedPositions.includes(pos.id)}>
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.035] text-[9px] font-bold text-white/80">{pos.symbol.slice(0, 3)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[11px] font-semibold text-white">{pos.symbol}/SOL</div>
+                    <div className="truncate text-[9px] text-white/35">{pos.name} · {pos.mint.slice(0, 4)}…{pos.mint.slice(-4)}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="text-[11px] font-semibold tabular-nums text-white">${pos.current_position_value_usd.toFixed(2)}</div>
+                    <div className={`text-[9px] font-medium tabular-nums ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>{isProfit ? '+' : ''}${pos.pnl_usd.toFixed(2)} · {isProfit ? '+' : ''}{pos.pnl_pct.toFixed(2)}%</div>
+                  </div>
+                  <span className="ml-1 text-[10px] text-white/30">{expandedPositions.includes(pos.id) ? '−' : '+'}</span>
+                </button>
+                {expandedPositions.includes(pos.id) && (
+                  <div className="mt-1 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-2">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      <div><div className="text-[8px] uppercase tracking-wider text-white/35">Current price</div><div className="text-[10px] font-mono text-white/80">${pos.current_price_usd.toFixed(6)}</div></div>
+                      <div><div className="text-[8px] uppercase tracking-wider text-white/35">Entry price</div><div className="text-[10px] font-mono text-white/80">${pos.entry_price_usd.toFixed(6)}</div></div>
+                      <div><div className="text-[8px] uppercase tracking-wider text-white/35">Token quantity</div><div className="text-[10px] font-mono text-white/80">{pos.amount_tokens.toLocaleString()}</div></div>
+                      <div><div className="text-[8px] uppercase tracking-wider text-white/35">Initial investment</div><div className="text-[10px] font-mono text-white/80">${pos.initial_investment_usd.toFixed(2)}</div></div>
+                      <div><div className="text-[8px] uppercase tracking-wider text-white/35">Position value</div><div className="text-[10px] font-mono text-white/80">${pos.current_position_value_usd.toFixed(2)}</div></div>
+                      <div><div className="text-[8px] uppercase tracking-wider text-white/35">Take profit / stop loss</div><div className="text-[10px] font-mono"><span className="text-emerald-400">+{pos.take_profit_target_pct}%</span><span className="text-white/25"> / </span><span className="text-red-400">-{pos.stop_loss_target_pct}%</span></div></div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white truncate">{pos.symbol}/SOL</div>
-                      <div className="text-[10px] text-[#737373] truncate">{pos.name} · {pos.mint.slice(0, 4)}...{pos.mint.slice(-4)}</div>
+                    <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2">
+                      <span className={`text-[8px] uppercase tracking-wider ${isOpen ? 'text-emerald-300' : 'text-white/40'}`}>{pos.status}</span>
+                      <button onClick={() => openTokenDetailByMint(pos.mint)} className="text-[9px] text-white/55">Token details ↗</button>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-sm font-semibold font-mono text-white tabular-nums">
-                      ${pos.current_position_value_usd.toFixed(2)}
-                    </div>
-                    <div className={`text-xs font-mono font-semibold tabular-nums ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {isProfit ? '+' : ''}${pos.pnl_usd.toFixed(2)} ({isProfit ? '+' : ''}{pos.pnl_pct.toFixed(2)}%)
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-white/[0.025] border border-white/[0.06] px-2.5 py-2">
-                  <div>
-                    <div className="text-[9px] uppercase tracking-wider text-[#737373]">Entry</div>
-                    <div className="text-[11px] font-mono text-[#d4d4d4] tabular-nums">${pos.entry_price_usd.toFixed(6)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] uppercase tracking-wider text-[#737373]">Take profit</div>
-                    <div className="text-[11px] font-mono text-emerald-400">+{pos.take_profit_target_pct}%</div>
-                  </div>
-                  <div>
-                    <div className="text-[9px] uppercase tracking-wider text-[#737373]">Stop loss</div>
-                    <div className="text-[11px] font-mono text-red-400">-{pos.stop_loss_target_pct}%</div>
-                  </div>
-                </div>
-                <div className="mt-2.5 flex items-center justify-between gap-2">
-                  <span className={`text-[9px] font-mono tracking-wide px-2 py-1 rounded border ${isOpen
-                    ? 'text-emerald-300 bg-emerald-950/30 border-emerald-500/30'
-                    : 'text-[#a3a3a3] bg-white/[0.04] border-white/10'}`}>
-                    {pos.status}
-                  </span>
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => openTokenDetailByMint(pos.mint)}
-                      className="px-3 py-1.5 rounded-lg glass-icon text-[10px] text-white font-mono"
-                    >
-                      Details
-                    </button>
-                    {isOpen && (
-                      <button
-                        disabled title="Paper close endpoint is not implemented yet"
-                        className="px-3 py-1.5 rounded-lg border border-white/10 bg-[#151515] text-[10px] text-[#737373] font-mono opacity-50 cursor-not-allowed"
-                      >
-                        Close
-                      </button>
-                    )}
-                  </div>
-                </div>
+                )}
               </article>
             );
           })
