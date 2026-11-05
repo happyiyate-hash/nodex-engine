@@ -395,6 +395,7 @@ export const OverviewPage: React.FC = () => {
       tokens: new Map(),
       positions: new Map(),
     };
+    let previousPortfolioValue = DEMO_STARTING_BALANCE;
     const timer = setInterval(() => {
       const now = Date.now();
       const elapsed = now - simulation.startedAt;
@@ -499,8 +500,17 @@ export const OverviewPage: React.FC = () => {
       setPortfolioValue(totalValue);
       setProfitLoss(pnl);
       setProfitLossPct((pnl / DEMO_STARTING_BALANCE) * 100);
-      setBalanceDirection(pnl >= 0 ? 'up' : 'down');
-      setPortfolioFlash(pnl >= 0 ? 'up' : 'down');
+      const portfolioDelta = totalValue - previousPortfolioValue;
+      if (portfolioDelta > 0.000001) {
+        setBalanceDirection('up');
+        setPortfolioFlash('up');
+      } else if (portfolioDelta < -0.000001) {
+        setBalanceDirection('down');
+        setPortfolioFlash('down');
+      } else {
+        setPortfolioFlash(null);
+      }
+      previousPortfolioValue = totalValue;
     }, 200);
     return () => { clearInterval(timer); };
   }, []);
