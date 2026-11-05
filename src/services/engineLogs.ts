@@ -16,6 +16,7 @@ export interface EngineLogEntry {
 
 const STORAGE_KEY = 'nodex-engine-logs.v1';
 const MAX_LOGS = 500;
+let fetchLoggerInstalled = false;
 
 function read(): EngineLogEntry[] {
   if (typeof window === 'undefined') return [];
@@ -27,8 +28,9 @@ function read(): EngineLogEntry[] {
 
 function publish(logs: EngineLogEntry[]) {
   if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(logs.slice(0, MAX_LOGS))); } catch { /* Storage may be full. */ }
-  window.dispatchEvent(new CustomEvent('nodex-engine-logs-updated', { detail: logs.slice(0, MAX_LOGS) }));
+  const bounded = logs.slice(0, MAX_LOGS);
+  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(bounded)); } catch { /* Storage may be full. */ }
+  window.dispatchEvent(new CustomEvent('nodex-engine-logs-updated', { detail: bounded }));
 }
 
 export function readEngineLogs(): EngineLogEntry[] { return read(); }
@@ -47,6 +49,51 @@ export function recordLiveEvent(eventType: string, payload: unknown, ok = true, 
     at: new Date().toISOString(), ok, error, response: payload,
   });
   publish(logs);
+}
+
+export function installFetchLogger() {
+  if (typeof window === 'undefined' || fetchLoggerInstalled) return;
+  fetchLoggerInstalled = true;
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    let url: URL;
+    try { url = new URL(rawUrl, window.location.href); } catch { return originalFetch(input, init); }
+    const isNodeX = /\/api\/v1\//.test(url.pathname) || url.pathname === '/health';
+    if (!isNodeX) return originalFetch(input, init);
+    const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const started = performance.now();
+    const requestBody = typeof init?.body === 'string' ? (() => {
+      try { return JSON.parse(init.body as string); } catch { return init.body; }
+    })() : null;
+    try {
+      const response = await originalFetch(input, init);
+      const bodyText = await response.clone().text().catch(() => '');
+      let responseBody: unknown = bodyText;
+      try { responseBody = bodyText ? JSON.parse(bodyText) : null; } catch { /* Preserve non-JSON response text. */ }
+      recordRequest({
+        action: `${method.toLowerCase()} ${url.pathname}`,
+        at: new Date().toISOString(),
+        durationMs: Math.round(performance.now() - started),
+        ok: response.ok,
+        status: response.status,
+        error: response.ok ? undefined : typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody),
+        request: requestBody,
+        response: responseBody,
+      });
+      return response;
+    } catch (error) {
+      recordRequest({
+        action: `${method.toLowerCase()} ${url.pathname}`,
+        at: new Date().toISOString(),
+        durationMs: Math.round(performance.now() - started),
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        request: requestBody,
+      });
+      throw error;
+    }
+  };
 }
 
 export function clearEngineLogs() { publish([]); }
