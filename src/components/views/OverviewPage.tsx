@@ -453,7 +453,7 @@ export const OverviewPage: React.FC = () => {
   return (
     <div className="min-h-full w-full bg-black">
       <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
-      <section aria-label="Overview workspace" className="relative flex h-[calc(100dvh-8px)] min-h-[560px] w-full flex-col overflow-hidden rounded-t-[30px] rounded-b-none border border-white/[0.13] border-b-white/[0.22] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.07)] sm:rounded-t-[34px]">
+      <section aria-label="Overview workspace" className="relative flex h-[82dvh] min-h-[560px] w-full flex-col overflow-hidden rounded-b-[30px] rounded-t-[30px] border border-white/[0.13] border-b-white/[0.22] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.07)] sm:h-[84dvh] sm:rounded-[34px]">
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.16] to-transparent" />
 
         <div className="shrink-0 px-3 pt-3 sm:px-4 sm:pt-4">
@@ -530,7 +530,7 @@ export const OverviewPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="mx-0.5 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[8px] border border-white/[0.07] bg-[#090909]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border border-white/[0.055] bg-[#090909]">
             {filteredLaunches.length === 0 ? (
               <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
                 <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]">
@@ -547,7 +547,7 @@ export const OverviewPage: React.FC = () => {
                   const demo = Boolean(demoItem);
                   const demoSeed = demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === launch.mint_address.split('-')[1]) : null;
                   return (
-                  <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`px-2.5 py-3 transition-colors hover:bg-white/[0.018] ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}>
+                  <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`px-3 py-3 transition-colors hover:bg-white/[0.018] ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}>
                     <div className="flex items-start gap-2.5">
                       <div className={`relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border ${status === 'ANALYZING' ? 'border-amber-500/20 bg-amber-500/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
                         {status === 'ANALYZING' ? <LoaderCircle className="h-4 w-4 animate-spin text-[#d2b47c]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
