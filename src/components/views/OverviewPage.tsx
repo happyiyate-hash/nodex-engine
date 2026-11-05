@@ -4,12 +4,14 @@ type ChangeDirection = 'up' | 'down' | null;
 
 interface RollingDigitProps {
   digit: string;
+  balanceDirection: ChangeDirection;
 }
 
-const RollingDigit: React.FC<RollingDigitProps> = ({ digit }) => {
+const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) => {
   const lastDigit = useRef(digit);
+  const frameRef = useRef<number | null>(null);
   const [sequence, setSequence] = useState<string[]>([digit]);
-  const [direction, setDirection] = useState<ChangeDirection>(null);
+  const [offset, setOffset] = useState(0);
   const [isRolling, setIsRolling] = useState(false);
 
   useLayoutEffect(() => {
@@ -19,65 +21,69 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit }) => {
     lastDigit.current = digit;
     const from = Number(previous);
     const to = Number(digit);
+    let nextSequence: string[];
 
-    // Every digit chooses its own direction. It does not inherit the
-    // direction of the overall portfolio balance.
-    if (to > from) {
-      setDirection('up');
-      setSequence(Array.from({ length: to - from + 1 }, (_, index) => String(from + index)));
-      setIsRolling(false);
-      const startTimer = window.setTimeout(() => setIsRolling(true), 20);
-      const finishTimer = window.setTimeout(() => {
-        setIsRolling(false);
-        setSequence([digit]);
-        setDirection(null);
-      }, 430);
-      return () => {
-        window.clearTimeout(startTimer);
-        window.clearTimeout(finishTimer);
-      };
+    if (from === 9 && to === 0 && balanceDirection === 'up') {
+      nextSequence = ['9', '0'];
+    } else if (from === 0 && to === 9 && balanceDirection === 'down') {
+      nextSequence = ['0', '9'];
+    } else if (to > from) {
+      nextSequence = Array.from({ length: to - from + 1 }, (_, index) => String(from + index));
+    } else if (to < from) {
+      nextSequence = Array.from({ length: from - to + 1 }, (_, index) => String(from - index));
+    } else {
+      return;
     }
 
-    if (to < from) {
-      setDirection('down');
-      setSequence(Array.from({ length: from - to + 1 }, (_, index) => String(from - index)));
-      setIsRolling(false);
-      const startTimer = window.setTimeout(() => setIsRolling(true), 20);
-      const finishTimer = window.setTimeout(() => {
-        setIsRolling(false);
-        setSequence([digit]);
-        setDirection(null);
-      }, 430);
-      return () => {
-        window.clearTimeout(startTimer);
-        window.clearTimeout(finishTimer);
-      };
-    }
-  }, [digit]);
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
 
-  if (sequence.length === 1 || direction === null) {
-    return <span className="inline-block">{digit}</span>;
+    // Keep each column exactly one digit tall. The track moves by whole em
+    // rows, so no percentage-of-track sizing gaps can appear.
+    setSequence(nextSequence);
+    setOffset(0);
+    setIsRolling(false);
+
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = requestAnimationFrame(() => {
+        setIsRolling(true);
+        setOffset(nextSequence.length - 1);
+        frameRef.current = null;
+      });
+    });
+
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+    };
+  }, [digit, balanceDirection]);
+
+  const finishRoll = (event: React.TransitionEvent<HTMLSpanElement>) => {
+    if (event.propertyName !== 'transform' || !isRolling) return;
+    setIsRolling(false);
+    setSequence([digit]);
+    setOffset(0);
+  };
+
+  if (sequence.length === 1) {
+    return <span className="inline-block h-[1em] leading-[1em]">{digit}</span>;
   }
-
-  // The track contains every intermediate digit: e.g. 1→5 rolls
-  // 1, 2, 3, 4, 5 upward; 5→3 rolls 5, 4, 3 downward.
-  const startOffset = direction === 'up' ? 0 : -(sequence.length - 1) * 100;
-  const endOffset = direction === 'up' ? -(sequence.length - 1) * 100 : 0;
-  const translate = isRolling ? endOffset : startOffset;
 
   return (
     <span className="inline-block h-[1em] overflow-hidden align-bottom">
       <span
-        className="flex flex-col"
+        onTransitionEnd={finishRoll}
+        className="flex flex-col will-change-transform"
         style={{
-          transform: `translateY(${translate}%)`,
+          transform: `translate3d(0, -${offset}em, 0)`,
           transition: isRolling
-            ? 'transform 390ms cubic-bezier(0.22, 1.25, 0.36, 1)'
+            ? 'transform 360ms cubic-bezier(0.22, 0.72, 0.25, 1)'
             : 'none',
         }}
       >
         {sequence.map((value, index) => (
-          <span className="block h-[1em] leading-[1em]" key={index}>{value}</span>
+          <span className="block h-[1em] shrink-0 leading-[1em]" key={index}>{value}</span>
         ))}
       </span>
     </span>
@@ -89,6 +95,7 @@ export const OverviewPage: React.FC = () => {
   const [portfolioValue, setPortfolioValue] = useState(12840.56);
   const [profitLoss, setProfitLoss] = useState(12.4);
   const [portfolioFlash, setPortfolioFlash] = useState<ChangeDirection>(null);
+  const [balanceDirection, setBalanceDirection] = useState<ChangeDirection>(null);
   const updateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tick = useRef(0);
@@ -97,17 +104,16 @@ export const OverviewPage: React.FC = () => {
     const movements = [-18.75, 32.4, -41.2, 55.6, -22.3, 14.8, -35.5, 48.2, -9.6, 26.1];
 
     const scheduleUpdate = () => {
-      // Randomly vary the arrival time: roughly 300 ms to 2.1 seconds.
       const delay = 300 + Math.floor(Math.random() * 1800);
       updateTimer.current = setTimeout(() => {
         const change = movements[tick.current % movements.length];
         tick.current += 1;
         const direction: ChangeDirection = change >= 0 ? 'up' : 'down';
 
+        setBalanceDirection(direction);
         setPortfolioValue((current) => Math.max(0, current + change));
         setProfitLoss((current) => current + change);
 
-        // Keep the brief balance color cue; P&L remains independently colored.
         setPortfolioFlash(null);
         if (flashTimer.current) clearTimeout(flashTimer.current);
         flashTimer.current = setTimeout(() => setPortfolioFlash(direction), 16);
@@ -176,8 +182,8 @@ export const OverviewPage: React.FC = () => {
                 <span className="mr-0.5 text-white/65">$</span>
                 {Array.from(formattedPortfolio).map((character, index) => (
                   /[0-9]/.test(character)
-                    ? <RollingDigit key={index} digit={character} />
-                    : <span className="inline-block" key={index}>{character}</span>
+                    ? <RollingDigit key={index} digit={character} balanceDirection={balanceDirection} />
+                    : <span className="inline-block h-[1em] leading-[1em]" key={index}>{character}</span>
                 ))}
               </div>
             </div>
