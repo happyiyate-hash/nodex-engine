@@ -97,3 +97,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Fixed floating glass dock for event stream actions */
+.glass-event-controls {
+  background: linear-gradient(145deg, rgba(42, 42, 42, 0.62), rgba(12, 12, 12, 0.72));
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.025);
+}
