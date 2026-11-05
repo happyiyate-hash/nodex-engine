@@ -3,37 +3,42 @@ import React, { useEffect, useRef, useState } from 'react';
 type ChangeDirection = 'up' | 'down' | null;
 
 export const OverviewPage: React.FC = () => {
-  // Demo-only market movement until the real portfolio summary is connected.
+  // Demo-only values. Each simulated update arrives independently at a varied interval.
   const [portfolioValue, setPortfolioValue] = useState(12840.56);
   const [profitLoss, setProfitLoss] = useState(12.4);
   const [portfolioFlash, setPortfolioFlash] = useState<ChangeDirection>(null);
-  const [profitLossFlash, setProfitLossFlash] = useState<ChangeDirection>(null);
-  const flashTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const updateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tick = useRef(0);
 
   useEffect(() => {
-    const movements = [-18.75, 32.4, -41.2, 55.6, -22.3, 14.8, -35.5, 48.2];
+    const movements = [-18.75, 32.4, -41.2, 55.6, -22.3, 14.8, -35.5, 48.2, -9.6, 26.1];
 
-    const interval = setInterval(() => {
-      const change = movements[tick.current % movements.length];
-      tick.current += 1;
-      const direction: ChangeDirection = change >= 0 ? 'up' : 'down';
+    const scheduleUpdate = () => {
+      // Randomly vary the arrival time: roughly 300 ms to 2.1 seconds.
+      const delay = 300 + Math.floor(Math.random() * 1800);
+      updateTimer.current = setTimeout(() => {
+        const change = movements[tick.current % movements.length];
+        tick.current += 1;
+        const direction: ChangeDirection = change >= 0 ? 'up' : 'down';
 
-      setPortfolioValue((current) => Math.max(0, current + change));
-      setProfitLoss((current) => current + change);
-      setPortfolioFlash(direction);
-      setProfitLossFlash(direction);
+        setPortfolioValue((current) => Math.max(0, current + change));
+        setProfitLoss((current) => current + change);
 
-      if (flashTimeout.current) clearTimeout(flashTimeout.current);
-      flashTimeout.current = setTimeout(() => {
+        // Restart the short flash even when two consecutive updates move the same way.
         setPortfolioFlash(null);
-        setProfitLossFlash(null);
-      }, 950);
-    }, 2600);
+        if (flashTimer.current) clearTimeout(flashTimer.current);
+        flashTimer.current = setTimeout(() => setPortfolioFlash(direction), 16);
+        flashTimer.current = setTimeout(() => setPortfolioFlash(null), 190);
 
+        scheduleUpdate();
+      }, delay);
+    };
+
+    scheduleUpdate();
     return () => {
-      clearInterval(interval);
-      if (flashTimeout.current) clearTimeout(flashTimeout.current);
+      if (updateTimer.current) clearTimeout(updateTimer.current);
+      if (flashTimer.current) clearTimeout(flashTimer.current);
     };
   }, []);
 
@@ -44,11 +49,7 @@ export const OverviewPage: React.FC = () => {
     });
 
   const isProfitable = profitLoss >= 0;
-  const flashColor = (direction: ChangeDirection) => {
-    if (direction === 'up') return 'text-[#75e58a] [text-shadow:0_0_18px_rgba(75,230,112,0.72)]';
-    if (direction === 'down') return 'text-[#ff7777] [text-shadow:0_0_18px_rgba(255,75,75,0.72)]';
-    return '';
-  };
+  const pnlColor = isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]';
 
   return (
     <div className="min-h-full w-full bg-black">
@@ -66,11 +67,12 @@ export const OverviewPage: React.FC = () => {
               </div>
               <div
                 aria-live="polite"
-                className={`mt-1 truncate text-[14px] font-semibold tracking-tight tabular-nums transition-all duration-700 ease-out sm:text-base ${
-                  profitLossFlash ? flashColor(profitLossFlash) : isProfitable ? 'text-[#9dbb98]' : 'text-[#d18d8d]'
-                }`}
+                className={`mt-1 flex items-center gap-1 truncate text-[14px] font-semibold tracking-tight tabular-nums sm:text-base ${pnlColor}`}
               >
-                {isProfitable ? '+' : '−'}${formatUsd(profitLoss)}
+                <span aria-hidden="true" className="text-[10px] leading-none">
+                  {isProfitable ? '▲' : '▼'}
+                </span>
+                <span>{isProfitable ? '+' : '−'}${formatUsd(profitLoss)}</span>
               </div>
             </div>
 
@@ -80,8 +82,12 @@ export const OverviewPage: React.FC = () => {
               </div>
               <div
                 aria-live="polite"
-                className={`mt-0.5 whitespace-nowrap text-[25px] font-bold leading-none tracking-[-0.055em] tabular-nums transition-all duration-700 ease-out sm:text-[32px] ${
-                  portfolioFlash ? flashColor(portfolioFlash) : 'text-white'
+                className={`mt-0.5 whitespace-nowrap text-[25px] font-bold leading-none tracking-[-0.055em] tabular-nums transition-colors duration-150 ease-out sm:text-[32px] ${
+                  portfolioFlash === 'up'
+                    ? 'text-[#83b982]'
+                    : portfolioFlash === 'down'
+                      ? 'text-[#c77b7b]'
+                      : 'text-white'
                 }`}
               >
                 <span className="mr-0.5 text-white/65">$</span>{formatUsd(portfolioValue)}
