@@ -1,408 +1,107 @@
 import React from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import {
-  TrendingUp,
-  TrendingDown,
-  ArrowUpRight,
-  Activity,
-  Layers,
-  Radio,
-  Zap,
-  ShoppingBag,
-  ExternalLink,
-} from 'lucide-react';
+import { Activity, ArrowUpRight, Radio, Layers, Zap, Wallet, Terminal } from 'lucide-react';
 
 export const OverviewPage: React.FC = () => {
-  const {
-    summary,
-    engineStatus,
-    positions,
-    tokens,
-    events,
-    setActiveTab,
-    openTokenDetailByMint,
-    setSelectedEvent,
-    backendError,
-    paperWallet,
-  } = useTerminal();
-
-
-  const openPositions = positions.filter((p) => p.status === 'OPEN');
-  const recentEvents = events.slice(0, 8);
+  const { engineStatus, launches, events, setActiveTab, paperWallet, backendError } = useTerminal();
+  const availableSol = paperWallet ? paperWallet.available_balance_lamports / 1_000_000_000 : null;
+  const investedSol = paperWallet ? paperWallet.invested_balance_lamports / 1_000_000_000 : null;
 
   return (
-    <div className="w-full text-white select-none">
-      {backendError && <div className="mx-4 mt-3 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-xs font-mono text-amber-200">{backendError}</div>}
+    <div className="mx-auto w-full max-w-[1500px] space-y-4 px-3 pb-8 pt-4 sm:px-5 lg:px-7">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-neutral-500">NodeX terminal</p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight text-white sm:text-2xl">Overview</h1>
+        </div>
+        <button onClick={() => setActiveTab('event_monitor')} className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-2 text-xs text-neutral-300 backdrop-blur-xl transition hover:bg-white/[0.08]">
+          <Terminal className="h-3.5 w-3.5" /> Event log <ArrowUpRight className="h-3 w-3" />
+        </button>
+      </div>
 
-      {/* Financial figures are withheld until backend paper-accounting endpoints exist. */}
-      {/* 1. PRIMARY BALANCE & FINANCIAL SUMMARY STRIP (FULL WIDTH ON MAIN BACKGROUND) */}
-      <section className="w-full border-b border-white/[0.08] bg-[#090909]/60 backdrop-blur-md">
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
-          {/* Total Portfolio Value */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Total Portfolio
-            </div>
-            <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              —
-            </div>
-            <div className="text-[10px] font-mono text-[#737373] tabular-nums">
-              Not provided by backend
-            </div>
-          </div>
+      {backendError && <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-4 py-3 text-xs leading-relaxed text-amber-200">{backendError}</div>}
 
-          {/* Total Invested Capital */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Invested Capital
-            </div>
-            <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              —
-            </div>
-            <div className="text-[10px] font-mono text-[#737373]">
-              Waiting for paper-wallet valuation API
-            </div>
+      <section className="glass-panel overflow-hidden rounded-2xl p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-medium text-neutral-300">
+            <Activity className="h-4 w-4 text-emerald-400" /> Engine overview
           </div>
-
-          {/* Current Open Positions */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Open Positions
-            </div>
-            <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums flex items-baseline gap-1.5">
-              <span>—</span>
-            </div>
-            <div className="text-[10px] font-mono text-emerald-400">
-              Positions API not implemented
-            </div>
+          <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-mono ${engineStatus.running ? 'bg-emerald-500/10 text-emerald-300' : 'bg-neutral-500/10 text-neutral-400'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${engineStatus.running ? 'bg-emerald-400' : 'bg-neutral-500'}`} />
+            {engineStatus.running ? 'RUNNING' : 'STOPPED'}
+          </span>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-xl bg-black/20 p-3">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500"><Layers className="h-3 w-3" /> Tracked launches</div>
+            <div className="mt-2 text-2xl font-semibold tabular-nums text-white">{launches.length}</div>
+            <div className="mt-1 text-[10px] text-neutral-600">Persisted launch records</div>
           </div>
-
-          {/* Realised P&L */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Realised P&L
-            </div>
-            <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums flex items-center gap-1 ${
-              'text-[#737373]'
-            }`}>
-              <span>—</span>
-            </div>
-            <div className={`text-[10px] font-mono tabular-nums ${'text-[#737373]'}`}>
-              Not available
-            </div>
+          <div className="rounded-xl bg-black/20 p-3">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500"><Radio className="h-3 w-3" /> WebSocket</div>
+            <div className={`mt-2 text-lg font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : 'text-amber-300'}`}>{engineStatus.ws_status.toUpperCase()}</div>
+            <div className="mt-1 text-[10px] text-neutral-600">Live event transport</div>
           </div>
-
-          {/* Unrealised P&L */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Unrealised P&L
-            </div>
-            <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums ${
-              'text-[#737373]'
-            }`}>
-              —
-            </div>
-            <div className={`text-[10px] font-mono tabular-nums ${'text-[#737373]'}`}>
-              Not available
-            </div>
+          <div className="rounded-xl bg-black/20 p-3">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500"><Zap className="h-3 w-3" /> Event rate</div>
+            <div className="mt-2 text-2xl font-semibold tabular-nums text-white">{engineStatus.incoming_event_rate.toFixed(1)}<span className="ml-1 text-xs font-normal text-neutral-500">/s</span></div>
+            <div className="mt-1 text-[10px] text-neutral-600">Backend reported</div>
           </div>
-
-          {/* Total Net P&L */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Total Net P&L
-            </div>
-            <div className={`text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums ${
-              'text-[#737373]'
-            }`}>
-              —
-            </div>
-            <div className={`text-[10px] font-mono tabular-nums ${'text-[#737373]'}`}>
-              Not available
-            </div>
+          <div className="rounded-xl bg-black/20 p-3">
+            <div className="flex items-center gap-1.5 text-[10px] text-neutral-500"><Wallet className="h-3 w-3" /> Paper balance</div>
+            <div className="mt-2 text-xl font-semibold tabular-nums text-white">{availableSol === null ? '—' : availableSol.toFixed(4)}<span className="ml-1 text-xs font-normal text-neutral-500">SOL</span></div>
+            <div className="mt-1 text-[10px] text-neutral-600">{investedSol === null ? 'Wallet snapshot unavailable' : `${investedSol.toFixed(4)} SOL invested`}</div>
           </div>
-
-          {/* Win Rate */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Win Rate
-            </div>
-            <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              —
-            </div>
-            <div className="text-[10px] font-mono text-[#737373]">
-              Trade history API not implemented
-            </div>
-          </div>
-
-          {/* Completed Trades */}
-          <div className="p-3 sm:p-4">
-            <div className="text-[10px] font-mono text-[#8e8e93] uppercase tracking-wider mb-0.5">
-              Trades Closed
-            </div>
-            <div className="text-lg sm:text-xl font-bold font-mono tracking-tight text-white tabular-nums">
-              —
-            </div>
-            <div className="text-[10px] font-mono text-[#737373]">
-              Trade history API not implemented
-            </div>
-          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/[0.07] pt-3 text-[10px] font-mono text-neutral-500">
+          <span>NETWORK <b className="ml-1 font-medium text-neutral-300">{engineStatus.network.toUpperCase()}</b></span>
+          <span>RPC <b className={`ml-1 font-medium ${engineStatus.solana_connected ? 'text-emerald-300' : 'text-amber-300'}`}>{engineStatus.solana_connected ? 'CONNECTED' : 'DISCONNECTED'}</b></span>
+          <span>MODE <b className="ml-1 font-medium text-amber-300">PAPER ONLY</b></span>
+          <span>SIMULATED <b className="ml-1 font-medium text-neutral-300">{engineStatus.simulated_buys_count} buys / {engineStatus.simulated_sells_count} sells</b></span>
         </div>
       </section>
 
-      <section className="px-4 lg:px-6 py-3 border-b border-white/[0.08] bg-[#0b0b0b]/40">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-[10px] font-mono uppercase tracking-wider text-[#8e8e93]">Backend paper wallet · SOL units</h2>
-          <span className="text-[10px] font-mono text-[#737373]">Live REST snapshot</span>
+      <section className="glass-panel overflow-hidden rounded-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3 sm:px-5">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Tracked token launches</h2>
+            <p className="mt-0.5 text-[10px] text-neutral-500">Swipe horizontally to inspect recorded launches</p>
+          </div>
+          <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[10px] font-mono text-neutral-400">{launches.length} records</span>
         </div>
-        {paperWallet ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
-            <div><div className="text-[#737373]">Available</div><div className="text-white font-semibold">{(paperWallet.available_balance_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
-            <div><div className="text-[#737373]">Invested</div><div className="text-white font-semibold">{(paperWallet.invested_balance_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
-            <div><div className="text-[#737373]">Locked rent</div><div className="text-white font-semibold">{(paperWallet.locked_rent_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
-            <div><div className="text-[#737373]">Starting balance</div><div className="text-white font-semibold">{(paperWallet.starting_balance_lamports / 1_000_000_000).toFixed(6)} SOL</div></div>
+        {launches.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <Layers className="mx-auto h-6 w-6 text-neutral-700" />
+            <p className="mt-3 text-sm text-neutral-400">No token launches received yet</p>
+            <p className="mt-1 text-xs text-neutral-600">New launch records will appear here when the engine detects them.</p>
           </div>
         ) : (
-          <div className="text-xs font-mono text-[#737373]">Paper wallet snapshot unavailable until the backend responds.</div>
-        )}
-      </section>
-
-      {/* 2. TELEMETRY & ENGINE STATUS STRIP */}
-      <section className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-4 lg:px-6 py-2">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs font-mono">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[#8e8e93] text-[11px]">ENGINE:</span>
-            <span className="text-white font-medium text-[11px]">{engineStatus.running ? 'RUNNING' : 'STOPPED'}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <Radio className="w-3 h-3 text-emerald-400" />
-            <span className="text-[#8e8e93] text-[11px]">SOLANA:</span>
-            <span className="text-white uppercase text-[11px]">{engineStatus.network}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <Activity className="w-3 h-3 text-[#8e8e93]" />
-            <span className="text-[#8e8e93] text-[11px]">THROUGHPUT:</span>
-            <span className="text-white tabular-nums text-[11px]">{engineStatus.incoming_event_rate} evt/s</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <Zap className="w-3 h-3 text-amber-400" />
-            <span className="text-[#8e8e93] text-[11px]">DETECTED TODAY:</span>
-            <span className="text-white font-bold tabular-nums text-[11px]">{engineStatus.tokens_detected_today}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-[#8e8e93] text-[11px]">SIMULATED TRADES:</span>
-            <span className="text-emerald-400 font-bold tabular-nums text-[11px]">
-              {engineStatus.simulated_buys_count}B / {engineStatus.simulated_sells_count}S
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-[#8e8e93] text-[11px]">MODE:</span>
-            <span className="text-amber-400 font-bold text-[11px]">PAPER TRADING</span>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. ACTIVE OPEN POSITIONS (HORIZONTAL SCROLLABLE, CLICK TOKEN TO OPEN CHARTS & DETAILS) */}
-      <section className="w-full border-b border-white/[0.08]">
-        <div className="px-4 lg:px-6 py-2.5 border-b border-white/[0.06] flex items-center justify-between bg-[#0a0a0a]/30">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded glass-icon flex items-center justify-center text-emerald-400">
-              <Layers className="w-3 h-3" />
-            </div>
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-white">
-              Active Holdings ({openPositions.length})
-            </span>
-            <span className="text-[10px] font-mono text-[#737373]">· Click any token to inspect full charts & transactions</span>
-          </div>
-          <button
-            onClick={() => setActiveTab('positions')}
-            className="text-xs font-mono text-[#8e8e93] hover:text-white flex items-center gap-1 transition-colors"
-          >
-            <span>All Positions</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {openPositions.length === 0 ? (
-          <div className="py-10 px-4 text-center text-xs font-mono text-[#737373]">
-            No paper positions are available yet. The backend does not expose a positions endpoint.
-          </div>
-        ) : (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono min-w-[760px]">
-              <thead>
-                <tr className="text-[#737373] border-b border-white/[0.06] text-[11px] bg-white/[0.01]">
-                  <th className="py-2 px-4 font-medium">Asset</th>
-                  <th className="py-2 px-3 font-medium text-right">Entry Price</th>
-                  <th className="py-2 px-3 font-medium text-right">Current Price</th>
-                  <th className="py-2 px-3 font-medium text-right">Tokens Held</th>
-                  <th className="py-2 px-3 font-medium text-right">Invested $</th>
-                  <th className="py-2 px-3 font-medium text-right">Position Value</th>
-                  <th className="py-2 px-3 font-medium text-right">P&L ($)</th>
-                  <th className="py-2 px-3 font-medium text-right">P&L (%)</th>
-                  <th className="py-2 px-4 font-medium text-right">Detailed Chart</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {openPositions.map((pos) => {
-                  const isProfit = pos.pnl_usd >= 0;
-                  return (
-                    <tr
-                      key={pos.id}
-                      onClick={() => openTokenDetailByMint(pos.mint)}
-                      className="hover:bg-white/[0.04] transition-colors cursor-pointer group"
-                    >
-                      <td className="py-2.5 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded glass-icon flex items-center justify-center font-bold text-white text-[10px]">
-                            {pos.symbol.slice(0, 3)}
-                          </div>
-                          <div>
-                            <div className="font-bold text-white text-xs">${pos.symbol}</div>
-                            <div className="text-[10px] text-[#737373]">{pos.name}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 tabular-nums text-[#a3a3a3] text-right whitespace-nowrap">
-                        ${pos.entry_price_usd.toFixed(4)}
-                      </td>
-                      <td className="py-2.5 px-3 tabular-nums font-semibold text-white text-right whitespace-nowrap">
-                        ${pos.current_price_usd.toFixed(4)}
-                      </td>
-                      <td className="py-2.5 px-3 tabular-nums text-[#a3a3a3] text-right whitespace-nowrap">
-                        {pos.amount_tokens.toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-3 tabular-nums text-[#a3a3a3] text-right whitespace-nowrap">
-                        ${pos.initial_investment_usd.toFixed(2)}
-                      </td>
-                      <td className="py-2.5 px-3 tabular-nums font-semibold text-white text-right whitespace-nowrap">
-                        ${pos.current_position_value_usd.toFixed(2)}
-                      </td>
-                      <td className={`py-2.5 px-3 tabular-nums text-right font-medium whitespace-nowrap ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {isProfit ? '+' : ''}${pos.pnl_usd.toFixed(2)}
-                      </td>
-                      <td className={`py-2.5 px-3 tabular-nums text-right font-bold whitespace-nowrap ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                        {isProfit ? '+' : ''}{pos.pnl_pct.toFixed(2)}%
-                      </td>
-                      <td className="py-2.5 px-4 text-right whitespace-nowrap">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openTokenDetailByMint(pos.mint);
-                          }}
-                          className="px-2 py-0.5 rounded glass-icon text-[10px] text-white group-hover:border-white/30 transition-all font-mono"
-                        >
-                          Open Chart & Details →
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto p-3 sm:p-4">
+            {launches.map((launch) => (
+              <article key={launch.id} className="w-[250px] shrink-0 snap-start rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.055] to-white/[0.015] p-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] font-mono uppercase text-emerald-300">Detected</span>
+                  <span className="text-[9px] text-neutral-600">Slot {launch.slot || '—'}</span>
+                </div>
+                <div className="mt-4 text-sm font-semibold text-white">New Solana launch</div>
+                <div className="mt-1 break-all font-mono text-[10px] leading-relaxed text-neutral-500">{launch.mint_address.slice(0, 9)}…{launch.mint_address.slice(-7)}</div>
+                <div className="mt-4 flex items-center justify-between border-t border-white/[0.07] pt-3 text-[9px] text-neutral-500">
+                  <span className="uppercase">{launch.source || 'Unknown source'}</span>
+                  <span>{launch.detected_at ? new Date(launch.detected_at).toLocaleTimeString() : 'Time unavailable'}</span>
+                </div>
+                <button onClick={() => setActiveTab('live_feed')} className="mt-3 w-full rounded-lg bg-white/[0.06] py-2 text-[10px] font-medium text-neutral-300 transition hover:bg-white/[0.1]">Open live feed <ArrowUpRight className="ml-1 inline h-3 w-3" /></button>
+              </article>
+            ))}
           </div>
         )}
       </section>
 
-      {/* 4. DISCOVERED TOKENS & LIVE SOLANA EVENT STREAM */}
-      <div className="w-full grid grid-cols-1 xl:grid-cols-2 divide-y xl:divide-y-0 xl:divide-x divide-white/[0.08]">
-        {/* Discovered Tokens */}
-        <section className="w-full">
-          <div className="px-4 lg:px-6 py-2.5 border-b border-white/[0.08] flex items-center justify-between bg-[#0a0a0a]/30">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-white">
-                Recently Discovered Solana Tokens ({tokens.slice(0, 6).length})
-              </span>
-            </div>
-            <button
-              onClick={() => setActiveTab('live_feed')}
-              className="text-xs font-mono text-[#8e8e93] hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <span>View Live Feed</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="divide-y divide-white/[0.04]">
-            {tokens.slice(0, 6).map((t) => (
-              <div
-                key={t.mint}
-                onClick={() => openTokenDetailByMint(t.mint)}
-                className="px-4 lg:px-6 py-2.5 hover:bg-white/[0.04] transition-colors cursor-pointer flex items-center justify-between text-xs font-mono"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-6 h-6 rounded glass-icon flex items-center justify-center font-bold text-white text-[10px]">
-                    {t.symbol.slice(0, 3)}
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-xs">${t.symbol}</div>
-                    <div className="text-[10px] text-[#737373]">{t.venue} · {t.safety_status.toUpperCase()}</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 text-right">
-                  <div>
-                    <div className="text-white font-medium tabular-nums">${t.current_price_usd.toFixed(6)}</div>
-                    <div className="text-[10px] text-emerald-400 tabular-nums">Liq: ${t.liquidity_usd.toLocaleString()}</div>
-                  </div>
-                  <span className="text-[10px] text-[#8e8e93] glass-icon px-2 py-0.5 rounded">
-                    Inspect →
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Live Event Stream */}
-        <section className="w-full">
-          <div className="px-4 lg:px-6 py-2.5 border-b border-white/[0.08] flex items-center justify-between bg-[#0a0a0a]/30">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded glass-icon flex items-center justify-center text-emerald-400">
-                <Activity className="w-3 h-3" />
-              </div>
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-white">
-                Live Engine Stream
-              </span>
-            </div>
-            <button
-              onClick={() => setActiveTab('event_monitor')}
-              className="text-xs font-mono text-[#8e8e93] hover:text-white flex items-center gap-1 transition-colors"
-            >
-              <span>Full Stream</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="divide-y divide-white/[0.04]">
-            {recentEvents.map((evt) => (
-              <div
-                key={evt.event_id}
-                onClick={() => {
-                  setSelectedEvent(evt);
-                  setActiveTab('event_monitor');
-                }}
-                className="px-4 lg:px-6 py-2.5 transition-colors hover:bg-white/[0.04] cursor-pointer text-xs font-mono space-y-0.5"
-              >
-                <div className="flex items-center justify-between text-[10px] text-[#737373]">
-                  <span className="uppercase text-[#a3a3a3] font-semibold">{evt.event_type.replace(/_/g, ' ')}</span>
-                  <span className="tabular-nums">
-                    {new Date(evt.timestamp).toLocaleTimeString()}
-                  </span>
-                </div>
-                <div className="text-white text-[11px] line-clamp-1 leading-relaxed">
-                  {evt.message}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+      <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.025] px-4 py-3">
+        <div>
+          <p className="text-xs font-medium text-neutral-300">Recent engine activity</p>
+          <p className="mt-0.5 text-[10px] text-neutral-600">{events.length} WebSocket events in the current session</p>
+        </div>
+        <button onClick={() => setActiveTab('event_monitor')} className="text-xs text-neutral-400 transition hover:text-white">View events <ArrowUpRight className="ml-1 inline h-3 w-3" /></button>
       </div>
     </div>
   );
