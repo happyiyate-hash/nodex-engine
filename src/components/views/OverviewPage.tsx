@@ -189,7 +189,14 @@ interface DemoPosition {
   pnlPct: number;
   openedAt: number;
   status: 'OPEN' | 'CLOSED';
+  peakPrice: number;
+  peakPnlPct: number;
+  trailingActivated: boolean;
+  trailingStopPrice: number;
+  lastPriceStep: number;
+  belowStopSamples: number;
   exitPrice?: number;
+  exitReason?: string;
 }
 interface SimToken {
   launch: TokenLaunchRecord;
@@ -210,38 +217,19 @@ interface SimulationState {
 const DEMO_STARTING_BALANCE = 10000;
 const DEMO_TRADE_SIZE = 50;
 const DEMO_ENTRY_PRICES = [0.00042, 0.00115, 0.00078, 0.0024, 0.00063, 0.0018, 0.00095, 0.0031, 0.00054, 0.00135];
-const DEMO_PRICE_PATHS = [
-  [1.2, 2.6, 4.3, -1.8],
-  [1.4, 2.9, 4.8, -2.1],
-  [1.1, 2.4, 4.1, -1.7],
-  [1.6, 3.1, 5, -2.3],
-  [1.3, 2.7, 4.5, -1.9],
-  [1.5, 3.2, 5.2, -2.4],
-  [1.2, 2.8, 4.6, -2],
-  [1.7, 3.3, 5.4, -2.5],
-  [1.1, 2.5, 4.2, -1.8],
-  [1.4, 3, 4.9, -2.2],
-  [1.6, 3.4, 5.5, -2.6],
-  [1.3, 2.9, 4.7, -2.1],
-  [1.5, 3.1, 5.1, -2.3],
-  [1.2, 2.6, 4.4, -1.9],
-  [1.8, 3.5, 5.7, -2.7],
-  [1.1, 2.7, 4.5, -2],
-  [1.4, 3.2, 5.3, -2.4],
-  [1.7, 3.4, 5.6, -2.6],
-  [1.3, 2.8, 4.6, -2.1],
-  [1.6, 3.3, 5.4, -2.5],
-  [1.2, 2.5, 4.3, -1.8],
-  [1.5, 3, 4.9, -2.2],
-  [1.8, 3.6, 5.8, -2.8],
-  [1.1, 2.4, 4.2, -1.9],
-  [1.4, 2.9, 4.8, -2.2],
-  [1.7, 3.5, 5.6, -2.6],
-  [1.2, 2.7, 4.5, -2],
-  [1.6, 3.2, 5.2, -2.4],
-  [1.3, 2.8, 4.7, -2.1],
-  [1.5, 3.3, 5.4, -2.5]
-];
+const DEMO_PRICE_PATHS = Array.from({ length: 30 }, (_, index) => {
+  const variation = (index % 5) * 0.8;
+  const pullback = (index % 3) * 0.6;
+  return [
+    10 + variation, 8 + variation, 20 + variation, 16 + variation,
+    28 + variation, 24 + variation, 18 + variation, 12 + pullback,
+    11 + pullback,
+  ];
+});
+const INITIAL_STOP_LOSS_PCT = 8;
+const TAKE_PROFIT_ACTIVATION_PCT = 10;
+const TRAILING_DRAWDOWN_PCT = 8;
+const STOP_CONFIRMATION_SAMPLES = 2;
 
 interface DemoLaunchView extends LaunchView {
   demo: true;
@@ -442,6 +430,10 @@ export const OverviewPage: React.FC = () => {
                 entryPrice, currentPrice: entryPrice, quantity,
                 invested: DEMO_TRADE_SIZE, value: DEMO_TRADE_SIZE,
                 pnl: 0, pnlPct: 0, openedAt: now, status: 'OPEN',
+                peakPrice: entryPrice, peakPnlPct: 0,
+                trailingActivated: false,
+                trailingStopPrice: entryPrice * (1 - INITIAL_STOP_LOSS_PCT / 100),
+                lastPriceStep: 0, belowStopSamples: 0,
               });
               token.positionId = positionId;
               token.status = 'PAPER ENTRY';
@@ -463,16 +455,30 @@ export const OverviewPage: React.FC = () => {
         const age = now - position.openedAt;
         const stepMs = 5000 + ((tokenIndex * 613) % 4000);
         const step = Math.floor(age / stepMs);
-        if (step < 1) continue;
+        if (step < 1 || step <= position.lastPriceStep) continue;
+        position.lastPriceStep = step;
         const movement = path[Math.min(step - 1, path.length - 1)] / 100;
-        const previousPrice = position.currentPrice;
         position.currentPrice = position.entryPrice * (1 + movement);
+        position.peakPrice = Math.max(position.peakPrice, position.currentPrice);
+        position.pnlPct = ((position.currentPrice - position.entryPrice) / position.entryPrice) * 100;
+        position.peakPnlPct = ((position.peakPrice - position.entryPrice) / position.entryPrice) * 100;
+        if (!position.trailingActivated && position.peakPnlPct >= TAKE_PROFIT_ACTIVATION_PCT) {
+          position.trailingActivated = true;
+        }
+        position.trailingStopPrice = position.trailingActivated
+          ? position.peakPrice * (1 - TRAILING_DRAWDOWN_PCT / 100)
+          : position.entryPrice * (1 - INITIAL_STOP_LOSS_PCT / 100);
         position.value = position.quantity * position.currentPrice;
         position.pnl = position.value - position.invested;
-        position.pnlPct = (position.pnl / position.invested) * 100;
-        if (position.currentPrice < previousPrice) {
+
+        const stopWasHit = position.currentPrice <= position.trailingStopPrice;
+        position.belowStopSamples = stopWasHit ? position.belowStopSamples + 1 : 0;
+        if (position.belowStopSamples >= STOP_CONFIRMATION_SAMPLES) {
           position.status = 'CLOSED';
           position.exitPrice = position.currentPrice;
+          position.exitReason = position.trailingActivated
+            ? 'Trailing stop confirmed'
+            : 'Initial stop-loss confirmed';
           const saleProceeds = position.quantity * position.exitPrice;
           position.value = saleProceeds;
           position.pnl = saleProceeds - position.invested;
@@ -741,7 +747,17 @@ export const OverviewPage: React.FC = () => {
                     <div className="min-w-0"><div className="truncate text-[10px] font-semibold text-white">{position.name} <span className="text-white/35">{position.symbol}</span></div><div className="mt-0.5 text-[8px] text-white/35">{position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'} · {position.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} tokens</div></div>
                     <div className="text-right"><div className={`text-[10px] font-semibold tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>{position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}</div><div className="text-[8px] text-white/35">{position.pnlPct >= 0 ? '+' : ''}{position.pnlPct.toFixed(2)}%</div></div>
                   </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-[8px]"><div><div className="text-white/30">Entry</div><div className="mt-0.5 text-white/75">${position.entryPrice.toFixed(6)}</div></div><div><div className="text-white/30">Current</div><div className="mt-0.5 text-white/75">${position.currentPrice.toFixed(6)}</div></div><div><div className="text-white/30">Value</div><div className="mt-0.5 text-white/75">${formatUsd(position.value)}</div></div></div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-[8px]">
+                    <div><div className="text-white/30">Entry</div><div className="mt-0.5 text-white/75">${position.entryPrice.toFixed(6)}</div></div>
+                    <div><div className="text-white/30">Current</div><div className="mt-0.5 text-white/75">${position.currentPrice.toFixed(6)}</div></div>
+                    <div><div className="text-white/30">Value</div><div className="mt-0.5 text-white/75">${formatUsd(position.value)}</div></div>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
+                    <div><div className="text-white/30">Peak P&L</div><div className="mt-0.5 text-[#83b982]">+${position.peakPnlPct.toFixed(2)}%</div></div>
+                    <div><div className="text-white/30">Stop level</div><div className="mt-0.5 text-white/75">${position.trailingStopPrice.toFixed(6)}</div></div>
+                    <div><div className="text-white/30">Strategy</div><div className="mt-0.5 text-white/65">{position.status === 'CLOSED' ? (position.exitReason || 'Closed') : position.trailingActivated ? 'TRAILING' : 'PROTECTING'}</div></div>
+                  </div>
+                  <div className="mt-1 text-[8px] text-white/30">{position.status === 'CLOSED' ? `Exit: ${position.exitReason || 'Stop reached'}` : position.trailingActivated ? 'Take-profit armed · tracking peak with 8% trailing stop' : 'Initial 8% stop · trailing activates after +10%'}</div>
                 </article>)}
               </div>}
             </section>
