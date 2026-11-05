@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { Check, AlertCircle, RefreshCw, Lock, Server, Radio, Database, ChevronDown } from 'lucide-react';
+import { apiClient } from '../../services/api';
+import { Check, AlertCircle, RefreshCw, Lock, Server, Radio, Database, ChevronDown, Trash2, ShieldAlert } from 'lucide-react';
 
 type HealthResult = { status: 'idle' | 'testing' | 'success' | 'failed'; message?: string };
 
@@ -10,17 +11,22 @@ const implementedRoutes = [
   ['GET', '/api/v1/paper-wallet', 'Persistent personal paper wallet'],
   ['GET', '/api/v1/tokens/recent', 'Persisted confirmed token launches'],
   ['GET', '/api/v1/events/recent', 'Persisted raw-event history (internal; not browser feed)'],
+  ['POST', '/api/v1/admin/maintenance/clear-history', 'Protected temporary cleanup of token launch and raw-event history only'],
   ['GET', '/api/v1/tokens/:mint/scan', 'On-demand token security scan'],
   ['GET', '/api/v1/fees/token-account-rent', 'Solana token-account rent estimate'],
   ['WS', '/api/v1/ws', 'Curated application events and engine commands'],
 ] as const;
 
 export const SettingsPage: React.FC = () => {
-  const { engineStatus, toggleEngine, settings, updateSettings, backendError } = useTerminal();
+  const { engineStatus, toggleEngine, settings, updateSettings, backendError, clearBrowserHistory } = useTerminal();
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [wsUrl, setWsUrl] = useState(settings.wsUrl);
   const [testResult, setTestResult] = useState<HealthResult>({ status: 'idle' });
   const [savedNotice, setSavedNotice] = useState(false);
+  const [adminKey, setAdminKey] = useState('');
+  const [cleanupStatus, setCleanupStatus] = useState<'idle' | 'working' | 'success' | 'failed'>('idle');
+  const [cleanupMessage, setCleanupMessage] = useState('');
+  const [localClearMessage, setLocalClearMessage] = useState('');
 
   const handleTestBackend = async () => {
     const baseUrl = backendUrl.trim().replace(/\/$/, '');
@@ -70,6 +76,44 @@ export const SettingsPage: React.FC = () => {
     updateSettings({ backendUrl: backendUrl.trim(), wsUrl: wsUrl.trim() });
     setSavedNotice(true);
     window.setTimeout(() => setSavedNotice(false), 2500);
+  };
+
+  const handleClearLocalStorage = () => {
+    if (!window.confirm('Clear NodeX browser history and NodeX-prefixed local storage? Your saved backend connection URL will be preserved.')) return;
+    let removed = 0;
+    try {
+      const keysToRemove: string[] = [];
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (key && key.startsWith('nodex.') && key !== 'nodex.connection-settings.v1') keysToRemove.push(key);
+      }
+      keysToRemove.forEach((key) => { window.localStorage.removeItem(key); removed += 1; });
+      clearBrowserHistory();
+      setLocalClearMessage('Cleared browser event/token display and removed ' + removed + ' NodeX local-storage item(s). Backend records were not touched.');
+    } catch (error) {
+      setLocalClearMessage(error instanceof Error ? error.message : 'Browser storage cleanup failed.');
+    }
+  };
+
+  const handleClearEngineHistory = async () => {
+    if (!adminKey.trim()) {
+      setCleanupStatus('failed');
+      setCleanupMessage('Enter the backend NODEX_ADMIN_API_KEY first.');
+      return;
+    }
+    if (!window.confirm('Permanently delete stored token launch records and raw Solana event history from the backend database? Live monitoring, paper wallet, ledger, database schema, and configuration will remain untouched.')) return;
+    setCleanupStatus('working');
+    setCleanupMessage('Sending protected cleanup request to the Rust engine…');
+    try {
+      const result = await apiClient.clearEngineHistory(adminKey.trim());
+      setCleanupStatus('success');
+      setCleanupMessage('Cleanup complete: ' + result.deleted_token_records + ' token records and ' + result.deleted_raw_event_records + ' raw event records deleted. Live monitoring and paper wallet were preserved.');
+      clearBrowserHistory();
+      setAdminKey('');
+    } catch (error) {
+      setCleanupStatus('failed');
+      setCleanupMessage(error instanceof Error ? error.message : 'Backend cleanup failed.');
+    }
   };
 
   const streamActive = !engineStatus.strategy_paused;
@@ -146,6 +190,37 @@ export const SettingsPage: React.FC = () => {
               <span>{testResult.message || 'Checking…'}</span>
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-[#101010] p-3.5 sm:p-4">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
+          <Trash2 className="h-4 w-4 text-neutral-400" /> Temporary history cleanup
+        </div>
+        <p className="mb-4 text-[11px] leading-relaxed text-neutral-500">
+          These controls are temporary maintenance tools. They clear historical records only; they do not stop token discovery or remove active market subscriptions.
+        </p>
+        <div className="space-y-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+          <div className="text-xs font-semibold text-white">1. Clear browser local storage</div>
+          <p className="text-[11px] leading-relaxed text-neutral-500">Clears NodeX browser display history and NodeX-prefixed local-storage entries. Your saved backend and WebSocket URLs are kept. This does not delete backend database records.</p>
+          <button onClick={handleClearLocalStorage} className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-semibold text-white active:scale-[.99]">Clear local browser data</button>
+          {localClearMessage && <p className="text-[11px] leading-relaxed text-neutral-400">{localClearMessage}</p>}
+        </div>
+        <div className="mt-3 space-y-3 rounded-xl border border-amber-500/15 bg-amber-500/[0.025] p-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-white">
+            <ShieldAlert className="h-4 w-4 text-amber-300" /> 2. Clear backend token and event history
+          </div>
+          <p className="text-[11px] leading-relaxed text-neutral-400">
+            Deletes rows only from <code>token_launches</code> and <code>solana_raw_events</code>. It does not clear active monitored-token subscriptions, paper wallet balances, paper ledger, users, database schema, environment variables, or application code.
+          </p>
+          <label className="block space-y-1.5">
+            <span className="text-[11px] font-medium text-neutral-400">Backend maintenance key</span>
+            <input type="password" value={adminKey} onChange={(event) => setAdminKey(event.target.value)} autoComplete="off" spellCheck={false} placeholder="Enter NODEX_ADMIN_API_KEY" className="w-full min-w-0 rounded-xl border border-white/10 bg-[#080808] px-3 py-3 text-xs text-white outline-none focus:border-white/30" />
+          </label>
+          <button onClick={handleClearEngineHistory} disabled={cleanupStatus === 'working'} className="w-full rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2.5 text-xs font-semibold text-red-200 disabled:opacity-50 active:scale-[.99]">
+            {cleanupStatus === 'working' ? 'Clearing backend history…' : 'Clear backend token & event history'}
+          </button>
+          {cleanupMessage && <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[11px] leading-relaxed text-neutral-300">{cleanupMessage}</div>}
         </div>
       </section>
 
