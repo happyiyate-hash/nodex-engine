@@ -30,15 +30,15 @@ export const SettingsPage: React.FC = () => {
   const [localClearMessage, setLocalClearMessage] = useState('');
 
   const handleTestBackend = async () => {
-    const baseUrl = backendUrl.trim().replace(/\\/$/, '');
+    const baseUrl = backendUrl.trim().replace(/\/$/, '');
     const socketUrl = wsUrl.trim();
     const key = operatorKey.trim();
 
-    if (!/^https:\\/\\//i.test(baseUrl)) {
+    if (!/^https:\/\//i.test(baseUrl)) {
       setTestResult({ status: 'failed', message: 'Backend address is missing or invalid. Enter your HTTPS backend URL, then try again.' });
       return;
     }
-    if (!/^wss:\\/\\//i.test(socketUrl)) {
+    if (!/^wss:\/\//i.test(socketUrl)) {
       setTestResult({ status: 'failed', message: 'WebSocket address is missing or invalid. Use a WSS address for the secure connection.' });
       return;
     }
