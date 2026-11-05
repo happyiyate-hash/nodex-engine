@@ -453,7 +453,7 @@ export const OverviewPage: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
+      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } } @keyframes border-travel { to { stroke-dashoffset: -320; } }`}</style>
       <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
@@ -554,16 +554,16 @@ export const OverviewPage: React.FC = () => {
                   return (
                   <article
                     key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature}
-                    className={`relative mb-1.5 overflow-hidden rounded-xl border bg-white/[0.025] backdrop-blur-xl transition-all duration-300 ${status === 'ANALYZING' ? 'border-amber-400/20 shadow-[0_0_14px_rgba(210,180,124,0.07)]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/15' : 'border-white/[0.07]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}
+                    className={`relative mb-1 overflow-hidden rounded-xl border bg-white/[0.025] backdrop-blur-xl transition-all duration-300 ${status === 'ANALYZING' ? 'border-amber-400/20 shadow-[0_0_14px_rgba(210,180,124,0.07)]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/15' : 'border-white/[0.07]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}
                   >
-                    {status === 'ANALYZING' && <div className="pointer-events-none absolute -inset-px rounded-xl border border-dashed border-amber-300/30 animate-[spin_8s_linear_infinite]" />}
+                    {status === 'ANALYZING' && <svg aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 60" preserveAspectRatio="none"><rect x="0.75" y="0.75" width="98.5" height="58.5" rx="9" fill="none" stroke="rgba(210,180,124,0.75)" strokeWidth="1.2" strokeDasharray="24 296" className="animate-[border-travel_5s_linear_infinite]" /></svg>}
                     <button
                       type="button"
                       onClick={() => setExpandedScans((current) => current.includes(launch.mint_address) ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])}
-                      className="relative flex min-h-[54px] w-full items-center gap-2.5 px-2.5 py-1.5 text-left"
+                      className="relative flex min-h-[50px] w-full items-center gap-2 px-2 py-1 text-left"
                       aria-expanded={expandedScans.includes(launch.mint_address)}
                     >
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.07]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
+                      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.07]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
                         {status === 'ANALYZING' ? <LoaderCircle className="h-4 w-4 animate-spin text-[#d2b47c]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -573,12 +573,12 @@ export const OverviewPage: React.FC = () => {
                         </div>
                         <div className="mt-0.5 truncate text-[9px] text-white/35">{demo ? 'SIMULATED EXAMPLE' : launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
                       </div>
-                      <span className={`shrink-0 rounded-md border px-1.5 py-1 text-[8px] font-semibold tracking-wide ${statusStyle[status]}`}>{status}</span>
+                      <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[8px] font-semibold tracking-wide ${statusStyle[status]}`}>{status}</span>
                       <span className="ml-0.5 text-[10px] text-white/30">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
                     </button>
                     {status === 'ANALYZING' && demo && <div className="mx-2.5 mb-1 h-[2px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-[#d2b47c] transition-[width] duration-300" style={{ width: `${demoItem?.progress ?? 0}%` }} /></div>}
                     {expandedScans.includes(launch.mint_address) && (
-                      <div className="relative border-t border-white/[0.06] px-2.5 py-2">
+                      <div className="relative border-t border-white/[0.06] px-2 py-1.5">
                         <p className="text-[9px] leading-relaxed text-white/55">{reason}</p>
                         {!demo && (() => {
                           const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
