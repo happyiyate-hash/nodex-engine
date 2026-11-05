@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent } from '../../types';
-import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
+import { Activity, Circle, Copy, ExternalLink, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 
 type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'detected' | 'qualified' | 'positions';
@@ -378,6 +378,11 @@ export const OverviewPage: React.FC = () => {
   const [demoLaunches, setDemoLaunches] = useState<DemoLaunchView[]>([]);
   const [demoPositions, setDemoPositions] = useState<DemoPosition[]>([]);
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
+  const [scanClock, setScanClock] = useState(Date.now());
+  useEffect(() => {
+    const scanTimer = window.setInterval(() => setScanClock(Date.now()), 500);
+    return () => window.clearInterval(scanTimer);
+  }, []);
   useEffect(() => {
     const simulation: SimulationState = {
       startedAt: Date.now(),
@@ -763,16 +768,46 @@ export const OverviewPage: React.FC = () => {
                             {status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
                           </span>}
                       </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1 border-t border-white/[0.055] pt-1.5">
-                        {checkRows.map((check: any, index: number) => {
-                          const result = String(check.status || 'PENDING').toUpperCase();
+                      <div className="mt-1.5 border-t border-white/[0.055] pt-1.5">
+                        {status === 'ANALYZING' ? (() => {
+                          const activeIndex = Math.floor((scanClock - new Date(launch.detected_at).getTime()) / 1250) % Math.max(checkRows.length, 1);
+                          const activeCheck = checkRows[activeIndex] || checkRows[0];
+                          const result = String(activeCheck?.status || 'CHECKING').toUpperCase();
+                          const hasRisk = ['FAILED', 'FAIL', 'REJECTED', 'RISKY', 'WARNING', 'RISK', 'DETECTED'].includes(result);
                           const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
-                          const failed = ['FAILED', 'FAIL', 'REJECTED', 'RISKY'].includes(result);
-                          return <span key={check.name || index} className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[7px] leading-tight ${passed ? 'border-emerald-400/15 bg-emerald-400/[0.045] text-[#83b982]' : failed ? 'border-red-400/15 bg-red-400/[0.045] text-[#c77b7b]' : 'border-white/[0.06] bg-white/[0.025] text-[#b9a77f]'}`}>
-                            <span className="opacity-75">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
-                            <span className="font-semibold">{result}</span>
-                          </span>;
-                        })}
+                          const shortName = String(activeCheck?.name || 'Security').replace(/_/g, ' ').replace(/ authority/gi, '').replace(/-pull/gi, '');
+                          return <div className="flex min-h-[22px] items-center gap-2">
+                            <RefreshCw className={`h-4 w-4 shrink-0 animate-spin ${hasRisk ? 'text-amber-400' : passed ? 'text-emerald-400' : 'text-[#d2b47c]'}`} />
+                            <span key={`${activeIndex}-${Math.floor(scanClock / 1250)}`} className={`animate-[scan-label-in_260ms_ease-out] text-[10px] font-medium tracking-wide ${hasRisk ? 'text-amber-300' : passed ? 'text-[#83b982]' : 'text-white/70'}`}>
+                              {shortName}{hasRisk ? ' · RISK DETECTED' : passed ? ' · CLEAR' : ' · CHECKING'}
+                            </span>
+                            <span className="ml-auto text-[8px] text-white/30">LIVE SCAN</span>
+                          </div>;
+                        })() : (
+                          <div className="flex min-h-[22px] items-center justify-between gap-2">
+                            <span className={`text-[9px] font-medium ${status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'text-[#83b982]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'text-[#d2a064]' : 'text-white/45'}`}>
+                              {status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'Security checks completed' : status === 'REJECTED' || status === 'BUY FAILED' ? 'Risk checks flagged this token' : 'Waiting for security scan'}
+                            </span>
+                            <span className="text-[8px] text-white/30">{checkRows.length} checks</span>
+                          </div>
+                        )}
+                        <button type="button" onClick={() => setExpandedScans((current) => current.includes(launch.mint_address) ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])} className="mt-1 flex w-full items-center justify-between text-left text-[8px] text-white/35 transition-colors hover:text-white/65">
+                          <span>{expandedScans.includes(launch.mint_address) ? 'Hide scan details' : 'View scan details'}</span>
+                          <span className="text-[10px]">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
+                        </button>
+                        {expandedScans.includes(launch.mint_address) && <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md bg-white/[0.025] p-2">
+                          {checkRows.map((check: any, index: number) => {
+                            const result = String(check.status || 'PENDING').toUpperCase();
+                            const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
+                            const flagged = ['FAILED', 'FAIL', 'REJECTED', 'RISKY', 'WARNING', 'RISK', 'DETECTED'].includes(result);
+                            return <div key={check.name || index} className="flex min-w-0 items-center justify-between gap-1 text-[8px]">
+                              <span className="truncate text-white/55">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
+                              <span className={`shrink-0 font-semibold ${passed ? 'text-[#83b982]' : flagged ? 'text-amber-300' : 'text-white/35'}`}>{passed ? 'PASS' : flagged ? (result === 'DETECTED' ? 'RISK' : result) : result}</span>
+                            </div>;
+                          })}
+                          {report?.risk_score !== undefined && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] text-white/55">Risk score: <span className="font-semibold text-white/80">{String(report.risk_score)}</span></div>}
+                          {reason && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] leading-relaxed text-white/45">{reason}</div>}
+                        </div>}
                       </div>
                       <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2 border-t border-white/[0.055] pt-1.5">
                         <div className="flex min-w-0 items-center gap-3 text-[8px]">
