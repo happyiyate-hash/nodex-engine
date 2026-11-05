@@ -60,8 +60,8 @@ export const LogsPage: React.FC = () => {
   const connected = engineStatus.ws_status === 'connected';
 
   return (
-    <main className="relative flex min-h-full w-full flex-col bg-[#09090b] text-white">
-      <header className="sticky top-0 z-20 border-b border-white/[0.10] bg-[#09090b]/85 px-3 pb-3 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-2xl sm:px-5">
+    <main className="relative flex min-h-full w-full flex-col bg-black text-white">
+      <header className="sticky top-0 z-20 border-b border-white/[0.10] bg-black/85 px-3 pb-3 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-2xl sm:px-5">
         <div className="flex min-h-9 items-center gap-2">
           {selected ? (
             <button onClick={() => { setSelected(null); setCopied(false); }} aria-label="Back to logs" className="grid size-9 shrink-0 place-items-center rounded-full border border-white/[0.14] bg-[#111113]/75 text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,.12),0_3px_12px_rgba(0,0,0,.25)]"><ArrowLeft className="size-4" /></button>
@@ -83,8 +83,8 @@ export const LogsPage: React.FC = () => {
         {!selected ? (
           <div className="mt-3 flex items-center gap-2">
             <div className="grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-xl border border-white/[0.07] bg-[#111113] p-1">
-              <button onClick={() => setFilter('requests')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'requests' ? 'bg-[#09090b] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.08)]' : 'text-zinc-500'}`}><FileJson className="size-3.5" />Requests <span className="text-[10px] opacity-70">{requests.length}</span></button>
-              <button onClick={() => setFilter('events')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'events' ? 'bg-[#09090b] text-white shadow-[inset_0_1px_0_rgba(255,255,255,.08)]' : 'text-zinc-500'}`}><RadioTower className="size-3.5" />Live events <span className="text-[10px] opacity-70">{events.length}</span></button>
+              <button onClick={() => setFilter('requests')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'requests' ? 'bg-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,.08)]' : 'text-zinc-500'}`}><FileJson className="size-3.5" />Requests <span className="text-[10px] opacity-70">{requests.length}</span></button>
+              <button onClick={() => setFilter('events')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'events' ? 'bg-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,.08)]' : 'text-zinc-500'}`}><RadioTower className="size-3.5" />Live events <span className="text-[10px] opacity-70">{events.length}</span></button>
             </div>
             <span className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.10] bg-[#111113] px-2.5 text-[11px] font-medium text-zinc-400"><span className={`size-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-zinc-500'}`} />{connected ? 'Live' : 'Offline'}</span>
           </div>
@@ -96,8 +96,8 @@ export const LogsPage: React.FC = () => {
       {selected ? (
         <>
           {selected.error && <div className="mx-3 mt-3 flex items-start gap-2 border-l-2 border-red-500 px-3 py-2 text-sm text-red-400"><CircleAlert className="mt-0.5 size-4 shrink-0" /><span className="break-words">{selected.error}</span></div>}
-          <pre aria-label="Log JSON" className="min-h-[55dvh] flex-1 overflow-auto bg-[#09090b] px-3 pb-28 pt-3 font-mono text-[11px] leading-[1.75] text-zinc-300 [overflow-wrap:anywhere] sm:px-5 sm:text-xs">{detailJson}</pre>
-          <div className="fixed inset-x-0 bottom-0 z-30 flex justify-center border-t border-white/[0.10] bg-[#09090b]/90 px-4 py-3 pb-[max(env(safe-area-inset-bottom),12px)] backdrop-blur-2xl">
+          <pre aria-label="Log JSON" className="min-h-[55dvh] flex-1 overflow-auto bg-black px-3 pb-28 pt-3 font-mono text-[11px] leading-[1.75] text-zinc-300 [overflow-wrap:anywhere] sm:px-5 sm:text-xs">{detailJson}</pre>
+          <div className="fixed inset-x-0 bottom-0 z-30 flex justify-center border-t border-white/[0.10] bg-black/90 px-4 py-3 pb-[max(env(safe-area-inset-bottom),12px)] backdrop-blur-2xl">
             <div className="flex w-full max-w-md items-center gap-2 rounded-2xl border border-white/[0.12] bg-[#111113] p-1.5 shadow-[0_12px_34px_rgba(0,0,0,.45),inset_0_1px_0_rgba(255,255,255,.08)]">
               <button onClick={() => void copy()} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-xs font-semibold text-black"><Copy className="size-3.5" />{copied ? 'Copied' : 'Copy JSON'}</button>
               <button onClick={download} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/[0.07] text-xs font-medium text-zinc-200"><Download className="size-3.5" />Download</button>
