@@ -4,7 +4,6 @@ import {
   Activity,
   Play,
   Pause,
-  Sliders,
   Radio,
   Zap,
 } from 'lucide-react';
@@ -16,8 +15,6 @@ export const Navbar: React.FC = () => {
     summary,
     isStreamPaused,
     toggleStreamPause,
-    setActiveTab,
-    closeTokenDetail,
   } = useTerminal();
 
   return (
@@ -99,18 +96,6 @@ export const Navbar: React.FC = () => {
         {/* PWA Install Button */}
         <PWAInstallButton variant="nav" />
 
-        {/* Quick Settings */}
-        <button
-          onClick={() => {
-            closeTokenDetail();
-            setActiveTab('settings');
-          }}
-          title="Engine Settings & Rust Backend Integration"
-          aria-label="Engine Settings"
-          className="p-2 rounded-lg glass-icon text-[#8e8e93] hover:text-white transition-colors cursor-pointer touch-manipulation"
-        >
-          <Sliders className="w-4 h-4" />
-        </button>
       </div>
     </header>
   );
