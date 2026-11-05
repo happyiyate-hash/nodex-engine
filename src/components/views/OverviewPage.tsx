@@ -721,43 +721,50 @@ export const OverviewPage: React.FC = () => {
                     { name: 'Risk score', status: status === 'QUALIFIED' ? 'PASSED' : 'PENDING' },
                   ];
                   return (
-                    <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`overflow-hidden rounded-xl border bg-[#101010] px-2.5 py-2 ${isQualified ? 'border-emerald-400/20' : 'border-white/[0.08]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : ''}`}>
-                      <div className="flex items-start justify-between gap-2">
+                    <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`rounded-lg border bg-[#101010] px-2 py-1.5 ${isQualified ? 'border-emerald-400/20' : 'border-white/[0.07]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : ''}`}>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#242424]">
+                          {(() => {
+                            const imageUrl = tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image;
+                            return imageUrl
+                              ? <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                              : <span className="text-[11px] font-semibold text-white/75">{String(cardSymbol || cardName).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>;
+                          })()}
+                        </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate text-[11px] font-semibold text-white">{cardName}</span>
-                            {cardSymbol && <span className="shrink-0 text-[8px] text-white/40">{cardSymbol}</span>}
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-[11px] font-semibold leading-tight text-white">{cardName}</span>
+                            {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${cardSymbol}</span>}
                           </div>
-                          <div className="mt-0.5 truncate text-[8px] text-white/35">{launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
+                          <div className="mt-0.5 truncate text-[8px] leading-tight text-white/35">{launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
                         </div>
-                        {isQualified ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-2 py-1 text-[8px] font-semibold text-[#83b982]"><ShieldCheck className="h-3 w-3" /> VERIFIED</span> : <span className={`rounded-full border px-2 py-1 text-[8px] font-semibold ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>{status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}</span>}
+                        {isQualified
+                          ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
+                          : <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
+                            {status === 'ANALYZING' && <span className="h-1 w-1 animate-pulse rounded-full bg-current" />}
+                            {status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
+                          </span>}
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
-                        <div><div className="text-white/30">Current price</div><div className="mt-0.5 text-[10px] font-medium tabular-nums text-white/80">{Number.isFinite(price) && price > 0 ? `$${price.toFixed(8)}` : 'Price unavailable'}</div></div>
-                        <div><div className="text-white/30">Market cap</div><div className="mt-0.5 text-[10px] font-medium tabular-nums text-white/80">{Number.isFinite(marketCap) && marketCap > 0 ? `$${marketCap.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—'}</div></div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1 border-t border-white/[0.055] pt-1.5">
+                        {checkRows.map((check: any, index: number) => {
+                          const result = String(check.status || 'PENDING').toUpperCase();
+                          const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
+                          const failed = ['FAILED', 'FAIL', 'REJECTED', 'RISKY'].includes(result);
+                          return <span key={check.name || index} className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[7px] leading-tight ${passed ? 'border-emerald-400/15 bg-emerald-400/[0.045] text-[#83b982]' : failed ? 'border-red-400/15 bg-red-400/[0.045] text-[#c77b7b]' : 'border-white/[0.06] bg-white/[0.025] text-[#b9a77f]'}`}>
+                            <span className="opacity-75">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
+                            <span className="font-semibold">{result}</span>
+                          </span>;
+                        })}
                       </div>
-                      {isQualified ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/[0.055] pt-2 text-[8px] text-white/45">
-                          <span>Security checks passed</span><span>Strategy eligible</span><span>{reason}</span>
+                      <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2 border-t border-white/[0.055] pt-1.5">
+                        <div className="flex min-w-0 items-center gap-3 text-[8px]">
+                          <span className="whitespace-nowrap text-white/35">Price <span className="font-medium tabular-nums text-white/80">{Number.isFinite(price) && price > 0 ? `$${price.toFixed(8)}` : '—'}</span></span>
+                          <span className="whitespace-nowrap text-white/35">MCap <span className="font-medium tabular-nums text-white/80">{Number.isFinite(marketCap) && marketCap > 0 ? `$${marketCap.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—'}</span></span>
                         </div>
-                      ) : (
-                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-white/[0.055] pt-2">
-                          {checkRows.map((check: any, index: number) => {
-                            const result = String(check.status || 'PENDING').toUpperCase();
-                            const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
-                            const failed = ['FAILED', 'FAIL', 'REJECTED', 'RISKY'].includes(result);
-                            return <div key={check.name || index} className="flex min-w-0 items-center justify-between gap-1 text-[8px]">
-                              <span className="truncate text-white/40">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
-                              <span className={`shrink-0 font-semibold ${passed ? 'text-[#83b982]' : failed ? 'text-[#c77b7b]' : 'text-[#d2b47c]'}`}>{result}</span>
-                            </div>;
-                          })}
-                        </div>
-                      )}
-                      <div className="mt-2 flex items-center justify-between border-t border-white/[0.055] pt-2 text-[8px] text-white/30">
-                        <span>{demo ? 'DEMO DATA' : `Mint ${launch.mint_address.slice(0, 6)}…${launch.mint_address.slice(-5)}`}</span>
-                        <div className="flex items-center gap-3">
-                          <button onClick={(event) => copyMint(event, launch.mint_address)} className="inline-flex items-center gap-1 text-[9px] text-white/45"><Copy className="h-3 w-3" /> Copy</button>
-                          {!demo && <a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] text-white/45">Inspect <ExternalLink className="h-3 w-3" /></a>}
+                        <div className="flex shrink-0 items-center gap-2.5 text-[8px] text-white/35">
+                          <span>{demo ? 'DEMO' : `${launch.mint_address.slice(0, 5)}…${launch.mint_address.slice(-4)}`}</span>
+                          <button onClick={(event) => copyMint(event, launch.mint_address)} aria-label="Copy token mint" className="inline-flex items-center gap-0.5 text-white/45"><Copy className="h-2.5 w-2.5" />Copy</button>
+                          {!demo && <a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-white/45">Inspect <ExternalLink className="h-2.5 w-2.5" /></a>}
                         </div>
                       </div>
                     </article>
