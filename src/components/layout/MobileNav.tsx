@@ -290,18 +290,18 @@ export const MobileNav: React.FC = () => {
             <span className="text-[10px] font-mono tracking-tight leading-none">Events</span>
           </button>
 
-          {/* 5. More Menu */}
+          {/* 5. Settings */}
           <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="More Menu"
+            onClick={() => handleSelectTab('settings')}
+            aria-label="Settings"
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 px-1 rounded-xl cursor-pointer touch-manipulation active:scale-95 transition-all ${
-              ['strategy', 'token_intelligence', 'settings'].includes(activeTab) && !selectedToken
+              activeTab === 'settings' && !selectedToken
                 ? 'bg-white/[0.12] border border-white/20 text-white shadow-sm'
                 : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.04]'
             }`}
           >
-            <Menu className="w-4 h-4 shrink-0 mb-0.5" />
-            <span className="text-[10px] font-mono tracking-tight leading-none">More</span>
+            <Sliders className="w-4 h-4 shrink-0 mb-0.5" />
+            <span className="text-[10px] font-mono tracking-tight leading-none">Settings</span>
           </button>
         </nav>
       </div>
