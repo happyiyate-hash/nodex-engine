@@ -669,7 +669,16 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   </div>
                 ) : (
                   <>
-                    {filteredPositions.map((position) => <article key={position.id} onClick={() => openTokenDetailByMint(position.mint)} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
+                    {filteredPositions.map((position) => <article key={position.id} role="button" tabIndex={0} onClick={() => openTokenDetailByMint(position.mint, {
+                        name: position.name,
+                        symbol: position.symbol,
+                        launch_time: new Date(position.openedAt).toISOString(),
+                        current_price_usd: position.currentPrice,
+                        market_cap_usd: 0,
+                        venue: 'pump.fun',
+                        qualification_status: 'bought_paper',
+                        safety_status: 'warning',
+                      })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(position.mint, { name: position.name, symbol: position.symbol, launch_time: new Date(position.openedAt).toISOString(), current_price_usd: position.currentPrice, venue: 'pump.fun', qualification_status: 'bought_paper', safety_status: 'warning' }); } }} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.09] bg-[#242424]">
                           <span className="text-[12px] font-semibold text-white/75">{String(position.symbol || position.name).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>
@@ -698,7 +707,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       </div>
                       <div className="mt-1 text-[8px] text-white/30">{position.status === 'CLOSED' ? `Exit: ${position.exitReason || 'Stop reached'}` : position.trailingActivated ? 'Take-profit armed · tracking peak with 8% trailing stop' : 'Initial 8% stop · trailing activates after +10%'}</div>
                     </article>)}
-                    {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
+                    {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} role="button" tabIndex={0} onClick={() => openTokenDetailByMint(item.launch.mint_address)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(item.launch.mint_address); } }} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.09] bg-[#242424]">
                           <span className="text-[11px] font-semibold text-white/70">S</span>
