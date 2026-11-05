@@ -91,10 +91,18 @@ export class NodeXApiClient {
   public getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
   public async getEngineStatus(): Promise<EngineStatus> {
     const raw = await this.request<any>('/api/v1/engine/status');
-    const stream = raw.solana_stream || {};
+    const streams = raw.solana_streams || {};
+    const stream = streams.pump_fun || raw.solana_stream || {};
+    const pumpswap = streams.pumpswap || {};
     return {
       running: !raw.paused, operating_mode: 'PAPER', network: 'mainnet-beta',
-      solana_connected: Boolean(stream.connected), rpc_endpoint: '',
+      solana_connected: Boolean(stream.connected),
+      pumpswap_connected: Boolean(pumpswap.connected),
+      pumpswap_reconnection_count: Number(pumpswap.reconnect_count || 0),
+      pumpswap_last_error: String(pumpswap.last_error || ''),
+      solana_last_error: String(stream.last_error || ''),
+      solana_last_message_at: String(stream.last_message_at || ''),
+      rpc_endpoint: '',
       rpc_latency_ms: Number(stream.latency_ms || 0),
       ws_status: stream.connected ? 'connected' : 'disconnected',
       ws_endpoint: this.settings.wsUrl, provider_name: stream.provider || 'Solana RPC',
