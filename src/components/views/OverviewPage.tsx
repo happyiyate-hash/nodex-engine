@@ -456,7 +456,7 @@ export const OverviewPage: React.FC = () => {
       <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
-        <div className="shrink-0 px-3 pt-8 sm:px-4 sm:pt-9">
+        <div className="shrink-0 px-3 pt-9 sm:px-4 sm:pt-10">
           <div className="flex min-h-[82px] items-center rounded-xl bg-[#181818] px-3.5 py-3 sm:min-h-[94px] sm:px-5">
             <div className="w-[34%] min-w-0 pr-2">
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
