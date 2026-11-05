@@ -456,7 +456,7 @@ export const OverviewPage: React.FC = () => {
       <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
-        <div className="shrink-0 px-3 pt-5 sm:px-4 sm:pt-6">
+        <div className="shrink-0 px-3 pt-8 sm:px-4 sm:pt-9">
           <div className="flex min-h-[82px] items-center rounded-xl bg-[#181818] px-3.5 py-3 sm:min-h-[94px] sm:px-5">
             <div className="w-[34%] min-w-0 pr-2">
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
@@ -477,7 +477,7 @@ export const OverviewPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="shrink-0 px-3 pt-4 sm:px-4">
+        <div className="shrink-0 px-3 pt-3 sm:px-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h1 className="text-[15px] font-semibold tracking-tight text-white sm:text-base">Live Detection</h1>
@@ -489,7 +489,7 @@ export const OverviewPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
             <div className="rounded-lg bg-[#121212] px-3 py-2.5">
               <div className="text-[19px] font-semibold leading-none tabular-nums text-white">{counts.detected}</div>
               <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Detected</div>
@@ -505,7 +505,7 @@ export const OverviewPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-4 flex shrink-0 flex-col px-3 pb-1 sm:px-4 sm:pb-2">
+        <div className="mt-3 flex shrink-0 flex-col px-3 pb-0 sm:px-4 sm:pb-0">
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
             <div>
               <h2 className="text-[12px] font-semibold text-white">Token discoveries</h2>
