@@ -49,7 +49,7 @@ export const TokenDetailPage: React.FC = () => {
   return (
     <div className="w-full text-white select-none">
       {/* 1. TOP HEADER & BREADCRUMB STRIP */}
-      <div className="w-full border-b border-white/[0.08] bg-[#090909]/70 backdrop-blur-md px-4 lg:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      <div className="w-full border-b border-white/[0.08] bg-black backdrop-blur-md px-4 lg:px-6 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-center gap-2.5">
           <button
             onClick={closeTokenDetail}
@@ -106,7 +106,7 @@ export const TokenDetailPage: React.FC = () => {
 
       {/* 2. DEDICATED TOKEN HOLDING & INVESTMENT STATS BANNER */}
       {activePosition ? (
-        <section className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/80 backdrop-blur-sm">
+        <section className="w-full border-b border-white/[0.08] bg-black backdrop-blur-sm">
           <div className="px-4 lg:px-6 py-2 border-b border-white/[0.06] flex items-center justify-between bg-emerald-950/20 text-xs font-mono">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -188,7 +188,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </section>
       ) : (
-        <section className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-4 lg:px-6 py-2 flex items-center justify-between text-xs font-mono">
+        <section className="w-full border-b border-white/[0.08] bg-black backdrop-blur-sm px-4 lg:px-6 py-2 flex items-center justify-between text-xs font-mono">
           <div className="flex items-center gap-2">
             <span className="text-[#8e8e93]">Position Status:</span>
             <span className="text-white">NOT CURRENTLY HELD</span>
@@ -206,7 +206,7 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {/* 3. FULL-WIDTH TRADING CHART VIEWPORT (TIME FILTERS & PUMP.FUN PULSING BEACON DOT) */}
-      <section className="w-full border-b border-white/[0.08] bg-[#070707]">
+      <section className="w-full border-b border-white/[0.08] bg-black">
         {/* Chart Header Bar: Full-Width with Timeframe & Metric Toggles */}
         <div className="px-4 lg:px-6 py-2.5 border-b border-white/[0.06] flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-[#0a0a0a]/30">
           <div className="flex items-center gap-2.5">
@@ -265,7 +265,7 @@ export const TokenDetailPage: React.FC = () => {
       </section>
 
       {/* 4. ON-CHAIN TOKEN METRICS & LIQUIDITY STRIP */}
-      <section className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
+      <section className="w-full border-b border-white/[0.08] bg-black backdrop-blur-sm grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
         <div className="p-3">
           <div className="text-[10px] font-mono text-[#8e8e93] uppercase">Market Cap</div>
           <div className="text-sm font-bold font-mono text-white tabular-nums mt-0.5">
