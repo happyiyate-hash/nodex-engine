@@ -32,13 +32,8 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="h-[100dvh] w-full overflow-hidden bg-[#09090b] text-white font-sans relative selection:bg-white/20">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-0 left-1/4 w-[800px] h-[400px] bg-emerald-500/[0.015] rounded-full blur-[140px]" />
-        <div className="absolute bottom-0 right-1/4 w-[700px] h-[400px] bg-purple-500/[0.015] rounded-full blur-[160px]" />
-      </div>
-
-      <main className="relative z-10 h-full w-full overflow-y-auto pb-24 focus:outline-none">
+    <div className="h-[100dvh] w-full overflow-hidden bg-black text-white font-sans relative selection:bg-white/20">
+      <main/ className="relative z-10 h-full w-full overflow-y-auto pb-24 focus:outline-none">
         {renderActiveView()}
       </main>
 
