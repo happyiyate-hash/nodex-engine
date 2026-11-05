@@ -1,26 +1,16 @@
 import React from 'react';
-import { useTerminal } from '../../context/TerminalContext';
-
-const lamportsToSol = (value: number) => value / 1_000_000_000;
-
-const formatSol = (value: number) =>
-  `${value < 0 ? '-' : ''}${Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} SOL`;
 
 export const OverviewPage: React.FC = () => {
-  const { paperWallet, summary } = useTerminal();
+  // Temporary display values until the portfolio summary endpoint is connected.
+  const portfolioValue = 12840.56;
+  const profitLoss = 1240.56;
+  const isProfitable = profitLoss >= 0;
 
-  const walletBalanceLamports = paperWallet
-    ? paperWallet.available_balance_lamports +
-      paperWallet.invested_balance_lamports +
-      paperWallet.locked_rent_lamports
-    : 0;
-  const balanceSol = lamportsToSol(walletBalanceLamports);
-  const startingBalanceSol = paperWallet
-    ? lamportsToSol(paperWallet.starting_balance_lamports)
-    : 0;
-  const totalProfitSol = balanceSol - startingBalanceSol;
-  const solPrice = summary.sol_price_usd;
-  const hasWallet = paperWallet !== null;
+  const formatUsd = (value: number) =>
+    Math.abs(value).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
   return (
     <div className="min-h-full w-full bg-black">
@@ -31,33 +21,23 @@ export const OverviewPage: React.FC = () => {
         <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.16] to-transparent" />
 
         <div className="px-3 pt-3 sm:px-4 sm:pt-4">
-          <div className="grid grid-cols-2 items-center rounded-xl bg-[#171717] px-3.5 py-2.5 sm:px-4 sm:py-3">
-            <div className="min-w-0 pr-3">
-              <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/45 sm:text-[10px]">
-                Actual balance
+          <div className="flex min-h-[82px] items-center rounded-xl bg-[#181818] px-3.5 py-3 sm:min-h-[94px] sm:px-5">
+            <div className="w-[34%] min-w-0 pr-2">
+              <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">
+                P&L
               </div>
-              <div className="mt-0.5 truncate text-[15px] font-semibold leading-tight tracking-tight text-white tabular-nums sm:text-lg">
-                {hasWallet ? formatSol(balanceSol) : '—'}
+              <div className={`mt-1 truncate text-[14px] font-semibold tracking-tight tabular-nums sm:text-base ${isProfitable ? 'text-[#9dbb98]' : 'text-[#d18d8d]'}`}>
+                {isProfitable ? '+' : '−'}${formatUsd(profitLoss)}
               </div>
-              {hasWallet && solPrice > 0 && (
-                <div className="mt-0.5 text-[9px] text-white/40 tabular-nums sm:text-[10px]">
-                  ${(balanceSol * solPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              )}
             </div>
 
-            <div className="min-w-0 border-l border-white/[0.08] pl-3 sm:pl-4">
-              <div className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/45 sm:text-[10px]">
-                Total profit
+            <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
+              <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">
+                Portfolio
               </div>
-              <div className={`mt-0.5 truncate text-[15px] font-semibold leading-tight tracking-tight tabular-nums sm:text-lg ${totalProfitSol >= 0 ? 'text-[#a8c5a5]' : 'text-[#d49a9a]'}`}>
-                {hasWallet ? `${totalProfitSol >= 0 ? '+' : '−'}${formatSol(Math.abs(totalProfitSol))}` : '—'}
+              <div className="mt-0.5 whitespace-nowrap text-[25px] font-bold leading-none tracking-[-0.055em] text-white tabular-nums sm:text-[32px]">
+                <span className="mr-0.5 text-white/65">$</span>{formatUsd(portfolioValue)}
               </div>
-              {hasWallet && solPrice > 0 && (
-                <div className={`mt-0.5 text-[9px] tabular-nums sm:text-[10px] ${totalProfitSol >= 0 ? 'text-[#8fa98d]' : 'text-[#bd8585]'}`}>
-                  {totalProfitSol >= 0 ? '+' : '−'}${(Math.abs(totalProfitSol) * solPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              )}
             </div>
           </div>
         </div>
