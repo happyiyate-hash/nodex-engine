@@ -55,7 +55,7 @@ export const PositionsPage: React.FC = () => {
   return (
     <div className="w-full text-white select-none">
       {/* 1. FINANCIAL KPI SUMMARY STRIP (COMPACT, FULL WIDTH, ZERO BLOAT) */}
-      <section className="w-full border-b border-white/[0.08] bg-[#090909]/60 backdrop-blur-md">
+      <section className="w-full border-b border-white/[0.08] bg-black backdrop-blur-md">
         <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
           {/* Active Holdings Value */}
           <div className="p-2.5 sm:p-3.5 min-w-0">
@@ -117,7 +117,7 @@ export const PositionsPage: React.FC = () => {
       </section>
 
       {/* 2. COMPACT TOOLBAR (FILTER & SEARCH) */}
-      <div className="w-full border-b border-white/[0.08] bg-[#0c0c0c]/40 backdrop-blur-sm px-3 sm:px-4 lg:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      <div className="w-full border-b border-white/[0.08] bg-black backdrop-blur-sm px-3 sm:px-4 lg:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 min-w-0">
           {/* Status Filters */}
           <div className="flex items-center p-0.5 rounded-lg glass-panel-subtle text-xs font-mono w-full sm:w-auto overflow-x-auto whitespace-nowrap">
