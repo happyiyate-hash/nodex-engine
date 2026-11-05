@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, CircleAlert, Copy, Download, FileJson, RadioTower, RefreshCw } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { clearEngineLogs, EngineLogEntry, readEngineLogs } from '../../services/engineLogs';
+import { MobileNav } from '../layout/MobileNav';
 
 type LogFilter = 'requests' | 'events';
 
@@ -129,6 +130,7 @@ export const LogsPage: React.FC = () => {
           {logs.length > 0 && <div className="mt-3 flex justify-end"><button onClick={() => { clearEngineLogs(); setLogs([]); }} className="rounded-lg px-3 py-2 text-xs text-zinc-500 hover:bg-white/[0.05]">Clear logs</button></div>}
         </section>
       )}
+      {!selected && <MobileNav />}
     </main>
   );
 };
