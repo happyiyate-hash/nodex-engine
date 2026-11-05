@@ -362,8 +362,8 @@ const statusStyle: Record<PipelineStatus, string> = {
   'BUY FAILED': 'border-red-500/20 bg-red-500/[0.07] text-[#c77b7b]',
 };
 
-export const OverviewPage: React.FC = () => {
-  const { launches, events, engineStatus } = useTerminal();
+export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
+  const { launches, events, engineStatus, openTokenDetailByMint } = useTerminal();
   const [portfolioValue, setPortfolioValue] = useState(DEMO_STARTING_BALANCE);
   const [profitLoss, setProfitLoss] = useState(0);
   const [profitLossPct, setProfitLossPct] = useState(0);
@@ -588,7 +588,7 @@ export const OverviewPage: React.FC = () => {
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
       <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
-      <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
+      {!embeddedMode && <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
         <div className="shrink-0 px-3 pt-9 sm:px-4 sm:pt-10">
@@ -655,11 +655,11 @@ export const OverviewPage: React.FC = () => {
           </div>
 
         </div>
-      </section>
+      </section>}
 
-      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 sm:px-4 sm:pb-0">
+      <div className={`${embeddedMode ? "flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 sm:px-4 sm:pb-0"}`}>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
-            {filter === 'positions' ? (
+            {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
               <div className="space-y-1.5 pb-2">
                 {filteredPositions.length === 0 && backendPaperEntries.length === 0 ? (
                   <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
@@ -669,7 +669,7 @@ export const OverviewPage: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    {filteredPositions.map((position) => <article key={position.id} className="rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
+                    {filteredPositions.map((position) => <article key={position.id} onClick={() => openTokenDetailByMint(position.mint)} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.09] bg-[#242424]">
                           <span className="text-[12px] font-semibold text-white/75">{String(position.symbol || position.name).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>
@@ -826,7 +826,7 @@ export const OverviewPage: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="mt-2 grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-[#090909] p-1">
+          {!embeddedMode && <div className="mt-2 grid shrink-0 grid-cols-3 gap-1 rounded-xl border border-white/[0.07] bg-[#090909] p-1">
             {([
               ['detected', 'Detected', counts.detected],
               ['qualified', 'Qualified', counts.qualified],
@@ -836,11 +836,11 @@ export const OverviewPage: React.FC = () => {
                 <span>{label}</span><span className="text-[8px] tabular-nums text-white/35">· {count}</span>
               </button>
             ))}
-          </div>
-                    <div className="mt-2 flex shrink-0 items-center justify-between text-[8px] text-white/25">
+          </div>}
+                    {!embeddedMode && <div className="mt-2 flex shrink-0 items-center justify-between text-[8px] text-white/25">
             <span>{filter === 'positions' ? filteredPositions.length + backendPaperEntries.length : filteredLaunches.length} shown · {launches.length} loaded</span>
             <span className="inline-flex items-center gap-1"><Circle className="h-1.5 w-1.5 fill-current" /> Backend event-driven</span>
-          </div>
+          </div>}
       </div>
     </div>
   );
