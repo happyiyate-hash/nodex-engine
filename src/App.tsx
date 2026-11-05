@@ -14,7 +14,8 @@ import { installFetchLogger } from './services/engineLogs';
 installFetchLogger();
 
 const REFRESH_TRIGGER_DISTANCE = 72;
-const getResistedPull = (fingerDistance: number) => 116 * (1 - Math.exp(-fingerDistance / 145));
+const getResistedPull = (fingerDistance: number) =>
+  116 * (1 - Math.exp(-Math.max(0, fingerDistance) / 145));
 
 const MainLayout: React.FC = () => {
   const { activeTab, selectedToken } = useTerminal();
@@ -58,25 +59,34 @@ const MainLayout: React.FC = () => {
         return;
       }
 
-      // Arm refresh only when the main scroll area is already at its top edge.
-      // Normal upward finger movement remains native scrolling.
+      // Only arm the gesture when the scroll container is already at its top.
       touchStartY.current = main.scrollTop <= 1 ? event.touches[0].clientY : null;
       pullingRef.current = false;
       pullDistanceRef.current = 0;
+      setPullDistance(0);
     };
 
     const onTouchMove = (event: TouchEvent) => {
       if (touchStartY.current === null || refreshingRef.current || event.touches.length !== 1) return;
 
-      const delta = event.touches[0].clientY - touchStartY.current;
-      if (delta <= 0) {
-        // The user is scrolling into the content, not pulling past the top.
-        if (pullingRef.current) resetPull();
-        else touchStartY.current = null;
+      if (main.scrollTop > 1 && !pullingRef.current) {
+        resetPull();
         return;
       }
 
-      // If the page has moved away from the top, let the browser handle scrolling.
+      const delta = event.touches[0].clientY - touchStartY.current;
+
+      // Once a pull begins, keep tracking the same finger origin. Moving upward
+      // retracts the spinner and reverses its rotation; moving down again resumes it.
+      if (pullingRef.current) {
+        event.preventDefault();
+        const distance = getResistedPull(delta);
+        pullDistanceRef.current = distance;
+        setPullDistance(distance);
+        return;
+      }
+
+      if (delta <= 0) return;
       if (main.scrollTop > 1) {
         resetPull();
         return;
@@ -117,7 +127,8 @@ const MainLayout: React.FC = () => {
   }, []);
 
   const indicatorVisible = pullDistance > 0 || isRefreshing;
-  const indicatorRotation = Math.min(300, (pullDistance / REFRESH_TRIGGER_DISTANCE) * 300);
+  const indicatorOpacity = isRefreshing ? 1 : Math.min(1, pullDistance / 22);
+  const indicatorRotation = (pullDistance / REFRESH_TRIGGER_DISTANCE) * 360;
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20">
@@ -130,15 +141,20 @@ const MainLayout: React.FC = () => {
           aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
           className="pointer-events-none absolute left-1/2 top-0 z-50 flex items-center justify-center"
           style={{
-            opacity: indicatorVisible ? 1 : 0,
-            transform: `translate(-50%, ${indicatorVisible ? pullDistance + 12 : -44}px)`,
-            transition: isRefreshing ? 'transform 180ms cubic-bezier(.2,.8,.2,1), opacity 120ms ease' : 'opacity 100ms linear',
+            opacity: indicatorVisible ? indicatorOpacity : 0,
+            transform: `translate(-50%, ${pullDistance - 24}px)`,
+            transition: isRefreshing ? 'transform 180ms cubic-bezier(.2,.8,.2,1), opacity 120ms ease' : 'none',
           }}
         >
           <svg viewBox="0 0 24 24" className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} fill="none">
             <circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,.18)" strokeWidth="2.4" />
-            <path d="M12 3a9 9 0 0 1 9 9" stroke="white" strokeWidth="2.4" strokeLinecap="round"
-              transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`} />
+            <path
+              d="M12 3a9 9 0 0 1 9 9"
+              stroke="white"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`}
+            />
           </svg>
         </div>
         {renderActiveView()}
