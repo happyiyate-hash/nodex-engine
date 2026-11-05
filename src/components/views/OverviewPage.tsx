@@ -314,6 +314,7 @@ export const OverviewPage: React.FC = () => {
   const [filter, setFilter] = useState<FeedFilter>('all');
   const [search, setSearch] = useState('');
   const [demoLaunches, setDemoLaunches] = useState<DemoLaunchView[]>([]);
+  const [expandedScans, setExpandedScans] = useState<string[]>([]);
   const updateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -551,34 +552,61 @@ export const OverviewPage: React.FC = () => {
                   const demo = Boolean(demoItem);
                   const demoSeed = demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === launch.mint_address.split('-')[1]) : null;
                   return (
-                  <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`px-3 py-3 transition-colors hover:bg-white/[0.018] ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}>
-                    <div className="flex items-start gap-2.5">
-                      <div className={`relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border ${status === 'ANALYZING' ? 'border-amber-500/20 bg-amber-500/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
+                  <article
+                    key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature}
+                    className={`relative mb-1.5 overflow-hidden rounded-xl border bg-white/[0.025] backdrop-blur-xl transition-all duration-300 ${status === 'ANALYZING' ? 'border-amber-400/20 shadow-[0_0_14px_rgba(210,180,124,0.07)]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/15' : 'border-white/[0.07]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : 'animate-[token-arrive_360ms_ease-out]'}`}
+                  >
+                    {status === 'ANALYZING' && <div className="pointer-events-none absolute -inset-px rounded-xl border border-dashed border-amber-300/30 animate-[spin_8s_linear_infinite]" />}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedScans((current) => current.includes(launch.mint_address) ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])}
+                      className="relative flex min-h-[54px] w-full items-center gap-2.5 px-2.5 py-1.5 text-left"
+                      aria-expanded={expandedScans.includes(launch.mint_address)}
+                    >
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.07]' : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'border-emerald-400/20 bg-emerald-400/[0.06]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06]' : 'border-white/[0.07] bg-[#171717]'}`}>
                         {status === 'ANALYZING' ? <LoaderCircle className="h-4 w-4 animate-spin text-[#d2b47c]" /> : status === 'QUALIFIED' || status === 'PAPER ENTRY' ? <ShieldCheck className="h-4 w-4 text-[#83b982]" /> : status === 'REJECTED' || status === 'BUY FAILED' ? <ShieldX className="h-4 w-4 text-[#c77b7b]" /> : <Activity className="h-4 w-4 text-white/45" />}
-                        {status === 'ANALYZING' && <span className="absolute inset-x-1 bottom-1 h-px animate-pulse bg-[#d2b47c]/70" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-1.5"><div className="truncate text-[11px] font-semibold tracking-wide text-white">{demoSeed ? demoSeed.name : `${launch.mint_address.slice(0, 6)}…${launch.mint_address.slice(-5)}`}</div>{demoSeed && <span className="shrink-0 text-[8px] text-white/30">{demoSeed.symbol}</span>}</div>
-                          <span className={`shrink-0 rounded-md border px-1.5 py-1 text-[8px] font-semibold tracking-[0.04em] ${statusStyle[status]}`}>{status}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-[11px] font-semibold text-white">{demoSeed ? demoSeed.name : `${launch.mint_address.slice(0, 6)}…${launch.mint_address.slice(-5)}`}</span>
+                          {demoSeed && <span className="shrink-0 text-[8px] text-white/35">{demoSeed.symbol}</span>}
                         </div>
-                        <div className="mt-1 flex items-center gap-1.5 text-[9px] text-white/35">
-                          <span>{demo ? 'SIMULATED LAUNCH' : launch.source || 'Solana'}</span>
-                          <span className="text-white/15">·</span>
-                          <span>{timeAgo(launch.detected_at)}</span>
-                        </div>
-                        <p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-white/45">{reason}</p>
-                        {demo && status === 'ANALYZING' && <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-[#d2b47c] transition-[width] duration-300 ease-out" style={{ width: `${demoItem?.progress ?? 0}%` }} /></div>}
+                        <div className="mt-0.5 truncate text-[9px] text-white/35">{demo ? 'SIMULATED EXAMPLE' : launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
+                      </div>
+                      <span className={`shrink-0 rounded-md border px-1.5 py-1 text-[8px] font-semibold tracking-wide ${statusStyle[status]}`}>{status}</span>
+                      <span className="ml-0.5 text-[10px] text-white/30">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
+                    </button>
+                    {status === 'ANALYZING' && demo && <div className="mx-2.5 mb-1 h-[2px] overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-[#d2b47c] transition-[width] duration-300" style={{ width: `${demoItem?.progress ?? 0}%` }} /></div>}
+                    {expandedScans.includes(launch.mint_address) && (
+                      <div className="relative border-t border-white/[0.06] px-2.5 py-2">
+                        <p className="text-[9px] leading-relaxed text-white/55">{reason}</p>
+                        {!demo && (() => {
+                          const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
+                          const report = reportEvent?.data;
+                          const checks = Array.isArray(report?.checks) ? report.checks : [];
+                          return (
+                            <div className="mt-2 space-y-1.5">
+                              {checks.length > 0 ? checks.map((check: any, index: number) => (
+                                <div key={check.name || index} className="flex items-start justify-between gap-3 text-[9px]">
+                                  <span className="min-w-0 text-white/45">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
+                                  <span className={`shrink-0 font-medium ${String(check.status).toLowerCase() === 'passed' || String(check.status).toLowerCase() === 'ok' ? 'text-emerald-300' : String(check.status).toLowerCase() === 'failed' ? 'text-red-300' : 'text-amber-200'}`}>{String(check.status || 'unverified').toUpperCase()}</span>
+                                </div>
+                              )) : <div className="text-[9px] text-white/35">{status === 'ANALYZING' ? 'Backend scanner is running. Individual check results have not arrived yet.' : 'No detailed scan report is available for this launch.'}</div>}
+                              {report && <div className="mt-2 border-t border-white/[0.06] pt-2 text-[9px] text-white/40">Mint authority: {report.mint_authority ? 'Present' : 'None reported'} · Freeze authority: {report.freeze_authority ? 'Present' : 'None reported'}</div>}
+                              {report?.decision_reason && <p className="mt-1 text-[9px] text-white/55">{String(report.decision_reason)}</p>}
+                            </div>
+                          );
+                        })()}
+                        {demo && <span className="mt-1 inline-block text-[8px] text-white/25">Illustrative demo state — not a live security result</span>}
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <span className="text-[8px] text-white/25">Updated {timeAgo(updatedAt)}</span>
                           <div className="flex items-center gap-3">
-                            {demo ? <span className="text-[8px] font-medium tracking-[0.08em] text-white/25">DEMO ONLY</span> : <><button onClick={(event) => copyMint(event, launch.mint_address)} className="inline-flex items-center gap-1 text-[9px] text-white/40 hover:text-white/80" aria-label="Copy token mint"><Copy className="h-3 w-3" /> Copy mint</button><a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] text-white/40 hover:text-white/80">Inspect <ExternalLink className="h-3 w-3" /></a></>}
+                            {demo ? <span className="text-[8px] text-white/25">DEMO ONLY</span> : <><button onClick={(event) => copyMint(event, launch.mint_address)} className="inline-flex items-center gap-1 text-[9px] text-white/40"><Copy className="h-3 w-3" /> Copy</button><a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[9px] text-white/40">Inspect <ExternalLink className="h-3 w-3" /></a></>}
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </article>
-                  );
                 })}
               </div>
             )}
