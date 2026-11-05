@@ -3,7 +3,7 @@
  * Provides offline caching for the application shell and assets.
  */
 
-const CACHE_NAME = 'nodex-terminal-v1';
+const CACHE_NAME = 'nodex-terminal-v2';
 
 const STATIC_ASSETS = [
   '/',
