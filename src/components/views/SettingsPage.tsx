@@ -237,8 +237,11 @@ export const SettingsPage: React.FC = () => {
           </div>
           {testResult.status !== 'idle' && (
             <div className={`flex items-start gap-3 rounded-xl border p-4 text-xs leading-relaxed ${testResult.status === 'success' ? 'border-emerald-500/25 bg-emerald-500/[0.07] text-emerald-200' : testResult.status === 'failed' ? 'border-red-500/25 bg-red-500/[0.07] text-red-200' : 'border-sky-500/20 bg-sky-500/[0.05] text-sky-100'}`}>
-              {testResult.status === 'success' ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
-              <span>{testResult.message || 'Checking…'}</span>
+              {testResult.status === 'success' ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : testResult.status === 'testing' ? <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+              <div className="min-w-0">
+                <div className="mb-1 font-semibold">{testResult.status === 'success' ? 'Connection successful' : testResult.status === 'failed' ? 'Connection failed' : 'Connection in progress'}</div>
+                <p>{testResult.message || 'Waiting for the server…'}</p>
+              </div>
             </div>
           )}
         </div>
