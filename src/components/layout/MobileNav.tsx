@@ -17,12 +17,12 @@ const MAIN_ITEMS: { tab: NavigationTab; label: string; icon: React.ElementType }
   { tab: 'event_monitor', label: 'Logs', icon: ScrollText },
 ];
 
-export const MobileNav: React.FC = () => {
+export const MobileNav: React.FC<{ hidden?: boolean }> = ({ hidden = false }) => {
   const { activeTab, setActiveTab, closeTokenDetail, selectedToken } = useTerminal();
   const select = (tab: NavigationTab) => { closeTokenDetail(); setActiveTab(tab); };
 
   return (
-    <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 flex items-center gap-2 select-none pointer-events-auto">
+    <div className={`fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 flex items-center gap-2 select-none transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${hidden ? "translate-y-[150%] opacity-0 pointer-events-none" : "translate-y-0 opacity-100 pointer-events-auto"}`}>
       <nav aria-label="Main navigation" className="glass-nav-float flex h-[60px] min-w-0 flex-1 items-center rounded-full p-1.5 backdrop-blur-2xl">
         <div className="grid h-full w-full grid-cols-3 items-center gap-1">
           {MAIN_ITEMS.map(({ tab, label, icon: Icon }) => {
