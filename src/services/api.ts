@@ -115,6 +115,16 @@ export class NodeXApiClient {
   }>> {
     return this.request(`/api/v1/events/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
+  public clearEngineHistory(adminKey: string): Promise<{
+    status: string; deleted_token_records: number; deleted_raw_event_records: number;
+    preserved: string[];
+  }> {
+    return this.request('/api/v1/admin/maintenance/clear-history', {
+      method: 'POST',
+      headers: { 'X-NodeX-Admin-Key': adminKey },
+    });
+  }
+
   public scanToken(mint:string) {
     return this.request<any>(`/api/v1/tokens/${encodeURIComponent(mint)}/scan`);
   }
