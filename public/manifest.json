@@ -5,11 +5,15 @@
   "description": "Institutional Solana token monitoring and automated paper-trading terminal.",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "any",
-  "background_color": "#080808",
-  "theme_color": "#080808",
-  "categories": ["finance", "utilities", "productivity"],
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "categories": [
+    "finance",
+    "utilities",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -42,21 +46,40 @@
       "short_name": "Positions",
       "description": "View open Solana token positions and real-time P&L",
       "url": "/#positions",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Live Token Feed",
       "short_name": "Feed",
       "description": "Stream incoming Solana token detections and migration flags",
       "url": "/#live_feed",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Event Monitor",
       "short_name": "Events",
       "description": "Inspect real-time WebSocket Geyser transactions and payloads",
       "url": "/#event_monitor",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
+  ],
+  "display_override": [
+    "fullscreen",
+    "standalone"
   ]
 }
