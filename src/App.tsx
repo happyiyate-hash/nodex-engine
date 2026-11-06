@@ -48,7 +48,7 @@ const MainLayout: React.FC = () => {
     switch (activeTab) {
       case 'overview': return <OverviewPage />;
       case 'positions': return <PositionsPage />;
-      case 'live_feed': return <LiveFeedPage />;
+      case 'live_feed': return null;
       case 'event_monitor': return <LogsPage />;
       case 'strategy': return <StrategyPage />;
       case 'token_intelligence': return <TokenIntelligencePage />;
@@ -185,7 +185,7 @@ const MainLayout: React.FC = () => {
             <path d="M12 3a9 9 0 0 1 9 9" stroke="white" strokeWidth="2.4" strokeLinecap="round" transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`} />
           </svg>
         </div>
-        {renderActiveView()}
+        <LiveFeedPage activeTab={activeTab} visible={!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed')} />\n        {activeTab !== 'overview' && activeTab !== 'live_feed' || selectedToken ? renderOtherView() : null}
       </main>
       {!selectedToken && activeTab !== 'event_monitor' && <MobileNav />}
     </div>
