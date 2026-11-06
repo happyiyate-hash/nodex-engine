@@ -14,18 +14,17 @@ export const SettingsPage: React.FC = () => {
       >
         <div className="flex h-14 items-center justify-between px-4">
           <h1 className="text-[15px] font-semibold tracking-tight text-white">Settings</h1>
-          <button
-            type="button"
-            onClick={toggleEngine}
-            aria-label={isRunning ? 'Pause engine' : 'Resume engine'}
-            title={isRunning ? 'Pause engine' : 'Resume engine'}
-            className={`inline-flex h-9 items-center justify-center gap-2 rounded-full border px-3.5 text-[11px] font-semibold transition-colors active:scale-[0.97] ${isRunning
-              ? 'border-amber-400/20 bg-amber-400/[0.08] text-amber-200'
-              : 'border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-200'}`}
-          >
-            {isRunning ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            <span>{isRunning ? 'Pause' : 'Resume'}</span>
-          </button>
+          <div className="ml-auto flex h-10 w-11 shrink-0 items-center justify-center rounded-xl bg-white p-1 shadow-[0_2px_10px_rgba(255,255,255,0.08)]">
+            <button
+              type="button"
+              onClick={toggleEngine}
+              aria-label={isRunning ? 'Pause engine' : 'Resume engine'}
+              title={isRunning ? 'Pause engine' : 'Resume engine'}
+              className="flex h-full w-full items-center justify-center rounded-lg bg-black text-white transition-transform active:scale-90"
+            >
+              {isRunning ? <Pause className="h-4 w-4" strokeWidth={2.5} /> : <Play className="h-4 w-4 fill-current" strokeWidth={2.5} />}
+            </button>
+          </div>
         </div>
       </header>
 
