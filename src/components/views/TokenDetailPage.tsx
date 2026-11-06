@@ -79,9 +79,12 @@ export const TokenDetailPage: React.FC = () => {
       <header className="sticky top-0 z-30 w-full shrink-0 border-b border-white/[0.06] bg-[#000000] px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.65rem)] shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5">
         <div className="flex w-full items-center justify-between gap-3">
           {/* Token identity sits flush to the left edge of the header. */}
-          <div className="flex min-w-0 items-center gap-2.5">
-            <TokenAvatar symbol={activeToken.symbol} size="md" className="shadow-md" />
-            <div className="flex min-w-0 flex-col justify-center gap-1.5 leading-[1.15]">
+          <div className="flex min-w-0 items-center gap-3">
+            <TokenAvatar symbol={activeToken.symbol} size="lg" className="shadow-md" />
+            <div className="flex min-w-0 flex-col justify-center gap-1 leading-[1.15]">
+              <span className="block truncate text-[13px] font-medium tracking-[0.01em] text-white/95">
+                {activeToken.name || activeToken.symbol}
+              </span>
               <button
                 onClick={handleCopyMint}
                 className="flex min-w-0 items-center gap-1 text-[10px] font-normal tracking-[0.015em] text-white/40 transition-colors hover:text-white font-mono"
@@ -89,9 +92,6 @@ export const TokenDetailPage: React.FC = () => {
                 <span>{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
                 {copiedMint ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
               </button>
-              <span className="block truncate text-[13px] font-medium tracking-[0.01em] text-white/95">
-                {activeToken.name || activeToken.symbol}
-              </span>
             </div>
           </div>
 
