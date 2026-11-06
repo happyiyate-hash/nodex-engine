@@ -181,9 +181,8 @@ export const TokenDetailPage: React.FC = () => {
 
         {/* Pure Black Canvas with Dot Matrix & Backward Tracking Line */}
         <DotMatrixChart
-          currentPrice={activeToken.current_price_usd}
-          entryPrice={activePosition ? entryPriceUsd : undefined}
           currentPrice={liveTokenPrice}
+          entryPrice={activePosition && priceCurrency === 'USD' ? entryPriceUsd : undefined}
           priceHistory={activeToken.price_history_5m}
           isPositive={isPositive}
           timeframe={timeframe}
