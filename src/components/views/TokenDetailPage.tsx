@@ -28,7 +28,11 @@ export const TokenDetailPage: React.FC = () => {
   const lastScrollTop = useRef(0);
   const headerHeight = 56;
 
-  const activeToken = selectedToken || tokens[0];
+  // Resolve the selected token from the shared registry on every render so live
+  // token merges are reflected immediately instead of displaying a stale snapshot.
+  const activeToken = selectedToken
+    ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
+    : tokens[0];
   if (!activeToken) return null;
 
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
@@ -36,6 +40,9 @@ export const TokenDetailPage: React.FC = () => {
   const liveTokenPrice = priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd;
   const currentPrice = scrubPrice ?? liveTokenPrice;
   const marketChangePct = activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
+  const pnlPct = marketChangePct ?? 0;
+  const isPositive = (activePosition?.pnl_sol ?? marketChangePct ?? 0) >= 0;
+  const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
   const formatTokenPrice = (value: number) => priceCurrency === 'SOL'
     ? `${value.toFixed(10).replace(/\.?0+$/, '')} SOL`
