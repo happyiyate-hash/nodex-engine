@@ -35,7 +35,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const points = useMemo<PriceTick[]>(() => {
     const count = 50;
     const now = Date.now();
-    const stepMs = timeframe === '1m' ? 1200 : timeframe === '5m' ? 6000 : timeframe === '15m' ? 18000 : timeframe === '1H' ? 72000 : 1728000;
     const historical = (priceHistory || []).filter((point) => Number.isFinite(point.price) && point.price > 0).slice(-count);
     if (historical.length > 0) {
       const livePoints = historical.map((point) => ({
@@ -49,35 +48,16 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           price: currentPrice,
         });
       }
-      if (livePoints.length === 1) {
-        livePoints.push({ ...livePoints[0] });
-      }
+      if (livePoints.length === 1) livePoints.push({ ...livePoints[0] });
       return livePoints.slice(-count);
     }
 
-    const result: PriceTick[] = [];
-
-    const base = entryPrice ? entryPrice * 0.94 : currentPrice * 0.88;
-    const target = currentPrice;
-
-    for (let i = 0; i < count; i++) {
-      const progress = i / (count - 1);
-      // Realistic trending curve
-      const trend = base + (target - base) * Math.pow(progress, 0.85);
-      const wave1 = Math.sin(i * 0.35) * currentPrice * 0.018;
-      const wave2 = Math.cos(i * 0.7) * currentPrice * 0.012;
-      const val = i === count - 1 ? target : Math.max(base * 0.8, trend + wave1 + wave2);
-
-      const d = new Date(now - (count - 1 - i) * stepMs);
-      const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      result.push({
-        time: timeStr,
-        price: val,
-      });
+    // No synthetic candles: show only the real current quote until ticks arrive.
+    if (currentPrice > 0) {
+      const current = { time: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), price: currentPrice };
+      return [current, { ...current }];
     }
-
-    return result;
+    return [];
   }, [currentPrice, entryPrice, timeframe, priceHistory]);
 
   // Handle responsive width
