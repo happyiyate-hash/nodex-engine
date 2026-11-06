@@ -73,7 +73,7 @@ export const StrategyPage: React.FC = () => {
   const targetRow = (
     target: RiskTarget,
     title: string,
-    description: string,
+    _description: string,
     Icon: typeof TrendingDown,
     tone: 'loss' | 'profit',
   ) => {
@@ -81,26 +81,23 @@ export const StrategyPage: React.FC = () => {
     const enabled = value > 0;
     const isLoss = tone === 'loss';
     return (
-      <div className="flex items-center gap-4 border-b border-white/[0.08] py-4">
-        <span className={`grid size-9 shrink-0 place-items-center rounded-full ${isLoss ? 'bg-rose-400/[0.09] text-rose-300' : 'bg-emerald-400/[0.09] text-emerald-300'}`}>
-          <Icon className="h-[17px] w-[17px]" />
+      <button
+        type="button"
+        onClick={() => openTarget(target)}
+        aria-label={`Configure ${title}`}
+        className="flex min-h-[76px] min-w-0 flex-col justify-between rounded-xl border border-white/[0.09] bg-white/[0.025] p-3 text-left transition-colors hover:bg-white/[0.055] active:scale-[0.99]"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={`grid size-6 shrink-0 place-items-center rounded-full ${isLoss ? 'bg-rose-400/[0.10] text-rose-300' : 'bg-emerald-400/[0.10] text-emerald-300'}`}>
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className="truncate text-[11px] font-semibold text-white/85">{title}</span>
+          <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-white/35" />
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold text-white">{title}</p>
-          <p className="mt-0.5 text-[10px] leading-relaxed text-white/40">{description}</p>
-          <p className={`mt-1 text-[12px] font-semibold tabular-nums ${enabled ? 'text-white/85' : 'text-white/35'}`}>
-            {enabled ? `${value}%` : 'Disabled'}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => openTarget(target)}
-          aria-label={`Configure ${title}`}
-          className="grid size-11 shrink-0 place-items-center rounded-full border border-white/[0.13] bg-white/[0.045] text-white/75 transition-colors hover:bg-white/[0.09] active:scale-95"
-        >
-          <ChevronDown className="h-[18px] w-[18px]" />
-        </button>
-      </div>
+        <span className={`mt-2 pl-8 text-[14px] font-semibold leading-none tabular-nums ${enabled ? 'text-white' : 'text-white/35'}`}>
+          {enabled ? `${value}%` : 'Off'}
+        </span>
+      </button>
     );
   };
 
@@ -116,8 +113,10 @@ export const StrategyPage: React.FC = () => {
           <SlidersHorizontal className="h-4 w-4 text-white/50" />
           <h3 className="text-[12px] font-semibold text-white/90">Exit targets</h3>
         </div>
-        {targetRow('stop_loss_pct', 'Stop loss', 'Exit a paper position after it falls by the selected amount.', TrendingDown, 'loss')}
-        {targetRow('take_profit_pct', 'Take profit', 'Exit a paper position after it gains by the selected amount.', TrendingUp, 'profit')}
+        <div className="grid grid-cols-2 gap-2.5 py-3">
+          {targetRow('stop_loss_pct', 'Stop loss', '', TrendingDown, 'loss')}
+          {targetRow('take_profit_pct', 'Take profit', '', TrendingUp, 'profit')}
+        </div>
       </section>
 
       <section className="pt-5">
