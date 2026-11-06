@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight,
-  Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
+  Database, HardDrive, LockKeyhole, Pause, Play, PlugZap, Radar, RefreshCw,
   SlidersHorizontal, Trash2, Wifi,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
