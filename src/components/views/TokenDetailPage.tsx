@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
@@ -26,6 +26,8 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [tradeMessage, setTradeMessage] = useState<string | null>(null);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const lastScrollTop = useRef(0);
 
   const activeToken = selectedToken || tokens[0];
   if (!activeToken) return null;
@@ -75,8 +77,12 @@ export const TokenDetailPage: React.FC = () => {
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#000000] text-white select-none font-sans">
-      {/* 1. ULTRA-COMPACT TOP NAVIGATION (NO BULKY BARS, ONLY LOGO ON LEFT & PRICE/PERCENTAGE ON RIGHT) */}
-      <header className="sticky top-0 z-30 w-full shrink-0 border-b border-white/[0.06] bg-[#000000] px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.65rem)] shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5">
+      {/* Safe area stays fixed while the token navigation collapses and reappears. */}
+      <div aria-hidden="true" className="h-[env(safe-area-inset-top)] w-full shrink-0 bg-[#000000]" />
+      {/* 1. DIRECTION-AWARE COLLAPSING TOKEN NAVIGATION */}
+      <div className={`z-30 grid w-full shrink-0 overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${headerVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="min-h-0 overflow-hidden">
+      <header className="w-full border-b border-white/[0.06] bg-[#000000] px-3 py-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5">
         <div className="flex w-full items-center justify-between gap-3">
           {/* Token identity sits flush to the left edge of the header. */}
           <div className="flex min-w-0 items-center gap-3">
@@ -108,8 +114,21 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
       </header>
+        </div>
+      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28"
+        onScroll={(event) => {
+          const nextScrollTop = event.currentTarget.scrollTop;
+          const delta = nextScrollTop - lastScrollTop.current;
+          if (Math.abs(delta) > 3) {
+            if (delta > 0) setHeaderVisible(false);
+            else setHeaderVisible(true);
+            lastScrollTop.current = nextScrollTop;
+          }
+        }}
+      >
       {/* Trade Notification Toast */}
       {tradeMessage && (
         <div className="mx-4 sm:mx-6 mt-2 p-2 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 font-mono text-xs flex items-center gap-2">
