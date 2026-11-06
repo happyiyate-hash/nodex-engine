@@ -97,9 +97,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const history = previous?.price_history_5m ? [...previous.price_history_5m] : [];
   if (price > 0 && price !== previous?.current_price_usd) history.push({ time: Date.parse(event.timestamp) || Date.now(), price, volume: Number(data.volume_5m_usd || 0) });
   const venueValue = String(data.venue || data.source || previous?.venue || 'pump.fun').toLowerCase();
-  const venue = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
+  const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(data.decision || data.status || '').toLowerCase();
-  const qualification = event.event_type === 'paper_buy_executed' ? 'bought_paper'
+  const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
     : event.event_type === 'token_scan_started' ? 'under_analysis'
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
