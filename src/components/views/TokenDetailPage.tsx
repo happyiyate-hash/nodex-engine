@@ -410,7 +410,7 @@ export const TokenDetailPage: React.FC = () => {
       </section>
 
       {/* Compact, full-width position and live market information. */}
-      <section className="w-full px-4 sm:px-6 pt-3 pb-6 max-w-4xl mx-auto font-mono">
+      <section className="w-full px-4 sm:px-6 pt-3 pb-8 max-w-4xl mx-auto font-mono border-b border-white/[0.10]">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">My Position</h2>
@@ -521,11 +521,11 @@ export const TokenDetailPage: React.FC = () => {
       <button
         type="button"
         onClick={closeTokenDetail}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-5 py-3 text-[13px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97]"
-        aria-label="Go back"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[60] flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97]"
+        aria-label="Back"
       >
-        <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
-        <span>Go back</span>
+        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.5} />
+        <span>Back</span>
       </button>
     </div>
   );
