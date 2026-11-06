@@ -349,8 +349,8 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 5: THE VERY BIG CARD AT THE VERY BOTTOM (SHOWING ANNUAL PROFIT & DOLLAR VALUE WITH PLUS) */}
-        <div className="relative rounded-2xl bg-gradient-to-b from-[#0f1412] via-[#090b0a] to-[#050606] border border-emerald-500/30 p-5 sm:p-6 shadow-[0_10px_35px_rgba(0,0,0,0.8)] overflow-hidden font-mono">
+        {/* Only show annualized return when a backend position exists. */}
+        {activePosition && <div className="relative rounded-2xl bg-gradient-to-b from-[#0f1412] via-[#090b0a] to-[#050606] border border-emerald-500/30 p-5 sm:p-6 shadow-[0_10px_35px_rgba(0,0,0,0.8)] overflow-hidden font-mono">
           {/* Ambient emerald backlight glow */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none" />
 
@@ -396,7 +396,7 @@ export const TokenDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
       </section>
 
       </div>
