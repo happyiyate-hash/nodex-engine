@@ -1,6 +1,5 @@
 import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot } from '../types';
 
-const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\/$/, '');
 function websocketUrlFor(backendUrl: string): string {
   if (!backendUrl) return '';
   try {
@@ -14,7 +13,6 @@ function websocketUrlFor(backendUrl: string): string {
     return '';
   }
 }
-const WS_URL = websocketUrlFor(API_URL) || ((typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (typeof window !== 'undefined' ? window.location.host : 'localhost') + '/api/v1/ws');
 
 const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
@@ -29,11 +27,11 @@ export interface EngineControlSnapshot {
 }
 
 export interface ApiSettings {
-  backendUrl: string; wsUrl: string; wsUrlOverride: string; domain: string; publicIp: string; mode: 'RUST_BACKEND'; rpcUrl: string;
+  backendUrl: string; wsUrl: string; wsUrlOverride: string; mode: 'RUST_BACKEND'; rpcUrl: string;
   autoReconnection: boolean; heartbeatIntervalMs: number; apiKey: string; adminApiKey: string;
 }
 export const DEFAULT_SETTINGS: ApiSettings = {
-  backendUrl: API_URL, wsUrl: WS_URL, wsUrlOverride: '', domain: '', publicIp: '', mode: 'RUST_BACKEND', rpcUrl: '',
+  backendUrl: '', wsUrl: '', wsUrlOverride: '', mode: 'RUST_BACKEND', rpcUrl: '',
   autoReconnection: true, heartbeatIntervalMs: 5000, apiKey: '', adminApiKey: '',
 };
 
@@ -42,12 +40,10 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
   try {
     const raw = window.localStorage.getItem(CONNECTION_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrlOverride?: unknown; domain?: unknown; publicIp?: unknown; adminApiKey?: unknown };
+    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrlOverride?: unknown; adminApiKey?: unknown };
     return {
       ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl } : {}),
       ...(typeof parsed.wsUrlOverride === 'string' ? { wsUrlOverride: parsed.wsUrlOverride } : {}),
-      ...(typeof parsed.domain === 'string' ? { domain: parsed.domain } : {}),
-      ...(typeof parsed.publicIp === 'string' ? { publicIp: parsed.publicIp } : {}),
       ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: parsed.adminApiKey } : {}),
     };
   } catch {
@@ -111,13 +107,11 @@ export class NodeXApiClient {
     };
     if (typeof window !== 'undefined') {
       try {
-        // These are client-side connection credentials, not provider or blockchain secrets.
+        // The operator key is saved in this browser profile; it is not secure secret storage.
         window.localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
           backendUrl: this.settings.backendUrl,
           adminApiKey: this.settings.adminApiKey,
           wsUrlOverride: this.settings.wsUrlOverride,
-          domain: this.settings.domain,
-          publicIp: this.settings.publicIp,
         }));
       } catch (error) {
         console.warn('Unable to persist NodeX connection preferences in this browser.', error);
