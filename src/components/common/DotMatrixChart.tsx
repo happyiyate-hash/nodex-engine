@@ -242,8 +242,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       };
     }
     const scale = scaleRef.current;
-    const scaleRange = Math.max(scale.max - scale.min, Number.EPSILON);
-    const getY = (price: number) => padTop + plotH - ((price - scale.min) / scaleRange) * plotH;
+    const rawScaleRange = scale.max - scale.min;
+    const scaleRange = Number.isFinite(rawScaleRange) && rawScaleRange > 0 ? rawScaleRange : 1;
+    const getY = (price: number) => {
+      if (!Number.isFinite(price) || !Number.isFinite(scale.min) || !Number.isFinite(scaleRange)) return padTop + plotH / 2;
+      const y = padTop + plotH - ((price - scale.min) / scaleRange) * plotH;
+      return Number.isFinite(y) ? y : padTop + plotH / 2;
+    };
     // Keep a small live-side breathing margin. Points are distributed evenly
     // across the remaining viewport instead of touching the right plot edge.
     const rightLiveInset = Math.min(14, plotW * 0.06);
@@ -302,12 +307,20 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         ctx.fillStyle = areaGrad;
         ctx.fill();
       }
-      drawPath();
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = 1.8;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
+      if (visible.length > 1) {
+        drawPath();
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1.8;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      } else {
+        // A single 24H bucket still needs a visible price mark.
+        ctx.beginPath();
+        ctx.arc(latestX, latestY, 2.8, 0, Math.PI * 2);
+        ctx.fillStyle = lineColor;
+        ctx.fill();
+      }
     } else {
       const slotWidth = visible.length > 1 ? livePlotW / (visible.length - 1) : livePlotW;
       const bodyWidth = Math.max(2, Math.min(12, slotWidth * 0.62));
