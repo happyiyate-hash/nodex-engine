@@ -3,7 +3,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
 import {
   AlertCircle, Check, ChevronDown, History, ShieldCheck, SlidersHorizontal,
-  TrendingDown, TrendingUp, X,
+  X,
 } from 'lucide-react';
 
 type RiskTarget = 'stop_loss_pct' | 'take_profit_pct';
@@ -70,32 +70,22 @@ export const StrategyPage: React.FC = () => {
     setActiveTarget(null);
   };
 
-  const targetRow = (
-    target: RiskTarget,
-    title: string,
-    _description: string,
-    Icon: typeof TrendingDown,
-    tone: 'loss' | 'profit',
-  ) => {
+  const targetCell = (target: RiskTarget, title: string) => {
     const value = form[target];
     const enabled = value > 0;
-    const isLoss = tone === 'loss';
     return (
       <button
         type="button"
         onClick={() => openTarget(target)}
         aria-label={`Configure ${title}`}
-        className="flex min-h-[76px] min-w-0 flex-col justify-between rounded-xl border border-white/[0.09] bg-white/[0.025] p-3 text-left transition-colors hover:bg-white/[0.055] active:scale-[0.99]"
+        className="flex min-h-[76px] min-w-0 flex-1 flex-col justify-between p-3 text-left transition-colors hover:bg-white/[0.035] active:bg-white/[0.06]"
       >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className={`grid size-6 shrink-0 place-items-center rounded-full ${isLoss ? 'bg-rose-400/[0.10] text-rose-300' : 'bg-emerald-400/[0.10] text-emerald-300'}`}>
-            <Icon className="h-3.5 w-3.5" />
-          </span>
-          <span className="truncate text-[11px] font-semibold text-white/85">{title}</span>
-          <ChevronDown className="ml-auto h-3.5 w-3.5 shrink-0 text-white/35" />
+        <span className="flex w-full min-w-0 items-center justify-between gap-2">
+          <span className="truncate text-[11px] font-medium text-white/55">{title}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
         </span>
-        <span className={`mt-2 pl-8 text-[14px] font-semibold leading-none tabular-nums ${enabled ? 'text-white' : 'text-white/35'}`}>
-          {enabled ? `${value}%` : 'Off'}
+        <span className={`mt-2 text-[14px] font-semibold leading-none tabular-nums ${enabled ? 'text-white/90' : 'text-white/35'}`}>
+          {enabled ? `${value}%` : 'Disabled'}
         </span>
       </button>
     );
@@ -113,9 +103,9 @@ export const StrategyPage: React.FC = () => {
           <SlidersHorizontal className="h-4 w-4 text-white/50" />
           <h3 className="text-[12px] font-semibold text-white/90">Exit targets</h3>
         </div>
-        <div className="grid grid-cols-2 gap-2.5 py-3">
-          {targetRow('stop_loss_pct', 'Stop loss', '', TrendingDown, 'loss')}
-          {targetRow('take_profit_pct', 'Take profit', '', TrendingUp, 'profit')}
+        <div className="my-3 flex overflow-hidden rounded-lg border border-white/[0.12] divide-x divide-white/[0.12]">
+          {targetCell('stop_loss_pct', 'Stop loss')}
+          {targetCell('take_profit_pct', 'Take profit')}
         </div>
       </section>
 
