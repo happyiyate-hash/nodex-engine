@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
+import { PricePoint } from '../../types';
 
 export interface PriceTick {
   time: string;
@@ -8,6 +9,7 @@ export interface PriceTick {
 interface DotMatrixChartProps {
   currentPrice: number;
   entryPrice?: number;
+  priceHistory?: PricePoint[];
   isPositive?: boolean;
   timeframe?: string;
   onPriceHover?: (price: number | null, time: string | null) => void;
@@ -17,6 +19,7 @@ interface DotMatrixChartProps {
 export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   currentPrice,
   entryPrice,
+  priceHistory,
   isPositive = true,
   timeframe = '24H',
   onPriceHover,
@@ -33,6 +36,14 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const count = 50;
     const now = Date.now();
     const stepMs = timeframe === '1m' ? 1200 : timeframe === '5m' ? 6000 : timeframe === '15m' ? 18000 : timeframe === '1H' ? 72000 : 1728000;
+    const historical = (priceHistory || []).filter((point) => Number.isFinite(point.price) && point.price > 0).slice(-count);
+    if (historical.length > 1) {
+      return historical.map((point) => ({
+        time: new Date(point.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        price: point.price,
+      }));
+    }
+
     const result: PriceTick[] = [];
 
     const base = entryPrice ? entryPrice * 0.94 : currentPrice * 0.88;
@@ -56,7 +67,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     }
 
     return result;
-  }, [currentPrice, entryPrice, timeframe]);
+  }, [currentPrice, entryPrice, timeframe, priceHistory]);
 
   // Handle responsive width
   useEffect(() => {
