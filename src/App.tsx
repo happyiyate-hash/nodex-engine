@@ -165,7 +165,7 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20">
-      <main ref={mainRef} className={`relative z-10 h-full w-full overscroll-y-none focus:outline-none ${(activeTab === "overview" || activeTab === "live_feed") && !selectedToken ? "overflow-hidden pb-0" : "overflow-y-auto pb-24"}`}>
+      <main ref={mainRef} className={`relative z-10 h-full w-full overscroll-y-none focus:outline-none ${(activeTab === "overview" || activeTab === "live_feed" || selectedToken) ? "overflow-hidden pb-0" : "overflow-y-auto pb-24"}`}>
         <div
           aria-live="polite"
           aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
