@@ -46,9 +46,10 @@ export const TokenDetailPage: React.FC = () => {
       setDemoData(null);
       return;
     }
-    const seedPrice = activeToken.current_price_sol > 0
-      ? activeToken.current_price_sol
-      : activeToken.current_price_usd > 0 ? activeToken.current_price_usd : 0.00000125;
+    const seedCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
+    const seedPrice = seedCurrency === 'SOL'
+      ? (activeToken.current_price_sol > 0 ? activeToken.current_price_sol : 0.00000125)
+      : (activeToken.current_price_usd > 0 ? activeToken.current_price_usd : 0.00000125);
     const seedHistory = (activeToken.price_history_5m || []).filter((point) => point.price > 0).slice(-50);
     setDemoData({
       tick: 0, price: seedPrice, changePct: 0,
@@ -256,31 +257,31 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Token balance</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? formatMetric(activePosition.amount_tokens, 6) : formatMetric((demoData?.price ? 125000 / demoData.price : 0), 2)}
+                {formatMetric(demoData?.price ? 125000 * ((demoData.price / (activeToken.price_currency === 'SOL' ? (activeToken.current_price_sol || demoData.price) : (activeToken.current_price_usd || demoData.price)))) : 125000, 2)}
               </div>
-              <div className="text-[9px] text-white/30">{activePosition ? activeToken.symbol : 'DEMO POSITION'}</div>
+              <div className="text-[9px] text-white/30">{activeToken.symbol} · DEMO</div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Average entry price</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? `${formatMetric(activePosition.entry_price_sol, 10)} SOL` : `${formatMetric((demoData?.price || 1) * 0.91, 10)} ${priceCurrency}`}
+                {formatMetric((activeToken.price_currency === 'SOL' ? (activeToken.current_price_sol || demoData?.price || 1) : (activeToken.current_price_usd || demoData?.price || 1)) * 0.91, 10)} {priceCurrency}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Total budget</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? `${formatMetric(activePosition.initial_investment_sol, 4)} SOL` : '1.2500 SOL'}
+                1.2500 SOL
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Current position value</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition && positionValueSol != null ? `${formatMetric(positionValueSol, 4)} SOL` : `${formatMetric(demoData?.price ? 1.25 * (demoData.price / (demoData.price / (1 + (demoData.changePct || 0) / 100))) : 1.25, 4)} SOL`}
+                {`${formatMetric(1.25 * (1 + (demoData?.changePct || 0) / 100), 4)} SOL`}
               </div>
             </div>
             <div className="col-span-2">
               <div className="text-[10px] text-white/40">Unrealized P&L</div>
-              <div className={`mt-0.5 text-[13px] font-semibold ${positionPnlSol == null ? 'text-white/55' : positionPnlSol >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <div className={`mt-0.5 text-[13px] font-semibold ${(demoData?.changePct || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {activePosition && positionPnlSol != null
                   ? `${positionPnlSol >= 0 ? '+' : ''}${formatMetric(positionPnlSol, 4)} SOL${positionPnlPct == null ? '' : ` · ${positionPnlPct >= 0 ? '+' : ''}${formatMetric(positionPnlPct, 2)}%`}`
                   : `${(demoData?.changePct || 0) >= 0 ? '+' : ''}${formatMetric(1.25 * (demoData?.changePct || 0) / 100, 4)} SOL · ${(demoData?.changePct || 0).toFixed(2)}%`}
