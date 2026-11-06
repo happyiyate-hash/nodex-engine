@@ -98,11 +98,14 @@ export const TokenDetailPage: React.FC = () => {
   const priceCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
   const liveTokenPrice = demoData?.price ?? (priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd);
   const currentPrice = scrubPrice ?? liveTokenPrice;
-  const marketChangePct = demoData?.changePct ?? activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
+  const demoDirection = demoData
+    ? (Math.floor(Math.max(0, demoData.tick - 1) / 18) % 2 === 0 ? 1 : -1)
+    : null;
+  const marketChangePct = demoData
+    ? Math.abs(demoData.changePct) * (demoDirection || 1)
+    : activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
   const pnlPct = marketChangePct ?? 0;
-  const isPositive = demoData
-    ? Math.floor(Math.max(0, demoData.tick - 1) / 18) % 2 === 0
-    : (marketChangePct ?? 0) >= 0;
+  const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
   const formatTokenPrice = (value: number) => priceCurrency === 'SOL'
