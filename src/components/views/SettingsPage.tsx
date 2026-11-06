@@ -8,6 +8,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/api';
 import { StrategyPage } from './StrategyPage';
 
+type RuntimeControlKey = 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled';
 type SettingsSection =
   | 'home'
   | 'engine'
@@ -82,6 +83,45 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [notificationChoices, setNotificationChoices] = useState({
     engine: true, connection: true, qualified: true, paperTrades: true, risk: true, diagnostics: true,
   });
+  const [runtimeControls, setRuntimeControls] = useState({
+    token_discovery_enabled: false,
+    new_entries_enabled: false,
+    position_monitoring_enabled: true,
+  });
+  const [runtimeControlMessage, setRuntimeControlMessage] = useState('');
+  const [updatingRuntimeControl, setUpdatingRuntimeControl] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    apiClient.getEngineControl().then((state) => {
+      if (active) setRuntimeControls({
+        token_discovery_enabled: state.token_discovery_enabled,
+        new_entries_enabled: state.new_entries_enabled,
+        position_monitoring_enabled: state.position_monitoring_enabled,
+      });
+    }).catch((error) => {
+      if (active) setRuntimeControlMessage(error instanceof Error ? error.message : 'Could not load runtime controls.');
+    });
+    return () => { active = false; };
+  }, []);
+
+  const updateRuntimeControl = async (key: RuntimeControlKey, enabled: boolean) => {
+    setUpdatingRuntimeControl(true);
+    setRuntimeControlMessage('');
+    try {
+      const result = await apiClient.updateEngineControl('configure', { [key]: enabled });
+      setRuntimeControls({
+        token_discovery_enabled: result.engine.token_discovery_enabled,
+        new_entries_enabled: result.engine.new_entries_enabled,
+        position_monitoring_enabled: result.engine.position_monitoring_enabled,
+      });
+      setRuntimeControlMessage('Runtime control updated.');
+    } catch (error) {
+      setRuntimeControlMessage(error instanceof Error ? error.message : 'Could not update runtime control.');
+    } finally {
+      setUpdatingRuntimeControl(false);
+    }
+  };
 
   useEffect(() => {
     setBackendUrl(settings.backendUrl);
@@ -222,17 +262,25 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           </div>
           <div>
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-white/35">Runtime controls</p>
-            {[
-              ['Token discovery', 'Pause new token discovery independently'],
-              ['New paper entries', 'Prevent new simulated positions'],
-              ['Position monitoring', 'Continue tracking open paper positions'],
-            ].map(([title, detail]) => (
-              <div key={title} className="flex items-center justify-between gap-3 border-b border-white/[0.07] py-3">
-                <div><p className="text-[12px] text-white/80">{title}</p><p className="mt-0.5 text-[10px] text-white/35">{detail}</p></div>
-                <span className="text-[9px] text-white/30">Backend control pending</span>
-              </div>
+            {([
+              ['token_discovery_enabled', 'Token discovery', 'Allow the engine to process newly discovered launches.'],
+              ['new_entries_enabled', 'New paper entries', 'Allow new simulated positions when strategy rules pass.'],
+              ['position_monitoring_enabled', 'Position monitoring', 'Continue tracking and marking existing open positions.'],
+            ] as const).map(([key, title, detail]) => (
+              <label key={key} className="flex items-center justify-between gap-3 border-b border-white/[0.07] py-3">
+                <span><span className="block text-[12px] text-white/80">{title}</span><span className="mt-0.5 block text-[10px] text-white/35">{detail}</span></span>
+                <input
+                  type="checkbox"
+                  checked={runtimeControls[key]}
+                  disabled={updatingRuntimeControl || !settings.adminApiKey}
+                  onChange={(event) => updateRuntimeControl(key, event.target.checked)}
+                  className="h-4 w-4 accent-white disabled:opacity-40"
+                />
+              </label>
             ))}
           </div>
+          {runtimeControlMessage && <p className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{runtimeControlMessage}</p>}
+          {!settings.adminApiKey && <p className="text-[10px] text-amber-200/75">Save the Engine API key in API & Connections to change runtime controls.</p>}
           {backendError && <p className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3 text-[10px] text-amber-200">{backendError}</p>}
         </div>
       )}
