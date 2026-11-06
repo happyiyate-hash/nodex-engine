@@ -3,7 +3,7 @@ import { Pause, Play } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 
 export const SettingsPage: React.FC = () => {
-  const { engineStatus, toggleEngine, backendError } = useTerminal();
+  const { engineStatus, toggleEngine } = useTerminal();
   const isRunning = engineStatus.running;
 
   return (
@@ -29,11 +29,6 @@ export const SettingsPage: React.FC = () => {
         </div>
       </header>
 
-      {backendError && (
-        <p role="status" className="mx-4 mt-3 text-[11px] leading-relaxed text-amber-200/80">
-          {backendError}
-        </p>
-      )}
     </div>
   );
 };
