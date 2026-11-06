@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight, CircleHelp,
-  Database, Eye, EyeOff, FileText, HardDrive, LockKeyhole, Pause, Play,
-  PlugZap, Radar, RefreshCw, Settings2, ShieldCheck, SlidersHorizontal,
-  Trash2, Wifi, X,
+  Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight,
+  Database, Eye, EyeOff, HardDrive, LockKeyhole, Pause, Play,
+  PlugZap, Radar, RefreshCw, SlidersHorizontal, Trash2, Wifi,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/api';
@@ -65,7 +64,7 @@ const StatusLine = ({ label, value, good }: { label: string; value: string; good
 
 export const SettingsPage: React.FC = () => {
   const {
-    engineStatus, isStreamPaused, toggleEngine, settings, updateSettings, backendError,
+    engineStatus, toggleEngine, settings, updateSettings, backendError,
   } = useTerminal();
   const [section, setSection] = useState<SettingsSection>('home');
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
