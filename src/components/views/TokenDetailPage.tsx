@@ -20,6 +20,7 @@ export const TokenDetailPage: React.FC = () => {
 
   const [copiedMint, setCopiedMint] = useState(false);
   const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1H' | '24H'>('24H');
+  const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [tradeMessage, setTradeMessage] = useState<string | null>(null);
@@ -237,8 +238,8 @@ export const TokenDetailPage: React.FC = () => {
 
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
       <section className="relative w-full bg-[#000000]">
-        {/* Subtle Timeframe Switcher Overlay */}
-        <div className="absolute top-2.5 left-4 z-10 flex items-center gap-1 bg-[#0a0a0c]/80 backdrop-blur-md p-0.5 rounded-lg border border-white/10 text-[10px] font-mono">
+        {/* Timeframe and chart-style controls */}
+        <div className="absolute top-2.5 left-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 font-mono text-[10px] backdrop-blur-md">
           {(['1m', '5m', '15m', '1H', '24H'] as const).map((tf) => (
             <button
               key={tf}
@@ -248,6 +249,23 @@ export const TokenDetailPage: React.FC = () => {
               }`}
             >
               {tf}
+            </button>
+          ))}
+          <span className="mx-0.5 h-3.5 w-px bg-white/15" />
+          {([
+            { value: 'line', label: 'Line' },
+            { value: 'candle', label: 'Candle' },
+          ] as const).map((mode) => (
+            <button
+              key={mode.value}
+              type="button"
+              aria-pressed={chartType === mode.value}
+              onClick={() => setChartType(mode.value)}
+              className={`rounded px-2 py-0.5 transition-colors ${
+                chartType === mode.value ? 'bg-emerald-400/15 text-emerald-300 font-bold' : 'text-white/40 hover:text-white'
+              }`}
+            >
+              {mode.label}
             </button>
           ))}
         </div>
@@ -266,6 +284,7 @@ export const TokenDetailPage: React.FC = () => {
           priceHistory={demoData?.history || activeToken.price_history_5m}
           isPositive={isPositive}
           timeframe={timeframe}
+          chartType={chartType}
           height={320}
           onPriceHover={(p, t) => {
             setScrubPrice(p);
