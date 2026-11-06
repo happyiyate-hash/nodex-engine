@@ -8,8 +8,8 @@ export const LiveFeedPage: React.FC<LiveFeedPageProps> = ({ activeTab, visible }
   const [section, setSection] = useState<LiveSection>('detected');
 
   return (
-    <main className="flex h-full min-h-0 w-full flex-col bg-[#080808] text-white">
-      <div className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#080808]/95 px-3 pb-2 pt-3 backdrop-blur-xl sm:px-5">
+    <main className={`${visible ? "relative" : "pointer-events-none invisible absolute inset-0"} flex h-full min-h-0 w-full flex-col bg-[#080808] text-white`}>
+      {activeTab === "live_feed" && <div className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#080808]/95 px-3 pb-2 pt-3 backdrop-blur-xl sm:px-5">
         <div className="mb-2 text-[13px] font-semibold tracking-wide">Live</div>
         <nav aria-label="Live sections" className="grid grid-cols-2 gap-1 rounded-xl border border-white/[0.07] bg-[#0d0d0d] p-1">
           {([
