@@ -658,7 +658,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                 <span className="mr-0.5 shrink-0 text-white/65" style={{ fontSize: 'clamp(14px, 5.8vw, 25px)', lineHeight: 1 }}>$</span>
                 <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
-              <div className="mt-1 flex justify-center gap-3
               <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available ${formatUsd(availableBalance)}</span><span>Invested ${formatUsd(investedBalance)}</span></div>
             </div>
           </div>
