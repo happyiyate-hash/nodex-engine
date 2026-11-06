@@ -96,7 +96,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const padTop = 35;
     const padBottom = 35;
     const padLeft = 12;
-    const padRight = 72; // space for target price badge on right
+    const padRight = 76; // reserved right gutter for compact price labels
     const plotW = w - padLeft - padRight;
     const plotH = h - padTop - padBottom;
 
@@ -187,7 +187,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.bezierCurveTo(mx, p0.y, mx, p1.y, p1.x, p1.y);
     }
     ctx.strokeStyle = isPositive ? '#10B981' : '#EF4444';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 1.8;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
@@ -212,53 +212,63 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // Outer radar wave
     ctx.fillStyle = isPositive ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
     ctx.beginPath();
-    ctx.arc(latestX, latestY, 11, 0, Math.PI * 2);
+    ctx.arc(latestX, latestY, 7, 0, Math.PI * 2);
     ctx.fill();
 
     // Mid halo
     ctx.fillStyle = isPositive ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)';
     ctx.beginPath();
-    ctx.arc(latestX, latestY, 6, 0, Math.PI * 2);
+    ctx.arc(latestX, latestY, 4, 0, Math.PI * 2);
     ctx.fill();
 
     // Solid core bead
     ctx.fillStyle = isPositive ? '#34D399' : '#F87171';
     ctx.beginPath();
-    ctx.arc(latestX, latestY, 3.5, 0, Math.PI * 2);
+    ctx.arc(latestX, latestY, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
-    // 9. Floating Target Number Badge on the Right
-    // "Then you put the number which is the target number at the right side where the line is chasing all the time."
-    const badgeW = 68;
-    const badgeH = 22;
-    const badgeX = w - badgeW - 4;
-    const badgeY = Math.max(padTop - 8, Math.min(padTop + plotH - badgeH + 8, latestY - badgeH / 2));
+    // 9. Right-side price scale. Keep labels inside the reserved gutter.
+    const formatPrice = (price: number) => price < 0.001
+      ? `${price.toFixed(6)}`
+      : price < 1
+      ? `${price.toFixed(4)}`
+      : `${price.toFixed(2)}`;
 
-    // Connect line to badge
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
+    for (let tick = 0; tick <= 4; tick++) {
+      const value = maxPrice - (effRange * tick) / 4;
+      const y = padTop + (plotH * tick) / 4;
+      if (Math.abs(y - latestY) > 13) {
+        ctx.fillText(formatPrice(value), w - 5, y);
+      }
+    }
+
+    // Compact live-price tag aligned with the latest chart point.
+    const badgeW = 58;
+    const badgeH = 18;
+    const badgeX = w - badgeW - 3;
+    const badgeY = Math.max(padTop - 2, Math.min(padTop + plotH - badgeH + 2, latestY - badgeH / 2));
+
     ctx.strokeStyle = isPositive ? '#10B981' : '#EF4444';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.8;
     ctx.beginPath();
     ctx.moveTo(latestX, latestY);
     ctx.lineTo(badgeX, badgeY + badgeH / 2);
     ctx.stroke();
 
-    // Badge pill container
     ctx.fillStyle = isPositive ? '#10B981' : '#EF4444';
     ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
     ctx.fill();
 
-    // Badge text
-    const displayNum = currentPrice < 0.001
-      ? `$${currentPrice.toFixed(6)}`
-      : currentPrice < 1
-      ? `$${currentPrice.toFixed(4)}`
-      : `$${currentPrice.toFixed(2)}`;
-
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 10px JetBrains Mono, monospace';
+    ctx.font = 'bold 8px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(displayNum, badgeX + badgeW / 2, badgeY + 14.5);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(formatPrice(currentPrice), badgeX + badgeW / 2, badgeY + 12);
 
     // 10. Interactive Scrub Crosshair (Touch/Mouse)
     if (hoverIndex !== null && hoverIndex >= 0 && hoverIndex < points.length) {
@@ -314,7 +324,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const padLeft = 12;
-    const padRight = 72;
+    const padRight = 76;
     const plotW = containerWidth - padLeft - padRight;
 
     if (x < padLeft || x > containerWidth - padRight) {
