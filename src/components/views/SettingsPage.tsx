@@ -71,8 +71,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [websocketUrl, setWebsocketUrl] = useState(settings.wsUrlOverride);
-  const [domain, setDomain] = useState(settings.domain);
-  const [publicIp, setPublicIp] = useState(settings.publicIp);
   const [operatorKey, setOperatorKey] = useState(settings.adminApiKey);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
@@ -137,10 +135,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   useEffect(() => {
     setBackendUrl(settings.backendUrl);
     setWebsocketUrl(settings.wsUrlOverride);
-    setDomain(settings.domain);
-    setPublicIp(settings.publicIp);
     setOperatorKey(settings.adminApiKey);
-  }, [settings.backendUrl, settings.wsUrl, settings.domain, settings.publicIp, settings.adminApiKey]);
+  }, [settings.backendUrl, settings.wsUrl, settings.adminApiKey]);
 
   const saveConnections = (event: React.FormEvent) => {
     event.preventDefault();
@@ -161,8 +157,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       updateSettings({
         backendUrl: backendUrl.trim().replace(/\/$/, ''),
         wsUrlOverride: cleanWsUrl,
-        domain: domain.trim(),
-        publicIp: publicIp.trim(),
         adminApiKey: operatorKey.trim(),
       });
       setConnectionMessage('Connection settings saved. REST and WebSocket connections have been refreshed.');
@@ -318,7 +312,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         <form onSubmit={saveConnections} className="space-y-5 pt-5">
           <div>
             <p className="text-[13px] font-semibold text-white">NodeX connection endpoints</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Each connection value can be changed independently. Leave the WebSocket override empty to derive it from the REST API address.</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Connect this frontend to any compatible NodeX Rust backend. Nothing is preconfigured: enter the server address and operator key supplied by that backend administrator.</p>
           </div>
           <Field label="REST API base URL" hint="The address used for /health and /api/v1 routes. Enter the host only, without a route.">
             <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://api.example.com" autoCapitalize="none" autoCorrect="off" />
@@ -326,18 +320,12 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           <Field label="WebSocket URL (optional override)" hint="Use the full WSS endpoint, e.g. wss://api.example.com/api/v1/ws. Leave blank to derive it from the REST API URL.">
             <input className={inputClass} type="url" value={websocketUrl} onChange={(e) => setWebsocketUrl(e.target.value)} placeholder="wss://api.example.com/api/v1/ws" autoCapitalize="none" autoCorrect="off" />
           </Field>
-          <Field label="Domain / hostname" hint="Deployment reference only. REST and WebSocket URLs above control actual routing.">
-            <input className={inputClass} type="text" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="api.example.com" autoCapitalize="none" autoCorrect="off" />
-          </Field>
-          <Field label="Server public IP" hint="Reference only. Editing this field does not change DNS, AWS networking, or API routing.">
-            <input className={inputClass} type="text" value={publicIp} onChange={(e) => setPublicIp(e.target.value)} placeholder="203.0.113.10" autoCapitalize="none" autoCorrect="off" />
-          </Field>
-          <Field label="Operator API key" hint="Must match NODEX_ADMIN_API_KEY on the Rust backend. Used for protected engine controls and short-lived WebSocket tickets.">
+          <Field label="Backend operator API key" hint="Paste the operator key configured by the Rust backend administrator. It authorizes protected controls and requests a short-lived WebSocket ticket.">
             <input className={inputClass} type="password" value={operatorKey} onChange={(e) => setOperatorKey(e.target.value)} placeholder="Enter your NodeX operator key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
           </Field>
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Provider credentials stay on the backend</div>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Solana RPC, Helius, gRPC, wallet and signing credentials are configured on the Rust server. Do not enter them here.</p>
+            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Credential storage and server secrets</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/45">The operator key is saved in this browser's local storage so it remains available on this device. Anyone who can access this browser profile or run malicious script in this app may be able to read it. For shared or public deployments, use individual backend user authentication instead of distributing one shared operator key. Solana RPC provider keys, Helius/gRPC credentials, wallet private keys and signing secrets belong only in the Rust backend's server environment — never in this frontend.</p>
           </div>
           <button type="submit" disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-[12px] font-semibold text-black disabled:opacity-50">
             <Check className="h-4 w-4" /> {savingConnection ? 'Saving…' : 'Save connection settings'}
