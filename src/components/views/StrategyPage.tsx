@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
 import {
-  AlertCircle, Check, ChevronDown, History, ShieldCheck, SlidersHorizontal,
-  X,
+  Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
+  TrendingUp, X,
 } from 'lucide-react';
 
 type RiskTarget = 'stop_loss_pct' | 'take_profit_pct';
@@ -54,6 +54,7 @@ export const StrategyPage: React.FC = () => {
   const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
   const [customValue, setCustomValue] = useState('');
+  const [showAdvancedExit, setShowAdvancedExit] = useState(false);
 
   const hasUnappliedChanges = JSON.stringify(form) !== JSON.stringify(appliedConfig);
 
@@ -80,7 +81,7 @@ export const StrategyPage: React.FC = () => {
     setActiveTarget(null);
   };
 
-  const targetCell = (target: RiskTarget, title: string) => {
+  const targetRow = (target: RiskTarget, title: string, Icon: typeof ShieldAlert, tone: 'loss' | 'profit') => {
     const value = form[target];
     const enabled = value > 0;
     return (
@@ -88,14 +89,17 @@ export const StrategyPage: React.FC = () => {
         type="button"
         onClick={() => openTarget(target)}
         aria-label={`Configure ${title}`}
-        className="flex min-h-[76px] min-w-0 flex-1 flex-col justify-between p-3 text-left transition-colors hover:bg-white/[0.035] active:bg-white/[0.06]"
+        className="flex w-full items-center justify-between gap-3 border-b border-white/[0.08] py-3 text-left transition-colors hover:bg-white/[0.025] active:bg-white/[0.045]"
       >
-        <span className="flex w-full min-w-0 items-center justify-between gap-2">
-          <span className={`truncate text-[13px] font-bold tracking-tight ${target === 'stop_loss_pct' ? 'text-rose-300' : 'text-emerald-300'}`}>{title}</span>
-          <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${target === 'stop_loss_pct' ? 'text-rose-300/65' : 'text-emerald-300/65'}`} />
+        <span className="flex min-w-0 items-center gap-3">
+          <Icon className={`h-[17px] w-[17px] shrink-0 ${tone === 'loss' ? 'text-rose-300' : 'text-emerald-300'}`} />
+          <span className={`text-[13px] font-semibold ${tone === 'loss' ? 'text-rose-300' : 'text-emerald-300'}`}>{title}</span>
         </span>
-        <span className={`mt-1.5 text-[13px] font-semibold leading-none tabular-nums ${enabled ? 'text-white/90' : 'text-white/35'}`}>
-          {enabled ? `${value}%` : 'Disabled'}
+        <span className="flex shrink-0 items-center gap-2">
+          <span className={`text-[12px] font-semibold tabular-nums ${enabled ? 'text-white/85' : 'text-white/35'}`}>
+            {enabled ? `${value}%` : 'Disabled'}
+          </span>
+          <ChevronRight className="h-4 w-4 text-white/35" />
         </span>
       </button>
     );
@@ -108,19 +112,31 @@ export const StrategyPage: React.FC = () => {
         <p className="mt-1 text-[11px] leading-relaxed text-white/45">Set risk targets, entry limits and qualification rules for simulated positions.</p>
       </div>
 
-      <section className="pt-1">
-        <div className="flex items-center gap-2 border-b border-white/[0.08] py-3">
-          <SlidersHorizontal className="h-4 w-4 text-white/50" />
-          <h3 className="text-[12px] font-semibold text-white/90">Exit targets</h3>
+      <section className="pt-2">
+        <div className="border-b border-white/[0.08] pb-2">
+          <h3 className="text-[13px] font-semibold text-white/90">Exit Settings</h3>
+          <p className="mt-1 text-[10px] text-white/40">Manage how your paper positions exit automatically.</p>
         </div>
-        <div className="mx-[-1rem] flex w-[calc(100%+2rem)] overflow-hidden border-x border-b border-white/[0.12] divide-x divide-white/[0.12]">
-          <div className="min-w-0 flex-1 bg-rose-500/[0.075]">
-            {targetCell('stop_loss_pct', 'Stop loss')}
+        {targetRow('stop_loss_pct', 'Stop Loss', ShieldAlert, 'loss')}
+        {targetRow('take_profit_pct', 'Take Profit', TrendingUp, 'profit')}
+        <button
+          type="button"
+          onClick={() => setShowAdvancedExit((current) => !current)}
+          aria-expanded={showAdvancedExit}
+          className="flex w-full items-center justify-between py-3 text-left"
+        >
+          <span className="text-[11px] font-medium text-white/45">Advanced exit options</span>
+          <ChevronDown className={`h-4 w-4 text-white/40 transition-transform ${showAdvancedExit ? 'rotate-180' : ''}`} />
+        </button>
+        {showAdvancedExit && (
+          <div className="border-t border-white/[0.07] pl-1">
+            <ToggleRow title="Trailing stop loss" detail="Raise the exit threshold as an open position gains value." checked={form.trailing_stop_enabled} onChange={(v) => update('trailing_stop_enabled', v)} />
+            {form.trailing_stop_enabled && (
+              <NumberField label="Trailing callback" suffix="%" step="0.5" value={form.trailing_stop_callback_pct} onChange={(v) => update('trailing_stop_callback_pct', v)} />
+            )}
+            <p className="py-2 text-[10px] text-white/30">Break-even protection and partial profit taking can be added here later.</p>
           </div>
-          <div className="min-w-0 flex-1 bg-emerald-500/[0.075]">
-            {targetCell('take_profit_pct', 'Take profit')}
-          </div>
-        </div>
+        )}
       </section>
 
       <section className="pt-3">
@@ -158,10 +174,6 @@ export const StrategyPage: React.FC = () => {
         </div>
         <p className="py-2 text-[10px] text-white/40">Optional paper-trading behaviour.</p>
         <ToggleRow title="Automated paper buys" detail="Open a simulated position when all qualification rules pass." checked={form.auto_buy_enabled} onChange={(v) => update('auto_buy_enabled', v)} />
-        <ToggleRow title="Trailing stop loss" detail="Raise the exit threshold as an open position gains value." checked={form.trailing_stop_enabled} onChange={(v) => update('trailing_stop_enabled', v)} />
-        {form.trailing_stop_enabled && (
-          <NumberField label="Trailing callback" suffix="%" step="0.5" value={form.trailing_stop_callback_pct} onChange={(v) => update('trailing_stop_callback_pct', v)} />
-        )}
         <ToggleRow title="Blacklist known rug creators" detail="Reject launches linked to creators with prior rug activity." checked={form.blacklist_creators_with_prior_rugs} onChange={(v) => update('blacklist_creators_with_prior_rugs', v)} />
       </section>
 
