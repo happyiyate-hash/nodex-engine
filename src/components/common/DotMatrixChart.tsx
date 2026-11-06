@@ -17,6 +17,7 @@ interface DotMatrixChartProps {
   priceHistory?: PricePoint[];
   isPositive?: boolean;
   timeframe?: string;
+  chartType?: 'line' | 'candle';
   onPriceHover?: (price: number | null, time: string | null) => void;
   height?: number;
 }
@@ -81,6 +82,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   priceHistory,
   isPositive = true,
   timeframe = '24H',
+  chartType = 'line',
   onPriceHover,
   height = 340,
 }) => {
@@ -94,6 +96,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const scaleRef = useRef<PriceScale | null>(null);
   const animationRef = useRef<number | null>(null);
   const pointerRef = useRef<number | null>(null);
+  const radarPhaseRef = useRef(0);
 
   const points = useMemo<PriceTick[]>(() => {
     const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
@@ -284,25 +287,48 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       });
     };
 
-    if (visible.length > 1) {
-      drawPath();
-      ctx.lineTo(getX(visible.length - 1), padTop + plotH);
-      ctx.lineTo(getX(0), padTop + plotH);
-      ctx.closePath();
-      ctx.fillStyle = areaGrad;
-      ctx.fill();
-    }
-
-    drawPath();
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 1.8;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke();
-
     const latest = visible[visible.length - 1];
     const latestX = getX(visible.length - 1);
     const latestY = getY(latest.price);
+
+    if (chartType === 'line') {
+      if (visible.length > 1) {
+        drawPath();
+        ctx.lineTo(getX(visible.length - 1), padTop + plotH);
+        ctx.lineTo(getX(0), padTop + plotH);
+        ctx.closePath();
+        ctx.fillStyle = areaGrad;
+        ctx.fill();
+      }
+      drawPath();
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    } else {
+      const slotWidth = visible.length > 1 ? livePlotW / (visible.length - 1) : livePlotW;
+      const bodyWidth = Math.max(2, Math.min(12, slotWidth * 0.62));
+      visible.forEach((candle, index) => {
+        const x = getX(index);
+        const openY = getY(candle.open);
+        const closeY = getY(candle.price);
+        const highY = getY(candle.high);
+        const lowY = getY(candle.low);
+        const rising = candle.price >= candle.open;
+        const color = rising ? '#10B981' : '#EF4444';
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(1, Math.min(2, bodyWidth * 0.18));
+        ctx.beginPath();
+        ctx.moveTo(x, highY);
+        ctx.lineTo(x, lowY);
+        ctx.stroke();
+        const bodyTop = Math.min(openY, closeY);
+        const bodyHeight = Math.max(1.5, Math.abs(closeY - openY));
+        ctx.fillStyle = color;
+        ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
+      });
+    }
     ctx.strokeStyle = isPositive ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
@@ -312,18 +338,25 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = isPositive ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)';
-    ctx.beginPath();
-    ctx.arc(latestX, latestY, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = isPositive ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)';
-    ctx.beginPath();
-    ctx.arc(latestX, latestY, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = isPositive ? '#34D399' : '#F87171';
-    ctx.beginPath();
-    ctx.arc(latestX, latestY, 2.5, 0, Math.PI * 2);
-    ctx.fill();
+    if (chartType === 'line') {
+      // Expanding radar ring follows the live tip and fades continuously.
+      radarPhaseRef.current = (radarPhaseRef.current + 0.42) % 15;
+      const radius = radarPhaseRef.current;
+      const alpha = 1 - radius / 15;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(latestX, latestY, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = isPositive
+        ? `rgba(16,185,129,${alpha.toFixed(3)})`
+        : `rgba(239,68,68,${alpha.toFixed(3)})`;
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(latestX, latestY, 3, 0, Math.PI * 2);
+      ctx.fillStyle = lineColor;
+      ctx.fill();
+      ctx.restore();
+    }
 
     const badgeW = 58;
     const badgeH = 18;
@@ -377,13 +410,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     // Continue easing until the interpolated scale reaches its target.
     const desiredRange = Math.max(desiredScale.max - desiredScale.min, Number.EPSILON);
-    if (Math.abs(scale.min - desiredScale.min) > desiredRange * 0.0005 ||
-        Math.abs(scale.max - desiredScale.max) > desiredRange * 0.0005) {
+    const scaleIsMoving = Math.abs(scale.min - desiredScale.min) > desiredRange * 0.0005 ||
+      Math.abs(scale.max - desiredScale.max) > desiredRange * 0.0005;
+    if (!scaleIsMoving) scaleRef.current = desiredScale;
+    if (scaleIsMoving || chartType === 'line') {
       animationRef.current = requestAnimationFrame(draw);
-    } else {
-      scaleRef.current = desiredScale;
     }
-  }, [points, view, containerWidth, height, isPositive, hoverIndex]);
+  }, [points, view, containerWidth, height, isPositive, hoverIndex, chartType]);
 
   useEffect(() => {
     if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
