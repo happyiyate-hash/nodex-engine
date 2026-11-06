@@ -245,27 +245,50 @@ const AutoFitNumber: React.FC<AutoFitNumberProps> = ({ fullText, compactText, cl
   const textRef = useRef<HTMLSpanElement>(null);
   const [fontSize, setFontSize] = useState(maxFontSize);
   const [compact, setCompact] = useState(false);
-  useLayoutEffect(() => { setFontSize(maxFontSize); setCompact(false); }, [fullText, maxFontSize]);
+  // Refit only when the rendered width can materially change (digit count or
+  // container size). Updating a digit at the same magnitude must not restart
+  // the font-size calculation while its reel is moving.
+  useLayoutEffect(() => {
+    setFontSize(maxFontSize);
+    setCompact(false);
+  }, [fullText.length, maxFontSize]);
+
   useLayoutEffect(() => {
     const container = containerRef.current;
     const content = textRef.current;
     if (!container || !content) return;
+
     const fit = () => {
       if (compact) return;
       const available = container.clientWidth;
       const required = content.scrollWidth;
-      if (!available || required <= available + 1) return;
-      const nextSize = Math.max(minFontSize, Math.floor(fontSize * (available / required)));
-      if (nextSize < fontSize) setFontSize(nextSize);
-      else if (fontSize <= minFontSize) setCompact(true);
+      if (!available || !required) return;
+
+      if (required > available + 1) {
+        const nextSize = Math.max(minFontSize, Math.round(fontSize * (available / required) * 10) / 10);
+        if (nextSize < fontSize - 0.1) setFontSize(nextSize);
+        else if (fontSize <= minFontSize) setCompact(true);
+      } else if (fontSize < maxFontSize && required < available - 2) {
+        const nextSize = Math.min(maxFontSize, Math.round(fontSize * (available / required) * 10) / 10);
+        if (nextSize > fontSize + 0.1) setFontSize(nextSize);
+      }
     };
+
     fit();
     const observer = new ResizeObserver(fit);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [compact, fontSize, fullText, minFontSize]);
+  }, [compact, fontSize, fullText.length, maxFontSize, minFontSize]);
   const displayText = compact ? compactText : fullText;
-  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{Array.from(displayText).map((character, index) => /[0-9]/.test(character) ? <RollingDigit key={index} digit={character} balanceDirection={balanceDirection} /> : <span key={index} className="inline-block h-[1em] leading-[1em]">{character}</span>)}</span></span>;
+  let digitPositionFromRight = 0;
+  const renderedCharacters = Array.from(displayText).reverse().map((character) => {
+    if (/[0-9]/.test(character)) {
+      const position = digitPositionFromRight++;
+      return <RollingDigit key={`digit-place-${position}`} digit={character} balanceDirection={balanceDirection} />;
+    }
+    return <span key={`separator-after-place-${digitPositionFromRight}`} className="inline-block h-[1em] leading-[1em]">{character}</span>;
+  }).reverse();
+  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{renderedCharacters}</span></span>;
 };
 
 const compactNumber = (value: number) => {
