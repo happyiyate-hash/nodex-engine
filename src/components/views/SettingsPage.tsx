@@ -109,7 +109,9 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setUpdatingRuntimeControl(true);
     setRuntimeControlMessage('');
     try {
-      const result = await apiClient.updateEngineControl('configure', { [key]: enabled });
+      const updates: { token_discovery_enabled?: boolean; new_entries_enabled?: boolean; position_monitoring_enabled?: boolean } = {};
+      updates[key] = enabled;
+      const result = await apiClient.updateEngineControl('configure', updates);
       setRuntimeControls({
         token_discovery_enabled: result.engine.token_discovery_enabled,
         new_entries_enabled: result.engine.new_entries_enabled,
