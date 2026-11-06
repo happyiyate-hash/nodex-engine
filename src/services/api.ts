@@ -9,11 +9,11 @@ const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
 export interface ApiSettings {
   backendUrl: string; wsUrl: string; mode: 'RUST_BACKEND'; rpcUrl: string;
-  autoReconnection: boolean; heartbeatIntervalMs: number; adminApiKey: string;
+  autoReconnection: boolean; heartbeatIntervalMs: number; apiKey: string; adminApiKey: string;
 }
 export const DEFAULT_SETTINGS: ApiSettings = {
   backendUrl: API_URL, wsUrl: WS_URL, mode: 'RUST_BACKEND', rpcUrl: '',
-  autoReconnection: true, heartbeatIntervalMs: 5000, adminApiKey: '',
+  autoReconnection: true, heartbeatIntervalMs: 5000, apiKey: '', adminApiKey: '',
 };
 
 function readStoredConnectionSettings(): Partial<ApiSettings> {
@@ -21,10 +21,11 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
   try {
     const raw = window.localStorage.getItem(CONNECTION_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrl?: unknown; adminApiKey?: unknown };
+    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrl?: unknown; apiKey?: unknown; adminApiKey?: unknown };
     return {
       ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl } : {}),
       ...(typeof parsed.wsUrl === 'string' ? { wsUrl: parsed.wsUrl } : {}),
+      ...(typeof parsed.apiKey === 'string' ? { apiKey: parsed.apiKey } : {}),
       ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: parsed.adminApiKey } : {}),
     };
   } catch {
@@ -58,10 +59,11 @@ export class NodeXApiClient {
     };
     if (typeof window !== 'undefined') {
       try {
-        // Only public service addresses are persisted. Never store API keys or passwords here.
+        // These are client-side connection credentials, not provider or blockchain secrets.
         window.localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
           backendUrl: this.settings.backendUrl,
           wsUrl: this.settings.wsUrl,
+          apiKey: this.settings.apiKey,
           adminApiKey: this.settings.adminApiKey,
         }));
       } catch (error) {
@@ -80,7 +82,9 @@ export class NodeXApiClient {
     try {
       const response = await fetch(this.settings.backendUrl + path, {
         ...options, headers: { Accept: 'application/json',
-          ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers },
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(this.settings.apiKey.trim() ? { 'X-API-Key': this.settings.apiKey.trim() } : {}),
+          ...options.headers },
         signal: controller.signal,
       });
       const body = await response.text();
