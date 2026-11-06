@@ -65,13 +65,13 @@ const emptyStatus: EngineStatus = {
 };
 // These are form defaults only; the backend does not currently persist strategy settings.
 const emptyStrategy: StrategyConfig = {
-  min_liquidity_usd: 0, max_entry_price_usd: 0,
-  max_investment_per_token_sol: 0, max_investment_per_token_usd: 0,
-  max_simultaneous_positions: 0, min_safety_score: 0, max_slippage_pct: 0,
-  stop_loss_pct: 0, take_profit_pct: 0, min_5m_buy_volume_usd: 0,
-  max_top10_holder_concentration_pct: 0, auto_buy_enabled: false,
-  trailing_stop_enabled: false, trailing_stop_callback_pct: 0,
-  blacklist_creators_with_prior_rugs: false,
+  min_liquidity_usd: 5000, max_entry_price_usd: 0,
+  max_investment_per_token_sol: 0.1, max_investment_per_token_usd: 0,
+  max_simultaneous_positions: 3, min_safety_score: 80, max_slippage_pct: 10,
+  stop_loss_pct: 20, take_profit_pct: 50, min_5m_buy_volume_usd: 1000,
+  max_top10_holder_concentration_pct: 35, auto_buy_enabled: false,
+  trailing_stop_enabled: false, trailing_stop_callback_pct: 10,
+  blacklist_creators_with_prior_rugs: true,
 };
 
 const TerminalContext = createContext<TerminalContextType | null>(null);
@@ -150,8 +150,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [events, setEvents] = useState<NodeXEvent[]>(() => readPersistedState().events || []);
   const [selectedEvent, setSelectedEvent] = useState<NodeXEvent | null>(null);
   const [selectedToken, setSelectedToken] = useState<DiscoveredToken | null>(null);
-  const [strategyConfig] = useState<StrategyConfig>(emptyStrategy);
-  const [strategyDecisions] = useState<StrategyDecision[]>([]);
+  const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>(emptyStrategy);
+  const [strategyDecisions, setStrategyDecisions] = useState<StrategyDecision[]>([]);
   const [settings, setSettings] = useState<ApiSettings>(apiClient.getSettings());
   const [isStreamPaused, setIsStreamPaused] = useState(false);
   const [isMobilePreview, setIsMobilePreview] = useState(false);
@@ -183,6 +183,14 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     }).catch((error: unknown) => {
       if (active) setBackendError(error instanceof Error ? error.message : 'Backend connection failed.');
+    });
+    apiClient.getStrategy().then(({ config, decisions }) => {
+      if (active) {
+        setStrategyConfig(config);
+        setStrategyDecisions(decisions);
+      }
+    }).catch((error: unknown) => {
+      if (active) setBackendError(error instanceof Error ? error.message : 'Could not load trading configuration.');
     });
     const unsubscribeStatus = wsService.onStatusChange((status: ConnectionStatus) => {
       setEngineStatus((previous) => ({ ...previous, ws_status: status }));
@@ -366,9 +374,16 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const closePosition = () => setBackendError('Paper position closing is unavailable: no backend paper-order endpoint exists yet.');
   const executeManualPaperBuy = () => setBackendError('Paper buying is disabled until a real backend paper-order endpoint is implemented.');
   const updatePositionRisk = () => setBackendError('Position risk updates are unavailable until the backend provides persistent position endpoints.');
-  const saveStrategyConfig = async (_config: StrategyConfig): Promise<boolean> => {
-    setBackendError('Strategy settings were not saved: the backend does not yet expose a strategy persistence endpoint.');
-    return false;
+  const saveStrategyConfig = async (config: StrategyConfig): Promise<boolean> => {
+    try {
+      const result = await apiClient.updateStrategy(config);
+      setStrategyConfig(result.config);
+      setBackendError(null);
+      return true;
+    } catch (error) {
+      setBackendError(error instanceof Error ? error.message : 'Could not save trading configuration.');
+      return false;
+    }
   };
   const updateSettings = (newSettings: Partial<ApiSettings>) => {
     const updated = apiClient.saveSettings(newSettings);
