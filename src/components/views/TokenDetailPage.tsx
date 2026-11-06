@@ -67,12 +67,38 @@ export const TokenDetailPage: React.FC = () => {
       setDemoData((previous) => {
         if (!previous) return previous;
         const tick = previous.tick + 1;
-        // 18 ticks up, then 18 ticks down: repeat so both scale behaviours are visible.
-        const direction = Math.floor((tick - 1) / 18) % 2 === 0 ? 1 : -1;
-        const pulse = 1 + direction * (0.012 + Math.abs(Math.sin(tick * 0.72)) * 0.009);
-        const price = Math.max(Number.EPSILON, previous.price * pulse);
+        // Repeatable stress-test tape:
+        // pause -> +20% breakout -> steady climb -> pause -> -10% flush
+        // -> steady decline -> pause -> +12% rebound.
+        const phase = (tick - 1) % 48;
+        let movePct = 0;
+        let direction = 0;
+        if (phase === 5) {
+          movePct = 20;
+          direction = 1;
+        } else if (phase >= 6 && phase <= 17) {
+          movePct = 0.72 + (Math.sin(tick * 0.8) + 1) * 0.16;
+          direction = 1;
+        } else if (phase === 22) {
+          movePct = -10;
+          direction = -1;
+        } else if (phase >= 23 && phase <= 34) {
+          movePct = -(0.58 + (Math.sin(tick * 0.67) + 1) * 0.15);
+          direction = -1;
+        } else if (phase === 40) {
+          movePct = 12;
+          direction = 1;
+        } else if (phase >= 41 && phase <= 47) {
+          movePct = 0.42 + (Math.sin(tick * 0.74) + 1) * 0.12;
+          direction = 1;
+        } else {
+          // A near-flat tape makes the pauses obvious without freezing the UI.
+          movePct = Math.sin(tick * 0.55) * 0.025;
+        }
+
+        const price = Math.max(Number.EPSILON, previous.price * (1 + movePct / 100));
         const changePct = ((price / seedPrice) - 1) * 100;
-        const volume = 35 + (tick % 11) * 17;
+        const volume = Math.abs(movePct) > 5 ? 420 : Math.abs(movePct) > 0.5 ? 80 + (tick % 7) * 13 : 8;
         const now = Date.now();
         const history = [...previous.history, { time: now, price, volume }].slice(-180);
         return {
