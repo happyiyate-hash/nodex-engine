@@ -239,7 +239,7 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
-      <section className="relative w-full bg-[#000000] pt-11">
+      <section className="relative w-full bg-[#000000] pt-10">
         {/* Controls occupy their own top strip; the chart canvas starts beneath them with clear separation. */}
         <div className="absolute inset-x-0 top-2.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
           <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
@@ -300,7 +300,7 @@ export const TokenDetailPage: React.FC = () => {
           isPositive={isPositive}
           timeframe={timeframe}
           chartType={chartType}
-          height={320}
+          height={290}
           onPriceHover={(p, t) => {
             setScrubPrice(p);
             setScrubTime(t);
@@ -309,7 +309,7 @@ export const TokenDetailPage: React.FC = () => {
       </section>
 
       {/* Compact, full-width position and live market information. */}
-      <section className="w-full px-4 sm:px-6 pt-4 pb-6 max-w-4xl mx-auto font-mono">
+      <section className="w-full px-4 sm:px-6 pt-3 pb-6 max-w-4xl mx-auto font-mono">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">My Position</h2>
