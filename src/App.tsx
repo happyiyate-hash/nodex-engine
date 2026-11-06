@@ -184,7 +184,8 @@ const MainLayout: React.FC = () => {
             <path d="M12 3a9 9 0 0 1 9 9" stroke="white" strokeWidth="2.4" strokeLinecap="round" transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`} />
           </svg>
         </div>
-        <LiveFeedPage activeTab={activeTab} visible={!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed')} />\n        {activeTab !== 'overview' && activeTab !== 'live_feed' || selectedToken ? renderOtherView() : null}
+        <LiveFeedPage activeTab={activeTab} visible={!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed')} />
+        {selectedToken ? <TokenDetailPage /> : activeTab !== 'overview' && activeTab !== 'live_feed' || selectedToken ? renderActiveView() : null}
       </main>
       {!selectedToken && activeTab !== 'event_monitor' && <MobileNav />}
     </div>
