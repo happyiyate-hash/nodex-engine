@@ -32,6 +32,7 @@ const getScrollableAncestor = (target: EventTarget | null, boundary: HTMLElement
 };
 
 const MainLayout: React.FC = () => {
+  const [settingsSubpage, setSettingsSubpage] = useState(false);
   const { activeTab, selectedToken } = useTerminal();
   const mainRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -51,7 +52,7 @@ const MainLayout: React.FC = () => {
       case 'event_monitor': return <LogsPage />;
       case 'strategy': return <StrategyPage />;
       case 'token_intelligence': return <TokenIntelligencePage />;
-      case 'settings': return <SettingsPage />;
+      case 'settings': return <SettingsPage onSubpageChange={setSettingsSubpage} />;
       default: return null;
     }
   };
@@ -168,7 +169,7 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20">
-      <main ref={mainRef} className={`relative z-10 h-full w-full overscroll-y-none focus:outline-none ${(activeTab === "overview" || activeTab === "live_feed" || selectedToken) ? "overflow-hidden pb-0" : "overflow-y-auto pb-24"}`}>
+      <main ref={mainRef} className={`relative z-10 h-full w-full overscroll-y-none focus:outline-none ${(activeTab === "overview" || activeTab === "live_feed" || selectedToken) ? "overflow-hidden pb-0" : settingsSubpage && activeTab === "settings" ? "overflow-y-auto pb-0" : "overflow-y-auto pb-24"}`}>
         <div
           aria-live="polite"
           aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
@@ -187,7 +188,7 @@ const MainLayout: React.FC = () => {
         <LiveFeedPage activeTab={activeTab} visible={!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed')} />
         {selectedToken ? <TokenDetailPage /> : activeTab !== 'overview' && activeTab !== 'live_feed' ? renderActiveView() : null}
       </main>
-      {!selectedToken && activeTab !== 'event_monitor' && <MobileNav />}
+      {!selectedToken && activeTab !== 'event_monitor' && !(activeTab === 'settings' && settingsSubpage) && <MobileNav />}
     </div>
   );
 };
