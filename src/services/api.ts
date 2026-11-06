@@ -1,9 +1,20 @@
 import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot } from '../types';
 
 const API_URL = (import.meta.env.VITE_NODEX_API_URL || '').replace(/\/$/, '');
-const WS_URL = import.meta.env.VITE_NODEX_WS_URL || (API_URL
-  ? API_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/ws'
-  : (typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (typeof window !== 'undefined' ? window.location.host : 'localhost') + '/api/v1/ws');
+function websocketUrlFor(backendUrl: string): string {
+  if (!backendUrl) return '';
+  try {
+    const parsed = new URL(backendUrl);
+    parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+    parsed.pathname = '/api/v1/ws';
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+}
+const WS_URL = websocketUrlFor(API_URL) || ((typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + (typeof window !== 'undefined' ? window.location.host : 'localhost') + '/api/v1/ws');
 
 const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
@@ -31,11 +42,9 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
   try {
     const raw = window.localStorage.getItem(CONNECTION_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrl?: unknown; apiKey?: unknown; adminApiKey?: unknown };
+    const parsed = JSON.parse(raw) as { backendUrl?: unknown; adminApiKey?: unknown };
     return {
       ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl } : {}),
-      ...(typeof parsed.wsUrl === 'string' ? { wsUrl: parsed.wsUrl } : {}),
-      ...(typeof parsed.apiKey === 'string' ? { apiKey: parsed.apiKey } : {}),
       ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: parsed.adminApiKey } : {}),
     };
   } catch {
@@ -44,27 +53,30 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
 }
 
 export class NodeXApiClient {
-  private settings: ApiSettings = {
-    ...DEFAULT_SETTINGS,
-    ...readStoredConnectionSettings(),
-    mode: 'RUST_BACKEND',
-  };
+  private settings: ApiSettings = (() => {
+    const stored = readStoredConnectionSettings();
+    const backendUrl = (stored.backendUrl ?? DEFAULT_SETTINGS.backendUrl).trim().replace(/\/$/, '');
+    return {
+      ...DEFAULT_SETTINGS,
+      ...stored,
+      backendUrl,
+      wsUrl: websocketUrlFor(backendUrl) || DEFAULT_SETTINGS.wsUrl,
+      apiKey: '',
+      mode: 'RUST_BACKEND',
+    };
+  })();
 
   public loadSettings(): ApiSettings { return { ...this.settings }; }
 
   public saveSettings(update: Partial<ApiSettings>): ApiSettings {
     const nextBackendUrl = (update.backendUrl ?? this.settings.backendUrl).trim().replace(/\/$/, '');
-    const backendUrlChanged = update.backendUrl !== undefined && nextBackendUrl !== this.settings.backendUrl;
-    const nextWsUrl = update.wsUrl !== undefined
-      ? update.wsUrl.trim()
-      : backendUrlChanged && nextBackendUrl
-        ? nextBackendUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/ws'
-        : this.settings.wsUrl;
+    const nextWsUrl = websocketUrlFor(nextBackendUrl);
     this.settings = {
       ...this.settings,
       ...update,
       backendUrl: nextBackendUrl,
       wsUrl: nextWsUrl,
+      apiKey: '',
       mode: 'RUST_BACKEND',
     };
     if (typeof window !== 'undefined') {
@@ -72,8 +84,6 @@ export class NodeXApiClient {
         // These are client-side connection credentials, not provider or blockchain secrets.
         window.localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
           backendUrl: this.settings.backendUrl,
-          wsUrl: this.settings.wsUrl,
-          apiKey: this.settings.apiKey,
           adminApiKey: this.settings.adminApiKey,
         }));
       } catch (error) {
@@ -93,7 +103,6 @@ export class NodeXApiClient {
       const response = await fetch(this.settings.backendUrl + path, {
         ...options, headers: { Accept: 'application/json',
           ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-          ...(this.settings.apiKey.trim() ? { 'X-API-Key': this.settings.apiKey.trim() } : {}),
           ...options.headers },
         signal: controller.signal,
       });
@@ -119,6 +128,30 @@ export class NodeXApiClient {
     });
     if (!result.ticket) throw new Error('Backend did not return a WebSocket ticket.');
     return result.ticket;
+  }
+
+  public async testWebSocketConnection(): Promise<void> {
+    const ticket = await this.issueWebSocketTicket();
+    const separator = this.settings.wsUrl.includes('?') ? '&' : '?';
+    const socketUrl = this.settings.wsUrl + separator + 'ticket=' + encodeURIComponent(ticket);
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        try { socket.close(1000, 'Connection test complete'); } catch { /* already closed */ }
+        if (error) reject(error);
+        else resolve();
+      };
+      const socket = new WebSocket(socketUrl);
+      const timeout = window.setTimeout(() => finish(new Error('WebSocket handshake timed out after 10 seconds.')), 10000);
+      socket.onopen = () => finish();
+      socket.onerror = () => finish(new Error('The ticket was accepted, but the secure WebSocket connection failed. Check the TLS certificate and reverse-proxy WebSocket upgrade settings.'));
+      socket.onclose = (event) => {
+        if (!settled) finish(new Error(`WebSocket closed before connecting (code ${event.code}).`));
+      };
+    });
   }
 
   public getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
