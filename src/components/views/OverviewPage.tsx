@@ -678,9 +678,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         venue: 'pump.fun',
                         qualification_status: 'bought_paper',
                         safety_status: 'warning',
-                      })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(position.mint, { name: position.name, symbol: position.symbol, launch_time: new Date(position.openedAt).toISOString(), current_price_usd: position.currentPrice, venue: 'pump.fun', qualification_status: 'bought_paper', safety_status: 'warning' }); } }} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-white/30">
+                      })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(position.mint, { name: position.name, symbol: position.symbol, launch_time: new Date(position.openedAt).toISOString(), current_price_usd: position.currentPrice, venue: 'pump.fun', qualification_status: 'bought_paper', safety_status: 'warning' }); } }} className="cursor-pointer border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.09] bg-[#242424]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
                           <span className="text-[12px] font-semibold text-white/75">{String(position.symbol || position.name).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>
                         </div>
                         <div className="min-w-0 flex-1">
@@ -709,7 +709,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     </article>)}
                     {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} role="button" tabIndex={0} onClick={() => openTokenDetailByMint(item.launch.mint_address)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(item.launch.mint_address); } }} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.09] bg-[#242424]">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black">
                           <span className="text-[11px] font-semibold text-white/70">S</span>
                         </div>
                         <div className="min-w-0 flex-1">
@@ -753,9 +753,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     { name: 'Risk score', status: status === 'QUALIFIED' ? 'PASSED' : 'PENDING' },
                   ];
                   return (
-                    <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`rounded-lg border bg-[#101010] px-2 py-1.5 ${isQualified ? 'border-emerald-400/20' : 'border-white/[0.07]'} ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : ''}`}>
+                    <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : ''}`}>
                       <div className="flex min-w-0 items-center gap-2">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#242424]">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
                           {(() => {
                             const imageUrl = tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image;
                             return imageUrl
@@ -804,7 +804,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           <span>{expandedScans.includes(launch.mint_address) ? 'Hide scan details' : 'View scan details'}</span>
                           <span className="text-[10px]">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
                         </button>
-                        {expandedScans.includes(launch.mint_address) && <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md bg-white/[0.025] p-2">
+                        {expandedScans.includes(launch.mint_address) && <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 bg-transparent py-2">
                           {checkRows.map((check: any, index: number) => {
                             const result = String(check.status || 'PENDING').toUpperCase();
                             const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
