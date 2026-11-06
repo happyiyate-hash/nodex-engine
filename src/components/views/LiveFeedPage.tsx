@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { OverviewPage } from './OverviewPage';
 
 type LiveSection = 'detected' | 'positions';
+type LiveFeedPageProps = { activeTab: string; visible: boolean };
 
-export const LiveFeedPage: React.FC = () => {
+export const LiveFeedPage: React.FC<LiveFeedPageProps> = ({ activeTab, visible }) => {
   const [section, setSection] = useState<LiveSection>('detected');
 
   return (
