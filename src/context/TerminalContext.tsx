@@ -106,8 +106,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     if (previous?.price_currency && previous.price_currency !== priceCurrency) history.length = 0;
     history.push({ time: Date.parse(event.timestamp) || Date.now(), price: historyPrice, volume: Number(data.volume_5m_usd || 0) });
   }
-  const change1m = Number(data.price_change_1m_pct);
-  const change5m = Number(data.price_change_5m_pct);
+  const change1m = data.price_change_1m_pct == null ? Number.NaN : Number(data.price_change_1m_pct);
+  const change5m = data.price_change_5m_pct == null ? Number.NaN : Number(data.price_change_5m_pct);
   const venueValue = String(data.venue || data.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(data.decision || data.status || '').toLowerCase();
