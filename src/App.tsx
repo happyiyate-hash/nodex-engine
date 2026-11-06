@@ -11,7 +11,11 @@ import { TokenDetailPage } from './components/views/TokenDetailPage';
 import { LogsPage } from './components/views/LogsPage';
 import { installFetchLogger } from './services/engineLogs';
 
-installFetchLogger();
+try {
+  installFetchLogger();
+} catch (err) {
+  console.warn('installFetchLogger:', err);
+}
 
 const REFRESH_TRIGGER_DISTANCE = 72;
 const getResistedPull = (fingerDistance: number) =>

@@ -8,7 +8,8 @@ import { normalizeBackendEvent, wsService } from '../services/websocket';
 
 export type NavigationTab =
   | 'overview' | 'positions' | 'live_feed' | 'event_monitor'
-  | 'strategy' | 'token_intelligence' | 'settings';
+  | 'token_details' | 'analytics' | 'strategy' | 'token_intelligence'
+  | 'settings' | 'about';
 
 interface TerminalContextType {
   activeTab: NavigationTab;

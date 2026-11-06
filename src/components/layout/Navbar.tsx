@@ -15,6 +15,8 @@ export const Navbar: React.FC = () => {
     summary,
     isStreamPaused,
     toggleStreamPause,
+    closeTokenDetail,
+    setActiveTab,
   } = useTerminal();
 
   return (

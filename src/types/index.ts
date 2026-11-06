@@ -36,11 +36,11 @@ export interface EngineStatus {
   operating_mode: OperatingMode;
   network: 'mainnet-beta' | 'devnet';
   solana_connected: boolean;
-  pumpswap_connected: boolean;
-  pumpswap_reconnection_count: number;
-  pumpswap_last_error: string;
-  solana_last_error: string;
-  solana_last_message_at: string;
+  pumpswap_connected?: boolean;
+  pumpswap_reconnection_count?: number;
+  pumpswap_last_error?: string;
+  solana_last_error?: string;
+  solana_last_message_at?: string;
   rpc_endpoint: string;
   rpc_latency_ms: number;
   ws_status: ConnectionStatus;
@@ -85,7 +85,9 @@ export interface Position {
   initial_investment_usd: number;
   initial_investment_sol: number;
   current_position_value_usd: number;
+  current_position_value_sol?: number;
   pnl_usd: number;
+  pnl_sol?: number;
   pnl_pct: number;
   status: PositionStatus;
   entry_time: string;
@@ -196,7 +198,11 @@ export type EventType =
   | 'launch_snapshot'
   | 'reconnect_recovery_status'
   | 'solana_logs_notification'
-  | 'unknown_event';
+  | 'new_token'
+  | 'safety_check_passed'
+  | 'ws_reconnected'
+  | 'unknown_event'
+  | (string & {});
 
 export interface NodeXEvent {
   event_id: string;

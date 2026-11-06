@@ -1,176 +1,161 @@
 import React from 'react';
 import { useTerminal, NavigationTab } from '../../context/TerminalContext';
 import {
-  LayoutDashboard,
-  Layers,
-  Flame,
-  Terminal,
-  ShieldCheck,
-  Cpu,
-  Sliders,
-  Power,
-  ShieldAlert,
+  Home,
+  BarChart3,
+  Radio,
+  Box,
+  TrendingUp,
+  Settings,
+  Code2,
+  SlidersHorizontal,
+  Info,
 } from 'lucide-react';
 
-interface NavItem {
+interface SidebarItem {
   id: NavigationTab;
   label: string;
   icon: React.ElementType;
-  badge?: string | number;
-  badgeColor?: string;
 }
 
 export const Sidebar: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
-    positions,
-    tokens,
-    events,
     engineStatus,
     toggleEngine,
-    toggleStrategy,
-    settings,
     selectedToken,
     closeTokenDetail,
   } = useTerminal();
 
-  const openPositionsCount = positions.filter((p) => p.status === 'OPEN').length;
-
-  const navItems: NavItem[] = [
-    {
-      id: 'overview',
-      label: 'Overview',
-      icon: LayoutDashboard,
-    },
-    {
-      id: 'positions',
-      label: 'Positions',
-      icon: Layers,
-      badge: openPositionsCount,
-      badgeColor: 'glass-icon text-white',
-    },
-    {
-      id: 'live_feed',
-      label: 'Live Feed',
-      icon: Flame,
-      badge: tokens.length,
-      badgeColor: 'glass-icon text-emerald-400',
-    },
-    {
-      id: 'event_monitor',
-      label: 'Event Monitor',
-      icon: Terminal,
-      badge: events.length > 0 ? 'LIVE' : undefined,
-      badgeColor: 'glass-icon text-amber-400',
-    },
-    {
-      id: 'strategy',
-      label: 'Strategy & Risk',
-      icon: Cpu,
-    },
-    {
-      id: 'token_intelligence',
-      label: 'Token Intelligence',
-      icon: ShieldCheck,
-    },
-    {
-      id: 'settings',
-      label: 'Engine Settings',
-      icon: Sliders,
-    },
+  const navItems: SidebarItem[] = [
+    { id: 'overview', label: 'Overview', icon: Home },
+    { id: 'positions', label: 'Positions', icon: BarChart3 },
+    { id: 'live_feed', label: 'Live Feed', icon: Radio },
+    { id: 'token_details', label: 'Token Details', icon: Box },
+    { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+    { id: 'strategy', label: 'Strategy', icon: Settings },
+    { id: 'event_monitor', label: 'JSON Monitor', icon: Code2 },
+    { id: 'settings', label: 'Engine Settings', icon: SlidersHorizontal },
+    { id: 'about', label: 'About', icon: Info },
   ];
 
   return (
-    <aside className="w-64 border-r border-white/[0.08] backdrop-blur-xl bg-[#0c0c0c]/65 flex flex-col justify-between select-none shrink-0 h-[calc(100vh-3.5rem)] sticky top-14">
-      {/* Navigation Links */}
-      <div className="p-3 space-y-1">
-        <div className="px-3 py-2 text-[10px] font-mono font-medium text-[#737373] tracking-widest uppercase">
-          Navigation Modules
+    <aside className="w-[218px] bg-[#09090b] border-r border-[#1e2025] flex flex-col justify-between select-none shrink-0 h-[calc(100vh-3.25rem)] sticky top-13 text-xs overflow-y-auto no-scrollbar">
+      {/* Top Brand & Nav Menu */}
+      <div className="p-3 space-y-4">
+        {/* Brand Zone */}
+        <div
+          className="flex items-center gap-2.5 px-1 py-0.5 cursor-pointer"
+          onClick={() => {
+            closeTokenDetail();
+            setActiveTab('overview');
+          }}
+        >
+          {/* Stylized White/Silver Chevron X Logo */}
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none">
+              <path d="M 6,6 L 14,16 L 6,26 L 10,26 L 16,18.5 L 22,26 L 26,26 L 18,16 L 26,6 L 22,6 L 16,13.5 L 10,6 Z" fill="url(#brandGrad)" />
+              <defs>
+                <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#FFFFFF" />
+                  <stop offset="100%" stopColor="#A1A1AA" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <div className="leading-tight">
+            <div className="font-semibold text-sm text-white tracking-wide font-sans">NodeX</div>
+            <div className="text-[10px] text-[#71717a] font-normal tracking-tight">Solana Trading Terminal</div>
+          </div>
         </div>
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id && !selectedToken;
-          return (
-            <button
-              key={item.id}
-              onClick={() => {
-                closeTokenDetail();
-                setActiveTab(item.id);
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-mono font-medium cursor-pointer touch-manipulation active:scale-[0.98] transition-all ${
-                isActive
-                  ? 'glass-card border-white/20 text-white shadow-sm'
-                  : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.04]'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`p-1.5 rounded-lg transition-colors ${
-                  isActive ? 'glass-icon text-white' : 'text-[#737373]'
-                }`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                <span>{item.label}</span>
-              </div>
-              {item.badge !== undefined && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono tabular-nums ${item.badgeColor}`}>
-                  {item.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+
+        {/* Navigation Modules */}
+        <nav className="space-y-0.5">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id && !selectedToken;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  closeTokenDetail();
+                  setActiveTab(item.id);
+                }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium cursor-pointer transition-colors ${
+                  isActive
+                    ? 'bg-[#18191d] text-white shadow-sm border border-white/[0.08]'
+                    : 'text-[#8e8e93] hover:text-white hover:bg-white/[0.03]'
+                }`}
+              >
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-[#8e8e93]'}`} />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Bottom Core Telemetry & Quick Controls */}
-      <div className="p-3 border-t border-white/[0.08] space-y-3">
-        {/* Connection Mode Card */}
-        <div className="p-3 rounded-2xl glass-panel-subtle text-[11px] font-mono space-y-2">
-          <div className="flex items-center justify-between text-[#737373]">
-            <span>ENGINE CORE</span>
-            <span className={engineStatus.running ? 'text-emerald-400 font-semibold' : 'text-red-400'}>
-              {engineStatus.running ? 'ONLINE' : 'OFFLINE'}
-            </span>
+      {/* Bottom Status & Promo Cards */}
+      <div className="p-3 space-y-2.5 pt-0">
+        {/* Solana Mainnet & Engine Status Card */}
+        <div className="p-2.5 rounded-xl bg-[#121316] border border-[#212328] space-y-2">
+          {/* Solana Header */}
+          <div className="flex items-center gap-2">
+            {/* Solana Logo Bars */}
+            <div className="w-5 h-4 flex flex-col justify-between shrink-0">
+              <div className="h-1 w-full rounded-sm bg-gradient-to-r from-[#00FFA3] to-[#03E1FF]" />
+              <div className="h-1 w-3/4 rounded-sm bg-gradient-to-r from-[#03E1FF] to-[#DC1FFF] ml-auto" />
+              <div className="h-1 w-full rounded-sm bg-gradient-to-r from-[#DC1FFF] to-[#00FFA3]" />
+            </div>
+            <div className="leading-none">
+              <span className="text-[11px] font-bold text-white tracking-wider">SOLANA</span>
+              <span className="block text-[9px] text-[#71717a]">Mainnet</span>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-[#8e8e93]">
-            <span>TRANSPORT</span>
-            <span className="text-white font-medium">
-              {settings.mode === 'RUST_BACKEND' ? 'AXUM WS' : 'SIMULATOR'}
-            </span>
+
+          {/* Engine Status */}
+          <div className="space-y-0.5">
+            <span className="text-[10px] text-[#71717a] block">Engine Status</span>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+              <span className="text-xs font-bold text-[#10B981] tracking-wider uppercase">
+                {engineStatus.running ? 'RUNNING' : 'STOPPED'}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-[#8e8e93]">
-            <span>STRATEGY</span>
-            <span className={engineStatus.strategy_paused ? 'text-amber-400' : 'text-emerald-400 font-medium'}>
-              {engineStatus.strategy_paused ? 'PAUSED' : 'ACTIVE'}
-            </span>
+
+          {/* Mode Selector */}
+          <div className="flex items-center justify-between pt-1 border-t border-[#1e2025]">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#71717a]">
+              <div className="w-3.5 h-3.5 rounded border border-[#3f3f46] flex items-center justify-center text-[8px]">
+                ⚙
+              </div>
+              <span>Mode</span>
+            </div>
+            <button
+              onClick={toggleEngine}
+              title="Click to toggle engine mode"
+              className="px-2 py-0.5 rounded bg-[#1e2025] hover:bg-[#27272a] border border-white/10 text-[10px] font-medium text-white transition-colors"
+            >
+              PAPER
+            </button>
           </div>
         </div>
 
-        {/* Action Buttons with Frosted Glass */}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={toggleEngine}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-[11px] font-mono font-medium transition-all ${
-              engineStatus.running
-                ? 'glass-card text-[#a3a3a3] hover:text-white'
-                : 'glass-card bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
-            }`}
-          >
-            <Power className="w-3.5 h-3.5" />
-            <span>{engineStatus.running ? 'Stop Engine' : 'Start'}</span>
-          </button>
-
-          <button
-            onClick={toggleStrategy}
-            className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-[11px] font-mono font-medium transition-all ${
-              engineStatus.strategy_paused
-                ? 'glass-card bg-amber-950/30 border-amber-500/30 text-amber-300'
-                : 'glass-card text-[#a3a3a3] hover:text-white'
-            }`}
-          >
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span>{engineStatus.strategy_paused ? 'Resume' : 'Pause'}</span>
-          </button>
+        {/* NodeX Promo / Horizon Card */}
+        <div className="relative rounded-xl overflow-hidden bg-gradient-to-b from-[#13151b] to-[#090a0d] border border-[#212328] p-3 text-left">
+          {/* Subtle curved planet horizon arc */}
+          <div className="absolute -bottom-6 -right-6 w-28 h-28 rounded-full border border-white/10 bg-gradient-to-tr from-transparent via-[#1e293b]/40 to-transparent pointer-events-none" />
+          <div className="relative z-10 space-y-0.5">
+            <div className="font-semibold text-xs text-white">NodeX</div>
+            <div className="text-[10px] text-[#8e8e93] leading-tight">
+              Smart Trading.
+              <br />
+              Real Insights.
+            </div>
+          </div>
         </div>
       </div>
     </aside>
