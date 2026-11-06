@@ -167,30 +167,27 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const dataMin = Math.min(...prices);
     const dataMax = Math.max(...prices);
     const dataRange = dataMax - dataMin;
-    const baseRange = dataRange || Math.max(Math.abs(dataMax) * 0.002, Number.EPSILON);
-    const padding = baseRange * 0.12;
+    // Fit the complete visible price window on every update. A minimum span keeps
+    // quiet/flat markets readable, while real spikes expand the same shared scale.
+    const minimumRange = Math.max(Math.abs(dataMax) * 0.002, Number.EPSILON);
+    const fittedRange = Math.max(dataRange, minimumRange);
+    const padding = fittedRange * 0.12;
+    const center = (dataMin + dataMax) / 2;
+    const target: PriceScale = dataRange > 0
+      ? { min: dataMin - padding, max: dataMax + padding }
+      : { min: center - fittedRange / 2 - padding, max: center + fittedRange / 2 + padding };
 
-    // HYBRID AUTO-SCALE:
-    // 1) Expand the range to fit visible highs/lows with breathing room.
-    // 2) As the live window advances, translate the range with the visible market.
-    // The entire plot uses this one scale, so line, grid, cursor and badge stay aligned.
-    const target: PriceScale = { min: dataMin - padding, max: dataMax + padding };
+    // One animated scale maps every historical point, axis tick, grid line,
+    // cursor and live-price marker. When the range expands, older movement is
+    // naturally compressed; a sharp reversal compresses the previous highs.
     const previous = scaleRef.current;
-    let desiredScale = target;
+    const desiredScale = target;
     if (!previous || !Number.isFinite(previous.min) || !Number.isFinite(previous.max)) {
       scaleRef.current = target;
     } else {
-      const expandingMin = Math.min(previous.min, target.min);
-      const expandingMax = Math.max(previous.max, target.max);
-      const expandedRange = expandingMax - expandingMin || baseRange;
-      const edgeBuffer = expandedRange * 0.12;
-      const livePrice = visible[visible.length - 1].price;
-      const needsShift = livePrice > expandingMax - edgeBuffer || livePrice < expandingMin + edgeBuffer;
-      desiredScale = needsShift ? target : { min: expandingMin, max: expandingMax };
-      // Smooth the scale transition instead of snapping axis labels and plotted data.
       scaleRef.current = {
-        min: previous.min + (desiredScale.min - previous.min) * 0.22,
-        max: previous.max + (desiredScale.max - previous.max) * 0.22,
+        min: previous.min + (target.min - previous.min) * 0.18,
+        max: previous.max + (target.max - previous.max) * 0.18,
       };
     }
     const scale = scaleRef.current;
