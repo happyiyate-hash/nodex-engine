@@ -70,9 +70,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [section, setSection] = useState<SettingsSection>('home');
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
-  const [apiKey, setApiKey] = useState(settings.apiKey);
-  const [engineUrl, setEngineUrl] = useState(settings.wsUrl);
-  const [engineApiKey, setEngineApiKey] = useState(settings.adminApiKey);
+  const [operatorKey, setOperatorKey] = useState(settings.adminApiKey);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [testingConnection, setTestingConnection] = useState(false);
@@ -135,29 +133,25 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
   useEffect(() => {
     setBackendUrl(settings.backendUrl);
-    setApiKey(settings.apiKey);
-    setEngineUrl(settings.wsUrl);
-    setEngineApiKey(settings.adminApiKey);
-  }, [settings.backendUrl, settings.apiKey, settings.wsUrl, settings.adminApiKey]);
+    setOperatorKey(settings.adminApiKey);
+  }, [settings.backendUrl, settings.adminApiKey]);
 
   const saveConnections = (event: React.FormEvent) => {
     event.preventDefault();
     setSavingConnection(true);
     setConnectionMessage('');
     try {
-      if (!backendUrl.trim()) throw new Error('Enter the NodeX backend URL.');
+      if (!backendUrl.trim()) throw new Error('Enter the NodeX backend address.');
       const parsedBackend = new URL(backendUrl.trim());
-      if (!['http:', 'https:'].includes(parsedBackend.protocol)) throw new Error('Backend URL must use HTTP or HTTPS.');
-      if (!engineUrl.trim()) throw new Error('Enter the NodeX engine WebSocket URL.');
-      const parsedEngine = new URL(engineUrl.trim());
-      if (!['ws:', 'wss:'].includes(parsedEngine.protocol)) throw new Error('Engine URL must use WS or WSS.');
+      if (!['http:', 'https:'].includes(parsedBackend.protocol)) throw new Error('Backend address must start with https:// or http://.');
+      if (parsedBackend.pathname !== '/' || parsedBackend.search || parsedBackend.hash) {
+        throw new Error('Enter only the backend base address, without an API path or query string.');
+      }
       updateSettings({
-        backendUrl: backendUrl.trim(),
-        apiKey: apiKey.trim(),
-        wsUrl: engineUrl.trim(),
-        adminApiKey: engineApiKey.trim(),
+        backendUrl: backendUrl.trim().replace(/\/$/, ''),
+        adminApiKey: operatorKey.trim(),
       });
-      setConnectionMessage('API and engine connection settings saved. The app is reconnecting.');
+      setConnectionMessage('Backend address and operator key saved. REST and live-stream connections are being refreshed.');
     } catch (error) {
       setConnectionMessage(error instanceof Error ? error.message : 'Could not update connection settings.');
     } finally {
@@ -170,7 +164,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setHealthMessage('');
     try {
       const result = await apiClient.getHealth();
-      setHealthMessage(`Connected · ${result.service || 'NodeX API'} · ${result.status || 'Healthy'}`);
+      await apiClient.testWebSocketConnection();
+      setHealthMessage(`REST API healthy · authenticated live stream connected · ${result.service || 'NodeX'}`);
     } catch (error) {
       setHealthMessage(error instanceof Error ? error.message : 'Connection test failed.');
     } finally {
@@ -308,37 +303,30 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       {section === 'connections' && (
         <form onSubmit={saveConnections} className="space-y-5 pt-5">
           <div>
-            <p className="text-[13px] font-semibold text-white">Application API connection</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Credentials used by the NodeX app when calling its REST API.</p>
+            <p className="text-[13px] font-semibold text-white">NodeX backend</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">One address is used for every app-to-engine connection. The live WebSocket address is generated automatically from it.</p>
           </div>
-          <Field label="API URL" hint="Base HTTP or HTTPS address for the NodeX application API.">
-            <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://api.example.com" autoCapitalize="none" autoCorrect="off" />
+          <Field label="Backend address" hint="Enter the base HTTPS address only. Do not add /health, /api, or /ws.">
+            <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://your-nodeX-host" autoCapitalize="none" autoCorrect="off" />
           </Field>
-          <Field label="API key" hint="Application API key sent with REST requests.">
-            <input className={inputClass} type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Enter application API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
-          </Field>
-
-          <div className="border-t border-white/[0.09] pt-5">
-            <p className="text-[13px] font-semibold text-white">Engine connection</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Separate authenticated connection used for the live engine event stream.</p>
-          </div>
-          <Field label="Engine URL" hint="WebSocket endpoint of the NodeX engine (WS or WSS).">
-            <input className={inputClass} type="url" value={engineUrl} onChange={(e) => setEngineUrl(e.target.value)} placeholder="wss://engine.example.com/api/v1/ws" autoCapitalize="none" autoCorrect="off" />
-          </Field>
-          <Field label="Engine API key" hint="Operator key used to request an authenticated engine WebSocket ticket.">
-            <input className={inputClass} type="password" value={engineApiKey} onChange={(e) => setEngineApiKey(e.target.value)} placeholder="Enter engine API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
-          </Field>
-
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Engine-managed provider credentials</div>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Solana RPC provider URLs and keys, gRPC credentials, and private signing credentials remain configured inside the Rust backend. They are not app-to-engine connection credentials.</p>
+            <p className="text-[10px] font-medium text-white/65">Live event stream address (automatic)</p>
+            <p className="mt-1 break-all font-mono text-[10px] text-white/45">{backendUrl.trim().replace(/^https:/, 'wss:').replace(/^http:/, 'ws:').replace(/\/$/, '')}/api/v1/ws</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/35">The app always connects to this same host. You do not need to enter a second URL.</p>
+          </div>
+          <Field label="Operator key" hint="The same backend key is used to request a short-lived WebSocket ticket and authorize protected engine controls. It must match NODEX_ADMIN_API_KEY on the Rust server.">
+            <input className={inputClass} type="password" value={operatorKey} onChange={(e) => setOperatorKey(e.target.value)} placeholder="Enter your NodeX operator key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
+          </Field>
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Provider credentials stay on the backend</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Solana RPC, Helius, gRPC, wallet and signing credentials are configured on the Rust server. Do not enter them here.</p>
           </div>
           <button type="submit" disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-[12px] font-semibold text-black disabled:opacity-50">
-            <Check className="h-4 w-4" /> {savingConnection ? 'Saving connections…' : 'Save connection settings'}
+            <Check className="h-4 w-4" /> {savingConnection ? 'Saving…' : 'Save connection'}
           </button>
           {connectionMessage && <p className="text-[10px] leading-relaxed text-white/60">{connectionMessage}</p>}
           <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] font-medium text-white/80 disabled:opacity-50">
-            <Wifi className="h-4 w-4" /> {testingConnection ? 'Testing connection…' : 'Test backend connection'}
+            <Wifi className="h-4 w-4" /> {testingConnection ? 'Testing REST + live stream…' : 'Test full connection'}
           </button>
           {healthMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{healthMessage}</p>}
         </form>
