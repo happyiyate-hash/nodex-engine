@@ -141,6 +141,10 @@ export interface DiscoveredToken {
   launch_time: string;
   current_price_usd: number;
   current_price_sol: number;
+  price_currency?: 'USD' | 'SOL';
+  price_change_1m_pct?: number;
+  price_change_5m_pct?: number;
+  market_cap_sol?: number;
   market_cap_usd: number;
   liquidity_usd: number;
   volume_5m_usd: number;
