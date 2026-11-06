@@ -1,8 +1,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent } from '../../types';
-import { Activity, Copy, ExternalLink, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { Activity, Circle, Copy, ExternalLink, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 
+type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'detected' | 'qualified' | 'positions';
 
 interface RollingDigitProps {
@@ -20,29 +21,352 @@ interface LaunchView {
   scanStarted: boolean;
 }
 
+const DEMO_TOKEN_SEEDS: Array<{ name: string; symbol: string; outcome: 'REJECTED' | 'QUALIFIED' }> = [
+  {
+    "name": "Aether",
+    "symbol": "AETH",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Nova Protocol",
+    "symbol": "NOVA",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Velora",
+    "symbol": "VLR",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Orbit Labs",
+    "symbol": "ORBT",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Nebula",
+    "symbol": "NEB",
+    "outcome": "REJECTED"
+  },
+  {
+    "name": "Solstice",
+    "symbol": "SOLT",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Kairo",
+    "symbol": "KAI",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Prism",
+    "symbol": "PRSM",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Vertex",
+    "symbol": "VRTX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Lumen",
+    "symbol": "LMN",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Driftwood",
+    "symbol": "DRFT",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Axiom",
+    "symbol": "AXM",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Monarch",
+    "symbol": "MNCH",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Helix",
+    "symbol": "HLX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Aurora",
+    "symbol": "AURA",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Quanta",
+    "symbol": "QNT",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Solis",
+    "symbol": "SOLS",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Cipher",
+    "symbol": "CIPH",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Flux",
+    "symbol": "FLUX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Zenith",
+    "symbol": "ZEN",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Mirage",
+    "symbol": "MRG",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Atlas",
+    "symbol": "ATLS",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Onyx",
+    "symbol": "ONYX",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Pulse",
+    "symbol": "PLS",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Cinder",
+    "symbol": "CNDR",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Echo",
+    "symbol": "ECHO",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Vanta",
+    "symbol": "VNT",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Sable",
+    "symbol": "SABL",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Lyra",
+    "symbol": "LYRA",
+    "outcome": "QUALIFIED"
+  },
+  {
+    "name": "Astra",
+    "symbol": "ASTR",
+    "outcome": "QUALIFIED"
+  }
+] as const;
 
-interface AutoFitNumberProps { fullText:string; compactText:string; className:string; maxFontSize:number; minFontSize:number; }
-const AutoFitNumber: React.FC<AutoFitNumberProps> = ({fullText,compactText,className,maxFontSize,minFontSize}) => {
-  const containerRef=useRef<HTMLSpanElement>(null);
-  const [compact,setCompact]=useState(false);
-  useLayoutEffect(()=>{
-    const container=containerRef.current;
-    if(!container)return;
-    const fit=()=>setCompact(container.scrollWidth>container.clientWidth+1);
+
+interface DemoPosition {
+  id: string;
+  mint: string;
+  name: string;
+  symbol: string;
+  entryPrice: number;
+  currentPrice: number;
+  quantity: number;
+  invested: number;
+  value: number;
+  pnl: number;
+  pnlPct: number;
+  openedAt: number;
+  status: 'OPEN' | 'CLOSED';
+  peakPrice: number;
+  peakPnlPct: number;
+  trailingActivated: boolean;
+  trailingStopPrice: number;
+  lastPriceStep: number;
+  belowStopSamples: number;
+  exitPrice?: number;
+  exitReason?: string;
+}
+interface SimToken {
+  launch: TokenLaunchRecord;
+  seed: typeof DEMO_TOKEN_SEEDS[number];
+  index: number;
+  detectedAt: number;
+  status: PipelineStatus;
+  progress: number;
+  scanStage: string;
+  positionId?: string;
+  verificationCycle: number;
+}
+interface SimulationState {
+  startedAt: number;
+  cash: number;
+  tokens: Map<number, SimToken>;
+  positions: Map<string, DemoPosition>;
+}
+const DEMO_STARTING_BALANCE = 10000;
+const DEMO_TRADE_SIZE = 50;
+const DEMO_ENTRY_PRICES = [0.00042, 0.00115, 0.00078, 0.0024, 0.00063, 0.0018, 0.00095, 0.0031, 0.00054, 0.00135];
+const DEMO_PRICE_PATHS = Array.from({ length: 30 }, (_, index) => {
+  const variation = (index % 5) * 0.8;
+  const pullback = (index % 3) * 0.6;
+  return [
+    10 + variation, 8 + variation, 20 + variation, 16 + variation,
+    28 + variation, 24 + variation, 18 + variation, 12 + pullback,
+    11 + pullback,
+  ];
+});
+const INITIAL_STOP_LOSS_PCT = 8;
+const TAKE_PROFIT_ACTIVATION_PCT = 10;
+const TRAILING_DRAWDOWN_PCT = 8;
+
+interface DemoLaunchView extends LaunchView {
+  demo: true;
+  progress: number;
+  scanStage: string;
+  arrivalKey: string;
+}
+
+interface AutoFitNumberProps { fullText: string; compactText: string; className: string; maxFontSize: number; minFontSize: number; balanceDirection: ChangeDirection; }
+
+const AutoFitNumber: React.FC<AutoFitNumberProps> = ({ fullText, compactText, className, maxFontSize, minFontSize, balanceDirection }) => {
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [fontSize, setFontSize] = useState(maxFontSize);
+  const [compact, setCompact] = useState(false);
+  // Refit only when the rendered width can materially change (digit count or
+  // container size). Updating a digit at the same magnitude must not restart
+  // the font-size calculation while its reel is moving.
+  useLayoutEffect(() => {
+    setFontSize(maxFontSize);
+    setCompact(false);
+  }, [fullText.length, maxFontSize]);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const content = textRef.current;
+    if (!container || !content) return;
+
+    const fit = () => {
+      if (compact) return;
+      const available = container.clientWidth;
+      const required = content.scrollWidth;
+      if (!available || !required) return;
+
+      if (required > available + 1) {
+        const nextSize = Math.max(minFontSize, Math.round(fontSize * (available / required) * 10) / 10);
+        if (nextSize < fontSize - 0.1) setFontSize(nextSize);
+        else if (fontSize <= minFontSize) setCompact(true);
+      } else if (fontSize < maxFontSize && required < available - 2) {
+        const nextSize = Math.min(maxFontSize, Math.round(fontSize * (available / required) * 10) / 10);
+        if (nextSize > fontSize + 0.1) setFontSize(nextSize);
+      }
+    };
+
     fit();
-    const observer=new ResizeObserver(fit);
+    const observer = new ResizeObserver(fit);
     observer.observe(container);
-    return ()=>observer.disconnect();
-  },[fullText,compactText]);
-  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span className={className} style={{fontSize:compact?minFontSize:maxFontSize}}>{compact?compactText:fullText}</span></span>;
+    return () => observer.disconnect();
+  }, [compact, fontSize, fullText.length, maxFontSize, minFontSize]);
+  const displayText = compact ? compactText : fullText;
+  let digitPositionFromRight = 0;
+  const renderedCharacters = Array.from(displayText).reverse().map((character) => {
+    if (/[0-9]/.test(character)) {
+      const position = digitPositionFromRight++;
+      return <RollingDigit key={`digit-place-${position}`} digit={character} balanceDirection={balanceDirection} />;
+    }
+    return <span key={`separator-after-place-${digitPositionFromRight}`} className="inline-block h-[1em] leading-[1em]">{character}</span>;
+  }).reverse();
+  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{renderedCharacters}</span></span>;
 };
-const compactNumber=(value:number)=>{
-  const absolute=Math.abs(value),sign=value<0?'−':'';
-  const units=[{limit:1_000_000_000,suffix:'B',divisor:1_000_000_000},{limit:1_000_000,suffix:'M',divisor:1_000_000},{limit:1_000,suffix:'K',divisor:1_000}];
-  const unit=units.find(item=>absolute>=item.limit);
-  if(!unit)return sign+absolute.toLocaleString('en-US',{maximumFractionDigits:3});
-  const scaled=absolute/unit.divisor,digits=scaled>=100?0:scaled>=10?1:2;
-  return sign+scaled.toLocaleString('en-US',{maximumFractionDigits:digits})+unit.suffix;
+
+const compactNumber = (value: number) => {
+  const absolute = Math.abs(value);
+  const sign = value < 0 ? '−' : '';
+  const units = [{ limit: 1_000_000_000, suffix: 'B', divisor: 1_000_000_000 }, { limit: 1_000_000, suffix: 'M', divisor: 1_000_000 }, { limit: 1_000, suffix: 'K', divisor: 1_000 }];
+  const unit = units.find((item) => absolute >= item.limit);
+  if (!unit) return sign + absolute.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const scaled = absolute / unit.divisor;
+  const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+  return sign + scaled.toLocaleString('en-US', { maximumFractionDigits: digits }) + unit.suffix;
+};
+
+const REEL_CENTER = 50;
+const REEL_DIGITS = Array.from({ length: 100 }, (_, index) => String(index % 10));
+
+const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) => {
+  const initialIndex = REEL_CENTER + Number(digit);
+  const lastDigit = useRef(digit);
+  const targetIndex = useRef(initialIndex);
+  const [reelIndex, setReelIndex] = useState(initialIndex);
+  const [isRolling, setIsRolling] = useState(false);
+
+  useLayoutEffect(() => {
+    const previous = lastDigit.current;
+    if (previous === digit) return;
+
+    lastDigit.current = digit;
+    const from = Number(previous);
+    const to = Number(digit);
+    if (from === to) return;
+
+    // Keep every changed place moving in the portfolio's direction. This
+    // preserves carry/borrow motion (9 -> 0 and 0 -> 9) at every magnitude.
+    let delta: number;
+    if (balanceDirection === 'up') {
+      delta = (to - from + 10) % 10;
+    } else if (balanceDirection === 'down') {
+      delta = -((from - to + 10) % 10);
+    } else {
+      const forward = (to - from + 10) % 10;
+      const backward = forward - 10;
+      delta = Math.abs(forward) <= Math.abs(backward) ? forward : backward;
+    }
+
+    if (delta === 0) return;
+
+    // Retarget the running CSS transition instead of cancelling it and
+    // restarting from a stale reel position. The browser continues from the
+    // currently rendered position, so rapid price ticks cannot expose a gap.
+    const nextIndex = targetIndex.current + delta;
+    targetIndex.current = nextIndex;
+    setIsRolling(true);
+    setReelIndex(nextIndex);
+  }, [digit, balanceDirection]);
+
+  const finishRoll = (event: React.TransitionEvent<HTMLSpanElement>) => {
+    if (event.propertyName !== 'transform' || !isRolling) return;
+    if (targetIndex.current % 10 !== Number(digit)) return;
+
+    // Recenter only after the latest destination is reached. The center and
+    // destination show the same digit, so this reset is visually invisible.
+    const centeredIndex = REEL_CENTER + Number(digit);
+    targetIndex.current = centeredIndex;
+    setIsRolling(false);
+    setReelIndex(centeredIndex);
+  };
+
+  return (
+    <span className="inline-block h-[1em] w-[0.62em] min-w-[0.62em] shrink-0 overflow-hidden align-bottom text-center">
+      <span onTransitionEnd={finishRoll} className="flex flex-col will-change-transform" style={{
+        transform: `translate3d(0, -${reelIndex}em, 0)`,
+        transition: isRolling ? 'transform 420ms cubic-bezier(0.22, 0.72, 0.25, 1)' : 'none',
+      }}>
+        {REEL_DIGITS.map((value, index) => <span className="block h-[1em] w-full shrink-0 leading-[1em]" key={index}>{value}</span>)}
+      </span>
+    </span>
+  );
 };
 
 const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[]): LaunchView => {
@@ -108,21 +432,203 @@ const statusStyle: Record<PipelineStatus, string> = {
 };
 
 export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
-  const { launches, events, engineStatus, openTokenDetailByMint, profile } = useTerminal();
+  const { launches, events, engineStatus, openTokenDetailByMint } = useTerminal();
+  const [portfolioValue, setPortfolioValue] = useState(DEMO_STARTING_BALANCE);
+  const [profitLoss, setProfitLoss] = useState(0);
+  const [profitLossPct, setProfitLossPct] = useState(0);
+  const [availableBalance, setAvailableBalance] = useState(DEMO_STARTING_BALANCE);
+  const [investedBalance, setInvestedBalance] = useState(0);
+  const [openPositionCount, setOpenPositionCount] = useState(0);
+  const [hourlyProfitLoss, setHourlyProfitLoss] = useState(0);
+  const [portfolioFlash, setPortfolioFlash] = useState<ChangeDirection>(null);
+  const [balanceDirection, setBalanceDirection] = useState<ChangeDirection>(null);
   const [filter, setFilter] = useState<FeedFilter>('detected');
   const [search, setSearch] = useState('');
+  const [demoLaunches, setDemoLaunches] = useState<DemoLaunchView[]>([]);
+  const [demoPositions, setDemoPositions] = useState<DemoPosition[]>([]);
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
+  const [scanClock, setScanClock] = useState(Date.now());
+  useEffect(() => {
+    const scanTimer = window.setInterval(() => setScanClock(Date.now()), 500);
+    return () => window.clearInterval(scanTimer);
+  }, []);
+  useEffect(() => {
+    const simulation: SimulationState = {
+      startedAt: Date.now(),
+      cash: DEMO_STARTING_BALANCE,
+      tokens: new Map(),
+      positions: new Map(),
+    };
+    let previousPortfolioValue = DEMO_STARTING_BALANCE;
+    const portfolioHistory: Array<{ timestamp: number; value: number }> = [{ timestamp: simulation.startedAt, value: DEMO_STARTING_BALANCE }];
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - simulation.startedAt;
+      // This demo run is intentionally finite: inspect exactly 60 launches.
+      const arrivals = Math.min(60, Math.floor(elapsed / 900) + 1);
+
+      for (let index = 0; index < arrivals; index += 1) {
+        if (simulation.tokens.has(index)) continue;
+        const catalogueSeed = DEMO_TOKEN_SEEDS[index % DEMO_TOKEN_SEEDS.length];
+        // Exactly five of the 60 demo launches are rejected; the remaining 55 qualify.
+        const seed = { ...catalogueSeed, outcome: index < 5 ? 'REJECTED' as const : 'QUALIFIED' as const };
+        const mint = `DEMO-${seed.symbol}-${index + 1}`;
+        const detectedAt = simulation.startedAt + index * 900;
+        simulation.tokens.set(index, {
+          index, seed, detectedAt, status: 'DETECTED', progress: 0,
+          scanStage: 'New launch received', verificationCycle: 0,
+          launch: {
+            id: mint, mint_address: mint, creator_address: null,
+            source: 'Demo launch stream', signature: mint, slot: 0,
+            detected_at: new Date(detectedAt).toISOString(),
+          },
+        });
+      }
+
+      for (const token of simulation.tokens.values()) {
+        const age = now - token.detectedAt;
+        if (age < 650) {
+          token.status = 'DETECTED'; token.progress = 0; token.scanStage = 'New launch received';
+        } else if (age < 5200) {
+          token.status = 'ANALYZING';
+          token.progress = Math.min(94, Math.round(((age - 650) / 4550) * 100));
+          token.scanStage = token.progress < 28 ? 'Checking mint authority' : token.progress < 52 ? 'Checking freeze authority' : token.progress < 76 ? 'Inspecting holder distribution' : 'Reviewing final risk signals';
+        } else if (token.seed.outcome === 'REJECTED') {
+          token.status = 'REJECTED'; token.progress = 100; token.scanStage = 'Demo risk checks failed';
+        } else {
+          token.progress = 100;
+          const positionId = `paper-${token.index}-${token.verificationCycle + 1}`;
+          const existing = simulation.positions.get(positionId);
+          if (!existing) {
+            const entryPrice = DEMO_ENTRY_PRICES[token.index % DEMO_ENTRY_PRICES.length];
+            const quantity = DEMO_TRADE_SIZE / entryPrice;
+            if (simulation.cash >= DEMO_TRADE_SIZE) {
+              simulation.cash -= DEMO_TRADE_SIZE;
+              simulation.positions.set(positionId, {
+                id: positionId, mint: token.launch.mint_address,
+                name: token.seed.name, symbol: token.seed.symbol,
+                entryPrice, currentPrice: entryPrice, quantity,
+                invested: DEMO_TRADE_SIZE, value: DEMO_TRADE_SIZE,
+                pnl: 0, pnlPct: 0, openedAt: now, status: 'OPEN',
+                peakPrice: entryPrice, peakPnlPct: 0,
+                trailingActivated: false,
+                trailingStopPrice: entryPrice * (1 - INITIAL_STOP_LOSS_PCT / 100),
+                lastPriceStep: 0, belowStopSamples: 0,
+              });
+              token.positionId = positionId;
+              token.status = 'PAPER ENTRY';
+              token.scanStage = 'Paper buy executed';
+            } else {
+              token.status = 'QUALIFIED'; token.scanStage = 'Qualified · balance limit reached';
+            }
+          } else if (existing.status === 'CLOSED') {
+            // Demo tokens remain on the discovery radar after a paper exit.
+            // Start a fresh verification cycle and keep the closed trade in history.
+            token.verificationCycle += 1;
+            token.positionId = undefined;
+            token.detectedAt = now;
+            token.status = 'DETECTED';
+            token.progress = 0;
+            token.scanStage = 'Rediscovered · queued for verification';
+          } else {
+            token.positionId = positionId;
+            token.status = 'PAPER ENTRY';
+            token.scanStage = 'Paper position open';
+          }
+        }
+      }
+
+      for (const position of simulation.positions.values()) {
+        if (position.status !== 'OPEN') continue;
+        // Position IDs include both token index and verification cycle:
+        // paper-<token-index>-<cycle>. Parse only the token index so the
+        // simulated price path never becomes NaN after a rediscovery.
+        const tokenIndex = Number(position.id.split('-')[1]);
+        if (!Number.isInteger(tokenIndex) || tokenIndex < 0) continue;
+        const age = now - position.openedAt;
+        const stepMs = 5000 + ((tokenIndex * 613) % 4000);
+        const step = Math.floor(age / stepMs);
+        if (step < 1 || step <= position.lastPriceStep) continue;
+        position.lastPriceStep = step;
+
+        // Bullish demo market: gains gradually strengthen, with realistic
+        // 4–7% pullbacks mixed in so prices can dip without losing the upward bias.
+        const moveIndex = step - 1;
+        const phase = Math.floor(moveIndex / 4);
+        const isPullback = moveIndex % 4 === 2;
+        const movementPct = isPullback
+          ? -(4 + (phase % 4))
+          : 6 + phase * 1.2 + ((tokenIndex + moveIndex) % 3) * 0.5;
+        position.currentPrice *= 1 + movementPct / 100;
+        position.peakPrice = Math.max(position.peakPrice, position.currentPrice);
+        position.pnlPct = ((position.currentPrice - position.entryPrice) / position.entryPrice) * 100;
+        position.peakPnlPct = ((position.peakPrice - position.entryPrice) / position.entryPrice) * 100;
+        if (!position.trailingActivated && position.peakPnlPct >= TAKE_PROFIT_ACTIVATION_PCT) {
+          position.trailingActivated = true;
+        }
+        position.trailingStopPrice = position.trailingActivated
+          ? position.peakPrice * (1 - TRAILING_DRAWDOWN_PCT / 100)
+          : position.entryPrice * (1 - INITIAL_STOP_LOSS_PCT / 100);
+        position.value = position.quantity * position.currentPrice;
+        position.pnl = position.value - position.invested;
+
+        // Observation mode: do not auto-sell or close accepted demo positions.
+        // The simulated market price keeps moving while the position remains OPEN.
+      }
+
+      const positionList = Array.from(simulation.positions.values()).sort((a, b) => b.openedAt - a.openedAt);
+      const openPositions = positionList.filter((position) => position.status === 'OPEN');
+      const invested = openPositions.reduce((sum, position) => sum + position.invested, 0);
+      const marketValue = openPositions.reduce((sum, position) => sum + position.value, 0);
+      const totalValue = simulation.cash + marketValue;
+      const pnl = totalValue - DEMO_STARTING_BALANCE;
+      setDemoLaunches(Array.from(simulation.tokens.values()).sort((a, b) => b.detectedAt - a.detectedAt).map((token) => ({
+        launch: token.launch, status: token.status,
+        reason: token.scanStage, updatedAt: new Date(now).toISOString(),
+        scanStarted: token.status !== 'DETECTED', demo: true,
+        progress: token.progress, scanStage: token.scanStage,
+        arrivalKey: token.launch.id,
+      })));
+      setDemoPositions(positionList);
+      setAvailableBalance(simulation.cash);
+      setInvestedBalance(invested);
+      setOpenPositionCount(openPositions.length);
+      portfolioHistory.push({ timestamp: now, value: totalValue });
+      const hourCutoff = now - 60 * 60 * 1000;
+      while (portfolioHistory.length > 2 && portfolioHistory[1].timestamp <= hourCutoff) portfolioHistory.shift();
+      const hourBaseline = portfolioHistory[0]?.value ?? totalValue;
+      setHourlyProfitLoss(totalValue - hourBaseline);
+      setPortfolioValue(totalValue);
+      setProfitLoss(pnl);
+      setProfitLossPct((pnl / DEMO_STARTING_BALANCE) * 100);
+      const portfolioDelta = totalValue - previousPortfolioValue;
+      if (portfolioDelta > 0.000001) {
+        setBalanceDirection('up');
+        setPortfolioFlash('up');
+      } else if (portfolioDelta < -0.000001) {
+        setBalanceDirection('down');
+        setPortfolioFlash('down');
+      } else {
+        setPortfolioFlash(null);
+      }
+      previousPortfolioValue = totalValue;
+    }, 200);
+    return () => { clearInterval(timer); };
+  }, []);
 
   const realLaunchViews = useMemo(
-    () => launches.map((launch) => getLaunchView(launch, events)),
+    () => launches.map((launch) => ({ ...getLaunchView(launch, events), demo: false as const, progress: 0, scanStage: '', arrivalKey: launch.id || launch.signature })),
     [launches, events]
   );
   const launchViews = useMemo(
-    () => [...realLaunchViews].sort((left, right) =>
-      new Date(right.launch.detected_at).getTime() - new Date(left.launch.detected_at).getTime()
-    ),
-    [realLaunchViews]
+    () => [...demoLaunches, ...realLaunchViews].sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
+    [demoLaunches, realLaunchViews]
   );
+  const counts = useMemo(() => ({
+    detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'BUY FAILED'].includes(item.status)).length,
+    qualified: launchViews.filter((item) => ['QUALIFIED', 'PAPER ENTRY'].includes(item.status)).length,
+    positions: demoPositions.length + launchViews.filter((item) => item.status === 'PAPER ENTRY' && !('demo' in item && item.demo)).length,
+  }), [launchViews, demoPositions]);
 
   const filteredLaunches = launchViews.filter((item) => {
     if (filter === 'detected' && !['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'BUY FAILED'].includes(item.status)) return false;
@@ -130,54 +636,30 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     if (filter === 'positions') return false;
     if (search.trim()) {
       const query = search.trim().toLowerCase();
+      const demoSeed = 'demo' in item && item.demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === item.launch.mint_address.split('-')[1]) : null;
       return item.launch.mint_address.toLowerCase().includes(query) ||
         (item.launch.creator_address || '').toLowerCase().includes(query) ||
-        String(item.launch.source || '').toLowerCase().includes(query);
+        String(item.launch.source || '').toLowerCase().includes(query) ||
+        Boolean(demoSeed && (demoSeed.name.toLowerCase().includes(query) || demoSeed.symbol.toLowerCase().includes(query)));
     }
     return true;
   });
-  const filteredPositions: any[] = (profile?.portfolio?.positions || []).filter((position) => {
+
+  const filteredPositions = demoPositions.filter((position) => {
     if (!search.trim()) return true;
     const query = search.trim().toLowerCase();
-    return String(position.mint_address || position.mint || '').toLowerCase().includes(query) ||
-      String(position.symbol || '').toLowerCase().includes(query) ||
-      String(position.name || position.token_name || '').toLowerCase().includes(query);
-  }).map((position, index) => ({
-    id: String(position.position_id || position.id || index),
-    mint: String(position.mint_address || position.mint || ''),
-    name: String(position.name || position.token_name || 'Unknown token'),
-    symbol: String(position.symbol || position.token_symbol || 'UNKNOWN'),
-    entryPrice: Number(position.entry_price_sol || position.entry_price_usd || 0),
-    currentPrice: Number(position.current_price_sol || position.current_price_usd || 0),
-    quantity: Number(position.amount_tokens || position.token_amount || position.quantity || 0),
-    invested: Number(position.invested_sol || position.initial_investment_sol || 0),
-    value: Number(position.current_value_sol || position.current_position_value_sol || 0),
-    pnl: Number(position.unrealized_pnl_sol || position.pnl_sol || 0),
-    pnlPct: Number(position.unrealized_pnl_pct || position.pnl_pct || 0),
-    openedAt: Date.parse(String(position.opened_at || position.entry_time || '')) || 0,
-    status: String(position.status || 'open').toLowerCase() === 'open' ? 'OPEN' : 'CLOSED',
-    peakPnlPct: Number(position.peak_pnl_pct || 0),
-    trailingStopPrice: Number(position.trailing_stop_price || 0),
-    trailingActivated: Boolean(position.trailing_activated),
-    exitReason: position.exit_reason ? String(position.exit_reason) : undefined,
-  }));
-  const backendPaperEntries = launchViews.filter((item) => item.status === 'PAPER ENTRY' && (
+    return position.name.toLowerCase().includes(query) || position.symbol.toLowerCase().includes(query) || position.mint.toLowerCase().includes(query);
+  });
+  const backendPaperEntries = launchViews.filter((item) => item.status === 'PAPER ENTRY' && !('demo' in item && item.demo) && (
     !search.trim() || item.launch.mint_address.toLowerCase().includes(search.trim().toLowerCase()) ||
     String(item.launch.source || '').toLowerCase().includes(search.trim().toLowerCase())
   ));
 
   const connected = engineStatus.ws_status === 'connected' && engineStatus.running;
   const engineLabel = !engineStatus.running ? 'ENGINE PAUSED' : engineStatus.ws_status === 'connected' ? 'ENGINE ONLINE' : 'RECONNECTING';
-  const formatSol = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 });
-  const walletBalanceSol = Number(profile?.wallet?.sol_balance ?? 0);
-  const portfolioValueSol = Number(profile?.portfolio?.total_value_sol ?? 0);
-  const realisedPnlSol = Number(profile?.portfolio?.realized_pnl_sol ?? 0);
-  const unrealisedPnlSol = Number(profile?.portfolio?.unrealized_pnl_sol ?? 0);
-  const totalPnlSol = realisedPnlSol + unrealisedPnlSol;
-  const openPositionCount = Number(profile?.portfolio?.position_count ?? profile?.portfolio?.positions?.length ?? 0);
-  const isProfitable = totalPnlSol >= 0;
-  const formattedPortfolio = formatSol(portfolioValueSol);
-  const hourlyProfitLossLabel = '—';
+  const formatUsd = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isProfitable = profitLoss >= 0;
+  const formattedPortfolio = formatUsd(portfolioValue);
 
   const copyMint = async (event: React.MouseEvent, mint: string) => {
     event.stopPropagation();
@@ -186,6 +668,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
+      <style>{`@keyframes token-arrive { from { opacity: 0; transform: translate3d(0,-14px,0) scale(0.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }`}</style>
       {!embeddedMode && <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
         
 
@@ -195,16 +678,16 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
               <div aria-live="polite" className={`mt-1 flex h-[14px] items-center gap-1 truncate text-[14px] font-semibold leading-none tracking-tight tabular-nums sm:text-base ${isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
                 <span aria-hidden="true" className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '▲' : '▼'}</span>
-                <span className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '+' : '−'}</span><AutoFitNumber fullText={formatUsd(Math.abs(totalPnlSol)) + ' SOL'} compactText={compactNumber(Math.abs(totalPnlSol)) + ' SOL'} maxFontSize={14} minFontSize={9}  className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" />
+                <span className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '+' : '−'}</span><AutoFitNumber fullText={formatUsd(Math.abs(profitLossPct)) + '%'} compactText={compactNumber(Math.abs(profitLossPct)) + '%'} maxFontSize={14} minFontSize={9} balanceDirection={balanceDirection} className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" />
               </div>
             </div>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
               <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
-              <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${'text-white'}`}>
-                <span className="mr-1 shrink-0 text-white/65" style={{ fontSize: 'clamp(10px, 3.2vw, 14px)', lineHeight: 1 }}>SOL</span>
-                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValueSol)} maxFontSize={25} minFontSize={14}  className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
+              <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
+                <span className="mr-0.5 shrink-0 text-white/65" style={{ fontSize: 'clamp(14px, 5.8vw, 25px)', lineHeight: 1 }}>$</span>
+                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
-              <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Wallet {formatUsd(walletBalanceSol)} SOL</span><span>Realised {formatUsd(realisedPnlSol)} SOL</span></div>
+              <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available ${formatUsd(availableBalance)}</span><span>Invested ${formatUsd(investedBalance)}</span></div>
             </div>
           </div>
         </div>
@@ -228,11 +711,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             </div>
             <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
               <div className={`truncate text-[19px] font-semibold leading-none tabular-nums ${hourlyProfitLoss >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
-                {hourlyProfitLossLabel}
+                {hourlyProfitLoss >= 0 ? '+' : '−'}${formatUsd(Math.abs(hourlyProfitLoss))}
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-2">
                 <span className="text-[9px] uppercase tracking-[0.09em] text-white/40">P&L · 1H</span>
-                <span className="text-[8px] text-white/25">Not provided</span>
+                <span className="text-[8px] text-white/25">Rolling hour</span>
               </div>
             </div>
           </div>
@@ -292,8 +775,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         </div>
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
-                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.entryPrice.toFixed(6)} SOL</div></div>
-                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.currentPrice.toFixed(6)} SOL</div></div>
+                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.entryPrice.toFixed(6)}</div></div>
+                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.currentPrice.toFixed(6)}</div></div>
                         <div><div className="text-white/30">Value</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${formatUsd(position.value)}</div></div>
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[8px] text-white/35">
@@ -329,18 +812,27 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="space-y-1.5 pb-2">
                 {filteredLaunches.map((item) => {
                   const { launch, status, reason, updatedAt } = item;
+                  const demoItem = 'demo' in item && item.demo ? item : null;
+                  const demo = Boolean(demoItem);
+                  const demoSeed = demo ? DEMO_TOKEN_SEEDS.find((seed) => seed.symbol === launch.mint_address.split('-')[1]) : null;
                   const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const report = reportEvent?.data;
                   const checks = Array.isArray(report?.checks) ? report.checks : [];
                   const tokenData = launch as any;
                   const price = Number(tokenData.current_price ?? tokenData.price_usd ?? tokenData.price ?? report?.price_usd ?? report?.current_price);
                   const marketCap = Number(tokenData.market_cap ?? tokenData.market_cap_usd ?? report?.market_cap_usd);
-                  const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
-                  const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
+                  const cardName = demoSeed?.name || tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
+                  const cardSymbol = demoSeed?.symbol || tokenData.symbol || tokenData.token_symbol || '';
                   const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
-                  const checkRows = checks;
+                  const demoCheck = demoItem?.scanStage || 'Waiting for scan result';
+                  const checkRows = checks.length > 0 ? checks : [
+                    { name: 'Mint authority', status: demo ? (demoCheck.toLowerCase().includes('mint') ? 'CHECKING' : 'PENDING') : 'PENDING' },
+                    { name: 'Freeze authority', status: demo ? (demoCheck.toLowerCase().includes('freeze') ? 'CHECKING' : 'PENDING') : 'PENDING' },
+                    { name: 'Rug-pull risk', status: demo ? (demoCheck.toLowerCase().includes('risk') || demoCheck.toLowerCase().includes('holder') ? 'CHECKING' : 'PENDING') : 'PENDING' },
+                    { name: 'Risk score', status: status === 'QUALIFIED' ? 'PASSED' : 'PENDING' },
+                  ];
                   return (
-                    <article key={launch.id || launch.signature} className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0">
+                    <article key={demoItem ? demoItem.arrivalKey : launch.id || launch.signature} className={`border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : ''}`}>
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
                           {(() => {
@@ -360,23 +852,31 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         {isQualified
                           ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
                           : <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
-                            {status === 'ANALYZING' && <span className="h-1 w-1 rounded-full bg-current" />}
+                            {status === 'ANALYZING' && <span className="h-1 w-1 animate-pulse rounded-full bg-current" />}
                             {status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
                           </span>}
                       </div>
                       <div className="mt-1.5 border-t border-white/[0.055] pt-1.5">
                         {status === 'ANALYZING' ? (() => {
+                          const activeIndex = Math.floor((scanClock - new Date(launch.detected_at).getTime()) / 1250) % Math.max(checkRows.length, 1);
+                          const activeCheck = checkRows[activeIndex] || checkRows[0];
+                          const result = String(activeCheck?.status || 'CHECKING').toUpperCase();
+                          const hasRisk = ['FAILED', 'FAIL', 'REJECTED', 'RISKY', 'WARNING', 'RISK', 'DETECTED'].includes(result);
+                          const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
+                          const shortName = String(activeCheck?.name || 'Security').replace(/_/g, ' ').replace(/ authority/gi, '').replace(/-pull/gi, '');
                           return <div className="flex min-h-[22px] items-center gap-2">
-                            <RefreshCw className="h-4 w-4 shrink-0 text-[#d2b47c]" />
-                            <span className="text-[10px] font-medium tracking-wide text-white/70">Security checks in progress</span>
-                            <span className="ml-auto text-[8px] text-white/30">BACKEND</span>
+                            <RefreshCw className={`h-4 w-4 shrink-0 animate-spin ${hasRisk ? 'text-amber-400' : passed ? 'text-emerald-400' : 'text-[#d2b47c]'}`} />
+                            <span key={`${activeIndex}-${Math.floor(scanClock / 1250)}`} className={`animate-pulse text-[10px] font-medium tracking-wide ${hasRisk ? 'text-amber-300' : passed ? 'text-[#83b982]' : 'text-white/70'}`}>
+                              {shortName}{hasRisk ? ' · RISK DETECTED' : passed ? ' · CLEAR' : ' · CHECKING'}
+                            </span>
+                            <span className="ml-auto text-[8px] text-white/30">LIVE SCAN</span>
                           </div>;
                         })() : (
                           <div className="flex min-h-[22px] items-center justify-between gap-2">
                             <span className={`text-[9px] font-medium ${status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'text-[#83b982]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'text-[#d2a064]' : 'text-white/45'}`}>
                               {status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'Security checks completed' : status === 'REJECTED' || status === 'BUY FAILED' ? 'Risk checks flagged this token' : 'Waiting for security scan'}
                             </span>
-                            <span className="text-[8px] text-white/30">{checkRows.length ? `${checkRows.length} checks` : 'No scan report'}</span>
+                            <span className="text-[8px] text-white/30">{checkRows.length} checks</span>
                           </div>
                         )}
                         <button type="button" onClick={() => setExpandedScans((current) => current.includes(launch.mint_address) ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])} className="mt-1 flex w-full items-center justify-between text-left text-[8px] text-white/35 transition-colors hover:text-white/65">
@@ -384,7 +884,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           <span className="text-[10px]">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
                         </button>
                         {expandedScans.includes(launch.mint_address) && <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 bg-transparent py-2">
-                          {checkRows.length === 0 ? <div className="col-span-2 text-[8px] text-white/35">No scan details have been returned by the backend.</div> : checkRows.map((check: any, index: number) => {
+                          {checkRows.map((check: any, index: number) => {
                             const result = String(check.status || 'PENDING').toUpperCase();
                             const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
                             const flagged = ['FAILED', 'FAIL', 'REJECTED', 'RISKY', 'WARNING', 'RISK', 'DETECTED'].includes(result);
@@ -403,9 +903,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           <span className="whitespace-nowrap text-white/35">MCap <span className="font-medium tabular-nums text-white/80">{Number.isFinite(marketCap) && marketCap > 0 ? `$${marketCap.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—'}</span></span>
                         </div>
                         <div className="flex shrink-0 items-center gap-2.5 text-[8px] text-white/35">
-                          <span>{`${launch.mint_address.slice(0, 5)}…${launch.mint_address.slice(-4)}`}</span>
+                          <span>{demo ? 'DEMO' : `${launch.mint_address.slice(0, 5)}…${launch.mint_address.slice(-4)}`}</span>
                           <button onClick={(event) => copyMint(event, launch.mint_address)} aria-label="Copy token mint" className="inline-flex items-center gap-0.5 text-white/45"><Copy className="h-2.5 w-2.5" />Copy</button>
-                          {<a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-white/45">Inspect <ExternalLink className="h-2.5 w-2.5" /></a>}
+                          {!demo && <a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-white/45">Inspect <ExternalLink className="h-2.5 w-2.5" /></a>}
                         </div>
                       </div>
                     </article>
