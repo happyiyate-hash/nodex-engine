@@ -261,7 +261,7 @@ export const TokenDetailPage: React.FC = () => {
             <div className="col-span-2 sm:col-span-1">
               <div className="text-[10px] text-white/40">Price Movement</div>
               <div className={`text-sm font-bold mt-0.5 ${isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-                {isPositive ? '+' : ''}{pnlPct.toFixed(2)}%
+                {marketChangePct == null ? '—' : `${isPositive ? '+' : ''}${pnlPct.toFixed(2)}%`}
               </div>
               <div className="text-[9px] text-white/30">Net token price change</div>
             </div>
