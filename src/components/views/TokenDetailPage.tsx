@@ -36,7 +36,6 @@ export const TokenDetailPage: React.FC = () => {
 
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
   const currentPrice = scrubPrice ?? activeToken.current_price_usd;
-  const isPositive = activePosition ? activePosition.pnl_pct >= 0 : true;
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
@@ -66,15 +65,19 @@ export const TokenDetailPage: React.FC = () => {
   const initialCostSol = activePosition ? activePosition.initial_investment_sol : 0.0900;
   const initialCostUsd = activePosition ? activePosition.initial_investment_usd : 18.19;
   const entryPriceUsd = activePosition ? activePosition.entry_price_usd : 0.000018;
+  const currentValueUsd = activePosition
+    ? activePosition.current_position_value_usd
+    : entryPriceUsd > 0 ? (activeToken.current_price_usd / entryPriceUsd) * initialCostUsd : initialCostUsd;
   const currentValueSol = activePosition
     ? (activePosition.current_position_value_sol ?? (activePosition.current_position_value_usd / 202.15))
-    : 0.1235;
-  const currentValueUsd = activePosition ? activePosition.current_position_value_usd : 24.97;
+    : currentValueUsd / 202.15;
+  const pnlUsd = activePosition ? activePosition.pnl_usd : currentValueUsd - initialCostUsd;
   const pnlSol = activePosition
     ? (activePosition.pnl_sol ?? (activePosition.pnl_usd / 202.15))
-    : 0.0335;
-  const pnlUsd = activePosition ? activePosition.pnl_usd : 6.78;
-  const pnlPct = activePosition ? activePosition.pnl_pct : 37.22;
+    : currentValueSol - initialCostSol;
+  const pnlPct = activePosition ? activePosition.pnl_pct
+    : entryPriceUsd > 0 ? ((activeToken.current_price_usd - entryPriceUsd) / entryPriceUsd) * 100 : 0;
+  const isPositive = pnlPct >= 0;
   const annualizedRoi = (pnlPct * (365 / 7)).toFixed(1);
 
   return (
