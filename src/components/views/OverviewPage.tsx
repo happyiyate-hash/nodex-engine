@@ -238,6 +238,46 @@ interface DemoLaunchView extends LaunchView {
   arrivalKey: string;
 }
 
+interface AutoFitNumberProps { fullText: string; compactText: string; className: string; maxFontSize: number; minFontSize: number; }
+
+const AutoFitNumber: React.FC<AutoFitNumberProps> = ({ fullText, compactText, className, maxFontSize, minFontSize }) => {
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [fontSize, setFontSize] = useState(maxFontSize);
+  const [compact, setCompact] = useState(false);
+  useLayoutEffect(() => { setFontSize(maxFontSize); setCompact(false); }, [fullText, maxFontSize]);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const content = textRef.current;
+    if (!container || !content) return;
+    const fit = () => {
+      if (compact) return;
+      const available = container.clientWidth;
+      const required = content.scrollWidth;
+      if (!available || required <= available + 1) return;
+      const nextSize = Math.max(minFontSize, Math.floor(fontSize * (available / required)));
+      if (nextSize < fontSize) setFontSize(nextSize);
+      else if (fontSize <= minFontSize) setCompact(true);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [compact, fontSize, fullText, minFontSize]);
+  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{compact ? compactText : fullText}</span></span>;
+};
+
+const compactNumber = (value: number) => {
+  const absolute = Math.abs(value);
+  const sign = value < 0 ? '−' : '';
+  const units = [{ limit: 1_000_000_000, suffix: 'B', divisor: 1_000_000_000 }, { limit: 1_000_000, suffix: 'M', divisor: 1_000_000 }, { limit: 1_000, suffix: 'K', divisor: 1_000 }];
+  const unit = units.find((item) => absolute >= item.limit);
+  if (!unit) return sign + absolute.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const scaled = absolute / unit.divisor;
+  const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+  return sign + scaled.toLocaleString('en-US', { maximumFractionDigits: digits }) + unit.suffix;
+};
+
 const REEL_DIGITS = Array.from({ length: 50 }, (_, index) => String(index % 10));
 
 const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) => {
@@ -609,17 +649,16 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
               <div aria-live="polite" className={`mt-1 flex items-center gap-1 truncate text-[14px] font-semibold tracking-tight tabular-nums sm:text-base ${isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
                 <span aria-hidden="true" className="text-[10px] leading-none">{isProfitable ? '▲' : '▼'}</span>
-                <span>{isProfitable ? '+' : '−'}{formatUsd(Math.abs(profitLossPct))}%</span>
+                <AutoFitNumber fullText={formatUsd(Math.abs(profitLossPct))} compactText={compactNumber(Math.abs(profitLossPct))} maxFontSize={14} minFontSize={9} className="block whitespace-nowrap font-semibold tracking-tight tabular-nums" />
               </div>
             </div>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
               <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
-              <div aria-live="polite" className={`mt-0.5 flex justify-center whitespace-nowrap text-[25px] font-bold leading-none tracking-[-0.055em] tabular-nums transition-colors duration-150 ease-out sm:text-[32px] ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
-                <span className="mr-0.5 text-white/65">$</span>
-                {Array.from(formattedPortfolio).map((character, index) => /[0-9]/.test(character)
-                  ? <RollingDigit key={index} digit={character} balanceDirection={balanceDirection} />
-                  : <span className="inline-block h-[1em] leading-[1em]" key={index}>{character}</span>)}
+              <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
+                <span className="mr-0.5 shrink-0 text-white/65" style={{ fontSize: 'clamp(14px, 5.8vw, 25px)', lineHeight: 1 }}>$</span>
+                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
+              <div className="mt-1 flex justify-center gap-3
               <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available ${formatUsd(availableBalance)}</span><span>Invested ${formatUsd(investedBalance)}</span></div>
             </div>
           </div>
