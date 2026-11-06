@@ -1,5 +1,4 @@
 import React, { useEffect, useId, useMemo, useRef } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 
 const money = (value: number) => new Intl.NumberFormat('en-US', {
@@ -98,28 +97,12 @@ export const TokenDetailPage: React.FC = () => {
   const pnlPositive = (position?.pnl_usd ?? 0) >= 0;
 
   return (
-    <main className="relative h-full min-h-0 w-full overflow-y-auto bg-[#080808] pb-24 text-white">
-      <div aria-hidden="true" className="h-[env(safe-area-inset-top)] min-h-0 w-full bg-[#080808]/75 backdrop-blur-2xl" />
+    <main className="relative h-full min-h-0 w-full overflow-y-auto bg-[#080808] text-white">
+      <div aria-hidden="true" className="h-[env(safe-area-inset-top)] min-h-0 w-full bg-[#080808]" />
 
-      <header className="sticky top-0 z-30 flex h-[68px] w-full items-center justify-between border-b border-white/[0.10] bg-[#080808]/90 px-3 backdrop-blur-2xl sm:px-5">
-        <div className="flex min-w-0 items-center gap-3">
-          <button
-            type="button"
-            onClick={closeTokenDetail}
-            aria-label="Go back"
-            title="Go back"
-            className="grid size-10 shrink-0 place-items-center rounded-full border border-white/[0.18] bg-white/[0.045] text-white/85 transition hover:bg-white/[0.09] active:scale-95"
-          >
-            <ArrowLeft className="size-[17px]" strokeWidth={2.1} />
-          </button>
-          <span className="truncate text-[15px] font-semibold tracking-tight text-white">Token Details</span>
-        </div>
-        <span className="rounded-full border border-white/[0.10] bg-white/[0.045] px-2.5 py-1 text-[9px] font-semibold tracking-[0.14em] text-white/55">PAPER</span>
-      </header>
-
-      <section className="w-full px-3 pb-3 pt-4 sm:px-5">
+      <section className="w-full px-3 pb-4 pt-3 sm:px-5">
         <div className="flex w-full items-center gap-3">
-          <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/[0.12] bg-[#171717] text-lg font-semibold text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-full border border-white/[0.12] bg-[#171717] text-lg font-semibold text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
             {selectedToken.symbol.slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
@@ -192,7 +175,6 @@ export const TokenDetailPage: React.FC = () => {
         )}
       </section>
 
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-4 bg-gradient-to-t from-white/[0.055] via-white/[0.018] to-transparent" />
     </main>
   );
 };
