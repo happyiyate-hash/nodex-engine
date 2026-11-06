@@ -76,15 +76,63 @@ const emptyStrategy: StrategyConfig = {
 
 const TerminalContext = createContext<TerminalContextType | null>(null);
 
+const STORAGE_KEY = 'nodex.shared-terminal-state.v1';
+type PersistedTerminalState = { tokens?: DiscoveredToken[]; launches?: TokenLaunchRecord[]; events?: NodeXEvent[] };
+function readPersistedState(): PersistedTerminalState {
+  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as PersistedTerminalState : {}; }
+  catch { return {}; }
+}
+const defaultSafetyDetails: DiscoveredToken['safety_details'] = {
+  mint_authority: 'active', freeze_authority: 'active', top_10_holders_pct: 0,
+  liquidity_locked: false, liquidity_locked_pct: 0, honeypot_risk: 'low',
+  dev_holding_pct: 0, dev_sold_all: false, bundled_snipers_detected: false,
+  risk_flags: [], safety_score: 0, holders_count: 0, creator_reputation: 'first_deploy', largest_holders: [],
+};
+function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEvent): DiscoveredToken | null {
+  const data = event.data || {};
+  const mint = String(event.token_mint || data.mint_address || data.token_mint || data.base_mint || '');
+  if (!mint) return null;
+  const rawPrice = Number(data.current_price_usd ?? data.price_usd ?? data.price ?? data.current_price);
+  const price = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : previous?.current_price_usd || 0;
+  const history = previous?.price_history_5m ? [...previous.price_history_5m] : [];
+  if (price > 0 && price !== previous?.current_price_usd) history.push({ time: Date.parse(event.timestamp) || Date.now(), price, volume: Number(data.volume_5m_usd || 0) });
+  const venueValue = String(data.venue || data.source || previous?.venue || 'pump.fun').toLowerCase();
+  const venue = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
+  const decision = String(data.decision || data.status || '').toLowerCase();
+  const qualification = event.event_type === 'paper_buy_executed' ? 'bought_paper'
+    : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
+    : event.event_type === 'token_scan_started' ? 'under_analysis'
+    : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
+    : previous?.qualification_status || 'newly_detected';
+  return {
+    mint, name: String(data.name || data.token_name || previous?.name || 'Unknown token'),
+    symbol: String(data.symbol || data.token_symbol || previous?.symbol || 'UNKNOWN'),
+    creator_wallet: String(data.creator_wallet || data.creator_address || previous?.creator_wallet || ''),
+    launch_time: String(data.launch_time || data.detected_at || previous?.launch_time || event.timestamp),
+    current_price_usd: price, current_price_sol: Number(data.current_price_sol ?? previous?.current_price_sol ?? 0),
+    market_cap_usd: Number(data.market_cap_usd ?? data.market_cap ?? previous?.market_cap_usd ?? 0),
+    liquidity_usd: Number(data.liquidity_usd ?? previous?.liquidity_usd ?? 0),
+    volume_5m_usd: Number(data.volume_5m_usd ?? previous?.volume_5m_usd ?? 0),
+    volume_1h_usd: Number(data.volume_1h_usd ?? previous?.volume_1h_usd ?? 0),
+    tx_buys_5m: Number(data.tx_buys_5m ?? previous?.tx_buys_5m ?? 0),
+    tx_sells_5m: Number(data.tx_sells_5m ?? previous?.tx_sells_5m ?? 0),
+    bonding_curve_progress_pct: Number(data.bonding_curve_progress_pct ?? previous?.bonding_curve_progress_pct ?? 0),
+    venue, safety_status: data.safety_status || previous?.safety_status || 'warning',
+    qualification_status: qualification, rejection_reason: data.reason || data.decision_reason || previous?.rejection_reason,
+    safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(data.safety_details || {}) },
+    price_history_5m: history.slice(-300),
+  };
+}
+
 export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
   const [engineStatus, setEngineStatus] = useState<EngineStatus>(emptyStatus);
   const [summary] = useState<DashboardSummary>(emptySummary);
   const [positions] = useState<Position[]>([]);
-  const [tokens] = useState<DiscoveredToken[]>([]);
-  const [launches, setLaunches] = useState<TokenLaunchRecord[]>([]);
+  const [tokens, setTokens] = useState<DiscoveredToken[]>(() => readPersistedState().tokens || []);
+  const [launches, setLaunches] = useState<TokenLaunchRecord[]>(() => readPersistedState().launches || []);
   const [paperWallet, setPaperWallet] = useState<PaperWalletSnapshot | null>(null);
-  const [events, setEvents] = useState<NodeXEvent[]>([]);
+  const [events, setEvents] = useState<NodeXEvent[]>(() => readPersistedState().events || []);
   const [selectedEvent, setSelectedEvent] = useState<NodeXEvent | null>(null);
   const [selectedToken, setSelectedToken] = useState<DiscoveredToken | null>(null);
   const [strategyConfig] = useState<StrategyConfig>(emptyStrategy);
@@ -129,6 +177,16 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const snapshot = Array.isArray(event.data.launches) ? event.data.launches : [];
         setLaunches(snapshot as TokenLaunchRecord[]);
         return;
+      }
+      const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
+      if (tokenMint || ['launch_detected', 'token_scan_started', 'token_scan_update', 'market_price_update', 'paper_buy_executed', 'paper_buy_failed', 'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated'].includes(event.event_type)) {
+        setTokens((previous) => {
+          const mint = String(tokenMint || '');
+          const merged = mergeTokenEvent(previous.find((item) => item.mint === mint), event);
+          return merged ? [merged, ...previous.filter((item) => item.mint !== merged.mint)].slice(0, 500) : previous;
+        });
+        setSelectedToken((previous) => previous && previous.mint === String(tokenMint || '')
+          ? (mergeTokenEvent(previous, event) || previous) : previous);
       }
       setEvents((previous) => {
         const severity = String(event.data?.severity || '').toLowerCase();
