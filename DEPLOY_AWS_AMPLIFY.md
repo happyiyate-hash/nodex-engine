@@ -20,31 +20,39 @@ keeps client-side routes working after refresh.
 
 ## First deployment environment
 
-No backend URL is required to publish the frontend. Leave
-`VITE_NODEX_API_URL` and `VITE_NODEX_WS_URL` unset for the first deployment.
-After the Rust backend has a public HTTPS/WSS address, enter those two public
-service URLs in **Settings → Axum Rust Backend & WebSocket Gateway** and save.
+No backend URL is required to publish the frontend. The frontend contains no
+default Rust backend URL. After deploying a compatible Rust backend, open
+**Settings → API & Connections** in the app and enter:
 
-Example formats (replace with your real host):
+- **REST API base URL** — the backend origin, for example
+  `https://your-backend.example.com`
+- **WebSocket URL** — optional full endpoint, for example
+  `wss://your-backend.example.com/api/v1/ws`. Leave blank to derive it
+  from the REST URL.
+- **Backend operator API key** — the key configured by that Rust backend
+  administrator. It is used for protected engine operations and to request
+  short-lived WebSocket tickets.
 
-- REST base: `https://your-backend.example.com`
-- WebSocket: `wss://your-backend.example.com/api/v1/ws`
+Save the settings, then use **Test full connection**. These settings are
+stored in the current browser's local storage and are not shared with other
+browsers or devices. A browser-stored operator key is not a secure vault;
+restrict access to the browser profile and do not expose a shared operator
+key in a public client. A production multi-user deployment should use
+individual user authentication and short-lived user tokens.
 
-The dashboard stores only these public connection URLs in that browser's
-local storage. They are not AWS secrets and are not shared between browsers
-or devices. Do not paste RPC provider API keys, passwords, private keys, or
-other secrets into browser local storage.
+## Backend-only credentials
 
-## Backend requirements before connecting
+Solana RPC provider keys, Helius credentials, Yellowstone/gRPC credentials,
+database credentials, wallet private keys and signing secrets must remain
+on the Rust backend in its server-side environment or secret manager. Do not
+put them in Vite `VITE_*` variables or browser settings. The frontend needs
+the backend URL and the operator/user credential accepted by that backend;
+it does not need direct access to infrastructure or wallet secrets.
 
-- The Rust service must be reachable over HTTPS and WSS.
-- Configure backend CORS to allow the exact Amplify app origin.
-- Configure TLS and a reverse proxy for the Rust service.
-- Add authentication and rate limiting before exposing sensitive engine
-  controls publicly. The current frontend connection form does not provide
-  an authentication credential field.
-- Keep Solana RPC/Geyser credentials on the Rust server as environment
-  variables; never put them in Vite `VITE_*` variables.
+The Rust backend must be reachable over HTTPS and WSS, and its CORS policy
+must allow the exact frontend origin. Configure TLS, reverse-proxy WebSocket
+upgrades, authentication and rate limiting before exposing operator controls
+publicly.
 
 ## Automatic deployments
 
