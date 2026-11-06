@@ -100,7 +100,9 @@ export const TokenDetailPage: React.FC = () => {
   const currentPrice = scrubPrice ?? liveTokenPrice;
   const marketChangePct = demoData?.changePct ?? activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
   const pnlPct = marketChangePct ?? 0;
-  const isPositive = (marketChangePct ?? 0) >= 0;
+  const isPositive = demoData
+    ? Math.floor(Math.max(0, demoData.tick - 1) / 18) % 2 === 0
+    : (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
   const formatTokenPrice = (value: number) => priceCurrency === 'SOL'
@@ -282,9 +284,7 @@ export const TokenDetailPage: React.FC = () => {
             <div className="col-span-2">
               <div className="text-[10px] text-white/40">Unrealized P&L</div>
               <div className={`mt-0.5 text-[13px] font-semibold ${(demoData?.changePct || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {activePosition && positionPnlSol != null
-                  ? `${positionPnlSol >= 0 ? '+' : ''}${formatMetric(positionPnlSol, 4)} SOL${positionPnlPct == null ? '' : ` · ${positionPnlPct >= 0 ? '+' : ''}${formatMetric(positionPnlPct, 2)}%`}`
-                  : `${(demoData?.changePct || 0) >= 0 ? '+' : ''}${formatMetric(1.25 * (demoData?.changePct || 0) / 100, 4)} SOL · ${(demoData?.changePct || 0).toFixed(2)}%`}
+                `${(demoData?.changePct || 0) >= 0 ? '+' : ''}${formatMetric(1.25 * (demoData?.changePct || 0) / 100, 4)} SOL · ${(demoData?.changePct || 0).toFixed(2)}%`
               </div>
             </div>
           </div>
