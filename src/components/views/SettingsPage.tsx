@@ -62,11 +62,12 @@ const StatusLine = ({ label, value, good }: { label: string; value: string; good
   </div>
 );
 
-export const SettingsPage: React.FC = () => {
+export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void }> = ({ onSubpageChange }) => {
   const {
     engineStatus, toggleEngine, settings, updateSettings, backendError,
   } = useTerminal();
   const [section, setSection] = useState<SettingsSection>('home');
+  const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
@@ -131,7 +132,7 @@ export const SettingsPage: React.FC = () => {
   const pageDescription = sections.find((item) => item.id === section)?.description || 'Manage your NodeX engine configuration.';
 
   return (
-    <div className="min-h-[calc(100dvh-6rem)] w-full bg-black px-4 pb-28 text-white">
+    <div className={`w-full bg-black px-4 text-white ${section === 'home' ? 'min-h-[calc(100dvh-6rem)] pb-28' : 'min-h-full pb-8'}`}>
       {section === 'home' ? (
         <>
           <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.08] bg-black/95 px-4 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -161,7 +162,7 @@ export const SettingsPage: React.FC = () => {
             </div>
             <div className="divide-y divide-white/[0.07]">
               {sections.map(({ id, title, description, icon: Icon }) => (
-                <button key={id} type="button" onClick={() => setSection(id)} className="group flex w-full items-center gap-3 py-4 text-left transition-colors active:bg-white/[0.025]">
+                <button key={id} type="button" onClick={() => navigateSection(id)} className="group flex w-full items-center gap-3 py-4 text-left transition-colors active:bg-white/[0.025]">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#171717] text-white/80">
                     <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
                   </span>
@@ -176,7 +177,7 @@ export const SettingsPage: React.FC = () => {
           </div>
         </>
       ) : (
-        <SectionHeader title={pageTitle} description={pageDescription} onBack={() => setSection('home')} />
+        <SectionHeader title={pageTitle} description={pageDescription} onBack={() => navigateSection('home')} />
       )}
 
       {section === 'engine' && (
@@ -253,14 +254,7 @@ export const SettingsPage: React.FC = () => {
         </div>
       )}
 
-      {section === 'trading' && (
-        <div className="pt-4">
-          <div className="mb-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-            <p className="text-[11px] leading-relaxed text-white/55">Trading rules are currently managed by the existing Strategy configuration screen. The backend persistence endpoint is not implemented yet, so changes there are not saved.</p>
-          </div>
-          <StrategyPage />
-        </div>
-      )}
+      {section === 'trading' && <div className="pt-3"><StrategyPage /></div>}
 
       {section === 'notifications' && (
         <div className="space-y-1 pt-5">
