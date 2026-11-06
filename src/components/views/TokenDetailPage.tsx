@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
+import { PricePoint } from '../../types';
 import {
   ArrowLeft,
   Copy,
@@ -30,7 +31,7 @@ export const TokenDetailPage: React.FC = () => {
   const [demoData, setDemoData] = useState<{
     tick: number; price: number; changePct: number; marketCapSol: number; marketCapUsd: number;
     liquidityUsd: number; volume5mUsd: number; volume1hUsd: number; buys: number; sells: number;
-    holders: number; bonding: number; history: { time: number; price: number; volume: number }[];
+    holders: number; bonding: number; history: PricePoint[];
   } | null>(null);
   const headerOffsetRef = useRef(0);
   const lastScrollTop = useRef(0);
@@ -41,6 +42,72 @@ export const TokenDetailPage: React.FC = () => {
   const activeToken = selectedToken
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : tokens[0];
+
+  // Helper to generate a realistic 50-bar OHLCV history ending at basePrice
+  const generateOHLCVHistory = (
+    basePrice: number,
+    changePct: number,
+    tf: '1m' | '5m' | '15m' | '1H' | '24H',
+    mintSeed: string = 'token'
+  ) => {
+    const count = 50;
+    const intervalMs =
+      tf === '1m'
+        ? 60_000
+        : tf === '5m'
+        ? 5 * 60_000
+        : tf === '15m'
+        ? 15 * 60_000
+        : tf === '1H'
+        ? 60 * 60_000
+        : 30 * 60_000; // 30m candles for 24H view = 48-50 bars across the day
+
+    const now = Date.now();
+    let seedNum = 0;
+    for (let i = 0; i < mintSeed.length; i++) {
+      seedNum = (seedNum * 31 + mintSeed.charCodeAt(i)) & 0xffffffff;
+    }
+    const pseudoRand = (offset: number) => {
+      const x = Math.sin(seedNum + offset * 12.9898) * 43758.5453;
+      return x - Math.floor(x);
+    };
+
+    const ratio = 1 + changePct / 100;
+    const startPrice = Math.max(basePrice * 0.25, basePrice / (ratio > 0.1 ? ratio : 1.15));
+
+    const bars: { time: number; price: number; open: number; high: number; low: number; volume: number }[] = [];
+    let prevClose = startPrice;
+
+    for (let i = 0; i < count; i++) {
+      const t = now - (count - 1 - i) * intervalMs;
+      const progress = i / (count - 1);
+      // Realistic curve towards basePrice
+      const baseline = startPrice + (basePrice - startPrice) * Math.pow(progress, 0.85);
+      const noise = (pseudoRand(i) - 0.48) * 0.035 * (1 - progress * 0.45);
+      const open = prevClose;
+      let close = i === count - 1 ? basePrice : Math.max(Number.EPSILON, baseline * (1 + noise));
+
+      // Occasional spike/pullback
+      if (i % 8 === 4 && i !== count - 1) {
+        close = open * (pseudoRand(i * 3) > 0.5 ? 1.025 : 0.975);
+      }
+
+      const wickHigh = Math.max(open, close) * (1 + pseudoRand(i * 5) * 0.015 + 0.003);
+      const wickLow = Math.min(open, close) * (1 - pseudoRand(i * 7) * 0.015 - 0.003);
+      const vol = Math.round(500 + pseudoRand(i * 11) * 4500 + Math.abs(close - open) / (open || 1) * 50000);
+
+      bars.push({
+        time: t,
+        price: close,
+        open,
+        high: wickHigh,
+        low: wickLow,
+        volume: vol,
+      });
+      prevClose = close;
+    }
+    return bars;
+  };
 
   // VISUAL DEMO: isolated local market tape for previewing chart motion and
   // every changing statistic. It never writes to TerminalContext or the backend.
@@ -53,19 +120,27 @@ export const TokenDetailPage: React.FC = () => {
     const seedPrice = seedCurrency === 'SOL'
       ? (activeToken.current_price_sol > 0 ? activeToken.current_price_sol : 0.00000125)
       : (activeToken.current_price_usd > 0 ? activeToken.current_price_usd : 0.00000125);
-    const seedHistory = (activeToken.price_history_5m || []).filter((point) => point.price > 0).slice(-50);
+    
+    const activePositionForToken = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
+    const initialChange = activePositionForToken?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct ?? 14.8;
+    const initialHistory = generateOHLCVHistory(seedPrice, initialChange, timeframe, activeToken.mint);
+
     setDemoData({
-      tick: 0, price: seedPrice, changePct: 0,
+      tick: 0,
+      price: seedPrice,
+      changePct: initialChange,
       marketCapSol: activeToken.market_cap_sol || 128.4,
       marketCapUsd: activeToken.market_cap_usd || 18450,
       liquidityUsd: activeToken.liquidity_usd || 7350,
       volume5mUsd: activeToken.volume_5m_usd || 1280,
       volume1hUsd: activeToken.volume_1h_usd || 8940,
-      buys: activeToken.tx_buys_5m || 18, sells: activeToken.tx_sells_5m || 9,
+      buys: activeToken.tx_buys_5m || 18,
+      sells: activeToken.tx_sells_5m || 9,
       holders: activeToken.safety_details?.holders_count || 426,
       bonding: activeToken.bonding_curve_progress_pct || 37.5,
-      history: seedHistory.length ? seedHistory : [{ time: Date.now(), price: seedPrice, volume: 0 }],
+      history: initialHistory,
     });
+
     const timer = window.setInterval(() => {
       setDemoData((previous) => {
         if (!previous) return previous;
@@ -103,9 +178,35 @@ export const TokenDetailPage: React.FC = () => {
         const changePct = ((price / seedPrice) - 1) * 100;
         const volume = Math.abs(movePct) > 5 ? 420 : Math.abs(movePct) > 0.5 ? 80 + (tick % 7) * 13 : 8;
         const now = Date.now();
-        const history = [...previous.history, { time: now, price, volume }].slice(-180);
+
+        // Update the last candle or create a new one every 18 ticks
+        const history = [...previous.history];
+        if (history.length > 0) {
+          const lastIdx = history.length - 1;
+          const lastBar = { ...history[lastIdx] };
+          lastBar.price = price;
+          lastBar.high = Math.max(lastBar.high ?? price, price);
+          lastBar.low = Math.min(lastBar.low ?? price, price);
+          lastBar.volume += volume;
+          history[lastIdx] = lastBar;
+
+          if (tick % 18 === 0) {
+            history.push({
+              time: now,
+              price,
+              open: price,
+              high: price * 1.002,
+              low: price * 0.998,
+              volume: 12,
+            });
+            if (history.length > 60) history.shift();
+          }
+        }
+
         return {
-          tick, price, changePct,
+          tick,
+          price,
+          changePct,
           marketCapSol: previous.marketCapSol * (price / previous.price),
           marketCapUsd: previous.marketCapUsd * (price / previous.price),
           liquidityUsd: Math.max(100, previous.liquidityUsd + direction * (tick % 4) * 7),
@@ -120,7 +221,7 @@ export const TokenDetailPage: React.FC = () => {
       });
     }, 650);
     return () => window.clearInterval(timer);
-  }, [activeToken?.mint]);
+  }, [activeToken?.mint, timeframe]);
 
   if (!activeToken) return null;
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
