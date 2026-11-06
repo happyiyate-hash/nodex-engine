@@ -476,14 +476,21 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         // simulated price path never becomes NaN after a rediscovery.
         const tokenIndex = Number(position.id.split('-')[1]);
         if (!Number.isInteger(tokenIndex) || tokenIndex < 0) continue;
-        const path = DEMO_PRICE_PATHS[tokenIndex % DEMO_PRICE_PATHS.length];
         const age = now - position.openedAt;
         const stepMs = 5000 + ((tokenIndex * 613) % 4000);
         const step = Math.floor(age / stepMs);
         if (step < 1 || step <= position.lastPriceStep) continue;
         position.lastPriceStep = step;
-        const movement = path[(step - 1) % path.length] / 100;
-        position.currentPrice = position.entryPrice * (1 + movement);
+
+        // Bullish demo market: gains gradually strengthen, with realistic
+        // 4–7% pullbacks mixed in so prices can dip without losing the upward bias.
+        const moveIndex = step - 1;
+        const phase = Math.floor(moveIndex / 4);
+        const isPullback = moveIndex % 4 === 2;
+        const movementPct = isPullback
+          ? -(4 + (phase % 4))
+          : 6 + phase * 1.2 + ((tokenIndex + moveIndex) % 3) * 0.5;
+        position.currentPrice *= 1 + movementPct / 100;
         position.peakPrice = Math.max(position.peakPrice, position.currentPrice);
         position.pnlPct = ((position.currentPrice - position.entryPrice) / position.entryPrice) * 100;
         position.peakPnlPct = ((position.peakPrice - position.entryPrice) / position.entryPrice) * 100;
