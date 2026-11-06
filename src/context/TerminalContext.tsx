@@ -196,7 +196,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
-      if (tokenMint || ['launch_detected', 'token_scan_started', 'token_scan_update', 'market_price_update', 'paper_buy_executed', 'paper_buy_failed', 'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated'].includes(event.event_type)) {
+      if (tokenMint || ['launch_detected', 'token_scan_started', 'token_scan_update', 'market_price_update', 'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed', 'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated'].includes(event.event_type)) {
         setTokens((previous) => {
           const mint = String(tokenMint || '');
           const merged = mergeTokenEvent(previous.find((item) => item.mint === mint), event);
