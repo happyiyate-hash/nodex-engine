@@ -302,51 +302,56 @@ const compactNumber = (value: number) => {
   return sign + scaled.toLocaleString('en-US', { maximumFractionDigits: digits }) + unit.suffix;
 };
 
-const REEL_DIGITS = Array.from({ length: 50 }, (_, index) => String(index % 10));
+const REEL_CENTER = 50;
+const REEL_DIGITS = Array.from({ length: 100 }, (_, index) => String(index % 10));
 
 const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) => {
-  const initialIndex = 20 + Number(digit);
+  const initialIndex = REEL_CENTER + Number(digit);
   const lastDigit = useRef(digit);
   const targetIndex = useRef(initialIndex);
-  const frameRef = useRef<number | null>(null);
   const [reelIndex, setReelIndex] = useState(initialIndex);
   const [isRolling, setIsRolling] = useState(false);
 
   useLayoutEffect(() => {
     const previous = lastDigit.current;
     if (previous === digit) return;
+
     lastDigit.current = digit;
     const from = Number(previous);
     const to = Number(digit);
     if (from === to) return;
 
-    let nextIndex = targetIndex.current;
-    if (from === 9 && to === 0 && balanceDirection === 'up') nextIndex += 1;
-    else if (from === 0 && to === 9 && balanceDirection === 'down') nextIndex -= 1;
-    else if (to > from) nextIndex += to - from;
-    else nextIndex -= from - to;
+    // Keep every changed place moving in the portfolio's direction. This
+    // preserves carry/borrow motion (9 -> 0 and 0 -> 9) at every magnitude.
+    let delta: number;
+    if (balanceDirection === 'up') {
+      delta = (to - from + 10) % 10;
+    } else if (balanceDirection === 'down') {
+      delta = -((from - to + 10) % 10);
+    } else {
+      const forward = (to - from + 10) % 10;
+      const backward = forward - 10;
+      delta = Math.abs(forward) <= Math.abs(backward) ? forward : backward;
+    }
 
+    if (delta === 0) return;
+
+    // Retarget the running CSS transition instead of cancelling it and
+    // restarting from a stale reel position. The browser continues from the
+    // currently rendered position, so rapid price ticks cannot expose a gap.
+    const nextIndex = targetIndex.current + delta;
     targetIndex.current = nextIndex;
-    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-    setIsRolling(false);
-    frameRef.current = requestAnimationFrame(() => {
-      frameRef.current = requestAnimationFrame(() => {
-        setIsRolling(true);
-        setReelIndex(nextIndex);
-        frameRef.current = null;
-      });
-    });
-    return () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-      }
-    };
+    setIsRolling(true);
+    setReelIndex(nextIndex);
   }, [digit, balanceDirection]);
 
   const finishRoll = (event: React.TransitionEvent<HTMLSpanElement>) => {
     if (event.propertyName !== 'transform' || !isRolling) return;
-    const centeredIndex = 20 + Number(digit);
+    if (targetIndex.current % 10 !== Number(digit)) return;
+
+    // Recenter only after the latest destination is reached. The center and
+    // destination show the same digit, so this reset is visually invisible.
+    const centeredIndex = REEL_CENTER + Number(digit);
     targetIndex.current = centeredIndex;
     setIsRolling(false);
     setReelIndex(centeredIndex);
