@@ -157,7 +157,7 @@ const MainLayout: React.FC = () => {
       main.removeEventListener('touchend', onTouchEnd);
       main.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, []);
+  }, [activeTab, selectedToken]);
 
   const indicatorVisible = pullDistance > 0 || isRefreshing;
   const indicatorOpacity = isRefreshing ? 1 : Math.min(1, pullDistance / 22);
