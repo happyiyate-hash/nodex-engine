@@ -30,27 +30,27 @@ const DEMO_TOKEN_SEEDS = [
   {
     "name": "Nova Protocol",
     "symbol": "NOVA",
-    "outcome": "QUALIFIED"
+    "outcome": "REJECTED"
   },
   {
     "name": "Velora",
     "symbol": "VLR",
-    "outcome": "QUALIFIED"
+    "outcome": "REJECTED"
   },
   {
     "name": "Orbit Labs",
     "symbol": "ORBT",
-    "outcome": "QUALIFIED"
+    "outcome": "REJECTED"
   },
   {
     "name": "Nebula",
     "symbol": "NEB",
-    "outcome": "QUALIFIED"
+    "outcome": "REJECTED"
   },
   {
     "name": "Solstice",
     "symbol": "SOLT",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Kairo",
@@ -60,7 +60,7 @@ const DEMO_TOKEN_SEEDS = [
   {
     "name": "Prism",
     "symbol": "PRSM",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Vertex",
@@ -75,7 +75,7 @@ const DEMO_TOKEN_SEEDS = [
   {
     "name": "Driftwood",
     "symbol": "DRFT",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Axiom",
@@ -95,12 +95,12 @@ const DEMO_TOKEN_SEEDS = [
   {
     "name": "Aurora",
     "symbol": "AURA",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Quanta",
     "symbol": "QNT",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Solis",
@@ -125,12 +125,12 @@ const DEMO_TOKEN_SEEDS = [
   {
     "name": "Mirage",
     "symbol": "MRG",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Atlas",
     "symbol": "ATLS",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Onyx",
@@ -150,7 +150,7 @@ const DEMO_TOKEN_SEEDS = [
   {
     "name": "Echo",
     "symbol": "ECHO",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Vanta",
@@ -165,7 +165,7 @@ const DEMO_TOKEN_SEEDS = [
   {
     "name": "Lyra",
     "symbol": "LYRA",
-    "outcome": "REJECTED"
+    "outcome": "QUALIFIED"
   },
   {
     "name": "Astra",
@@ -396,9 +396,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     const timer = setInterval(() => {
       const now = Date.now();
       const elapsed = now - simulation.startedAt;
-      // Keep the demo discovery stream running indefinitely. Reuse the
-      // seed catalogue with unique launch indexes instead of stopping at 30.
-      const arrivals = Math.floor(elapsed / 900) + 1;
+      // This demo run is intentionally finite: inspect exactly 30 launches.
+      const arrivals = Math.min(30, Math.floor(elapsed / 900) + 1);
 
       for (let index = 0; index < arrivals; index += 1) {
         if (simulation.tokens.has(index)) continue;
@@ -482,7 +481,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         const step = Math.floor(age / stepMs);
         if (step < 1 || step <= position.lastPriceStep) continue;
         position.lastPriceStep = step;
-        const movement = path[Math.min(step - 1, path.length - 1)] / 100;
+        const movement = path[(step - 1) % path.length] / 100;
         position.currentPrice = position.entryPrice * (1 + movement);
         position.peakPrice = Math.max(position.peakPrice, position.currentPrice);
         position.pnlPct = ((position.currentPrice - position.entryPrice) / position.entryPrice) * 100;
@@ -496,20 +495,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         position.value = position.quantity * position.currentPrice;
         position.pnl = position.value - position.invested;
 
-        const stopWasHit = position.currentPrice <= position.trailingStopPrice;
-        position.belowStopSamples = stopWasHit ? position.belowStopSamples + 1 : 0;
-        if (position.belowStopSamples >= STOP_CONFIRMATION_SAMPLES) {
-          position.status = 'CLOSED';
-          position.exitPrice = position.currentPrice;
-          position.exitReason = position.trailingActivated
-            ? 'Trailing stop confirmed'
-            : 'Initial stop-loss confirmed';
-          const saleProceeds = position.quantity * position.exitPrice;
-          position.value = saleProceeds;
-          position.pnl = saleProceeds - position.invested;
-          position.pnlPct = (position.pnl / position.invested) * 100;
-          simulation.cash += saleProceeds;
-        }
+        // Observation mode: do not auto-sell or close accepted demo positions.
+        // The simulated market price keeps moving while the position remains OPEN.
       }
 
       const positionList = Array.from(simulation.positions.values()).sort((a, b) => b.openedAt - a.openedAt);
