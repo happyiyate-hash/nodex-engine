@@ -9,7 +9,9 @@ const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
 export interface EngineControlSnapshot {
   paused: boolean;
-  mode: 'paper';
+  mode: 'paper' | 'real';
+  available_modes: { paper: boolean; real: boolean };
+  real_trading_available: boolean;
   token_discovery_enabled: boolean;
   new_entries_enabled: boolean;
   position_monitoring_enabled: boolean;
@@ -192,7 +194,7 @@ export class NodeXApiClient {
   }
   public updateEngineControl(
     command: 'start' | 'resume' | 'pause' | 'stop' | 'configure',
-    updates: Partial<Pick<EngineControlSnapshot, 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled'>> = {},
+    updates: Partial<Pick<EngineControlSnapshot, 'mode' | 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled'>> = {},
   ): Promise<{status:string;engine:EngineControlSnapshot}> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the Engine API key in Settings before changing runtime controls.');
