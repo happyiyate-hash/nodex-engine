@@ -42,11 +42,18 @@ export class NodeXApiClient {
   public loadSettings(): ApiSettings { return { ...this.settings }; }
 
   public saveSettings(update: Partial<ApiSettings>): ApiSettings {
+    const nextBackendUrl = (update.backendUrl ?? this.settings.backendUrl).trim().replace(/\/$/, '');
+    const backendUrlChanged = update.backendUrl !== undefined && nextBackendUrl !== this.settings.backendUrl;
+    const nextWsUrl = update.wsUrl !== undefined
+      ? update.wsUrl.trim()
+      : backendUrlChanged && nextBackendUrl
+        ? nextBackendUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/ws'
+        : this.settings.wsUrl;
     this.settings = {
       ...this.settings,
       ...update,
-      backendUrl: (update.backendUrl ?? this.settings.backendUrl).trim().replace(/\/$/, ''),
-      wsUrl: (update.wsUrl ?? this.settings.wsUrl).trim(),
+      backendUrl: nextBackendUrl,
+      wsUrl: nextWsUrl,
       mode: 'RUST_BACKEND',
     };
     if (typeof window !== 'undefined') {
