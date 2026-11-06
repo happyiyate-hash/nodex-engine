@@ -11,6 +11,7 @@ export const LogsPage: React.FC = () => {
   const [logs, setLogs] = useState<EngineLogEntry[]>([]);
   const [filter, setFilter] = useState<LogFilter>('requests');
   const [selected, setSelected] = useState<EngineLogEntry | null>(null);
+  const [selectedView, setSelectedView] = useState<LogFilter>('requests');
   const [copied, setCopied] = useState(false);
   const reload = () => setLogs(readEngineLogs());
 
@@ -22,21 +23,34 @@ export const LogsPage: React.FC = () => {
   }, []);
 
   const requests = useMemo(() => logs.filter((item) => item.kind === 'request'), [logs]);
-  // A response is the backend outcome of the same captured HTTP request.
-  // Keep the request/response pair together so selecting either view opens the exact exchange.
-  const responses = useMemo(() => requests.filter((item) => item.response !== undefined || item.error || item.status !== undefined), [requests]);
+  // Responses are a separate presentation of the backend outcome, not duplicate request cards.
+  const responses = useMemo(
+    () => requests.filter((item) => item.response !== undefined || item.error !== undefined || item.status !== undefined),
+    [requests],
+  );
   const visible = filter === 'requests' ? requests : responses;
-  const detailJson = useMemo(() => selected ? JSON.stringify({
-    type: selected.kind,
-    action: selected.action,
-    timestamp: selected.at,
-    duration_ms: selected.durationMs ?? null,
-    http_status: selected.status ?? null,
-    success: selected.ok,
-    error: selected.error ?? null,
-    request: selected.request ?? null,
-    response: selected.response ?? null,
-  }, null, 2) : '', [selected]);
+  const detailJson = useMemo(() => {
+    if (!selected) return '';
+    const metadata = {
+      action: selected.action,
+      timestamp: selected.at,
+      duration_ms: selected.durationMs ?? null,
+      http_status: selected.status ?? null,
+      success: selected.ok,
+    };
+    return JSON.stringify(
+      selectedView === 'requests'
+        ? { type: 'request', ...metadata, request: selected.request ?? null }
+        : {
+            type: 'response',
+            ...metadata,
+            ...(selected.response !== undefined ? { response: selected.response } : {}),
+            ...(selected.error ? { error: selected.error } : {}),
+          },
+      null,
+      2,
+    );
+  }, [selected, selectedView]);
 
   const copy = async () => {
     try {
@@ -71,7 +85,7 @@ export const LogsPage: React.FC = () => {
             <button onClick={() => setActiveTab('overview')} aria-label="Back to overview" className="grid size-9 shrink-0 place-items-center rounded-full border border-white/[0.14] bg-[#111113]/75 text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,.12),0_3px_12px_rgba(0,0,0,.25)]"><ArrowLeft className="size-4" /></button>
           )}
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold tracking-tight">{selected ? selected.action : 'Logs'}</h1>
+            <h1 className="truncate text-base font-semibold tracking-tight">{selected ? `${selectedView === 'requests' ? 'Request' : 'Response'} · ${selected.action}` : 'Logs'}</h1>
             {selected && <p className="truncate text-[11px] text-zinc-500">{new Date(selected.at).toLocaleString()} {selected.durationMs != null ? `· ${selected.durationMs} ms` : ''}</p>}
           </div>
           {selected ? (
@@ -91,7 +105,7 @@ export const LogsPage: React.FC = () => {
             <span className="glass-panel flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[11px] font-medium text-zinc-300"><span className={`size-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-zinc-500'}`} />{connected ? 'Live' : 'Offline'}</span>
           </div>
         ) : (
-          <p className="mt-2 text-[11px] text-zinc-500">Complete captured request / response JSON</p>
+          <p className="mt-2 text-[11px] text-zinc-500">{selectedView === 'requests' ? 'Outgoing request JSON' : 'Backend response JSON'}</p>
         )}
       </header>
 
@@ -117,14 +131,27 @@ export const LogsPage: React.FC = () => {
           ) : (
             <div className="space-y-1.5">
               {visible.map((log) => (
-                <button key={log.id} onClick={() => { setSelected(log); setCopied(false); }} className="flex w-full items-center gap-2.5 rounded-xl border border-white/[0.09] bg-[#111113] px-3 py-2.5 text-left transition-colors hover:border-white/[0.18] active:bg-white/[0.04]">
+                <button key={log.id} onClick={() => { setSelected(log); setSelectedView(filter); setCopied(false); }} className="flex w-full items-center gap-2.5 rounded-xl border border-white/[0.09] bg-[#111113] px-3 py-2.5 text-left transition-colors hover:border-white/[0.18] active:bg-white/[0.04]">
                   <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${log.ok ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{log.ok ? <CheckCircle2 className="size-4" /> : <CircleAlert className="size-4" />}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-zinc-200">{log.action}</span>
-                    <span className="mt-0.5 block truncate text-[10px] text-zinc-500">{new Date(log.at).toLocaleString()}{log.durationMs != null ? ` · ${log.durationMs} ms` : ''}{log.status ? ` · HTTP ${log.status}` : ''}</span>
-                    {!log.ok && <span className="mt-1 block truncate text-[10px] text-red-400">{log.error || 'Request failed — open to inspect JSON'}</span>}
+                    {filter === 'requests' ? (
+                      <>
+                        <span className="block truncate text-[13px] font-medium text-zinc-200">{log.action}</span>
+                        <span className="mt-0.5 block truncate text-[10px] text-zinc-500">Outgoing request · {new Date(log.at).toLocaleString()}</span>
+                        {log.request !== undefined && log.request !== null && <span className="mt-1 block truncate text-[10px] text-zinc-500">Request body: {typeof log.request === 'string' ? log.request : JSON.stringify(log.request)}</span>}
+                      </>
+                    ) : (
+                      <>
+                        <span className="block truncate text-[13px] font-medium text-zinc-200">{log.action}</span>
+                        <span className="mt-0.5 block truncate text-[10px] text-zinc-500">Backend response · {log.status != null ? `HTTP ${log.status}` : 'No HTTP response'} · {new Date(log.at).toLocaleString()}</span>
+                        <span className={`mt-1 block truncate text-[10px] ${log.ok ? 'text-zinc-400' : 'text-red-400'}`}>
+                          {log.error ? log.error : log.response === null ? 'Backend returned an empty response' : typeof log.response === 'string' ? log.response : JSON.stringify(log.response)}
+                        </span>
+                      </>
+                    )}
+                    {log.durationMs != null && <span className="mt-1 block text-[10px] text-zinc-600">{log.durationMs} ms</span>}
                   </span>
-                  <span className={`shrink-0 text-[10px] font-medium ${log.ok ? 'text-emerald-400' : 'text-red-400'}`}>{log.ok ? 'OK' : 'Failed'}</span>
+                  <span className={`shrink-0 text-[10px] font-medium ${log.ok ? 'text-emerald-400' : 'text-red-400'}`}>{filter === 'requests' ? 'Sent' : log.ok ? 'Received' : 'Error'}</span>
                 </button>
               ))}
             </div>
