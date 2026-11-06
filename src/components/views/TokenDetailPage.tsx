@@ -119,7 +119,7 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
-      <section className="relative w-full bg-[#000000] border-b border-white/[0.06]">
+      <section className="relative w-full bg-[#000000]">
         {/* Subtle Timeframe Switcher Overlay */}
         <div className="absolute top-2.5 left-4 z-10 flex items-center gap-1 bg-[#0a0a0c]/80 backdrop-blur-md p-0.5 rounded-lg border border-white/10 text-[10px] font-mono">
           {(['1m', '5m', '15m', '1H', '24H'] as const).map((tf) => (
