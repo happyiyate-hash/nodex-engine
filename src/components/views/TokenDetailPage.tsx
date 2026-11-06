@@ -72,16 +72,10 @@ export const TokenDetailPage: React.FC = () => {
   const initialCostSol = activePosition?.initial_investment_sol;
   const initialCostUsd = activePosition?.initial_investment_usd;
   const entryPriceUsd = activePosition?.entry_price_usd;
-  const currentValueUsd = activePosition
-    ? activePosition.current_position_value_usd
-    : entryPriceUsd > 0 ? (activeToken.current_price_usd / entryPriceUsd) * initialCostUsd : initialCostUsd;
-  const currentValueSol = activePosition
-    ? (activePosition.current_position_value_sol ?? (activePosition.current_position_value_usd / 202.15))
-    : currentValueUsd / 202.15;
-  const pnlUsd = activePosition ? activePosition.pnl_usd : currentValueUsd - initialCostUsd;
-  const pnlSol = activePosition
-    ? (activePosition.pnl_sol ?? (activePosition.pnl_usd / 202.15))
-    : currentValueSol - initialCostSol;
+  const currentValueUsd = activePosition?.current_position_value_usd ?? 0;
+  const currentValueSol = activePosition?.current_position_value_sol ?? 0;
+  const pnlUsd = activePosition?.pnl_usd ?? 0;
+  const pnlSol = activePosition?.pnl_sol ?? 0;
   const pnlPct = activePosition ? activePosition.pnl_pct : marketChangePct ?? 0;
   const isPositive = pnlPct >= 0;
   const annualizedRoi = (pnlPct * (365 / 7)).toFixed(1);
@@ -121,7 +115,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
           <div className="shrink-0 text-right leading-none">
             <div className="font-mono text-base sm:text-lg font-bold text-white tracking-tight">
-              ${currentPrice < 0.001 ? currentPrice.toFixed(8).replace(/\.?0+$/, '') : currentPrice.toFixed(6)}
+              {hasMarketPrice ? formatTokenPrice(currentPrice) : 'Waiting for first market tick'}
             </div>
             <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
               <span>{marketChangePct == null ? 'Change warming up' : `${isPositive ? '▲ +' : '▼ '}${pnlPct.toFixed(2)}%`}</span>
@@ -251,7 +245,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Price at Purchase</div>
               <div className="text-sm font-semibold text-white mt-0.5">
-                ${entryPriceUsd.toFixed(8).replace(/\.?0+$/, '')}
+                {entryPriceUsd == null ? '—' : `${entryPriceUsd.toFixed(8).replace(/\.?0+$/, '')}`}
               </div>
               <div className="text-[9px] text-white/30">Execution benchmark</div>
             </div>
@@ -259,7 +253,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Price Right Now</div>
               <div className="text-sm font-semibold text-white mt-0.5">
-                ${activeToken.current_price_usd.toFixed(8).replace(/\.?0+$/, '')}
+                {hasMarketPrice ? formatTokenPrice(liveTokenPrice) : 'Waiting for market data'}
               </div>
               <div className="text-[9px] text-white/30">Live on-chain tick</div>
             </div>
@@ -295,7 +289,7 @@ export const TokenDetailPage: React.FC = () => {
               <div className="text-base font-bold text-white mt-0.5">
                 {activePosition ? `${currentValueUsd.toFixed(2)}` : '—'}
               </div>
-              <div className="text-[9px] text-white/30">At $202.15/SOL</div>
+              <div className="text-[9px] text-white/30">Backend-reported USD value</div>
             </div>
 
             <div className="col-span-2 sm:col-span-1">
