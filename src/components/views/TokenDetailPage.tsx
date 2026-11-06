@@ -29,7 +29,7 @@ export const TokenDetailPage: React.FC = () => {
   const [headerOffset, setHeaderOffset] = useState(0);
   const headerOffsetRef = useRef(0);
   const lastScrollTop = useRef(0);
-  const headerHeight = 48;
+  const headerHeight = 56;
 
   const activeToken = selectedToken || tokens[0];
   if (!activeToken) return null;
@@ -87,7 +87,7 @@ export const TokenDetailPage: React.FC = () => {
       />
       {/* Token bar overlays the scrolling content and follows scroll distance directly. */}
       <header
-        className="absolute inset-x-0 z-40 w-full border-b border-white/[0.06] bg-[#000000] px-3 py-1.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5"
+        className="absolute inset-x-0 z-40 min-h-14 w-full border-b border-white/[0.06] bg-[#000000] px-3 py-1.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5"
         style={{
           top: 'calc(env(safe-area-inset-top) - 2px)',
           transform: `translate3d(0, -${headerOffset}px, 0)`,
