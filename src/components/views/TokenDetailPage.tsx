@@ -74,44 +74,33 @@ export const TokenDetailPage: React.FC = () => {
   const annualizedRoi = (pnlPct * (365 / 7)).toFixed(1);
 
   return (
-    <div className="w-full bg-[#000000] text-white select-none min-h-screen pb-20 font-sans">
+    <div className="relative h-full min-h-0 w-full overflow-y-auto bg-[#000000] text-white select-none pb-28 font-sans">
       {/* 1. ULTRA-COMPACT TOP NAVIGATION (NO BULKY BARS, ONLY LOGO ON LEFT & PRICE/PERCENTAGE ON RIGHT) */}
-      <header className="w-full px-4 sm:px-6 py-3 flex items-center justify-between border-b border-white/[0.06] bg-[#000000] z-20">
-        {/* Left Side: Back action + Small Logo + Token Symbol */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={closeTokenDetail}
-            aria-label="Back"
-            className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-
-          <div
-            onClick={closeTokenDetail}
-            className="flex items-center gap-2 cursor-pointer group"
-          >
-            <TokenAvatar symbol={activeToken.symbol} size="md" className="group-hover:scale-105 transition-transform" />
-            <div className="leading-tight">
-              <span className="font-bold text-sm tracking-wide text-white font-mono block">
-                {activeToken.symbol}
+      <header className="relative z-20 w-full border-b border-white/[0.06] bg-[#000000] px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5">
+        <div className="flex w-full items-center justify-between gap-3">
+          {/* Token identity sits flush to the left edge of the header. */}
+          <div className="flex min-w-0 items-center gap-3">
+            <TokenAvatar symbol={activeToken.symbol} size="lg" className="scale-[1.3] shadow-lg" />
+            <div className="min-w-0 leading-tight">
+              <span className="block truncate text-[14px] font-bold tracking-wide text-white">
+                {activeToken.name || activeToken.symbol}
               </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCopyMint();
-                }}
-                className="text-[10px] text-white/40 hover:text-white flex items-center gap-1 font-mono transition-colors"
-              >
-                <span>{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
-                {copiedMint ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5 opacity-60" />}
-              </button>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="text-[10px] font-mono text-white/45">{activeToken.symbol}</span>
+                <span className="text-white/20">·</span>
+                <button
+                  onClick={handleCopyMint}
+                  className="flex items-center gap-1 text-[10px] text-white/40 transition-colors hover:text-white font-mono"
+                >
+                  <span>{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
+                  {copiedMint ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right Side: Big Bold Price and Percentage Under */}
-        <div className="text-right leading-none">
+          {/* Price and percentage remain aligned to the right. */}
+          <div className="shrink-0 text-right leading-none">
           <div className="font-mono text-base sm:text-lg font-bold text-white tracking-tight">
             ${currentPrice < 0.001 ? currentPrice.toFixed(8).replace(/\.?0+$/, '') : currentPrice.toFixed(6)}
           </div>
@@ -119,6 +108,7 @@ export const TokenDetailPage: React.FC = () => {
             isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'
           }`}>
             <span>{isPositive ? '▲ +' : '▼ '}{pnlPct.toFixed(2)}%</span>
+          </div>
           </div>
         </div>
       </header>
@@ -379,6 +369,17 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Fixed return control: stays above the device's bottom safe area while content scrolls. */}
+      <button
+        type="button"
+        onClick={closeTokenDetail}
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-5 py-3 text-[13px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97]"
+        aria-label="Go back"
+      >
+        <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
+        <span>Go back</span>
+      </button>
     </div>
   );
 };
