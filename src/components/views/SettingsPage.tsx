@@ -70,6 +70,9 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [section, setSection] = useState<SettingsSection>('home');
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
+  const [websocketUrl, setWebsocketUrl] = useState(settings.wsUrl);
+  const [domain, setDomain] = useState(settings.domain);
+  const [publicIp, setPublicIp] = useState(settings.publicIp);
   const [operatorKey, setOperatorKey] = useState(settings.adminApiKey);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
@@ -133,8 +136,11 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
   useEffect(() => {
     setBackendUrl(settings.backendUrl);
+    setWebsocketUrl(settings.wsUrl);
+    setDomain(settings.domain);
+    setPublicIp(settings.publicIp);
     setOperatorKey(settings.adminApiKey);
-  }, [settings.backendUrl, settings.adminApiKey]);
+  }, [settings.backendUrl, settings.wsUrl, settings.domain, settings.publicIp, settings.adminApiKey]);
 
   const saveConnections = (event: React.FormEvent) => {
     event.preventDefault();
@@ -147,11 +153,19 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       if (parsedBackend.pathname !== '/' || parsedBackend.search || parsedBackend.hash) {
         throw new Error('Enter only the backend base address, without an API path or query string.');
       }
+      const cleanWsUrl = websocketUrl.trim();
+      if (cleanWsUrl) {
+        const parsedWs = new URL(cleanWsUrl);
+        if (!['ws:', 'wss:'].includes(parsedWs.protocol)) throw new Error('WebSocket address must start with ws:// or wss://.');
+      }
       updateSettings({
         backendUrl: backendUrl.trim().replace(/\/$/, ''),
+        wsUrl: cleanWsUrl,
+        domain: domain.trim(),
+        publicIp: publicIp.trim(),
         adminApiKey: operatorKey.trim(),
       });
-      setConnectionMessage('Backend address and operator key saved. REST and live-stream connections are being refreshed.');
+      setConnectionMessage('Connection settings saved. REST and WebSocket connections have been refreshed.');
     } catch (error) {
       setConnectionMessage(error instanceof Error ? error.message : 'Could not update connection settings.');
     } finally {
@@ -303,18 +317,22 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       {section === 'connections' && (
         <form onSubmit={saveConnections} className="space-y-5 pt-5">
           <div>
-            <p className="text-[13px] font-semibold text-white">NodeX backend</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">One address is used for every app-to-engine connection. The live WebSocket address is generated automatically from it.</p>
+            <p className="text-[13px] font-semibold text-white">NodeX connection endpoints</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Each connection value can be changed independently. Leave the WebSocket override empty to derive it from the REST API address.</p>
           </div>
-          <Field label="Backend address" hint="Enter the base HTTPS address only. Do not add /health, /api, or /ws.">
-            <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://your-nodeX-host" autoCapitalize="none" autoCorrect="off" />
+          <Field label="REST API base URL" hint="The address used for /health and /api/v1 routes. Enter the host only, without a route.">
+            <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://api.example.com" autoCapitalize="none" autoCorrect="off" />
           </Field>
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-            <p className="text-[10px] font-medium text-white/65">Live event stream address (automatic)</p>
-            <p className="mt-1 break-all font-mono text-[10px] text-white/45">{backendUrl.trim().replace(/^https:/, 'wss:').replace(/^http:/, 'ws:').replace(/\/$/, '')}/api/v1/ws</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/35">The app always connects to this same host. You do not need to enter a second URL.</p>
-          </div>
-          <Field label="Operator key" hint="The same backend key is used to request a short-lived WebSocket ticket and authorize protected engine controls. It must match NODEX_ADMIN_API_KEY on the Rust server.">
+          <Field label="WebSocket URL (optional override)" hint="Use the full WSS endpoint, e.g. wss://api.example.com/api/v1/ws. Leave blank to derive it from the REST API URL.">
+            <input className={inputClass} type="url" value={websocketUrl} onChange={(e) => setWebsocketUrl(e.target.value)} placeholder="wss://api.example.com/api/v1/ws" autoCapitalize="none" autoCorrect="off" />
+          </Field>
+          <Field label="Domain / hostname" hint="Deployment reference only. REST and WebSocket URLs above control actual routing.">
+            <input className={inputClass} type="text" value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="api.example.com" autoCapitalize="none" autoCorrect="off" />
+          </Field>
+          <Field label="Server public IP" hint="Reference only. Editing this field does not change DNS, AWS networking, or API routing.">
+            <input className={inputClass} type="text" value={publicIp} onChange={(e) => setPublicIp(e.target.value)} placeholder="203.0.113.10" autoCapitalize="none" autoCorrect="off" />
+          </Field>
+          <Field label="Operator API key" hint="Must match NODEX_ADMIN_API_KEY on the Rust backend. Used for protected engine controls and short-lived WebSocket tickets.">
             <input className={inputClass} type="password" value={operatorKey} onChange={(e) => setOperatorKey(e.target.value)} placeholder="Enter your NodeX operator key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
           </Field>
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
@@ -322,7 +340,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             <p className="mt-1 text-[10px] leading-relaxed text-white/40">Solana RPC, Helius, gRPC, wallet and signing credentials are configured on the Rust server. Do not enter them here.</p>
           </div>
           <button type="submit" disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-[12px] font-semibold text-black disabled:opacity-50">
-            <Check className="h-4 w-4" /> {savingConnection ? 'Saving…' : 'Save connection'}
+            <Check className="h-4 w-4" /> {savingConnection ? 'Saving…' : 'Save connection settings'}
           </button>
           {connectionMessage && <p className="text-[10px] leading-relaxed text-white/60">{connectionMessage}</p>}
           <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] font-medium text-white/80 disabled:opacity-50">
