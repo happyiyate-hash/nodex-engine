@@ -229,7 +229,6 @@ export const StrategyPage: React.FC = () => {
               <span className="mb-2 block text-[10px] font-medium text-white/45">Custom percentage</span>
               <span className="flex h-12 items-center border-b border-white/[0.18] focus-within:border-white/60">
                 <input
-                  autoFocus
                   type="number"
                   min="0.1"
                   max="1000"
