@@ -185,7 +185,7 @@ const MainLayout: React.FC = () => {
           </svg>
         </div>
         <LiveFeedPage activeTab={activeTab} visible={!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed')} />
-        {selectedToken ? <TokenDetailPage /> : activeTab !== 'overview' && activeTab !== 'live_feed' || selectedToken ? renderActiveView() : null}
+        {selectedToken ? <TokenDetailPage /> : activeTab !== 'overview' && activeTab !== 'live_feed' ? renderActiveView() : null}
       </main>
       {!selectedToken && activeTab !== 'event_monitor' && <MobileNav />}
     </div>
