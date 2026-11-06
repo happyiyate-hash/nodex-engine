@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
 import {
@@ -49,12 +49,19 @@ const ToggleRow = ({
 );
 
 export const StrategyPage: React.FC = () => {
-  const { strategyConfig, strategyDecisions, openTokenDetailByMint } = useTerminal();
+  const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig } = useTerminal();
   const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig });
   const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
   const [customValue, setCustomValue] = useState('');
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  useEffect(() => {
+    setForm({ ...strategyConfig });
+    setAppliedConfig({ ...strategyConfig });
+  }, [strategyConfig]);
 
   const hasUnappliedChanges = JSON.stringify(form) !== JSON.stringify(appliedConfig);
 
@@ -62,11 +69,20 @@ export const StrategyPage: React.FC = () => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
-  const applySettings = () => {
-    // Mock engine handoff: snapshot the complete strategy payload.
-    // Replace this local acknowledgement with the backend request when the endpoint is ready.
-    const payload = JSON.parse(JSON.stringify(form)) as StrategyConfig;
-    setAppliedConfig(payload);
+  const applySettings = async () => {
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      const saved = await saveStrategyConfig(form);
+      if (saved) {
+        setAppliedConfig({ ...form });
+        setSaveMessage('Trading configuration saved to the backend.');
+      } else {
+        setSaveMessage('The backend did not accept this configuration.');
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openTarget = (target: RiskTarget) => {
@@ -203,13 +219,15 @@ export const StrategyPage: React.FC = () => {
         <button
           type="button"
           onClick={applySettings}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[70] inline-flex h-11 min-w-[112px] items-center justify-center gap-2 rounded-full bg-white px-5 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97]"
+          disabled={saving}
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[70] inline-flex h-11 min-w-[112px] items-center justify-center gap-2 rounded-full bg-white px-5 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97] disabled:opacity-50"
           aria-label="Apply strategy configuration changes"
         >
           <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-          Apply
+          {saving ? 'Saving…' : 'Apply'}
         </button>
       )}
+      {saveMessage && <p className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-[70] max-w-[min(90vw,320px)] rounded-lg border border-white/[0.10] bg-[#171717] px-3 py-2 text-[10px] text-white/75">{saveMessage}</p>}
 
       {activeTarget && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveTarget(null); }}>
