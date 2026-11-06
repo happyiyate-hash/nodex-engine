@@ -103,7 +103,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // creating a new timestamp/row for every tick.
     const now = Date.now();
     const lastRaw = raw[raw.length - 1];
-    if (currentPrice > 0 && (!lastRaw || lastRaw.price !== currentPrice)) {
+    if (currentPrice > 0 && (!lastRaw || lastRaw.price !== currentPrice || Math.floor(lastRaw.time / interval) !== Math.floor(now / interval))) {
       raw.push({ time: now, price: currentPrice, volume: 0 });
     }
 
