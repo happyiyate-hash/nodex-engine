@@ -3,7 +3,8 @@ import {
   ConnectionStatus, DashboardSummary, DiscoveredToken, EngineStatus, NodeXEvent,
   Position, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot,
 } from '../types';
-import { apiClient, ApiSettings } from '../services/api';
+import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/api';
+import { backendService } from '../services/backend';
 import { normalizeBackendEvent, wsService } from '../services/websocket';
 
 export type NavigationTab =
@@ -20,6 +21,7 @@ interface TerminalContextType {
   tokens: DiscoveredToken[];
   launches: TokenLaunchRecord[];
   paperWallet: PaperWalletSnapshot | null;
+  profile: NodeXProfileSnapshot | null;
   events: NodeXEvent[];
   selectedEvent: NodeXEvent | null;
   setSelectedEvent: (event: NodeXEvent | null) => void;
@@ -147,6 +149,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [tokens, setTokens] = useState<DiscoveredToken[]>(() => readPersistedState().tokens || []);
   const [launches, setLaunches] = useState<TokenLaunchRecord[]>(() => readPersistedState().launches || []);
   const [paperWallet, setPaperWallet] = useState<PaperWalletSnapshot | null>(null);
+  const [profile, setProfile] = useState<NodeXProfileSnapshot | null>(null);
   const [events, setEvents] = useState<NodeXEvent[]>(() => readPersistedState().events || []);
   const [selectedEvent, setSelectedEvent] = useState<NodeXEvent | null>(null);
   const [selectedToken, setSelectedToken] = useState<DiscoveredToken | null>(null);
@@ -165,32 +168,22 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // restored into the browser event feed. The feed is driven by curated live
     // application events only.
 
-    apiClient.getPaperWallet().then((wallet) => {
-      if (active) setPaperWallet(wallet);
-    }).catch((error: unknown) => {
-      if (active) setBackendError(error instanceof Error ? error.message : 'Could not load paper wallet.');
-    });
-    apiClient.getRecentTokens(100).then((records) => {
-      if (active) setLaunches(records);
-    }).catch((error: unknown) => {
-      if (active) setBackendError(error instanceof Error ? error.message : 'Could not load recent token launches.');
-    });
-    apiClient.getEngineStatus().then((status) => {
-      if (active) {
-        setEngineStatus((previous) => ({ ...previous, ...status, ws_status: wsService.getStatus().status }));
-        setIsStreamPaused(status.strategy_paused);
-        setBackendError(null);
+    backendService.loadInitialData().then((snapshot) => {
+      if (!active) return;
+      if (snapshot.profile) setProfile(snapshot.profile);
+      if (snapshot.paperWallet) setPaperWallet(snapshot.paperWallet);
+      if (snapshot.launches) setLaunches(snapshot.launches);
+      if (snapshot.engineStatus) {
+        setEngineStatus((previous) => ({ ...previous, ...snapshot.engineStatus!, ws_status: wsService.getStatus().status }));
+        setIsStreamPaused(snapshot.engineStatus.strategy_paused);
       }
-    }).catch((error: unknown) => {
-      if (active) setBackendError(error instanceof Error ? error.message : 'Backend connection failed.');
-    });
-    apiClient.getStrategy().then(({ config, decisions }) => {
-      if (active) {
-        setStrategyConfig(config);
-        setStrategyDecisions(decisions);
+      if (snapshot.strategy) {
+        setStrategyConfig(snapshot.strategy.config);
+        setStrategyDecisions(snapshot.strategy.decisions);
       }
+      setBackendError(snapshot.errors[0] || null);
     }).catch((error: unknown) => {
-      if (active) setBackendError(error instanceof Error ? error.message : 'Could not load trading configuration.');
+      if (active) setBackendError(error instanceof Error ? error.message : 'Could not load initial backend data.');
     });
     const unsubscribeStatus = wsService.onStatusChange((status: ConnectionStatus) => {
       setEngineStatus((previous) => ({ ...previous, ws_status: status }));
@@ -454,7 +447,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   return (
     <TerminalContext.Provider value={{
       activeTab, setActiveTab: navigateToTab, engineStatus, summary, positions, tokens,
-      events, launches, paperWallet, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
+      events, launches, paperWallet, profile, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
       openTokenDetailByMint, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
