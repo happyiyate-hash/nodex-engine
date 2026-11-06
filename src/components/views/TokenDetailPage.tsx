@@ -74,23 +74,23 @@ export const TokenDetailPage: React.FC = () => {
   const annualizedRoi = (pnlPct * (365 / 7)).toFixed(1);
 
   return (
-    <div className="relative h-full min-h-0 w-full overflow-y-auto bg-[#000000] text-white select-none pb-28 font-sans">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#000000] text-white select-none font-sans">
       {/* 1. ULTRA-COMPACT TOP NAVIGATION (NO BULKY BARS, ONLY LOGO ON LEFT & PRICE/PERCENTAGE ON RIGHT) */}
-      <header className="relative z-20 w-full border-b border-white/[0.06] bg-[#000000] px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-5">
+      <header className="sticky top-0 z-30 w-full shrink-0 border-b border-white/[0.06] bg-[#000000] px-3 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.65rem)] shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5">
         <div className="flex w-full items-center justify-between gap-3">
           {/* Token identity sits flush to the left edge of the header. */}
-          <div className="flex min-w-0 items-center gap-3">
-            <TokenAvatar symbol={activeToken.symbol} size="lg" className="scale-[1.3] shadow-lg" />
-            <div className="min-w-0 leading-tight">
-              <span className="block truncate text-[14px] font-bold tracking-wide text-white">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <TokenAvatar symbol={activeToken.symbol} size="md" className="shadow-md" />
+            <div className="min-w-0 self-center leading-[1.15]">
+              <span className="block truncate text-[13px] font-medium tracking-[0.01em] text-white/95">
                 {activeToken.name || activeToken.symbol}
               </span>
-              <div className="mt-1 flex items-center gap-1.5">
-                <span className="text-[10px] font-mono text-white/45">{activeToken.symbol}</span>
+              <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+                <span className="shrink-0 text-[10px] font-medium tracking-wide text-white/40">{activeToken.symbol}</span>
                 <span className="text-white/20">·</span>
                 <button
                   onClick={handleCopyMint}
-                  className="flex items-center gap-1 text-[10px] text-white/40 transition-colors hover:text-white font-mono"
+                  className="flex min-w-0 items-center gap-1 text-[10px] font-normal tracking-[0.015em] text-white/40 transition-colors hover:text-white font-mono"
                 >
                   <span>{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
                   {copiedMint ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
@@ -113,6 +113,7 @@ export const TokenDetailPage: React.FC = () => {
         </div>
       </header>
 
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28">
       {/* Trade Notification Toast */}
       {tradeMessage && (
         <div className="mx-4 sm:mx-6 mt-2 p-2 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-emerald-300 font-mono text-xs flex items-center gap-2">
@@ -369,6 +370,8 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      </div>
 
       {/* Fixed return control: stays above the device's bottom safe area while content scrolls. */}
       <button
