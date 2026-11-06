@@ -29,11 +29,11 @@ export interface EngineControlSnapshot {
 }
 
 export interface ApiSettings {
-  backendUrl: string; wsUrl: string; mode: 'RUST_BACKEND'; rpcUrl: string;
+  backendUrl: string; wsUrl: string; domain: string; publicIp: string; mode: 'RUST_BACKEND'; rpcUrl: string;
   autoReconnection: boolean; heartbeatIntervalMs: number; apiKey: string; adminApiKey: string;
 }
 export const DEFAULT_SETTINGS: ApiSettings = {
-  backendUrl: API_URL, wsUrl: WS_URL, mode: 'RUST_BACKEND', rpcUrl: '',
+  backendUrl: API_URL, wsUrl: WS_URL, domain: '', publicIp: '', mode: 'RUST_BACKEND', rpcUrl: '',
   autoReconnection: true, heartbeatIntervalMs: 5000, apiKey: '', adminApiKey: '',
 };
 
@@ -42,9 +42,12 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
   try {
     const raw = window.localStorage.getItem(CONNECTION_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as { backendUrl?: unknown; adminApiKey?: unknown };
+    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrl?: unknown; domain?: unknown; publicIp?: unknown; adminApiKey?: unknown };
     return {
       ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl } : {}),
+      ...(typeof parsed.wsUrl === 'string' ? { wsUrl: parsed.wsUrl } : {}),
+      ...(typeof parsed.domain === 'string' ? { domain: parsed.domain } : {}),
+      ...(typeof parsed.publicIp === 'string' ? { publicIp: parsed.publicIp } : {}),
       ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: parsed.adminApiKey } : {}),
     };
   } catch {
@@ -60,7 +63,7 @@ export class NodeXApiClient {
       ...DEFAULT_SETTINGS,
       ...stored,
       backendUrl,
-      wsUrl: websocketUrlFor(backendUrl) || DEFAULT_SETTINGS.wsUrl,
+      wsUrl: (stored.wsUrl || '').trim() || websocketUrlFor(backendUrl) || DEFAULT_SETTINGS.wsUrl,
       apiKey: '',
       mode: 'RUST_BACKEND',
     };
@@ -70,7 +73,9 @@ export class NodeXApiClient {
 
   public saveSettings(update: Partial<ApiSettings>): ApiSettings {
     const nextBackendUrl = (update.backendUrl ?? this.settings.backendUrl).trim().replace(/\/$/, '');
-    const nextWsUrl = websocketUrlFor(nextBackendUrl);
+    const nextWsUrl = typeof update.wsUrl === 'string' && update.wsUrl.trim()
+      ? update.wsUrl.trim()
+      : websocketUrlFor(nextBackendUrl);
     this.settings = {
       ...this.settings,
       ...update,
@@ -85,6 +90,9 @@ export class NodeXApiClient {
         window.localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
           backendUrl: this.settings.backendUrl,
           adminApiKey: this.settings.adminApiKey,
+          wsUrl: this.settings.wsUrl,
+          domain: this.settings.domain,
+          publicIp: this.settings.publicIp,
         }));
       } catch (error) {
         console.warn('Unable to persist NodeX connection preferences in this browser.', error);
