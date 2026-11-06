@@ -239,8 +239,8 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
-      <section className="relative w-full bg-[#000000]">
-        {/* Timeframe controls stay left; chart-style icon switcher is independent on the far right. */}
+      <section className="relative w-full bg-[#000000] pt-11">
+        {/* Controls occupy their own top strip; the chart canvas starts beneath them with clear separation. */}
         <div className="absolute inset-x-0 top-2.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
           <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
             {(['1m', '5m', '15m', '1H', '24H'] as const).map((tf) => (
