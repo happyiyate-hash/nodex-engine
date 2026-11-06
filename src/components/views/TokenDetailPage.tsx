@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
@@ -24,6 +24,11 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [tradeMessage, setTradeMessage] = useState<string | null>(null);
   const [headerOffset, setHeaderOffset] = useState(0);
+  const [demoData, setDemoData] = useState<{
+    tick: number; price: number; changePct: number; marketCapSol: number; marketCapUsd: number;
+    liquidityUsd: number; volume5mUsd: number; volume1hUsd: number; buys: number; sells: number;
+    holders: number; bonding: number; history: { time: number; price: number; volume: number }[];
+  } | null>(null);
   const headerOffsetRef = useRef(0);
   const lastScrollTop = useRef(0);
   const headerHeight = 56;
@@ -33,15 +38,68 @@ export const TokenDetailPage: React.FC = () => {
   const activeToken = selectedToken
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : tokens[0];
-  if (!activeToken) return null;
 
+  // VISUAL DEMO: isolated local market tape for previewing chart motion and
+  // every changing statistic. It never writes to TerminalContext or the backend.
+  useEffect(() => {
+    if (!activeToken) {
+      setDemoData(null);
+      return;
+    }
+    const seedPrice = activeToken.current_price_sol > 0
+      ? activeToken.current_price_sol
+      : activeToken.current_price_usd > 0 ? activeToken.current_price_usd : 0.00000125;
+    const seedHistory = (activeToken.price_history_5m || []).filter((point) => point.price > 0).slice(-50);
+    setDemoData({
+      tick: 0, price: seedPrice, changePct: 0,
+      marketCapSol: activeToken.market_cap_sol || 128.4,
+      marketCapUsd: activeToken.market_cap_usd || 18450,
+      liquidityUsd: activeToken.liquidity_usd || 7350,
+      volume5mUsd: activeToken.volume_5m_usd || 1280,
+      volume1hUsd: activeToken.volume_1h_usd || 8940,
+      buys: activeToken.tx_buys_5m || 18, sells: activeToken.tx_sells_5m || 9,
+      holders: activeToken.safety_details?.holders_count || 426,
+      bonding: activeToken.bonding_curve_progress_pct || 37.5,
+      history: seedHistory.length ? seedHistory : [{ time: Date.now(), price: seedPrice, volume: 0 }],
+    });
+    const timer = window.setInterval(() => {
+      setDemoData((previous) => {
+        if (!previous) return previous;
+        const tick = previous.tick + 1;
+        // 18 ticks up, then 18 ticks down: repeat so both scale behaviours are visible.
+        const direction = Math.floor((tick - 1) / 18) % 2 === 0 ? 1 : -1;
+        const pulse = 1 + direction * (0.012 + Math.abs(Math.sin(tick * 0.72)) * 0.009);
+        const price = Math.max(Number.EPSILON, previous.price * pulse);
+        const changePct = ((price / seedPrice) - 1) * 100;
+        const volume = 35 + (tick % 11) * 17;
+        const now = Date.now();
+        const history = [...previous.history, { time: now, price, volume }].slice(-180);
+        return {
+          tick, price, changePct,
+          marketCapSol: previous.marketCapSol * (price / previous.price),
+          marketCapUsd: previous.marketCapUsd * (price / previous.price),
+          liquidityUsd: Math.max(100, previous.liquidityUsd + direction * (tick % 4) * 7),
+          volume5mUsd: previous.volume5mUsd + volume,
+          volume1hUsd: previous.volume1hUsd + volume * 1.8,
+          buys: Math.max(0, previous.buys + (direction > 0 ? 2 : 0) + (tick % 3 === 0 ? 1 : 0)),
+          sells: Math.max(0, previous.sells + (direction < 0 ? 2 : 0) + (tick % 5 === 0 ? 1 : 0)),
+          holders: Math.max(1, previous.holders + (direction > 0 && tick % 4 === 0 ? 1 : direction < 0 && tick % 7 === 0 ? -1 : 0)),
+          bonding: Math.max(1, Math.min(99, previous.bonding + direction * 0.12)),
+          history,
+        };
+      });
+    }, 650);
+    return () => window.clearInterval(timer);
+  }, [activeToken?.mint]);
+
+  if (!activeToken) return null;
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
   const priceCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
-  const liveTokenPrice = priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd;
+  const liveTokenPrice = demoData?.price ?? (priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd);
   const currentPrice = scrubPrice ?? liveTokenPrice;
-  const marketChangePct = activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
+  const marketChangePct = demoData?.changePct ?? activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
   const pnlPct = marketChangePct ?? 0;
-  const isPositive = (activePosition?.pnl_sol ?? marketChangePct ?? 0) >= 0;
+  const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
   const formatTokenPrice = (value: number) => priceCurrency === 'SOL'
@@ -173,7 +231,7 @@ export const TokenDetailPage: React.FC = () => {
         <DotMatrixChart
           currentPrice={liveTokenPrice}
           entryPrice={activePosition && priceCurrency === 'USD' ? entryPriceUsd : undefined}
-          priceHistory={activeToken.price_history_5m}
+          priceHistory={demoData?.history || activeToken.price_history_5m}
           isPositive={isPositive}
           timeframe={timeframe}
           height={320}
@@ -198,26 +256,26 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Token balance</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? formatMetric(activePosition.amount_tokens, 6) : '—'}
+                {activePosition ? formatMetric(activePosition.amount_tokens, 6) : formatMetric((demoData?.price ? 125000 / demoData.price : 0), 2)}
               </div>
-              <div className="text-[9px] text-white/30">{activePosition ? activeToken.symbol : 'No open position'}</div>
+              <div className="text-[9px] text-white/30">{activePosition ? activeToken.symbol : 'DEMO POSITION'}</div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Average entry price</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? `${formatMetric(activePosition.entry_price_sol, 10)} SOL` : '—'}
+                {activePosition ? `${formatMetric(activePosition.entry_price_sol, 10)} SOL` : `${formatMetric((demoData?.price || 1) * 0.91, 10)} ${priceCurrency}`}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Total budget</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? `${formatMetric(activePosition.initial_investment_sol, 4)} SOL` : '—'}
+                {activePosition ? `${formatMetric(activePosition.initial_investment_sol, 4)} SOL` : '1.2500 SOL'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Current position value</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition && positionValueSol != null ? `${formatMetric(positionValueSol, 4)} SOL` : '—'}
+                {activePosition && positionValueSol != null ? `${formatMetric(positionValueSol, 4)} SOL` : `${formatMetric(demoData?.price ? 1.25 * (demoData.price / (demoData.price / (1 + (demoData.changePct || 0) / 100))) : 1.25, 4)} SOL`}
               </div>
             </div>
             <div className="col-span-2">
@@ -225,7 +283,7 @@ export const TokenDetailPage: React.FC = () => {
               <div className={`mt-0.5 text-[13px] font-semibold ${positionPnlSol == null ? 'text-white/55' : positionPnlSol >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                 {activePosition && positionPnlSol != null
                   ? `${positionPnlSol >= 0 ? '+' : ''}${formatMetric(positionPnlSol, 4)} SOL${positionPnlPct == null ? '' : ` · ${positionPnlPct >= 0 ? '+' : ''}${formatMetric(positionPnlPct, 2)}%`}`
-                  : '—'}
+                  : `${(demoData?.changePct || 0) >= 0 ? '+' : ''}${formatMetric(1.25 * (demoData?.changePct || 0) / 100, 4)} SOL · ${(demoData?.changePct || 0).toFixed(2)}%`}
               </div>
             </div>
           </div>
@@ -236,56 +294,56 @@ export const TokenDetailPage: React.FC = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">Market Statistics</h2>
-            <span className="text-[9px] uppercase tracking-wider text-white/30">Live data</span>
+            <span className="text-[9px] uppercase tracking-wider text-amber-300/70">DEMO TAPE · NOT LIVE</span>
           </div>
 
           <div className="grid grid-cols-2 gap-x-5 gap-y-3">
             <div>
               <div className="text-[10px] text-white/40">Market cap</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activeToken.market_cap_sol > 0 ? `${formatMetric(activeToken.market_cap_sol, 3)} SOL` : activeToken.market_cap_usd > 0 ? `$${formatMetric(activeToken.market_cap_usd, 2)}` : '—'}
+                {priceCurrency === 'SOL' ? `${formatMetric(demoData?.marketCapSol ?? activeToken.market_cap_sol, 3)} SOL` : `${formatMetric(demoData?.marketCapUsd ?? activeToken.market_cap_usd, 2)}`}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Liquidity</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activeToken.liquidity_usd > 0 ? `$${formatMetric(activeToken.liquidity_usd, 2)}` : '—'}
+                ${formatMetric(demoData?.liquidityUsd ?? activeToken.liquidity_usd, 2)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activeToken.volume_5m_usd > 0 ? `$${formatMetric(activeToken.volume_5m_usd, 2)}` : '—'}
+                ${formatMetric(demoData?.volume5mUsd ?? activeToken.volume_5m_usd, 2)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">1h volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activeToken.volume_1h_usd > 0 ? `$${formatMetric(activeToken.volume_1h_usd, 2)}` : '—'}
+                ${formatMetric(demoData?.volume1hUsd ?? activeToken.volume_1h_usd, 2)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m buys</div>
               <div className="mt-0.5 text-[13px] font-semibold text-emerald-400">
-                {formatMetric(activeToken.tx_buys_5m, 0)}
+                {formatMetric(demoData?.buys ?? activeToken.tx_buys_5m, 0)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m sells</div>
               <div className="mt-0.5 text-[13px] font-semibold text-red-400">
-                {formatMetric(activeToken.tx_sells_5m, 0)}
+                {formatMetric(demoData?.sells ?? activeToken.tx_sells_5m, 0)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Holders</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activeToken.safety_details?.holders_count > 0 ? formatMetric(activeToken.safety_details.holders_count, 0) : '—'}
+                {formatMetric(demoData?.holders ?? activeToken.safety_details?.holders_count, 0)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Bonding curve</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activeToken.bonding_curve_progress_pct > 0 ? `${formatMetric(activeToken.bonding_curve_progress_pct, 1)}%` : '—'}
+                {`${formatMetric(demoData?.bonding ?? activeToken.bonding_curve_progress_pct, 1)}%`}
               </div>
             </div>
           </div>
