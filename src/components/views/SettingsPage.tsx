@@ -90,11 +90,19 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   });
   const [runtimeControlMessage, setRuntimeControlMessage] = useState('');
   const [updatingRuntimeControl, setUpdatingRuntimeControl] = useState(false);
+  const [engineMode, setEngineMode] = useState<'paper' | 'real'>('paper');
+  const [availableModes, setAvailableModes] = useState({ paper: true, real: false });
 
   useEffect(() => {
     let active = true;
     apiClient.getEngineControl().then((state) => {
-      if (active) setRuntimeControls({
+      if (!active) return;
+      setEngineMode(state.mode);
+      setAvailableModes(state.available_modes || {
+        paper: state.mode === 'paper',
+        real: state.real_trading_available,
+      });
+      setRuntimeControls({
         token_discovery_enabled: state.token_discovery_enabled,
         new_entries_enabled: state.new_entries_enabled,
         position_monitoring_enabled: state.position_monitoring_enabled,
@@ -239,8 +247,18 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           onBack={() => navigateSection('home')}
           action={section === 'trading' ? (
             <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
-              <span aria-current="true" className="rounded-full bg-white px-3 py-1.5 text-[10px] font-semibold text-black">Paper</span>
-              <button type="button" disabled aria-disabled="true" title="Real trading is not implemented in the backend yet" className="cursor-not-allowed rounded-full px-3 py-1.5 text-[10px] font-medium text-white/25">Real</button>
+              <span
+                aria-current={engineMode === 'paper' ? 'true' : undefined}
+                title={availableModes.paper ? 'Paper trading is available' : 'Paper trading is unavailable'}
+                className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${engineMode === 'paper' ? 'bg-white text-black' : 'text-white/35'}`}
+              >Paper</span>
+              <button
+                type="button"
+                disabled={!availableModes.real}
+                aria-disabled={!availableModes.real}
+                title={availableModes.real ? 'Real trading is available' : 'Real trading is not available yet'}
+                className={`rounded-full px-3 py-1.5 text-[10px] font-medium ${engineMode === 'real' ? 'bg-white text-black' : 'text-white/25'} disabled:cursor-not-allowed`}
+              >Real</button>
             </div>
           ) : undefined}
         />
@@ -343,7 +361,18 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </div>
       )}
 
-      {section === 'trading' && <div className="pt-3"><StrategyPage /></div>}
+      {section === 'trading' && (
+        <div className="pt-3">
+          <div className="mb-3 flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2">
+            <span className="text-[10px] text-white/45">Backend-reported mode</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/80">{engineMode}</span>
+          </div>
+          {!availableModes.real && (
+            <p className="mb-3 text-[10px] text-white/35">Real trading is not available yet. The backend currently supports paper trading only.</p>
+          )}
+          <StrategyPage />
+        </div>
+      )}
 
       {section === 'notifications' && (
         <div className="space-y-1 pt-5">
