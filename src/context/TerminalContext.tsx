@@ -176,6 +176,23 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (event.event_type === 'launch_snapshot') {
         const snapshot = Array.isArray(event.data.launches) ? event.data.launches : [];
         setLaunches(snapshot as TokenLaunchRecord[]);
+        setTokens((previous) => {
+          const byMint = new Map(previous.map((token) => [token.mint, token]));
+          for (const launch of snapshot as TokenLaunchRecord[]) {
+            const restoredEvent: NodeXEvent = {
+              event_id: `snapshot-${launch.mint_address}`,
+              event_type: 'launch_detected',
+              timestamp: launch.detected_at,
+              token_mint: launch.mint_address,
+              message: 'Restored token launch snapshot',
+              processing_status: 'processed',
+              data: { mint_address: launch.mint_address, creator_address: launch.creator_address, source: launch.source, detected_at: launch.detected_at },
+            };
+            const merged = mergeTokenEvent(byMint.get(launch.mint_address), restoredEvent);
+            if (merged) byMint.set(merged.mint, merged);
+          }
+          return [...byMint.values()].slice(0, 500);
+        });
         return;
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
@@ -294,6 +311,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const clearBrowserHistory = () => {
     setEvents([]);
     setLaunches([]);
+    setTokens([]);
     setSelectedEvent(null);
     setSelectedToken(null);
     setBackendError(null);
