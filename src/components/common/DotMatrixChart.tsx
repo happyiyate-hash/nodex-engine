@@ -35,7 +35,14 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const points = useMemo<PriceTick[]>(() => {
     const count = 50;
     const now = Date.now();
-    const historical = (priceHistory || []).filter((point) => Number.isFinite(point.price) && point.price > 0).slice(-count);
+    const timeframeMs: Record<string, number> = {
+      '1m': 60_000, '5m': 5 * 60_000, '15m': 15 * 60_000,
+      '1H': 60 * 60_000, '24H': 24 * 60 * 60_000,
+    };
+    const cutoff = now - (timeframeMs[timeframe] || timeframeMs['24H']);
+    const historical = (priceHistory || [])
+      .filter((point) => Number.isFinite(point.price) && point.price > 0 && point.time >= cutoff)
+      .slice(-count);
     if (historical.length > 0) {
       const livePoints = historical.map((point) => ({
         time: new Date(point.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
