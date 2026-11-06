@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight,
-  Database, Eye, EyeOff, HardDrive, LockKeyhole, Pause, Play,
-  PlugZap, Radar, RefreshCw, SlidersHorizontal, Trash2, Wifi,
+  Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
+  SlidersHorizontal, Trash2, Wifi,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/api';
@@ -20,7 +20,7 @@ type SettingsSection =
 
 const sections = [
   { id: 'engine', title: 'Engine Control', description: 'Start, pause and manage engine operations.', icon: Activity },
-  { id: 'connections', title: 'API & Connections', description: 'Backend URL, operator key and provider endpoints.', icon: PlugZap },
+  { id: 'connections', title: 'API & Connections', description: 'Connect this app to your NodeX backend.', icon: PlugZap },
   { id: 'discovery', title: 'Token Discovery', description: 'Scanning sources, approval modes and filters.', icon: Radar },
   { id: 'trading', title: 'Trading Configuration', description: 'Stop loss, take profit, position sizing and risk.', icon: SlidersHorizontal },
   { id: 'notifications', title: 'Notifications', description: 'Choose which engine events should alert you.', icon: Bell },
@@ -68,9 +68,6 @@ export const SettingsPage: React.FC = () => {
   } = useTerminal();
   const [section, setSection] = useState<SettingsSection>('home');
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
-  const [wsUrl, setWsUrl] = useState(settings.wsUrl);
-  const [adminApiKey, setAdminApiKey] = useState(settings.adminApiKey);
-  const [showKey, setShowKey] = useState(false);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [testingConnection, setTestingConnection] = useState(false);
@@ -84,9 +81,7 @@ export const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     setBackendUrl(settings.backendUrl);
-    setWsUrl(settings.wsUrl);
-    setAdminApiKey(settings.adminApiKey);
-  }, [settings.backendUrl, settings.wsUrl, settings.adminApiKey]);
+  }, [settings.backendUrl]);
 
   const saveConnections = (event: React.FormEvent) => {
     event.preventDefault();
@@ -96,12 +91,8 @@ export const SettingsPage: React.FC = () => {
       if (!backendUrl.trim()) throw new Error('Enter the NodeX backend URL.');
       const parsedBackend = new URL(backendUrl.trim());
       if (!['http:', 'https:'].includes(parsedBackend.protocol)) throw new Error('Backend URL must use HTTP or HTTPS.');
-      if (wsUrl.trim()) {
-        const parsedWs = new URL(wsUrl.trim());
-        if (!['ws:', 'wss:'].includes(parsedWs.protocol)) throw new Error('WebSocket URL must use WS or WSS.');
-      }
-      updateSettings({ backendUrl: backendUrl.trim(), wsUrl: wsUrl.trim(), adminApiKey: adminApiKey.trim() });
-      setConnectionMessage('Connection settings updated on this device. The live connection is reconnecting.');
+      updateSettings({ backendUrl: backendUrl.trim() });
+      setConnectionMessage('NodeX backend address updated on this device. The app is reconnecting.');
     } catch (error) {
       setConnectionMessage(error instanceof Error ? error.message : 'Could not update connection settings.');
     } finally {
@@ -224,29 +215,18 @@ export const SettingsPage: React.FC = () => {
       {section === 'connections' && (
         <form onSubmit={saveConnections} className="space-y-5 pt-5">
           <div>
-            <p className="text-[13px] font-semibold text-white">NodeX backend</p>
-            <p className="mt-1 text-[10px] text-white/40">These details connect this app to your NodeX engine.</p>
+            <p className="text-[13px] font-semibold text-white">NodeX backend connection</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">This is the only connection address configured by the app. Blockchain providers and their credentials remain inside the Rust engine backend.</p>
           </div>
           <Field label="Backend API URL" hint="Base HTTP or HTTPS address of your NodeX Rust backend.">
-            <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://api.example.com" autoCapitalize="none" />
-          </Field>
-          <Field label="WebSocket URL" hint="Live event connection. Leave blank to use the backend-derived default.">
-            <input className={inputClass} type="url" value={wsUrl} onChange={(e) => setWsUrl(e.target.value)} placeholder="wss://api.example.com/api/v1/ws" autoCapitalize="none" />
-          </Field>
-          <Field label="NodeX operator API key" hint="Used by the app to authenticate operator-only backend requests and obtain a WebSocket ticket.">
-            <div className="relative">
-              <input className={`${inputClass} pr-12`} type={showKey ? 'text' : 'password'} value={adminApiKey} onChange={(e) => setAdminApiKey(e.target.value)} placeholder="Enter operator API key" autoCapitalize="none" autoCorrect="off" />
-              <button type="button" onClick={() => setShowKey((value) => !value)} aria-label={showKey ? 'Hide API key' : 'Show API key'} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40">
-                {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
+            <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://api.example.com" autoCapitalize="none" autoCorrect="off" />
           </Field>
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Operator credential</div>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">This is the key for connecting to NodeX, not a Solana RPC provider key. Provider credentials will be configured separately when the backend exposes provider configuration endpoints.</p>
+            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Backend-managed credentials</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Solana RPC, WebSocket and gRPC endpoints, provider API keys, and any private signing credentials are configured and kept by the backend. They are not entered or stored in this frontend.</p>
           </div>
           <button type="submit" disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-[12px] font-semibold text-black disabled:opacity-50">
-            <Check className="h-4 w-4" /> {savingConnection ? 'Applying…' : 'Save connection settings'}
+            <Check className="h-4 w-4" /> {savingConnection ? 'Applying…' : 'Save backend URL'}
           </button>
           {connectionMessage && <p className="text-[10px] leading-relaxed text-white/60">{connectionMessage}</p>}
           <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] font-medium text-white/80 disabled:opacity-50">
@@ -319,7 +299,7 @@ export const SettingsPage: React.FC = () => {
                 <button type="button" onClick={() => setShowClearConfirm(false)} className="flex-1 rounded-lg border border-white/15 py-2 text-[11px] text-white/70">Cancel</button>
                 <button type="button" onClick={clearEngineHistory} disabled={clearingHistory || !settings.adminApiKey} className="flex-1 rounded-lg bg-red-500 py-2 text-[11px] font-semibold text-white disabled:opacity-40">{clearingHistory ? 'Cleaning…' : 'Confirm cleanup'}</button>
               </div>
-              {!settings.adminApiKey && <p className="text-[10px] text-amber-200/80">Configure the operator API key in API & Connections first.</p>}
+              {!settings.adminApiKey && <p className="text-[10px] text-amber-200/80">This maintenance action requires backend operator authorization. Configure that authorization in the backend deployment; it is intentionally not exposed in this app.</p>}
             </div>
           )}
           {storageMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{storageMessage}</p>}
