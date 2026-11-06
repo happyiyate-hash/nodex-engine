@@ -297,7 +297,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       return Number.isFinite(y) ? y : padTop + plotH / 2;
     };
 
-    const rightLiveInset = Math.min(16, plotW * 0.06);
+    const rightLiveInset = Math.min(3, plotW * 0.012);
     const livePlotW = Math.max(1, plotW - rightLiveInset);
 
     const getLineX = (index: number) => {
@@ -325,7 +325,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.fillText(formatPrice(tick), w - 5, y);
     });
 
-    const lineColor = isPositive ? '#10B981' : '#EF4444';
+    const lineColor = isPositive ? '#B8FF35' : '#FF4057';
 
     // 1. LINE CHART MODE
     if (chartType === 'line') {
@@ -348,8 +348,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       if (visible.length > 1) {
         // Glowing Area Gradient
         const areaGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
-        areaGrad.addColorStop(0, isPositive ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)');
-        areaGrad.addColorStop(0.6, isPositive ? 'rgba(16,185,129,0.04)' : 'rgba(239,68,68,0.04)');
+        areaGrad.addColorStop(0, isPositive ? 'rgba(184,255,53,0.16)' : 'rgba(255,64,87,0.16)');
+        areaGrad.addColorStop(0.6, isPositive ? 'rgba(184,255,53,0.025)' : 'rgba(255,64,87,0.025)');
         areaGrad.addColorStop(1, 'rgba(0,0,0,0)');
 
         drawPath();
@@ -362,10 +362,20 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // High-clarity glowing stroke
         ctx.save();
         ctx.shadowColor = lineColor;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 4;
         drawPath();
-        ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 2.2;
+        const strokeGradient = ctx.createLinearGradient(padLeft, 0, padLeft + livePlotW, 0);
+        if (isPositive) {
+          strokeGradient.addColorStop(0, '#72D91B');
+          strokeGradient.addColorStop(0.55, '#B8FF35');
+          strokeGradient.addColorStop(1, '#E0FF78');
+        } else {
+          strokeGradient.addColorStop(0, '#B91C3B');
+          strokeGradient.addColorStop(0.55, '#FF4057');
+          strokeGradient.addColorStop(1, '#FF8A8A');
+        }
+        ctx.strokeStyle = strokeGradient;
+        ctx.lineWidth = 1.55;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
@@ -383,7 +393,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const highY = getY(candle.high);
         const lowY = getY(candle.low);
         const rising = candle.price >= candle.open;
-        const color = rising ? '#10B981' : '#EF4444';
+        const color = rising ? '#B8FF35' : '#FF4057';
 
         // High / Low Wick
         ctx.strokeStyle = color;
@@ -396,7 +406,15 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // Open / Close Body
         const bodyTop = Math.min(openY, closeY);
         const bodyHeight = Math.max(2, Math.abs(closeY - openY));
-        ctx.fillStyle = color;
+        const candleGradient = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyHeight);
+        if (rising) {
+          candleGradient.addColorStop(0, '#E0FF78');
+          candleGradient.addColorStop(1, '#72D91B');
+        } else {
+          candleGradient.addColorStop(0, '#FF8A8A');
+          candleGradient.addColorStop(1, '#B91C3B');
+        }
+        ctx.fillStyle = candleGradient;
         ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
       });
     }
@@ -409,7 +427,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const latestY = getY(latest.price);
 
     // Straight dashed line extending backwards to the left from the circle
-    ctx.strokeStyle = isPositive ? 'rgba(16,185,129,0.42)' : 'rgba(239,68,68,0.42)';
+    ctx.strokeStyle = isPositive ? 'rgba(184,255,53,0.42)' : 'rgba(255,64,87,0.42)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
@@ -426,8 +444,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     ctx.beginPath();
     ctx.arc(latestX, latestY, radius, 0, Math.PI * 2);
     ctx.strokeStyle = isPositive
-      ? `rgba(16,185,129,${alpha.toFixed(3)})`
-      : `rgba(239,68,68,${alpha.toFixed(3)})`;
+      ? `rgba(184,255,53,${alpha.toFixed(3)})`
+      : `rgba(255,64,87,${alpha.toFixed(3)})`;
     ctx.lineWidth = 1.4;
     ctx.stroke();
 
@@ -439,8 +457,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     ctx.restore();
 
     // Target number pill on the right margin where line chases
-    const badgeW = 66;
-    const badgeH = 19;
+    const badgeW = 58;
+    const badgeH = 17;
     const badgeX = w - badgeW - 4;
     const badgeY = Math.max(padTop - 2, Math.min(padTop + plotH - badgeH + 2, latestY - badgeH / 2));
 
@@ -453,11 +471,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     ctx.fillStyle = lineColor;
     ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, badgeH / 2);
     ctx.fill();
 
     ctx.fillStyle = '#000000';
-    ctx.font = 'bold 8.5px JetBrains Mono, monospace';
+    ctx.font = 'bold 8px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(formatPrice(latest.price), badgeX + badgeW / 2, badgeY + badgeH / 2 + 0.5);
