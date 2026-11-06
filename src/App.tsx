@@ -183,7 +183,7 @@ const MainLayout: React.FC = () => {
         </div>
         {renderActiveView()}
       </main>
-      {activeTab !== 'event_monitor' && <MobileNav />}
+      {!selectedToken && activeTab !== 'event_monitor' && <MobileNav />}
     </div>
   );
 };
