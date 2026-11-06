@@ -238,9 +238,9 @@ interface DemoLaunchView extends LaunchView {
   arrivalKey: string;
 }
 
-interface AutoFitNumberProps { fullText: string; compactText: string; className: string; maxFontSize: number; minFontSize: number; }
+interface AutoFitNumberProps { fullText: string; compactText: string; className: string; maxFontSize: number; minFontSize: number; balanceDirection: ChangeDirection; }
 
-const AutoFitNumber: React.FC<AutoFitNumberProps> = ({ fullText, compactText, className, maxFontSize, minFontSize }) => {
+const AutoFitNumber: React.FC<AutoFitNumberProps> = ({ fullText, compactText, className, maxFontSize, minFontSize, balanceDirection }) => {
   const containerRef = useRef<HTMLSpanElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const [fontSize, setFontSize] = useState(maxFontSize);
@@ -264,7 +264,8 @@ const AutoFitNumber: React.FC<AutoFitNumberProps> = ({ fullText, compactText, cl
     observer.observe(container);
     return () => observer.disconnect();
   }, [compact, fontSize, fullText, minFontSize]);
-  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{compact ? compactText : fullText}</span></span>;
+  const displayText = compact ? compactText : fullText;
+  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{Array.from(displayText).map((character, index) => /[0-9]/.test(character) ? <RollingDigit key={index} digit={character} balanceDirection={balanceDirection} /> : <span key={index} className="inline-block h-[1em] leading-[1em]">{character}</span>)}</span></span>;
 };
 
 const compactNumber = (value: number) => {
@@ -656,7 +657,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
               <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
                 <span className="mr-0.5 shrink-0 text-white/65" style={{ fontSize: 'clamp(14px, 5.8vw, 25px)', lineHeight: 1 }}>$</span>
-                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
+                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
               <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available ${formatUsd(availableBalance)}</span><span>Invested ${formatUsd(investedBalance)}</span></div>
             </div>
