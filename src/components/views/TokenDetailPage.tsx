@@ -81,7 +81,7 @@ const TradingViewChart: React.FC<{ symbol: string }> = ({ symbol }) => {
       ref={containerRef}
       id={`tradingview-chart-${widgetId}`}
       className="tradingview-widget-container w-full overflow-hidden"
-      style={{ height: 292, minHeight: 292 }}
+      style={{ height: 480, minHeight: 480 }}
     />
   );
 };
