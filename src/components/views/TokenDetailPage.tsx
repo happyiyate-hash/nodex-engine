@@ -315,7 +315,7 @@ export const TokenDetailPage: React.FC = () => {
       </header>
 
       <div
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(10rem+env(safe-area-inset-bottom))]"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(3.5rem+env(safe-area-inset-bottom))]"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 56px)' }}
         onScroll={(event) => {
           const nextScrollTop = event.currentTarget.scrollTop;
@@ -410,7 +410,7 @@ export const TokenDetailPage: React.FC = () => {
       </section>
 
       {/* Compact, full-width position and live market information. */}
-      <section className="w-full px-4 sm:px-6 pt-3 pb-8 max-w-4xl mx-auto font-mono border-b border-white/[0.10]">
+      <section className="w-full px-4 sm:px-6 pt-3 pb-3 max-w-4xl mx-auto font-mono border-b border-white/[0.10]">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">My Position</h2>
