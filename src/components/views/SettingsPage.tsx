@@ -69,6 +69,9 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [section, setSection] = useState<SettingsSection>('home');
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
+  const [apiKey, setApiKey] = useState(settings.apiKey);
+  const [engineUrl, setEngineUrl] = useState(settings.wsUrl);
+  const [engineApiKey, setEngineApiKey] = useState(settings.adminApiKey);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [testingConnection, setTestingConnection] = useState(false);
@@ -82,7 +85,10 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
   useEffect(() => {
     setBackendUrl(settings.backendUrl);
-  }, [settings.backendUrl]);
+    setApiKey(settings.apiKey);
+    setEngineUrl(settings.wsUrl);
+    setEngineApiKey(settings.adminApiKey);
+  }, [settings.backendUrl, settings.apiKey, settings.wsUrl, settings.adminApiKey]);
 
   const saveConnections = (event: React.FormEvent) => {
     event.preventDefault();
@@ -92,8 +98,16 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       if (!backendUrl.trim()) throw new Error('Enter the NodeX backend URL.');
       const parsedBackend = new URL(backendUrl.trim());
       if (!['http:', 'https:'].includes(parsedBackend.protocol)) throw new Error('Backend URL must use HTTP or HTTPS.');
-      updateSettings({ backendUrl: backendUrl.trim() });
-      setConnectionMessage('NodeX backend address updated on this device. The app is reconnecting.');
+      if (!engineUrl.trim()) throw new Error('Enter the NodeX engine WebSocket URL.');
+      const parsedEngine = new URL(engineUrl.trim());
+      if (!['ws:', 'wss:'].includes(parsedEngine.protocol)) throw new Error('Engine URL must use WS or WSS.');
+      updateSettings({
+        backendUrl: backendUrl.trim(),
+        apiKey: apiKey.trim(),
+        wsUrl: engineUrl.trim(),
+        adminApiKey: engineApiKey.trim(),
+      });
+      setConnectionMessage('API and engine connection settings saved. The app is reconnecting.');
     } catch (error) {
       setConnectionMessage(error instanceof Error ? error.message : 'Could not update connection settings.');
     } finally {
@@ -226,18 +240,33 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       {section === 'connections' && (
         <form onSubmit={saveConnections} className="space-y-5 pt-5">
           <div>
-            <p className="text-[13px] font-semibold text-white">NodeX backend connection</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">This is the only connection address configured by the app. Blockchain providers and their credentials remain inside the Rust engine backend.</p>
+            <p className="text-[13px] font-semibold text-white">Application API connection</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Credentials used by the NodeX app when calling its REST API.</p>
           </div>
-          <Field label="Backend API URL" hint="Base HTTP or HTTPS address of your NodeX Rust backend.">
+          <Field label="API URL" hint="Base HTTP or HTTPS address for the NodeX application API.">
             <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://api.example.com" autoCapitalize="none" autoCorrect="off" />
           </Field>
+          <Field label="API key" hint="Application API key sent with REST requests.">
+            <input className={inputClass} type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Enter application API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
+          </Field>
+
+          <div className="border-t border-white/[0.09] pt-5">
+            <p className="text-[13px] font-semibold text-white">Engine connection</p>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Separate authenticated connection used for the live engine event stream.</p>
+          </div>
+          <Field label="Engine URL" hint="WebSocket endpoint of the NodeX engine (WS or WSS).">
+            <input className={inputClass} type="url" value={engineUrl} onChange={(e) => setEngineUrl(e.target.value)} placeholder="wss://engine.example.com/api/v1/ws" autoCapitalize="none" autoCorrect="off" />
+          </Field>
+          <Field label="Engine API key" hint="Operator key used to request an authenticated engine WebSocket ticket.">
+            <input className={inputClass} type="password" value={engineApiKey} onChange={(e) => setEngineApiKey(e.target.value)} placeholder="Enter engine API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
+          </Field>
+
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Backend-managed credentials</div>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Solana RPC, WebSocket and gRPC endpoints, provider API keys, and any private signing credentials are configured and kept by the backend. They are not entered or stored in this frontend.</p>
+            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Engine-managed provider credentials</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Solana RPC provider URLs and keys, gRPC credentials, and private signing credentials remain configured inside the Rust backend. They are not app-to-engine connection credentials.</p>
           </div>
           <button type="submit" disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-[12px] font-semibold text-black disabled:opacity-50">
-            <Check className="h-4 w-4" /> {savingConnection ? 'Applying…' : 'Save backend URL'}
+            <Check className="h-4 w-4" /> {savingConnection ? 'Saving connections…' : 'Save connection settings'}
           </button>
           {connectionMessage && <p className="text-[10px] leading-relaxed text-white/60">{connectionMessage}</p>}
           <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] font-medium text-white/80 disabled:opacity-50">
