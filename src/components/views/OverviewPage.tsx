@@ -207,6 +207,7 @@ interface SimToken {
   progress: number;
   scanStage: string;
   positionId?: string;
+  verificationCycle: number;
 }
 interface SimulationState {
   startedAt: number;
@@ -404,7 +405,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         const detectedAt = simulation.startedAt + index * 900;
         simulation.tokens.set(index, {
           index, seed, detectedAt, status: 'DETECTED', progress: 0,
-          scanStage: 'New launch received',
+          scanStage: 'New launch received', verificationCycle: 0,
           launch: {
             id: mint, mint_address: mint, creator_address: null,
             source: 'Demo launch stream', signature: mint, slot: 0,
@@ -425,7 +426,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           token.status = 'REJECTED'; token.progress = 100; token.scanStage = 'Demo risk checks failed';
         } else {
           token.progress = 100;
-          const positionId = `paper-${token.index}`;
+          const positionId = `paper-${token.index}-${token.verificationCycle + 1}`;
           const existing = simulation.positions.get(positionId);
           if (!existing) {
             const entryPrice = DEMO_ENTRY_PRICES[token.index % DEMO_ENTRY_PRICES.length];
@@ -449,9 +450,19 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             } else {
               token.status = 'QUALIFIED'; token.scanStage = 'Qualified · balance limit reached';
             }
+          } else if (existing.status === 'CLOSED') {
+            // Demo tokens remain on the discovery radar after a paper exit.
+            // Start a fresh verification cycle and keep the closed trade in history.
+            token.verificationCycle += 1;
+            token.positionId = undefined;
+            token.detectedAt = now;
+            token.status = 'DETECTED';
+            token.progress = 0;
+            token.scanStage = 'Rediscovered · queued for verification';
           } else {
-            token.status = existing.status === 'OPEN' ? 'PAPER ENTRY' : 'QUALIFIED';
-            token.scanStage = existing.status === 'OPEN' ? 'Paper position open' : 'Paper position closed';
+            token.positionId = positionId;
+            token.status = 'PAPER ENTRY';
+            token.scanStage = 'Paper position open';
           }
         }
       }
