@@ -396,11 +396,13 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     const timer = setInterval(() => {
       const now = Date.now();
       const elapsed = now - simulation.startedAt;
-      const arrivals = Math.min(30, Math.floor(elapsed / 900) + 1);
+      // Keep the demo discovery stream running indefinitely. Reuse the
+      // seed catalogue with unique launch indexes instead of stopping at 30.
+      const arrivals = Math.floor(elapsed / 900) + 1;
 
       for (let index = 0; index < arrivals; index += 1) {
         if (simulation.tokens.has(index)) continue;
-        const seed = DEMO_TOKEN_SEEDS[index];
+        const seed = DEMO_TOKEN_SEEDS[index % DEMO_TOKEN_SEEDS.length];
         const mint = `DEMO-${seed.symbol}-${index + 1}`;
         const detectedAt = simulation.startedAt + index * 900;
         simulation.tokens.set(index, {
@@ -469,7 +471,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
       for (const position of simulation.positions.values()) {
         if (position.status !== 'OPEN') continue;
-        const tokenIndex = Number(position.id.replace('paper-', ''));
+        // Position IDs include both token index and verification cycle:
+        // paper-<token-index>-<cycle>. Parse only the token index so the
+        // simulated price path never becomes NaN after a rediscovery.
+        const tokenIndex = Number(position.id.split('-')[1]);
+        if (!Number.isInteger(tokenIndex) || tokenIndex < 0) continue;
         const path = DEMO_PRICE_PATHS[tokenIndex % DEMO_PRICE_PATHS.length];
         const age = now - position.openedAt;
         const stepMs = 5000 + ((tokenIndex * 613) % 4000);
