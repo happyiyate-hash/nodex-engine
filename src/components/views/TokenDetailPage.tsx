@@ -6,6 +6,8 @@ import {
   ArrowLeft,
   Copy,
   Check,
+  ChartLine,
+  ChartCandlestick,
 } from 'lucide-react';
 
 export const TokenDetailPage: React.FC = () => {
@@ -238,41 +240,54 @@ export const TokenDetailPage: React.FC = () => {
 
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
       <section className="relative w-full bg-[#000000]">
-        {/* Timeframe and chart-style controls */}
-        <div className="absolute top-2.5 left-3 z-10 flex max-w-[calc(100%-1.5rem)] items-center gap-1 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 font-mono text-[10px] backdrop-blur-md">
-          {(['1m', '5m', '15m', '1H', '24H'] as const).map((tf) => (
+        {/* Timeframe controls stay left; chart-style icon switcher is independent on the far right. */}
+        <div className="absolute inset-x-0 top-2.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
+          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
+            {(['1m', '5m', '15m', '1H', '24H'] as const).map((tf) => (
+              <button
+                key={tf}
+                type="button"
+                onClick={() => setTimeframe(tf)}
+                className={`rounded px-2 py-1 transition-colors ${
+                  timeframe === tf ? 'bg-white/15 text-white font-bold' : 'text-white/40 hover:text-white'
+                }`}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
             <button
-              key={tf}
-              onClick={() => setTimeframe(tf)}
-              className={`px-2 py-0.5 rounded transition-colors ${
-                timeframe === tf ? 'bg-white/15 text-white font-bold' : 'text-white/40 hover:text-white'
-              }`}
-            >
-              {tf}
-            </button>
-          ))}
-          <span className="mx-0.5 h-3.5 w-px bg-white/15" />
-          {([
-            { value: 'line', label: 'Line' },
-            { value: 'candle', label: 'Candle' },
-          ] as const).map((mode) => (
-            <button
-              key={mode.value}
               type="button"
-              aria-pressed={chartType === mode.value}
-              onClick={() => setChartType(mode.value)}
-              className={`rounded px-2 py-0.5 transition-colors ${
-                chartType === mode.value ? 'bg-emerald-400/15 text-emerald-300 font-bold' : 'text-white/40 hover:text-white'
+              aria-label="Line chart"
+              title="Line chart"
+              aria-pressed={chartType === 'line'}
+              onClick={() => setChartType('line')}
+              className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${
+                chartType === 'line' ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white'
               }`}
             >
-              {mode.label}
+              <ChartLine className="h-4 w-4" strokeWidth={1.8} />
             </button>
-          ))}
+            <button
+              type="button"
+              aria-label="Candlestick chart"
+              title="Candlestick chart"
+              aria-pressed={chartType === 'candle'}
+              onClick={() => setChartType('candle')}
+              className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${
+                chartType === 'candle' ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white'
+              }`}
+            >
+              <ChartCandlestick className="h-4 w-4" strokeWidth={1.8} />
+            </button>
+          </div>
         </div>
 
         {/* Live Scrub Indicator (if dragging) */}
         {scrubTime && (
-          <div className="absolute top-2.5 right-4 z-10 text-[10px] font-mono text-white/50 bg-[#0a0a0c]/80 px-2 py-0.5 rounded border border-white/10">
+          <div className="absolute top-11 right-4 z-10 text-[10px] font-mono text-white/50 bg-[#0a0a0c]/80 px-2 py-0.5 rounded border border-white/10">
             {scrubTime}
           </div>
         )}
