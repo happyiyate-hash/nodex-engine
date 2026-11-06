@@ -22,12 +22,25 @@ interface PriceScale {
   max: number;
 }
 
-const TIMEFRAME_MS: Record<string, number> = {
+// Each selector is a candle interval, not a rolling look-back window.
+const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
   '1m': 60_000,
   '5m': 5 * 60_000,
   '15m': 15 * 60_000,
   '1H': 60 * 60_000,
   '24H': 24 * 60 * 60_000,
+};
+
+const formatBucketTime = (timestamp: number, timeframe: string) => {
+  const date = new Date(timestamp);
+  if (timeframe === '24H') {
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+  return date.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(timeframe === '1m' ? { second: '2-digit' as const } : {}),
+  });
 };
 
 const niceStep = (rawStep: number) => {
@@ -79,25 +92,50 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const pointerRef = useRef<number | null>(null);
 
   const points = useMemo<PriceTick[]>(() => {
-    const now = Date.now();
-    const cutoff = now - (TIMEFRAME_MS[timeframe] || TIMEFRAME_MS['24H']);
-    const historical = (priceHistory || [])
-      .filter((point) => Number.isFinite(point.price) && point.price > 0 && point.time >= cutoff)
+    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+    const raw = (priceHistory || [])
+      .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.time))
+      .slice()
       .sort((a, b) => a.time - b.time);
-    const mapped = historical.map((point) => ({
-      timestamp: point.time,
-      time: new Date(point.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: timeframe === '1m' || timeframe === '5m' ? '2-digit' : undefined }),
-      price: point.price,
-    }));
-    const last = mapped[mapped.length - 1];
-    if (currentPrice > 0 && (!last || last.price !== currentPrice)) {
-      mapped.push({
-        timestamp: now,
-        time: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: timeframe === '1m' || timeframe === '5m' ? '2-digit' : undefined }),
-        price: currentPrice,
-      });
+
+    // Add the latest quote to the raw tape. It is folded into the active
+    // interval below, so a price update changes the current row instead of
+    // creating a new timestamp/row for every tick.
+    const now = Date.now();
+    const lastRaw = raw[raw.length - 1];
+    if (currentPrice > 0 && (!lastRaw || lastRaw.price !== currentPrice)) {
+      raw.push({ time: now, price: currentPrice, volume: 0 });
     }
-    return mapped;
+
+    const buckets = new Map<number, PriceTick & { open: number; high: number; low: number; volume: number }>();
+    raw.forEach((point) => {
+      const bucketTime = Math.floor(point.time / interval) * interval;
+      const open = Number.isFinite(point.open) && (point.open as number) > 0 ? point.open as number : point.price;
+      const high = Number.isFinite(point.high) && (point.high as number) > 0 ? point.high as number : point.price;
+      const low = Number.isFinite(point.low) && (point.low as number) > 0 ? point.low as number : point.price;
+      const close = Number.isFinite(point.close) && (point.close as number) > 0 ? point.close as number : point.price;
+      const existing = buckets.get(bucketTime);
+      if (!existing) {
+        buckets.set(bucketTime, {
+          timestamp: bucketTime,
+          time: formatBucketTime(bucketTime, timeframe),
+          price: close,
+          open,
+          high,
+          low,
+          volume: Number(point.volume || 0),
+        });
+        return;
+      }
+      existing.high = Math.max(existing.high, high);
+      existing.low = Math.min(existing.low, low);
+      existing.price = close;
+      existing.volume += Number(point.volume || 0);
+    });
+
+    // One plotted point per interval. The active bucket's close is replaced
+    // as quotes arrive; a fresh row is created only when the interval rolls.
+    return Array.from(buckets.values()).slice(-300);
   }, [currentPrice, timeframe, priceHistory]);
 
   useEffect(() => {
