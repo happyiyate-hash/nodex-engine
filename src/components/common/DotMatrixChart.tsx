@@ -183,7 +183,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // Let the plotted data occupy more of the existing canvas without moving
     // the timeframe/style controls or changing the sections below the chart.
     const padTop = 18;
-    const padBottom = 18;
+    const padBottom = 28;
     const padLeft = 12;
     const padRight = 76;
     const plotW = Math.max(1, w - padLeft - padRight);
