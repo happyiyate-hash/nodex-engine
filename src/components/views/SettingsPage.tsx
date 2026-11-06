@@ -177,7 +177,17 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           </div>
         </>
       ) : (
-        <SectionHeader title={pageTitle} description={pageDescription} onBack={() => navigateSection('home')} />
+        <SectionHeader
+          title={pageTitle}
+          description={pageDescription}
+          onBack={() => navigateSection('home')}
+          action={section === 'trading' ? (
+            <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
+              <span aria-current="true" className="rounded-full bg-white px-3 py-1.5 text-[10px] font-semibold text-black">Paper</span>
+              <button type="button" disabled aria-disabled="true" title="Real trading is not implemented in the backend yet" className="cursor-not-allowed rounded-full px-3 py-1.5 text-[10px] font-medium text-white/25">Real</button>
+            </div>
+          ) : undefined}
+        />
       )}
 
       {section === 'engine' && (
