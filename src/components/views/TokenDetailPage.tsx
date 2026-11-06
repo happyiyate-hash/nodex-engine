@@ -35,7 +35,14 @@ export const TokenDetailPage: React.FC = () => {
   if (!activeToken) return null;
 
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
-  const currentPrice = scrubPrice ?? activeToken.current_price_usd;
+  const priceCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
+  const liveTokenPrice = priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd;
+  const currentPrice = scrubPrice ?? liveTokenPrice;
+  const marketChangePct = activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
+  const hasMarketPrice = liveTokenPrice > 0;
+  const formatTokenPrice = (value: number) => priceCurrency === 'SOL'
+    ? `${value.toFixed(10).replace(/\.?0+$/, '')} SOL`
+    : `${value.toFixed(8).replace(/\.?0+$/, '')}`;
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
@@ -57,14 +64,14 @@ export const TokenDetailPage: React.FC = () => {
   };
 
   // Derived financial metrics
-  const tokensBought = activePosition ? activePosition.amount_tokens : 5000000;
-  const tokensHolding = activePosition ? activePosition.amount_tokens : 5000000;
+  const tokensBought = activePosition?.amount_tokens;
+  const tokensHolding = activePosition?.amount_tokens;
   const boughtTime = activePosition
     ? new Date(activePosition.entry_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '10:42 AM';
-  const initialCostSol = activePosition ? activePosition.initial_investment_sol : 0.0900;
-  const initialCostUsd = activePosition ? activePosition.initial_investment_usd : 18.19;
-  const entryPriceUsd = activePosition ? activePosition.entry_price_usd : 0.000018;
+    : null;
+  const initialCostSol = activePosition?.initial_investment_sol;
+  const initialCostUsd = activePosition?.initial_investment_usd;
+  const entryPriceUsd = activePosition?.entry_price_usd;
   const currentValueUsd = activePosition
     ? activePosition.current_position_value_usd
     : entryPriceUsd > 0 ? (activeToken.current_price_usd / entryPriceUsd) * initialCostUsd : initialCostUsd;
@@ -75,8 +82,7 @@ export const TokenDetailPage: React.FC = () => {
   const pnlSol = activePosition
     ? (activePosition.pnl_sol ?? (activePosition.pnl_usd / 202.15))
     : currentValueSol - initialCostSol;
-  const pnlPct = activePosition ? activePosition.pnl_pct
-    : entryPriceUsd > 0 ? ((activeToken.current_price_usd - entryPriceUsd) / entryPriceUsd) * 100 : 0;
+  const pnlPct = activePosition ? activePosition.pnl_pct : marketChangePct ?? 0;
   const isPositive = pnlPct >= 0;
   const annualizedRoi = (pnlPct * (365 / 7)).toFixed(1);
 
@@ -118,7 +124,7 @@ export const TokenDetailPage: React.FC = () => {
               ${currentPrice < 0.001 ? currentPrice.toFixed(8).replace(/\.?0+$/, '') : currentPrice.toFixed(6)}
             </div>
             <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-              <span>{isPositive ? '▲ +' : '▼ '}{pnlPct.toFixed(2)}%</span>
+              <span>{marketChangePct == null ? 'Change warming up' : `${isPositive ? '▲ +' : '▼ '}${pnlPct.toFixed(2)}%`}</span>
             </div>
           </div>
         </div>
@@ -176,7 +182,8 @@ export const TokenDetailPage: React.FC = () => {
         {/* Pure Black Canvas with Dot Matrix & Backward Tracking Line */}
         <DotMatrixChart
           currentPrice={activeToken.current_price_usd}
-          entryPrice={entryPriceUsd}
+          entryPrice={activePosition ? entryPriceUsd : undefined}
+          currentPrice={liveTokenPrice}
           priceHistory={activeToken.price_history_5m}
           isPositive={isPositive}
           timeframe={timeframe}
@@ -201,7 +208,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Amount Bought</div>
               <div className="text-sm font-semibold text-white mt-0.5">
-                {tokensBought.toLocaleString()}
+                {tokensBought == null ? '—' : tokensBought.toLocaleString()}
               </div>
               <div className="text-[9px] text-white/30">{activeToken.symbol} tokens</div>
             </div>
@@ -209,7 +216,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Currently Holding</div>
               <div className="text-sm font-semibold text-emerald-400 mt-0.5">
-                {tokensHolding.toLocaleString()}
+                {tokensHolding == null ? '—' : tokensHolding.toLocaleString()}
               </div>
               <div className="text-[9px] text-white/30">100% available</div>
             </div>
@@ -217,7 +224,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Time Bought</div>
               <div className="text-sm font-semibold text-white mt-0.5">
-                {boughtTime}
+                {boughtTime || '—'}
               </div>
               <div className="text-[9px] text-white/30">On-chain confirmed</div>
             </div>
@@ -225,9 +232,9 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">First Purchase Cost</div>
               <div className="text-sm font-semibold text-white mt-0.5">
-                {initialCostSol.toFixed(4)} SOL
+                {initialCostSol == null ? '—' : `${initialCostSol.toFixed(4)} SOL`}
               </div>
-              <div className="text-[9px] text-white/30">${initialCostUsd.toFixed(2)} USD</div>
+              <div className="text-[9px] text-white/30">{initialCostUsd == null ? 'No position recorded' : `${initialCostUsd.toFixed(2)} USD`}</div>
             </div>
           </div>
         </div>
@@ -279,7 +286,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Total Value in SOL</div>
               <div className="text-base font-bold text-white mt-0.5">
-                {currentValueSol.toFixed(4)} SOL
+                {activePosition ? `${currentValueSol.toFixed(4)} SOL` : '—'}
               </div>
               <div className="text-[9px] text-white/30">Liquid balance</div>
             </div>
@@ -287,7 +294,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Total Value in USD</div>
               <div className="text-base font-bold text-white mt-0.5">
-                ${currentValueUsd.toFixed(2)}
+                {activePosition ? `${currentValueUsd.toFixed(2)}` : '—'}
               </div>
               <div className="text-[9px] text-white/30">At $202.15/SOL</div>
             </div>
@@ -295,7 +302,7 @@ export const TokenDetailPage: React.FC = () => {
             <div className="col-span-2 sm:col-span-1">
               <div className="text-[10px] text-white/40">Net Gain in SOL</div>
               <div className={`text-base font-bold mt-0.5 ${isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-                {isPositive ? '+' : ''}{pnlSol.toFixed(4)} SOL
+                {activePosition ? `${isPositive ? '+' : ''}${pnlSol.toFixed(4)} SOL` : '—'}
               </div>
               <div className="text-[9px] text-white/30">Unrealised P&L</div>
             </div>
