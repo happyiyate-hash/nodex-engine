@@ -123,7 +123,7 @@ export const TokenDetailPage: React.FC = () => {
 
       <div
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(10rem+env(safe-area-inset-bottom))]"
-        style={{ paddingTop: headerHeight }}
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 56px)' }}
         onScroll={(event) => {
           const nextScrollTop = event.currentTarget.scrollTop;
           const delta = nextScrollTop - lastScrollTop.current;
