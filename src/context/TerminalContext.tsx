@@ -92,10 +92,22 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const data = event.data || {};
   const mint = String(event.token_mint || data.mint_address || data.token_mint || data.base_mint || '');
   if (!mint) return null;
-  const rawPrice = Number(data.current_price_usd ?? data.price_usd ?? data.price ?? data.current_price);
-  const price = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : previous?.current_price_usd || 0;
+  const rawUsdPrice = Number(data.current_price_usd ?? data.price_usd ?? data.price ?? data.current_price);
+  const rawSolPrice = Number(data.price_sol ?? data.current_price_sol);
+  const hasUsdPrice = Number.isFinite(rawUsdPrice) && rawUsdPrice > 0;
+  const hasSolPrice = Number.isFinite(rawSolPrice) && rawSolPrice > 0;
+  const price = hasUsdPrice ? rawUsdPrice : previous?.current_price_usd || 0;
+  const priceSol = hasSolPrice ? rawSolPrice : previous?.current_price_sol || 0;
+  const priceCurrency: DiscoveredToken['price_currency'] = hasUsdPrice ? 'USD' : hasSolPrice ? 'SOL' : previous?.price_currency || 'USD';
   const history = previous?.price_history_5m ? [...previous.price_history_5m] : [];
-  if (price > 0 && price !== previous?.current_price_usd) history.push({ time: Date.parse(event.timestamp) || Date.now(), price, volume: Number(data.volume_5m_usd || 0) });
+  const historyPrice = hasUsdPrice ? rawUsdPrice : hasSolPrice ? rawSolPrice : 0;
+  const previousHistoryPrice = previous?.price_currency === 'SOL' ? previous?.current_price_sol : previous?.current_price_usd;
+  if (historyPrice > 0 && historyPrice !== previousHistoryPrice) {
+    if (previous?.price_currency && previous.price_currency !== priceCurrency) history.length = 0;
+    history.push({ time: Date.parse(event.timestamp) || Date.now(), price: historyPrice, volume: Number(data.volume_5m_usd || 0) });
+  }
+  const change1m = Number(data.price_change_1m_pct);
+  const change5m = Number(data.price_change_5m_pct);
   const venueValue = String(data.venue || data.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(data.decision || data.status || '').toLowerCase();
@@ -109,7 +121,10 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     symbol: String(data.symbol || data.token_symbol || previous?.symbol || 'UNKNOWN'),
     creator_wallet: String(data.creator_wallet || data.creator_address || previous?.creator_wallet || ''),
     launch_time: String(data.launch_time || data.detected_at || previous?.launch_time || event.timestamp),
-    current_price_usd: price, current_price_sol: Number(data.current_price_sol ?? previous?.current_price_sol ?? 0),
+    current_price_usd: price, current_price_sol: priceSol, price_currency: priceCurrency,
+    price_change_1m_pct: Number.isFinite(change1m) ? change1m : previous?.price_change_1m_pct,
+    price_change_5m_pct: Number.isFinite(change5m) ? change5m : previous?.price_change_5m_pct,
+    market_cap_sol: Number(data.market_cap_sol ?? previous?.market_cap_sol ?? 0),
     market_cap_usd: Number(data.market_cap_usd ?? data.market_cap ?? previous?.market_cap_usd ?? 0),
     liquidity_usd: Number(data.liquidity_usd ?? previous?.liquidity_usd ?? 0),
     volume_5m_usd: Number(data.volume_5m_usd ?? previous?.volume_5m_usd ?? 0),
