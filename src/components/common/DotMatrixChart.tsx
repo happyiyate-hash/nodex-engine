@@ -176,6 +176,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // The entire plot uses this one scale, so line, grid, cursor and badge stay aligned.
     const target: PriceScale = { min: dataMin - padding, max: dataMax + padding };
     const previous = scaleRef.current;
+    let desiredScale = target;
     if (!previous || !Number.isFinite(previous.min) || !Number.isFinite(previous.max)) {
       scaleRef.current = target;
     } else {
@@ -185,11 +186,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const edgeBuffer = expandedRange * 0.12;
       const livePrice = visible[visible.length - 1].price;
       const needsShift = livePrice > expandingMax - edgeBuffer || livePrice < expandingMin + edgeBuffer;
-      const desired = needsShift ? target : { min: expandingMin, max: expandingMax };
+      desiredScale = needsShift ? target : { min: expandingMin, max: expandingMax };
       // Smooth the scale transition instead of snapping axis labels and plotted data.
       scaleRef.current = {
-        min: previous.min + (desired.min - previous.min) * 0.22,
-        max: previous.max + (desired.max - previous.max) * 0.22,
+        min: previous.min + (desiredScale.min - previous.min) * 0.22,
+        max: previous.max + (desiredScale.max - previous.max) * 0.22,
       };
     }
     const scale = scaleRef.current;
@@ -328,13 +329,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     }
 
     // Continue easing until the interpolated scale reaches its target.
-    const targetMin = dataMin - padding;
-    const targetMax = dataMax + padding;
-    if (Math.abs(scale.min - targetMin) > Math.abs(targetMax - targetMin) * 0.0005 ||
-        Math.abs(scale.max - targetMax) > Math.abs(targetMax - targetMin) * 0.0005) {
+    const desiredRange = Math.max(desiredScale.max - desiredScale.min, Number.EPSILON);
+    if (Math.abs(scale.min - desiredScale.min) > desiredRange * 0.0005 ||
+        Math.abs(scale.max - desiredScale.max) > desiredRange * 0.0005) {
       animationRef.current = requestAnimationFrame(draw);
     } else {
-      scaleRef.current = { min: targetMin, max: targetMax };
+      scaleRef.current = desiredScale;
     }
   }, [points, view, containerWidth, height, isPositive, hoverIndex]);
 
