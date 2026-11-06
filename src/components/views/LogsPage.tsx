@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, CircleAlert, Copy, Download, FileJson, RadioTower, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CircleAlert, Copy, Download, FileJson, RefreshCw } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { clearEngineLogs, EngineLogEntry, readEngineLogs } from '../../services/engineLogs';
 import { MobileNav } from '../layout/MobileNav';
 
-type LogFilter = 'requests' | 'events';
+type LogFilter = 'requests' | 'responses';
 
 export const LogsPage: React.FC = () => {
   const { setActiveTab, engineStatus } = useTerminal();
@@ -22,8 +22,10 @@ export const LogsPage: React.FC = () => {
   }, []);
 
   const requests = useMemo(() => logs.filter((item) => item.kind === 'request'), [logs]);
-  const events = useMemo(() => logs.filter((item) => item.kind === 'event'), [logs]);
-  const visible = filter === 'requests' ? requests : events;
+  // A response is the backend outcome of the same captured HTTP request.
+  // Keep the request/response pair together so selecting either view opens the exact exchange.
+  const responses = useMemo(() => requests.filter((item) => item.response !== undefined || item.error || item.status !== undefined), [requests]);
+  const visible = filter === 'requests' ? requests : responses;
   const detailJson = useMemo(() => selected ? JSON.stringify({
     type: selected.kind,
     action: selected.action,
@@ -84,7 +86,7 @@ export const LogsPage: React.FC = () => {
           <div className="mt-3 flex items-center gap-2">
             <div className="glass-panel grid min-w-0 flex-1 grid-cols-2 gap-1 rounded-2xl p-1">
               <button onClick={() => setFilter('requests')} className={`flex h-9 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium transition-all duration-200 ${filter === 'requests' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-zinc-200'}`}><FileJson className="size-3.5" />Requests <span className="text-[10px] opacity-70">{requests.length}</span></button>
-              <button onClick={() => setFilter('events')} className={`flex h-8 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-medium ${filter === 'events' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-zinc-200'}`}><RadioTower className="size-3.5" />Live events <span className="text-[10px] opacity-70">{events.length}</span></button>
+              <button onClick={() => setFilter('responses')} className={`flex h-9 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium transition-all duration-200 ${filter === 'responses' ? 'bg-white text-black shadow-sm' : 'text-zinc-500 hover:text-zinc-200'}`}><FileJson className="size-3.5" />Responses <span className="text-[10px] opacity-70">{responses.length}</span></button>
             </div>
             <span className="glass-panel flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[11px] font-medium text-zinc-300"><span className={`size-1.5 rounded-full ${connected ? 'bg-emerald-400' : 'bg-zinc-500'}`} />{connected ? 'Live' : 'Offline'}</span>
           </div>
@@ -109,8 +111,8 @@ export const LogsPage: React.FC = () => {
           {visible.length === 0 ? (
             <div className="flex min-h-[42dvh] flex-col items-center justify-center text-center">
               <span className="mb-3 grid size-11 place-items-center rounded-2xl border border-white/[0.08] bg-[#111113]"><FileJson className="size-5 text-zinc-500" /></span>
-              <p className="text-sm font-medium text-zinc-300">{filter === 'requests' ? 'No requests captured yet' : 'No live events captured yet'}</p>
-              <p className="mt-1 max-w-xs text-xs text-zinc-600">Requests and WebSocket messages will appear here as the engine communicates with this browser.</p>
+              <p className="text-sm font-medium text-zinc-300">{filter === 'requests' ? 'No requests captured yet' : 'No responses captured yet'}</p>
+              <p className="mt-1 max-w-xs text-xs text-zinc-600">{filter === 'requests' ? 'Frontend API requests to the NodeX backend will appear here.' : 'Backend responses, including successful payloads and errors, will appear here alongside their originating requests.'}</p>
             </div>
           ) : (
             <div className="space-y-1.5">
