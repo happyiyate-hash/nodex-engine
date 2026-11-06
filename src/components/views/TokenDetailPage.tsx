@@ -81,21 +81,17 @@ export const TokenDetailPage: React.FC = () => {
           {/* Token identity sits flush to the left edge of the header. */}
           <div className="flex min-w-0 items-center gap-2.5">
             <TokenAvatar symbol={activeToken.symbol} size="md" className="shadow-md" />
-            <div className="min-w-0 self-center leading-[1.15]">
+            <div className="flex min-w-0 flex-col justify-center gap-1.5 leading-[1.15]">
+              <button
+                onClick={handleCopyMint}
+                className="flex min-w-0 items-center gap-1 text-[10px] font-normal tracking-[0.015em] text-white/40 transition-colors hover:text-white font-mono"
+              >
+                <span>{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
+                {copiedMint ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
+              </button>
               <span className="block truncate text-[13px] font-medium tracking-[0.01em] text-white/95">
                 {activeToken.name || activeToken.symbol}
               </span>
-              <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
-                <span className="shrink-0 text-[10px] font-medium tracking-wide text-white/40">{activeToken.symbol}</span>
-                <span className="text-white/20">·</span>
-                <button
-                  onClick={handleCopyMint}
-                  className="flex min-w-0 items-center gap-1 text-[10px] font-normal tracking-[0.015em] text-white/40 transition-colors hover:text-white font-mono"
-                >
-                  <span>{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
-                  {copiedMint ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
-                </button>
-              </div>
             </div>
           </div>
 
