@@ -128,7 +128,7 @@ export class NodeXApiClient {
     const stream = streams.pump_fun || raw.solana_stream || {};
     const pumpswap = streams.pumpswap || {};
     return {
-      running: !raw.paused, operating_mode: 'PAPER', network: 'mainnet-beta',
+      running: !raw.paused, operating_mode: String(raw.mode || 'paper').toUpperCase() as EngineStatus['operating_mode'], network: 'mainnet-beta',
       solana_connected: Boolean(stream.connected),
       pumpswap_connected: Boolean(pumpswap.connected),
       pumpswap_reconnection_count: Number(pumpswap.reconnect_count || 0),
@@ -193,7 +193,7 @@ export class NodeXApiClient {
     return this.request<EngineControlSnapshot>('/api/v1/engine/control');
   }
   public updateEngineControl(
-    command: 'start' | 'resume' | 'pause' | 'stop' | 'configure',
+    command: 'start' | 'resume' | 'pause' | 'stop' | 'configure' | 'set_mode',
     updates: Partial<Pick<EngineControlSnapshot, 'mode' | 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled'>> = {},
   ): Promise<{status:string;engine:EngineControlSnapshot}> {
     const key = this.settings.adminApiKey.trim();
