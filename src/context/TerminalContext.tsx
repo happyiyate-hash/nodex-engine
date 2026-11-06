@@ -314,6 +314,38 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
 
+
+  // Keep the shared token registry durable and synchronized between tabs.
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tokens, launches, events }));
+    } catch (error) {
+      console.warn('Could not persist NodeX terminal state:', error);
+    }
+  }, [tokens, launches, events]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY || !event.newValue) return;
+      try {
+        const persisted = JSON.parse(event.newValue) as PersistedTerminalState;
+        if (Array.isArray(persisted.tokens)) {
+          setTokens(persisted.tokens);
+          setSelectedToken((current) => {
+            if (!current) return current;
+            return persisted.tokens!.find((token) => token.mint === current.mint) || current;
+          });
+        }
+        if (Array.isArray(persisted.launches)) setLaunches(persisted.launches);
+        if (Array.isArray(persisted.events)) setEvents(persisted.events);
+      } catch (error) {
+        console.warn('Ignoring invalid NodeX shared state update:', error);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   const sendPause = useCallback((pause: boolean) => {
     const sent = wsService.sendCommand(pause ? 'pause' : 'resume');
     if (!sent) setBackendError('Cannot change engine state: WebSocket is not connected.');
