@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TerminalProvider, useTerminal } from './context/TerminalContext';
 import { MobileNav } from './components/layout/MobileNav';
-import { OverviewPage } from './components/views/OverviewPage';
 import { PositionsPage } from './components/views/PositionsPage';
 import { LiveFeedPage } from './components/views/LiveFeedPage';
 import { StrategyPage } from './components/views/StrategyPage';
@@ -46,14 +45,14 @@ const MainLayout: React.FC = () => {
   const renderActiveView = () => {
     if (selectedToken) return <TokenDetailPage />;
     switch (activeTab) {
-      case 'overview': return <OverviewPage />;
+      case 'overview': return null;
       case 'positions': return <PositionsPage />;
       case 'live_feed': return null;
       case 'event_monitor': return <LogsPage />;
       case 'strategy': return <StrategyPage />;
       case 'token_intelligence': return <TokenIntelligencePage />;
       case 'settings': return <SettingsPage />;
-      default: return <OverviewPage />;
+      default: return null;
     }
   };
 
