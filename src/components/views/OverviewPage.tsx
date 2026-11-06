@@ -3,7 +3,6 @@ import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent } from '../../types';
 import { Activity, Copy, ExternalLink, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 
-type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'detected' | 'qualified' | 'positions';
 
 interface RollingDigitProps {
@@ -22,7 +21,7 @@ interface LaunchView {
 }
 
 
-interface AutoFitNumberProps { fullText:string; compactText:string; className:string; maxFontSize:number; minFontSize:number; balanceDirection:ChangeDirection; }
+interface AutoFitNumberProps { fullText:string; compactText:string; className:string; maxFontSize:number; minFontSize:number; }
 const AutoFitNumber: React.FC<AutoFitNumberProps> = ({fullText,compactText,className,maxFontSize,minFontSize}) => {
   const containerRef=useRef<HTMLSpanElement>(null);
   const [compact,setCompact]=useState(false);
@@ -137,7 +136,31 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     }
     return true;
   });
-  const filteredPositions: any[] = [];
+  const filteredPositions: any[] = (profile?.portfolio?.positions || []).filter((position) => {
+    if (!search.trim()) return true;
+    const query = search.trim().toLowerCase();
+    return String(position.mint_address || position.mint || '').toLowerCase().includes(query) ||
+      String(position.symbol || '').toLowerCase().includes(query) ||
+      String(position.name || position.token_name || '').toLowerCase().includes(query);
+  }).map((position, index) => ({
+    id: String(position.position_id || position.id || index),
+    mint: String(position.mint_address || position.mint || ''),
+    name: String(position.name || position.token_name || 'Unknown token'),
+    symbol: String(position.symbol || position.token_symbol || 'UNKNOWN'),
+    entryPrice: Number(position.entry_price_sol || position.entry_price_usd || 0),
+    currentPrice: Number(position.current_price_sol || position.current_price_usd || 0),
+    quantity: Number(position.amount_tokens || position.token_amount || position.quantity || 0),
+    invested: Number(position.invested_sol || position.initial_investment_sol || 0),
+    value: Number(position.current_value_sol || position.current_position_value_sol || 0),
+    pnl: Number(position.unrealized_pnl_sol || position.pnl_sol || 0),
+    pnlPct: Number(position.unrealized_pnl_pct || position.pnl_pct || 0),
+    openedAt: Date.parse(String(position.opened_at || position.entry_time || '')) || 0,
+    status: String(position.status || 'open').toLowerCase() === 'open' ? 'OPEN' : 'CLOSED',
+    peakPnlPct: Number(position.peak_pnl_pct || 0),
+    trailingStopPrice: Number(position.trailing_stop_price || 0),
+    trailingActivated: Boolean(position.trailing_activated),
+    exitReason: position.exit_reason ? String(position.exit_reason) : undefined,
+  }));
   const backendPaperEntries = launchViews.filter((item) => item.status === 'PAPER ENTRY' && (
     !search.trim() || item.launch.mint_address.toLowerCase().includes(search.trim().toLowerCase()) ||
     String(item.launch.source || '').toLowerCase().includes(search.trim().toLowerCase())
@@ -145,7 +168,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
   const connected = engineStatus.ws_status === 'connected' && engineStatus.running;
   const engineLabel = !engineStatus.running ? 'ENGINE PAUSED' : engineStatus.ws_status === 'connected' ? 'ENGINE ONLINE' : 'RECONNECTING';
-  const formatUsd = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 });
+  const formatSol = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 });
   const walletBalanceSol = Number(profile?.wallet?.sol_balance ?? 0);
   const portfolioValueSol = Number(profile?.portfolio?.total_value_sol ?? 0);
   const realisedPnlSol = Number(profile?.portfolio?.realized_pnl_sol ?? 0);
@@ -153,7 +176,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const totalPnlSol = realisedPnlSol + unrealisedPnlSol;
   const openPositionCount = Number(profile?.portfolio?.position_count ?? profile?.portfolio?.positions?.length ?? 0);
   const isProfitable = totalPnlSol >= 0;
-  const formattedPortfolio = formatUsd(portfolioValueSol);
+  const formattedPortfolio = formatSol(portfolioValueSol);
   const hourlyProfitLossLabel = '—';
 
   const copyMint = async (event: React.MouseEvent, mint: string) => {
@@ -172,14 +195,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
               <div aria-live="polite" className={`mt-1 flex h-[14px] items-center gap-1 truncate text-[14px] font-semibold leading-none tracking-tight tabular-nums sm:text-base ${isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
                 <span aria-hidden="true" className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '▲' : '▼'}</span>
-                <span className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '+' : '−'}</span><AutoFitNumber fullText={formatUsd(Math.abs(totalPnlSol)) + ' SOL'} compactText={compactNumber(Math.abs(totalPnlSol)) + ' SOL'} maxFontSize={14} minFontSize={9} balanceDirection={null} className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" />
+                <span className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '+' : '−'}</span><AutoFitNumber fullText={formatUsd(Math.abs(totalPnlSol)) + ' SOL'} compactText={compactNumber(Math.abs(totalPnlSol)) + ' SOL'} maxFontSize={14} minFontSize={9}  className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" />
               </div>
             </div>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
               <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
               <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${'text-white'}`}>
                 <span className="mr-1 shrink-0 text-white/65" style={{ fontSize: 'clamp(10px, 3.2vw, 14px)', lineHeight: 1 }}>SOL</span>
-                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
+                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValueSol)} maxFontSize={25} minFontSize={14}  className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
               <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Wallet {formatUsd(walletBalanceSol)} SOL</span><span>Realised {formatUsd(realisedPnlSol)} SOL</span></div>
             </div>
@@ -269,8 +292,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         </div>
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
-                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.entryPrice.toFixed(6)}</div></div>
-                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.currentPrice.toFixed(6)}</div></div>
+                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.entryPrice.toFixed(6)} SOL</div></div>
+                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.currentPrice.toFixed(6)} SOL</div></div>
                         <div><div className="text-white/30">Value</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${formatUsd(position.value)}</div></div>
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[8px] text-white/35">
@@ -317,7 +340,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
                   const checkRows = checks;
                   return (
-                    <article key={launch.id || launch.signature} className={`border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 ${demo ? 'animate-[token-arrive_520ms_cubic-bezier(0.2,0.75,0.25,1)]' : ''}`}>
+                    <article key={launch.id || launch.signature} className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0">
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
                           {(() => {
@@ -337,7 +360,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         {isQualified
                           ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
                           : <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
-                            {status === 'ANALYZING' && <span className="h-1 w-1 animate-pulse rounded-full bg-current" />}
+                            {status === 'ANALYZING' && <span className="h-1 w-1 rounded-full bg-current" />}
                             {status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
                           </span>}
                       </div>
