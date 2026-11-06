@@ -55,6 +55,28 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
   }
 }
 
+export interface NodeXProfileSnapshot {
+  profile?: {
+    wallet_address?: string | null;
+    name?: string;
+    symbol?: string;
+    profile_url?: string;
+    profile_picture_url?: string;
+    [key: string]: unknown;
+  };
+  wallet?: { sol_balance?: number; last_updated?: string | null; [key: string]: unknown };
+  existing_wallet?: { sol_balance?: number; last_synced?: string | null; [key: string]: unknown };
+  portfolio?: {
+    total_value_sol?: number;
+    unrealized_pnl_sol?: number;
+    realized_pnl_sol?: number;
+    position_count?: number;
+    positions?: Array<Record<string, unknown>>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 export class NodeXApiClient {
   private settings: ApiSettings = (() => {
     const stored = readStoredConnectionSettings();
@@ -165,6 +187,9 @@ export class NodeXApiClient {
     });
   }
 
+  public getProfile(): Promise<NodeXProfileSnapshot> {
+    return this.request<NodeXProfileSnapshot>('/api/v1/profile');
+  }
   public getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
   public async getEngineStatus(): Promise<EngineStatus> {
     const raw = await this.request<any>('/api/v1/engine/status');
