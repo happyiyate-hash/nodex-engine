@@ -395,12 +395,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     const timer = setInterval(() => {
       const now = Date.now();
       const elapsed = now - simulation.startedAt;
-      // This demo run is intentionally finite: inspect exactly 30 launches.
-      const arrivals = Math.min(30, Math.floor(elapsed / 900) + 1);
+      // This demo run is intentionally finite: inspect exactly 60 launches.
+      const arrivals = Math.min(60, Math.floor(elapsed / 900) + 1);
 
       for (let index = 0; index < arrivals; index += 1) {
         if (simulation.tokens.has(index)) continue;
-        const seed = DEMO_TOKEN_SEEDS[index % DEMO_TOKEN_SEEDS.length];
+        const catalogueSeed = DEMO_TOKEN_SEEDS[index % DEMO_TOKEN_SEEDS.length];
+        // Exactly five of the 60 demo launches are rejected; the remaining 55 qualify.
+        const seed = { ...catalogueSeed, outcome: index < 5 ? 'REJECTED' as const : 'QUALIFIED' as const };
         const mint = `DEMO-${seed.symbol}-${index + 1}`;
         const detectedAt = simulation.startedAt + index * 900;
         simulation.tokens.set(index, {
