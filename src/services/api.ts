@@ -7,6 +7,14 @@ const WS_URL = import.meta.env.VITE_NODEX_WS_URL || (API_URL
 
 const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
+export interface EngineControlSnapshot {
+  paused: boolean;
+  mode: 'paper';
+  token_discovery_enabled: boolean;
+  new_entries_enabled: boolean;
+  position_monitoring_enabled: boolean;
+}
+
 export interface ApiSettings {
   backendUrl: string; wsUrl: string; mode: 'RUST_BACKEND'; rpcUrl: string;
   autoReconnection: boolean; heartbeatIntervalMs: number; apiKey: string; adminApiKey: string;
@@ -166,7 +174,33 @@ export class NodeXApiClient {
   public async getTokens(): Promise<DiscoveredToken[]> { throw new Error('Use getRecentTokens(): the backend does not yet return complete token dossiers.'); }
   public async getToken(_mint:string): Promise<DiscoveredToken|null> { throw new Error('Complete token detail route is not implemented.'); }
   public async getEvents(_limit=100): Promise<NodeXEvent[]> { throw new Error('Historical events route is not implemented. Live events use WebSocket.'); }
-  public async getStrategy(): Promise<{config:StrategyConfig;decisions:StrategyDecision[]}> { throw new Error('Strategy persistence route is not implemented.'); }
-  public async updateStrategy(_config:StrategyConfig): Promise<never> { throw new Error('Strategy update route is not implemented.'); }
+  public async getStrategy(): Promise<{config:StrategyConfig;decisions:StrategyDecision[]}> {
+    const result = await this.request<{config:StrategyConfig}>('/api/v1/config/trading');
+    return { config: result.config, decisions: [] };
+  }
+  public async updateStrategy(config:StrategyConfig): Promise<{status:string;config:StrategyConfig}> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the Engine API key in Settings before updating trading configuration.');
+    return this.request('/api/v1/config/trading', {
+      method: 'PUT',
+      headers: { 'X-NodeX-Admin-Key': key },
+      body: JSON.stringify(config),
+    });
+  }
+  public getEngineControl(): Promise<EngineControlSnapshot> {
+    return this.request<EngineControlSnapshot>('/api/v1/engine/control');
+  }
+  public updateEngineControl(
+    command: 'start' | 'resume' | 'pause' | 'stop' | 'configure',
+    updates: Partial<Pick<EngineControlSnapshot, 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled'>> = {},
+  ): Promise<{status:string;engine:EngineControlSnapshot}> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the Engine API key in Settings before changing runtime controls.');
+    return this.request('/api/v1/engine/control', {
+      method: 'POST',
+      headers: { 'X-NodeX-Admin-Key': key },
+      body: JSON.stringify({ command, ...updates }),
+    });
+  }
 }
 export const apiClient = new NodeXApiClient();
