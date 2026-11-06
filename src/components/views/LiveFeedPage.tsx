@@ -27,7 +27,7 @@ export const LiveFeedPage: React.FC<LiveFeedPageProps> = ({ activeTab, visible }
             </button>
           ))}
         </nav>
-      </div>
+      </div>}
 
       <div className="min-h-0 flex-1 overflow-hidden">
         <OverviewPage embeddedMode={activeTab === "live_feed" ? section : undefined} />
