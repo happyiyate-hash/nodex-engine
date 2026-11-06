@@ -127,11 +127,11 @@ export const TokenDetailPage: React.FC = () => {
   const priceCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
   const liveTokenPrice = demoData?.price ?? (priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd);
   const currentPrice = scrubPrice ?? liveTokenPrice;
-  const demoDirection = demoData
-    ? (Math.floor(Math.max(0, demoData.tick - 1) / 18) % 2 === 0 ? 1 : -1)
-    : null;
+  // Keep the displayed percentage tied to the actual simulated price
+  // relative to its seed. Do not alternate the sign by animation phase:
+  // that made the header turn red while the price tape was still rising.
   const marketChangePct = demoData
-    ? Math.abs(demoData.changePct) * (demoDirection || 1)
+    ? demoData.changePct
     : activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
   const pnlPct = marketChangePct ?? 0;
   const isPositive = (marketChangePct ?? 0) >= 0;
