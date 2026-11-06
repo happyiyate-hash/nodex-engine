@@ -26,8 +26,10 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [tradeMessage, setTradeMessage] = useState<string | null>(null);
-  const [headerVisible, setHeaderVisible] = useState(true);
+  const [headerOffset, setHeaderOffset] = useState(0);
+  const headerOffsetRef = useRef(0);
   const lastScrollTop = useRef(0);
+  const headerHeight = 60;
 
   const activeToken = selectedToken || tokens[0];
   if (!activeToken) return null;
@@ -77,14 +79,22 @@ export const TokenDetailPage: React.FC = () => {
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#000000] text-white select-none font-sans">
-      {/* Safe area stays fixed while the token navigation collapses and reappears. */}
-      <div aria-hidden="true" className="h-[env(safe-area-inset-top)] w-full shrink-0 bg-[#000000]" />
-      {/* 1. DIRECTION-AWARE COLLAPSING TOKEN NAVIGATION */}
-      <div className={`z-30 grid w-full shrink-0 overflow-hidden transition-[grid-template-rows] duration-300 ease-out ${headerVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-        <div className="min-h-0 overflow-hidden">
-      <header className="w-full border-b border-white/[0.06] bg-[#000000] px-3 py-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5">
+      {/* The safe area is a stationary cover; the token bar moves underneath it. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-50 bg-[#000000]"
+        style={{ height: 'env(safe-area-inset-top)' }}
+      />
+      {/* Token bar overlays the scrolling content and follows scroll distance directly. */}
+      <header
+        className="absolute inset-x-0 z-40 w-full border-b border-white/[0.06] bg-[#000000] px-3 py-2.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5"
+        style={{
+          top: 'env(safe-area-inset-top)',
+          transform: `translate3d(0, -${headerOffset}px, 0)`,
+          willChange: 'transform',
+        }}
+      >
         <div className="flex w-full items-center justify-between gap-3">
-          {/* Token identity sits flush to the left edge of the header. */}
           <div className="flex min-w-0 items-center gap-3">
             <TokenAvatar symbol={activeToken.symbol} size="lg" className="shadow-md" />
             <div className="flex min-w-0 flex-col justify-center gap-1 leading-[1.15]">
@@ -100,32 +110,31 @@ export const TokenDetailPage: React.FC = () => {
               </button>
             </div>
           </div>
-
-          {/* Price and percentage remain aligned to the right. */}
           <div className="shrink-0 text-right leading-none">
-          <div className="font-mono text-base sm:text-lg font-bold text-white tracking-tight">
-            ${currentPrice < 0.001 ? currentPrice.toFixed(8).replace(/\.?0+$/, '') : currentPrice.toFixed(6)}
-          </div>
-          <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${
-            isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'
-          }`}>
-            <span>{isPositive ? '▲ +' : '▼ '}{pnlPct.toFixed(2)}%</span>
-          </div>
+            <div className="font-mono text-base sm:text-lg font-bold text-white tracking-tight">
+              ${currentPrice < 0.001 ? currentPrice.toFixed(8).replace(/\.?0+$/, '') : currentPrice.toFixed(6)}
+            </div>
+            <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+              <span>{isPositive ? '▲ +' : '▼ '}{pnlPct.toFixed(2)}%</span>
+            </div>
           </div>
         </div>
       </header>
-        </div>
-      </div>
 
       <div
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28"
+        style={{ paddingTop: headerHeight }}
         onScroll={(event) => {
           const nextScrollTop = event.currentTarget.scrollTop;
           const delta = nextScrollTop - lastScrollTop.current;
-          if (Math.abs(delta) > 3) {
-            if (delta > 0) setHeaderVisible(false);
-            else setHeaderVisible(true);
-            lastScrollTop.current = nextScrollTop;
+          lastScrollTop.current = nextScrollTop;
+          if (Math.abs(delta) < 0.5) return;
+
+          // Move the bar by the exact scroll delta: no snapping or layout collapse.
+          const nextOffset = Math.max(0, Math.min(headerHeight, headerOffsetRef.current + delta));
+          if (nextOffset !== headerOffsetRef.current) {
+            headerOffsetRef.current = nextOffset;
+            setHeaderOffset(nextOffset);
           }
         }}
       >
