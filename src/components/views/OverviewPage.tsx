@@ -230,7 +230,6 @@ const DEMO_PRICE_PATHS = Array.from({ length: 30 }, (_, index) => {
 const INITIAL_STOP_LOSS_PCT = 8;
 const TAKE_PROFIT_ACTIVATION_PCT = 10;
 const TRAILING_DRAWDOWN_PCT = 8;
-const STOP_CONFIRMATION_SAMPLES = 2;
 
 interface DemoLaunchView extends LaunchView {
   demo: true;
