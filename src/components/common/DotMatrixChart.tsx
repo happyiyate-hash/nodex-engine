@@ -5,6 +5,10 @@ export interface PriceTick {
   time: string;
   timestamp: number;
   price: number;
+  open: number;
+  high: number;
+  low: number;
+  volume: number;
 }
 
 interface DotMatrixChartProps {
@@ -107,7 +111,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       raw.push({ time: now, price: currentPrice, volume: 0 });
     }
 
-    const buckets = new Map<number, PriceTick & { open: number; high: number; low: number; volume: number }>();
+    const buckets = new Map<number, PriceTick>();
     raw.forEach((point) => {
       const bucketTime = Math.floor(point.time / interval) * interval;
       const open = Number.isFinite(point.open) && (point.open as number) > 0 ? point.open as number : point.price;
@@ -123,14 +127,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           open,
           high,
           low,
-          volume: Number(point.volume || 0),
+          volume: Math.max(0, Number(point.volume || 0)),
         });
         return;
       }
       existing.high = Math.max(existing.high, high);
       existing.low = Math.min(existing.low, low);
       existing.price = close;
-      existing.volume += Number(point.volume || 0);
+      // The frontend history currently carries rolling market-volume snapshots,
+      // not guaranteed per-trade deltas. Keep the latest reported value rather
+      // than summing snapshots and artificially inflating candle volume.
+      existing.volume = Math.max(0, Number(point.volume || existing.volume));
     });
 
     // One plotted point per interval. The active bucket's close is replaced
@@ -201,9 +208,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const count = Math.max(2, Math.min(points.length, Math.floor(view.count)));
     const startIndex = Math.max(0, endIndex - count + 1);
     const visible = points.slice(startIndex, endIndex + 1);
-    const prices = visible.map((point) => point.price);
-    const dataMin = Math.min(...prices);
-    const dataMax = Math.max(...prices);
+    // Fit against candle extremes, not just closes, so intrabucket spikes and
+    // wicks can never be clipped outside the visible chart area.
+    const dataMin = Math.min(...visible.map((point) => point.low));
+    const dataMax = Math.max(...visible.map((point) => point.high));
     const dataRange = dataMax - dataMin;
     // Fit the complete visible price window on every update. A minimum span keeps
     // quiet/flat markets readable, while real spikes expand the same shared scale.
@@ -231,7 +239,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const scale = scaleRef.current;
     const scaleRange = Math.max(scale.max - scale.min, Number.EPSILON);
     const getY = (price: number) => padTop + plotH - ((price - scale.min) / scaleRange) * plotH;
-    const getX = (index: number) => padLeft + (visible.length <= 1 ? 1 : index / (visible.length - 1)) * plotW;
+    // Keep a small live-side breathing margin. Points are distributed evenly
+    // across the remaining viewport instead of touching the right plot edge.
+    const rightLiveInset = Math.min(14, plotW * 0.06);
+    const livePlotW = Math.max(1, plotW - rightLiveInset);
+    const getX = (index: number) => padLeft + (visible.length <= 1 ? livePlotW : index / (visible.length - 1)) * livePlotW;
 
     // Nice-number price axis; ticks are generated from the active scale range.
     const ticks = getNiceTicks(scale.min, scale.max, 5);
@@ -388,7 +400,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const x = clientX - rect.left;
     const padLeft = 12;
     const padRight = 76;
-    const plotW = Math.max(1, containerWidth - padLeft - padRight);
+    const plotW = Math.max(1, containerWidth - padLeft - padRight - Math.min(14, Math.max(1, containerWidth - padLeft - padRight) * 0.06));
     if (x < padLeft || x > containerWidth - padRight) {
       setHoverIndex(null);
       onPriceHover?.(null, null);
@@ -417,7 +429,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const delta = event.clientX - drag.x;
       if (Math.abs(delta) > 4) drag.moved = true;
       if (drag.moved) {
-        const plotW = Math.max(1, containerWidth - 88);
+            const plotW = Math.max(1, containerWidth - 88 - Math.min(14, Math.max(1, containerWidth - 88) * 0.06));
         const shift = Math.round((-delta / plotW) * Math.max(2, view.count));
         const end = Math.max(1, Math.min(points.length - 1, drag.end + shift));
         setView((previous) => ({ ...previous, end }));
