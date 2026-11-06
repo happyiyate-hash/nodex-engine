@@ -70,7 +70,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [section, setSection] = useState<SettingsSection>('home');
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
-  const [websocketUrl, setWebsocketUrl] = useState(settings.wsUrl);
+  const [websocketUrl, setWebsocketUrl] = useState(settings.wsUrlOverride);
   const [domain, setDomain] = useState(settings.domain);
   const [publicIp, setPublicIp] = useState(settings.publicIp);
   const [operatorKey, setOperatorKey] = useState(settings.adminApiKey);
@@ -136,7 +136,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
   useEffect(() => {
     setBackendUrl(settings.backendUrl);
-    setWebsocketUrl(settings.wsUrl);
+    setWebsocketUrl(settings.wsUrlOverride);
     setDomain(settings.domain);
     setPublicIp(settings.publicIp);
     setOperatorKey(settings.adminApiKey);
@@ -160,7 +160,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       }
       updateSettings({
         backendUrl: backendUrl.trim().replace(/\/$/, ''),
-        wsUrl: cleanWsUrl,
+        wsUrlOverride: cleanWsUrl,
         domain: domain.trim(),
         publicIp: publicIp.trim(),
         adminApiKey: operatorKey.trim(),
