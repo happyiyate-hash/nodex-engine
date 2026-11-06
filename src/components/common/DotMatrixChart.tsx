@@ -180,8 +180,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, w, h);
 
-    const padTop = 35;
-    const padBottom = 35;
+    // Let the plotted data occupy more of the existing canvas without moving
+    // the timeframe/style controls or changing the sections below the chart.
+    const padTop = 18;
+    const padBottom = 18;
     const padLeft = 12;
     const padRight = 76;
     const plotW = Math.max(1, w - padLeft - padRight);
