@@ -177,6 +177,7 @@ export const TokenDetailPage: React.FC = () => {
         <DotMatrixChart
           currentPrice={activeToken.current_price_usd}
           entryPrice={entryPriceUsd}
+          priceHistory={activeToken.price_history_5m}
           isPositive={isPositive}
           timeframe={timeframe}
           height={320}
