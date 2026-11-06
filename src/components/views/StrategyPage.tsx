@@ -81,10 +81,10 @@ export const StrategyPage: React.FC = () => {
         className="flex min-h-[76px] min-w-0 flex-1 flex-col justify-between p-3 text-left transition-colors hover:bg-white/[0.035] active:bg-white/[0.06]"
       >
         <span className="flex w-full min-w-0 items-center justify-between gap-2">
-          <span className="truncate text-[11px] font-medium text-white/55">{title}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40" />
+          <span className={`truncate text-[13px] font-bold tracking-tight ${target === 'stop_loss_pct' ? 'text-rose-300' : 'text-emerald-300'}`}>{title}</span>
+          <ChevronDown className={`h-3.5 w-3.5 shrink-0 ${target === 'stop_loss_pct' ? 'text-rose-300/65' : 'text-emerald-300/65'}`} />
         </span>
-        <span className={`mt-2 text-[14px] font-semibold leading-none tabular-nums ${enabled ? 'text-white/90' : 'text-white/35'}`}>
+        <span className={`mt-1.5 text-[13px] font-semibold leading-none tabular-nums ${enabled ? 'text-white/90' : 'text-white/35'}`}>
           {enabled ? `${value}%` : 'Disabled'}
         </span>
       </button>
@@ -103,13 +103,17 @@ export const StrategyPage: React.FC = () => {
           <SlidersHorizontal className="h-4 w-4 text-white/50" />
           <h3 className="text-[12px] font-semibold text-white/90">Exit targets</h3>
         </div>
-        <div className="my-3 flex overflow-hidden rounded-lg border border-white/[0.12] divide-x divide-white/[0.12]">
-          {targetCell('stop_loss_pct', 'Stop loss')}
-          {targetCell('take_profit_pct', 'Take profit')}
+        <div className="mx-[-1rem] flex w-[calc(100%+2rem)] overflow-hidden border-x border-b border-white/[0.12] divide-x divide-white/[0.12]">
+          <div className="min-w-0 flex-1 bg-rose-500/[0.075]">
+            {targetCell('stop_loss_pct', 'Stop loss')}
+          </div>
+          <div className="min-w-0 flex-1 bg-emerald-500/[0.075]">
+            {targetCell('take_profit_pct', 'Take profit')}
+          </div>
         </div>
       </section>
 
-      <section className="pt-5">
+      <section className="pt-3">
         <div className="flex items-center gap-2 border-b border-white/[0.08] pb-2">
           <SlidersHorizontal className="h-4 w-4 text-white/50" />
           <h3 className="text-[12px] font-semibold text-white/90">Entry & position limits</h3>
