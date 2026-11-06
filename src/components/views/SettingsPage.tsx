@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { Pause, Play } from 'lucide-react';
-import { useTerminal } from '../../context/TerminalContext';
 
 export const SettingsPage: React.FC = () => {
-  const { engineStatus } = useTerminal();
-  // Local mock control for the Settings UI; this does not send commands to the backend yet.
-  const [isRunning, setIsRunning] = useState(engineStatus.running);
+  // UI-only mock until the real engine pause/resume action is connected.
+  const [isRunning, setIsRunning] = useState(true);
 
   return (
     <div className="min-h-[calc(100dvh-6rem)] w-full bg-black text-white">
