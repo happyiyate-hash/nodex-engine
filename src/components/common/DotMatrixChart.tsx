@@ -143,7 +143,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     for (let y = 8; y < h; y += dotSpacing) {
       const norm = y / h;
       const alpha = norm < 0.25 ? 0.12 * (norm / 0.25) : norm > 0.75 ? 0.12 * ((1 - norm) / 0.25) : 0.12;
-      ctx.fillStyle = \`rgba(255,255,255,\${Math.max(0, alpha).toFixed(3)})\`;
+      ctx.fillStyle = `rgba(255,255,255,${Math.max(0, alpha).toFixed(3)})`;
       for (let x = 8; x < w; x += dotSpacing) {
         ctx.beginPath();
         ctx.arc(x, y, 0.9, 0, Math.PI * 2);
