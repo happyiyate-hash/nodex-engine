@@ -42,7 +42,7 @@ export const TokenDetailPage: React.FC = () => {
   const hasMarketPrice = liveTokenPrice > 0;
   const formatTokenPrice = (value: number) => priceCurrency === 'SOL'
     ? `${value.toFixed(10).replace(/\.?0+$/, '')} SOL`
-    : `${value.toFixed(8).replace(/\.?0+$/, '')}`;
+    : `$${value.toFixed(8).replace(/\\.?0+$/, '')}`;
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
