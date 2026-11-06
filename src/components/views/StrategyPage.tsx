@@ -51,11 +51,21 @@ const ToggleRow = ({
 export const StrategyPage: React.FC = () => {
   const { strategyConfig, strategyDecisions, openTokenDetailByMint } = useTerminal();
   const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig });
+  const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
   const [customValue, setCustomValue] = useState('');
 
+  const hasUnappliedChanges = JSON.stringify(form) !== JSON.stringify(appliedConfig);
+
   const update = (key: keyof StrategyConfig, value: number | boolean) => {
     setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const applySettings = () => {
+    // Mock engine handoff: snapshot the complete strategy payload.
+    // Replace this local acknowledgement with the backend request when the endpoint is ready.
+    const payload = JSON.parse(JSON.stringify(form)) as StrategyConfig;
+    setAppliedConfig(payload);
   };
 
   const openTarget = (target: RiskTarget) => {
@@ -92,7 +102,7 @@ export const StrategyPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full pb-8 text-white">
+    <div className="w-full pb-24 text-white">
       <div className="border-b border-white/[0.08] pb-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Paper trading</p>
         <p className="mt-1 text-[11px] leading-relaxed text-white/45">Set risk targets, entry limits and qualification rules for simulated positions.</p>
@@ -176,6 +186,18 @@ export const StrategyPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {hasUnappliedChanges && (
+        <button
+          type="button"
+          onClick={applySettings}
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[70] inline-flex h-11 min-w-[112px] items-center justify-center gap-2 rounded-full bg-white px-5 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97]"
+          aria-label="Apply strategy configuration changes"
+        >
+          <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+          Apply
+        </button>
+      )}
 
       {activeTarget && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveTarget(null); }}>
