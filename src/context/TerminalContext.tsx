@@ -28,6 +28,7 @@ interface TerminalContextType {
   selectedToken: DiscoveredToken | null;
   setSelectedToken: (token: DiscoveredToken | null) => void;
   openTokenDetailByMint: (mint: string, fallback?: Partial<DiscoveredToken>) => void;
+  loadTokenSnapshot: (mint: string) => Promise<void>;
   closeTokenDetail: () => void;
   strategyConfig: StrategyConfig;
   strategyDecisions: StrategyDecision[];
@@ -86,10 +87,10 @@ function readPersistedState(): PersistedTerminalState {
   catch { return {}; }
 }
 const defaultSafetyDetails: DiscoveredToken['safety_details'] = {
-  mint_authority: 'active', freeze_authority: 'active', top_10_holders_pct: 0,
-  liquidity_locked: false, liquidity_locked_pct: 0, honeypot_risk: 'low',
+  mint_authority: 'unknown', freeze_authority: 'unknown', top_10_holders_pct: 0,
+  liquidity_locked: false, liquidity_locked_pct: 0, honeypot_risk: 'unknown',
   dev_holding_pct: 0, dev_sold_all: false, bundled_snipers_detected: false,
-  risk_flags: [], safety_score: 0, holders_count: 0, creator_reputation: 'first_deploy', largest_holders: [],
+  risk_flags: [], safety_score: 0, holders_count: 0, creator_reputation: 'unknown', largest_holders: [],
 };
 function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEvent): DiscoveredToken | null {
   const data = event.data || {};
@@ -487,28 +488,28 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const venueValue = String(fallback.venue || metadata.venue || launch?.source || 'pump.fun').toLowerCase();
     const venue = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
     const safetyDetails = {
-      mint_authority: 'active' as const,
-      freeze_authority: 'active' as const,
+      mint_authority: 'unknown' as const,
+      freeze_authority: 'unknown' as const,
       top_10_holders_pct: 0,
       liquidity_locked: false,
       liquidity_locked_pct: 0,
-      honeypot_risk: 'low' as const,
+      honeypot_risk: 'unknown' as const,
       dev_holding_pct: 0,
       dev_sold_all: false,
       bundled_snipers_detected: false,
       risk_flags: [],
       safety_score: 0,
       holders_count: 0,
-      creator_reputation: 'first_deploy' as const,
+      creator_reputation: 'unknown' as const,
       largest_holders: [],
       ...(fallback.safety_details || metadata.safety_details || {}),
     };
     const detailToken: DiscoveredToken = {
       mint,
-      name: String(fallback.name || metadata.name || metadata.token_name || 'Unknown token'),
-      symbol: String(fallback.symbol || metadata.symbol || metadata.token_symbol || 'UNKNOWN'),
+      name: String(fallback.name || metadata.name || metadata.token_name || ''),
+      symbol: String(fallback.symbol || metadata.symbol || metadata.token_symbol || ''),
       creator_wallet: String(fallback.creator_wallet || metadata.creator_wallet || metadata.creator_address || launch?.creator_address || ''),
-      launch_time: String(fallback.launch_time || launch?.detected_at || relatedEvent?.timestamp || new Date().toISOString()),
+      launch_time: String(fallback.launch_time || launch?.detected_at || relatedEvent?.timestamp || ''),
       current_price_usd: Number(fallback.current_price_usd ?? metadata.current_price_usd ?? metadata.price_usd ?? 0),
       current_price_sol: Number(fallback.current_price_sol ?? metadata.current_price_sol ?? 0),
       market_cap_usd: Number(fallback.market_cap_usd ?? metadata.market_cap_usd ?? metadata.market_cap ?? 0),
@@ -520,13 +521,27 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       bonding_curve_progress_pct: Number(fallback.bonding_curve_progress_pct ?? metadata.bonding_curve_progress_pct ?? 0),
       venue,
       safety_status: fallback.safety_status || 'warning',
-      qualification_status: fallback.qualification_status || 'bought_paper',
+      qualification_status: fallback.qualification_status || 'newly_detected',
       safety_details: safetyDetails,
       price_history_5m: fallback.price_history_5m || [],
     };
     setSelectedToken(detailToken);
     setBackendError(null);
   };
+  const loadTokenSnapshot = useCallback(async (mint: string) => {
+    try {
+      const snapshot = await apiClient.getTokenState(mint);
+      const mapped = mapTokenDetailSnapshot(snapshot);
+      if (!mapped) return;
+      setTokens((previous) => [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500));
+      setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(snapshot, previous) || previous : previous);
+      setBackendError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // A token that has not passed backend approval has no detail snapshot yet.
+      if (!message.includes('404')) setBackendError(message);
+    }
+  }, []);
   const closeTokenDetail = () => setSelectedToken(null);
   const navigateToTab = (tab: NavigationTab) => { setSelectedToken(null); setActiveTab(tab); };
 
@@ -534,7 +549,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <TerminalContext.Provider value={{
       activeTab, setActiveTab: navigateToTab, engineStatus, summary, positions, tokens,
       events, launches, paperWallet, profile, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
-      openTokenDetailByMint, closeTokenDetail, strategyConfig, strategyDecisions,
+      openTokenDetailByMint, loadTokenSnapshot, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
       saveStrategyConfig, updateSettings, updateConnectionDraft, isMobilePreview, setIsMobilePreview, backendError,
