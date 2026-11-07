@@ -42,7 +42,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   };
 
   return (
-    <div className="relative w-full space-y-7 pb-8" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)' }}>
+    <div className="relative min-h-full w-full space-y-4 bg-black px-4 pb-8 pt-[calc(env(safe-area-inset-top)+14px)] text-white">
       <div className="pointer-events-none fixed right-4 top-[calc(env(safe-area-inset-top)+12px)] z-50">
         <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-[#17130c]/95 px-3 py-2 text-[10px] font-semibold text-amber-200 shadow-[0_8px_28px_rgba(0,0,0,.45)] backdrop-blur-xl">
           <span className="relative flex h-2 w-2">
@@ -53,27 +53,22 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         </span>
       </div>
 
-      <div className="pt-8">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">Storage</p>
-            <h1 className="mt-1 text-[19px] font-semibold tracking-tight text-white">Overview</h1>
-          </div>
+      <div>
+        <div className="mb-3 flex items-center justify-end gap-3">
           <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh storage overview" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65 transition-colors hover:bg-white/[0.08] disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
 
-        <section className="relative overflow-hidden rounded-[26px] border border-white/[0.12] bg-gradient-to-br from-[#202329] via-[#141619] to-[#101113] px-5 pb-5 pt-5 shadow-[0_18px_50px_rgba(0,0,0,.32)]">
-          <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-sky-400/[0.09] blur-3xl" />
-          <div className="relative">
+        <section className="overflow-hidden rounded-xl border border-white/[0.07] bg-[#181818] px-4 py-3.5 shadow-[0_8px_24px_rgba(0,0,0,.18)]">
+          <div>
             <div className="flex items-center gap-2 text-white/55">
               <HardDrive className="h-4 w-4" />
               <span className="text-[11px] font-medium">Root storage capacity</span>
             </div>
-            <div className="mt-4 flex items-end justify-between gap-4">
+            <div className="mt-2.5 flex items-end justify-between gap-4">
               <div>
-                <p className="text-[32px] font-semibold leading-none tracking-tight text-white tabular-nums">— <span className="text-[13px] font-medium text-white/45">GB free</span></p>
+                <p className="text-[25px] font-semibold leading-none tracking-tight text-white tabular-nums">— <span className="text-[13px] font-medium text-white/45">GB free</span></p>
                 <p className="mt-2 text-[10px] text-white/40">Remaining storage</p>
               </div>
               <div className="text-right">
@@ -81,14 +76,14 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 <p className="mt-2 text-[10px] text-white/40">Total capacity</p>
               </div>
             </div>
-            <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-white/[0.10]">
+            <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-white/[0.10]">
               <div className="h-full w-0 rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300" />
             </div>
-            <div className="mt-2.5 flex items-center justify-between text-[10px] text-white/45">
+            <div className="mt-2 flex items-center justify-between text-[10px] text-white/45">
               <span>Used: — GB</span>
               <span>—% used</span>
             </div>
-            <div className="mt-5 flex items-start gap-2 border-t border-white/[0.09] pt-3">
+            <div className="mt-3 flex items-start gap-2 border-t border-white/[0.07] pt-2.5">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/80" />
               <p className="text-[10px] leading-relaxed text-white/45">Filesystem capacity is shown separately from the attached EC2 disk size. Values will populate from the backend.</p>
             </div>
@@ -97,7 +92,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       </div>
 
       <section>
-        <div className="mb-3 flex items-end justify-between gap-3">
+        <div className="mb-2.5 flex items-end justify-between gap-3">
           <div>
             <h2 className="text-[14px] font-semibold text-white">Storage breakdown</h2>
             <p className="mt-1 text-[10px] text-white/40">Usage by engine data category</p>
@@ -107,9 +102,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
 
         <div className="divide-y divide-white/[0.075]">
           {categories.map(({ id, title, description, icon: Icon, accent, tint, cleanable, note }) => (
-            <div key={id} className="py-3.5">
+            <div key={id} className="py-2.5">
               <div className="flex items-center gap-3">
-                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] ${accent}`}>
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] ${accent}`}>
                   <Icon className="h-[17px] w-[17px]" strokeWidth={1.8} />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -129,10 +124,10 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   )}
                 </div>
               </div>
-              <div className="ml-12 mt-3 h-1 overflow-hidden rounded-full bg-white/[0.07]">
+              <div className="ml-11 mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
                 <div className={`h-full w-0 rounded-full ${tint}`} />
               </div>
-              <p className="ml-12 mt-1.5 text-[9px] text-white/30">Not measured</p>
+              <p className="ml-11 mt-1 text-[9px] text-white/30">Not measured</p>
             </div>
           ))}
         </div>
