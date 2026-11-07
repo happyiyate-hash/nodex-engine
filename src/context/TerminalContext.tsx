@@ -6,6 +6,7 @@ import {
 import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/rest';
 import { backendService } from '../services/backend';
 import { normalizeBackendEvent, wsService } from '../services/websocket';
+import { engineEventStore } from '../services/engine-event-store';
 
 export type NavigationTab =
   | 'overview' | 'positions' | 'live_feed' | 'event_monitor'
@@ -281,10 +282,46 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   };
 }
 
+function mapDashboardSummary(profile: NodeXProfileSnapshot | null, positions: Position[] = []): DashboardSummary {
+  const portfolio = (profile?.portfolio || {}) as Record<string, any>;
+  const n = (...values: unknown[]) => {
+    for (const value of values) {
+      const parsed = Number(value);
+      if (value !== null && value !== undefined && Number.isFinite(parsed)) return parsed;
+    }
+    return 0;
+  };
+  const openPositions = positions.filter((position) => position.status === 'OPEN');
+  const investedUsd = n(portfolio.total_invested_usd, portfolio.invested_capital_usd, portfolio.total_cost_basis_usd);
+  const unrealizedUsd = n(portfolio.unrealized_pnl_usd, portfolio.unrealised_pnl_usd);
+  const realizedUsd = n(portfolio.realized_pnl_usd, portfolio.realised_pnl_usd);
+  const totalUsd = n(portfolio.total_value_usd, portfolio.portfolio_value_usd, portfolio.current_value_usd);
+  const investedSol = n(portfolio.total_invested_sol, portfolio.invested_sol, portfolio.total_cost_basis_sol);
+  const unrealizedSol = n(portfolio.unrealized_pnl_sol, portfolio.unrealised_pnl_sol);
+  const realizedSol = n(portfolio.realized_pnl_sol, portfolio.realised_pnl_sol);
+  const totalSol = n(portfolio.total_value_sol, portfolio.portfolio_value_sol, portfolio.current_value_sol);
+  return {
+    ...emptySummary,
+    total_portfolio_value_usd: totalUsd,
+    total_portfolio_value_sol: totalSol,
+    total_invested_capital_usd: investedUsd,
+    open_positions_count: n(portfolio.position_count, openPositions.length),
+    realised_pnl_usd: realizedUsd,
+    realised_pnl_pct: n(portfolio.realized_pnl_pct, portfolio.realised_pnl_pct),
+    unrealised_pnl_usd: unrealizedUsd,
+    unrealised_pnl_pct: n(portfolio.unrealized_pnl_pct, portfolio.unrealised_pnl_pct),
+    total_pnl_usd: n(portfolio.total_pnl_usd, realizedUsd + unrealizedUsd),
+    total_pnl_pct: n(portfolio.total_pnl_pct),
+    win_rate_pct: n(portfolio.win_rate_pct),
+    completed_trades_count: n(portfolio.completed_trades_count, portfolio.closed_positions_count),
+    sol_price_usd: n(portfolio.sol_price_usd, (profile?.wallet as any)?.sol_price_usd),
+  };
+}
+
 export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
   const [engineStatus, setEngineStatus] = useState<EngineStatus>(emptyStatus);
-  const [summary] = useState<DashboardSummary>(emptySummary);
+  const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [positions, setPositions] = useState<Position[]>([]);
   const [tokens, setTokens] = useState<DiscoveredToken[]>(() => readPersistedState().tokens || []);
   const [launches, setLaunches] = useState<TokenLaunchRecord[]>(() => readPersistedState().launches || []);
@@ -309,9 +346,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     backendService.loadInitialData().then((snapshot) => {
       if (!active) return;
       if (snapshot.profile) {
-        setProfile(snapshot.profile);
-        const rawPositions = snapshot.profile.portfolio?.positions;
-        if (Array.isArray(rawPositions)) setPositions(rawPositions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null));
+        const runtime = engineEventStore.hydrate(snapshot.profile);
+        setProfile(runtime.profile);
+        const mappedPositions = runtime.positions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null);
+        setPositions(mappedPositions);
+        setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
       }
       if (snapshot.paperWallet) setPaperWallet(snapshot.paperWallet);
       if (snapshot.launches) setLaunches(snapshot.launches);
@@ -331,6 +370,18 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setEngineStatus((previous) => ({ ...previous, ws_status: status }));
     });
     const unsubscribeEvents = wsService.subscribe((event) => {
+      if ([
+        'profile_updated', 'position_updated', 'trade_opened', 'trade_closed',
+        'paper_buy_executed', 'paper_sell_executed', 'portfolio_summary_updated',
+        'portfolio_updated', 'wallet_updated', 'wallet_balance_updated', 'balance_updated',
+        'market_tick', 'market_price_update', 'token_market_update',
+      ].includes(event.event_type)) {
+        const runtime = engineEventStore.apply(event);
+        if (runtime.profile) setProfile(runtime.profile);
+        const mappedPositions = runtime.positions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null);
+        setPositions(mappedPositions);
+        setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
+      }
       if (event.event_type === 'launch_snapshot') {
         const snapshot = Array.isArray(event.data.launches) ? event.data.launches : [];
         setLaunches(snapshot as TokenLaunchRecord[]);
@@ -385,23 +436,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setTokens((previous) => previous.map((token) => token.mint === mint ? append(token) : token));
           setSelectedToken((previous) => previous?.mint === mint ? append(previous) : previous);
         }
-      }
-      if (event.event_type === 'profile_updated') {
-        const nextProfile = event.data as NodeXProfileSnapshot;
-        setProfile(nextProfile);
-        const rawPositions = nextProfile.portfolio?.positions;
-        if (Array.isArray(rawPositions)) setPositions(rawPositions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null));
-      }
-      if (event.event_type === 'position_updated') {
-        const rawPosition = (event.data?.position || event.data) as Record<string, any>;
-        const mappedPosition = mapBackendPosition(rawPosition);
-        if (mappedPosition) setPositions((previous) => [mappedPosition, ...previous.filter((position) => position.id !== mappedPosition.id)]);
-      }
-      if (event.event_type === 'portfolio_summary_updated') {
-        setProfile((previous) => ({
-          ...(previous || {}),
-          portfolio: { ...(previous?.portfolio || {}), ...(event.data || {}) },
-        }));
       }
       if (event.event_type === 'token_removed') {
         const mint = String(event.data?.mint_address || '');
