@@ -215,14 +215,16 @@ const statusStyle: Record<PipelineStatus, string> = {
 };
 
 export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
-  const { launches, events, engineStatus, openTokenDetailByMint, summary, paperWallet, positions } = useTerminal();
-  const portfolioValue = summary.total_portfolio_value_usd;
-  const profitLoss = summary.total_pnl_usd;
-  const profitLossPct = summary.total_pnl_pct;
+  const { launches, events, engineStatus, openTokenDetailByMint, paperWallet, profile, positions } = useTerminal();
   const availableBalanceSol = paperWallet ? paperWallet.available_balance_lamports / 1_000_000_000 : null;
   const investedBalanceSol = paperWallet ? paperWallet.invested_balance_lamports / 1_000_000_000 : null;
-  const openPositionCount = positions.filter((position) => position.status === 'OPEN').length;
-  const hourlyProfitLoss = 0;
+  const markedPositionsSol = Number(profile?.portfolio?.total_value_sol || 0);
+  const portfolioValue = (availableBalanceSol ?? 0) + markedPositionsSol;
+  const profitLoss = Number(profile?.portfolio?.unrealized_pnl_sol || 0) + Number(profile?.portfolio?.realized_pnl_sol || 0);
+  const startingBalanceSol = paperWallet ? paperWallet.starting_balance_lamports / 1_000_000_000 : 0;
+  const profitLossPct = startingBalanceSol > 0 ? (profitLoss / startingBalanceSol) * 100 : 0;
+  const openPositionCount = Number(profile?.portfolio?.position_count ?? positions.filter((position) => position.status === 'OPEN').length);
+  const hourlyProfitLoss: number | null = null;
   const portfolioFlash: ChangeDirection = null;
   const balanceDirection: ChangeDirection = null;
   const [filter, setFilter] = useState<FeedFilter>('detected');
@@ -258,9 +260,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
   const connected = engineStatus.ws_status === 'connected' && engineStatus.running;
   const engineLabel = !engineStatus.running ? 'ENGINE PAUSED' : engineStatus.ws_status === 'connected' ? 'ENGINE ONLINE' : 'RECONNECTING';
-  const formatUsd = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatSol = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   const isProfitable = profitLoss >= 0;
-  const formattedPortfolio = formatUsd(portfolioValue);
+  const formattedPortfolio = formatSol(portfolioValue);
 
   const copyMint = async (event: React.MouseEvent, mint: string) => {
     event.stopPropagation();
@@ -284,7 +286,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
               <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
               <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
-                <span className="mr-0.5 shrink-0 text-white/65" style={{ fontSize: 'clamp(14px, 5.8vw, 25px)', lineHeight: 1 }}>$</span>
+                <span className="mr-1 shrink-0 text-[10px] font-semibold text-white/45">SOL</span>
                 <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
               <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available {availableBalanceSol == null ? '—' : `${availableBalanceSol.toFixed(4)} SOL`}</span><span>Invested {investedBalanceSol == null ? '—' : `${investedBalanceSol.toFixed(4)} SOL`}</span></div>
@@ -311,11 +313,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             </div>
             <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
               <div className={`truncate text-[19px] font-semibold leading-none tabular-nums ${hourlyProfitLoss >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
-                {hourlyProfitLoss >= 0 ? '+' : '−'}${formatUsd(Math.abs(hourlyProfitLoss))}
+                {hourlyProfitLoss == null ? '—' : `${hourlyProfitLoss >= 0 ? '+' : '−'}${formatSol(Math.abs(hourlyProfitLoss))} SOL`}
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-2">
                 <span className="text-[9px] uppercase tracking-[0.09em] text-white/40">P&L · 1H</span>
-                <span className="text-[8px] text-white/25">Rolling hour</span>
+                <span className="text-[8px] text-white/25">No 1h snapshot</span>
               </div>
             </div>
           </div>
