@@ -104,8 +104,8 @@ export class NodeXWebSocketService {
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
           this.lastMessageAt=Date.now();if(raw.type==='heartbeat')return;
           recordLiveEvent(raw.type, raw);
-          const visibleTypes=new Set(['connection_status','engine_state','launch_detected','launch_snapshot','token_removed','token_approval_pending','token_scan_started','token_scan_update','token_scan_progress','token_state_updated','token_detail_snapshot','market_price_update','market_tick','token_market_update','token_statistics_update','chart_history_snapshot','chart_candle_update','chart_candle_closed','position_updated','portfolio_summary_updated','profile_updated','price_updated','liquidity_updated','token_metadata_updated','new_token_detected','new_token','buy_signal_generated','paper_buy_executed','paper_buy_failed','sell_signal_generated','paper_sell_executed','safety_check_completed','safety_check_passed','pump_fun_migration_detected','pumpswap_pool_discovered','strategy_rejected_token','diagnostic','provider_status','market_account_update','market_curve_completed','market_monitor_status','market_subscription_requested','market_subscription_active','creator_history_started','creator_history_update','stream_warning','reconnect_recovery_status','pumpswap_activity','pumpswap_volume_update','command_rejected','token_unsubscribed','chart_history_snapshot']);
-          if(!visibleTypes.has(raw.type))return;
+// The backend already filters its browser stream to approved application events.
+          // Forward every typed event so pages do not silently lose new backend event types.
           const event=normalizeBackendEvent(raw);if(this.seen.has(event.event_id))return;
           this.seen.add(event.event_id);if(this.seen.size>3000)this.seen.delete(this.seen.values().next().value as string);
           this.dispatch(event);
