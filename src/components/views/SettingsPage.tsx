@@ -149,7 +149,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setConnectionErrorField('');
     setConnectionSuccess(false);
     try {
-      const cleanBackendUrl = backendUrl.trim().replace(/\\/$/, '');
+      const cleanBackendUrl = backendUrl.trim().replace(/\/$/, '');
       if (!cleanBackendUrl) {
         setConnectionErrorField('url');
         throw new Error('Enter the REST API server URL.');
