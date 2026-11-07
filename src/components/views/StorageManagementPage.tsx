@@ -1,8 +1,21 @@
 import React, { useState } from 'react';
 import {
   Activity, AlertTriangle, Archive, ArrowLeft, CheckCircle2, Coins, Database,
-  FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X,
+  FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X, KeyRound,
 } from 'lucide-react';
+
+type LocalStorageEntry = { key: string; bytes: number; group: string };
+const readLocalStorageEntries = (): LocalStorageEntry[] => {
+  try {
+    return Object.keys(window.localStorage).map((key) => {
+      const value = window.localStorage.getItem(key) ?? '';
+      const normalized = key.toLowerCase();
+      const group = /token|auth|session|credential|wallet|key/.test(normalized) ? 'Credentials & tokens' : /cache|temp|recent|history/.test(normalized) ? 'Cache & history' : /setting|preference|theme|config/.test(normalized) ? 'Settings' : 'Other';
+      return { key, bytes: new Blob([key, value]).size, group };
+    }).sort((a, b) => a.group.localeCompare(b.group) || a.key.localeCompare(b.key));
+  } catch { return []; }
+};
+const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 
 type StorageCategory = {
   id: string;
@@ -22,6 +35,7 @@ const categories: StorageCategory[] = [
   { id: 'engine-logs', title: 'Engine logs', description: 'NodeX output, warnings and backend errors', icon: FileText, accent: 'text-amber-300', tint: 'bg-amber-400', cleanable: false, note: 'Engine output is currently captured by the system journal. It cannot be cleaned separately yet.' },
   { id: 'system-logs', title: 'System logs', description: 'Linux journal and service messages', icon: Terminal, accent: 'text-rose-300', tint: 'bg-rose-400', cleanable: true, note: 'This operation affects archived system-wide journal data, not only NodeX logs.' },
   { id: 'database', title: 'SQLite database', description: 'Database, write-ahead log and shared memory', icon: Database, accent: 'text-emerald-300', tint: 'bg-emerald-400', cleanable: false, note: 'Database files, wallet data and paper-trading history are protected.' },
+  { id: 'local-storage', title: 'Local storage', description: 'Browser tokens, settings, cache and app records', icon: KeyRound, accent: 'text-fuchsia-300', tint: 'bg-fuchsia-400', cleanable: true, note: 'Clears all browser localStorage for this app origin. This may sign you out and reset locally saved preferences.' },
   { id: 'other', title: 'Other files', description: 'Remaining engine and host files', icon: Folder, accent: 'text-orange-300', tint: 'bg-orange-400', cleanable: false, note: 'Other files must be inspected before any cleanup.' },
 ];
 
@@ -29,14 +43,25 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const [selected, setSelected] = useState<StorageCategory | null>(null);
   const [notice, setNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [localStorageEntries, setLocalStorageEntries] = useState<LocalStorageEntry[]>(() => readLocalStorageEntries());
 
   const refresh = async () => {
     setRefreshing(true);
-    setNotice('Live storage readings will appear here when the app is connected to the storage overview API.');
+    setLocalStorageEntries(readLocalStorageEntries());
+    setNotice('Local storage inventory refreshed. Server storage readings still require the storage overview API.');
     window.setTimeout(() => setRefreshing(false), 350);
   };
 
   const confirmCleanup = () => {
+    if (selected?.id === 'local-storage') {
+      try {
+        window.localStorage.clear();
+        setLocalStorageEntries([]);
+        setSelected(null);
+        setNotice('Local storage cleared. You may need to sign in again or restore your preferences.');
+      } catch { setNotice('The browser blocked local storage cleanup.'); }
+      return;
+    }
     setSelected(null);
     setNotice('No files were deleted. Connect the approved cleanup operation before running this action.');
   };
@@ -91,7 +116,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             <h2 className="text-[14px] font-semibold text-white">Storage breakdown</h2>
             <p className="mt-1 text-[10px] text-white/40">Usage by engine data category</p>
           </div>
-          <span className="text-[9px] text-white/30">7 categories</span>
+          <span className="text-[9px] text-white/30">8 categories</span>
         </div>
 
         <div className="divide-y divide-white/[0.075]">
@@ -104,7 +129,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[12px] font-semibold text-white/90">{title}</p>
-                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">—</p>
+                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">{id === "local-storage" ? formatBytes(localStorageEntries.reduce((sum, entry) => sum + entry.bytes, 0)) : "—"}</p>
                   </div>
                   <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
                 </div>
@@ -121,7 +146,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <div className="ml-11 mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
                 <div className={`h-full w-0 rounded-full ${tint}`} />
               </div>
-              <p className="ml-11 mt-1 text-[9px] text-white/30">Not measured</p>
+              <p className="ml-11 mt-1 text-[9px] text-white/30">{id === "local-storage" ? `${localStorageEntries.length} stored items · browser localStorage` : "Not measured"}</p>
             </div>
           ))}
         </div>
@@ -154,11 +179,23 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">Confirm {selected.title.toLowerCase()} cleanup?</h2>
             <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
             <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/[0.045] p-3">
-              <p className="text-[10px] leading-relaxed text-amber-100/75">Cleanup is not connected to this control yet. Confirming will not delete anything.</p>
+              {selected.id === "local-storage" ? (
+                <div>
+                  <p className="text-[10px] leading-relaxed text-amber-100/75">This permanently removes all {localStorageEntries.length} localStorage items for this app in this browser. It does not delete server files or the SQLite database.</p>
+                  <div className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
+                    {localStorageEntries.length === 0 ? <p className="text-[10px] text-white/40">No local storage items found.</p> : localStorageEntries.map((entry) => (
+                      <div key={entry.key} className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-2 text-[10px]">
+                        <div className="min-w-0"><p className="truncate text-white/75">{entry.key}</p><p className="mt-0.5 text-[9px] text-white/35">{entry.group}</p></div>
+                        <span className="shrink-0 tabular-nums text-white/45">{formatBytes(entry.bytes)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : <p className="text-[10px] leading-relaxed text-amber-100/75">Cleanup is not connected to this control yet. Confirming will not delete anything.</p>}
             </div>
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => setSelected(null)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">Acknowledge</button>
+              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">{selected.id === "local-storage" ? "Clear all local storage" : "Acknowledge"}</button>
             </div>
           </section>
         </div>
