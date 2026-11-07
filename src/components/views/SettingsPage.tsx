@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight,
   Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
-  SlidersHorizontal, Trash2, Wifi, Eye, EyeOff,
+  SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu, ArrowRight,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/api';
@@ -325,6 +325,13 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </div>
           </div>
         </>
+      ) : section === 'connections' ? (
+        <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.06] bg-black/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
+          <div className="flex min-h-10 items-center">
+            <h1 className="text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
+          </div>
+          <p className="mt-0.5 text-[10px] text-white/40">Connect this app to your NodeX backend.</p>
+        </header>
       ) : (
         <SectionHeader
           title={pageTitle}
@@ -391,48 +398,48 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       )}
 
       {section === 'connections' && (
-        <div className="space-y-5 pt-5 pb-28">
+        <div className="space-y-5 pt-5 pb-8">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">System connectivity</p>
             <p className="mt-1 text-[12px] text-white/55">Live health of your NodeX backend and engine.</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div className="min-w-0 rounded-2xl border border-white/[0.09] bg-[#101010] p-3">
-              <div className="mb-3 flex items-center gap-1.5">
-                <span className={`h-1.5 w-1.5 rounded-full ${engineStatus.ws_status === 'connected' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                <span className="truncate text-[9px] font-semibold uppercase tracking-wider text-white/40">WebSocket</span>
+          <div className="overflow-hidden rounded-lg bg-[#101010]">
+            <div className="flex items-center gap-3 px-3 py-3">
+              <Wifi className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-white/90">WebSocket</p>
+                <p className="mt-0.5 text-[9px] text-white/35">Live event stream</p>
               </div>
-              <p className={`truncate text-[12px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : 'text-red-300'}`}>
+              <span className={`text-[11px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : engineStatus.ws_status === 'reconnecting' ? 'text-amber-300' : 'text-red-300'}`}>
                 {engineStatus.ws_status === 'connected' ? 'Connected' : engineStatus.ws_status === 'reconnecting' ? 'Connecting' : 'Disconnected'}
-              </p>
-              <p className="mt-1 text-[9px] leading-relaxed text-white/35">Live event stream</p>
+              </span>
             </div>
-
-            <div className="min-w-0 rounded-2xl border border-white/[0.09] bg-[#101010] p-3">
-              <div className="mb-3 flex items-center gap-1.5">
-                <span className={`h-1.5 w-1.5 rounded-full ${restOnline === true ? 'bg-emerald-400' : restOnline === false ? 'bg-red-400' : 'bg-white/30'}`} />
-                <span className="truncate text-[9px] font-semibold uppercase tracking-wider text-white/40">REST API</span>
+            <div className="mx-3 border-t border-white/[0.05]" />
+            <div className="flex items-center gap-3 px-3 py-3">
+              <Server className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-white/90">REST API</p>
+                <p className="mt-0.5 text-[9px] text-white/35">HTTP health endpoint</p>
               </div>
-              <p className={`truncate text-[12px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/60'}`}>
+              <span className={`text-[11px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/55'}`}>
                 {restOnline === true ? 'Online' : restOnline === false ? 'Unavailable' : 'Checking'}
-              </p>
-              <p className="mt-1 text-[9px] leading-relaxed text-white/35">HTTP health endpoint</p>
+              </span>
             </div>
-
-            <div className="min-w-0 rounded-2xl border border-white/[0.09] bg-[#101010] p-3">
-              <div className="mb-3 flex items-center gap-1.5">
-                <span className={`h-1.5 w-1.5 rounded-full ${runtimeSnapshot?.running ?? engineStatus.running ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                <span className="truncate text-[9px] font-semibold uppercase tracking-wider text-white/40">Engine</span>
+            <div className="mx-3 border-t border-white/[0.05]" />
+            <div className="flex items-center gap-3 px-3 py-3">
+              <Cpu className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-white/90">Engine</p>
+                <p className="mt-0.5 text-[9px] text-white/35">Background processing</p>
               </div>
-              <p className={`truncate text-[12px] font-semibold ${runtimeSnapshot?.running ?? engineStatus.running ? 'text-emerald-300' : 'text-amber-300'}`}>
+              <span className={`text-[11px] font-semibold ${(runtimeSnapshot?.running ?? engineStatus.running) ? 'text-emerald-300' : 'text-amber-300'}`}>
                 {runtimeSnapshot?.running ?? engineStatus.running ? 'Running' : 'Paused'}
-              </p>
-              <p className="mt-1 text-[9px] leading-relaxed text-white/35">Background processing</p>
+              </span>
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+          <div className="px-1">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[10px] text-white/45">Last status check</span>
               <span className="text-[10px] tabular-nums text-white/60">{statusCheckedAt ? statusCheckedAt.toLocaleTimeString() : 'Checking…'}</span>
@@ -441,37 +448,51 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           </div>
 
           <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Connection controls</p>
-            <div className="space-y-2">
-              <button type="button" onClick={testWebSocket} disabled={testingWs || !settings.adminApiKey || !settings.backendUrl} className="flex w-full items-center justify-between rounded-xl border border-white/[0.10] bg-[#111] px-4 py-3.5 text-left transition-colors active:bg-white/[0.06] disabled:opacity-45">
-                <span><span className="block text-[12px] font-medium text-white/90">Test WebSocket</span><span className="mt-0.5 block text-[10px] text-white/40">Verify the authenticated live-stream handshake</span></span>
-                <span className="text-[11px] font-semibold text-white/65">{testingWs ? 'Testing…' : 'Test'}</span>
-              </button>
-              <button type="button" onClick={testRestConnection} disabled={testingRest || !settings.backendUrl} className="flex w-full items-center justify-between rounded-xl border border-white/[0.10] bg-[#111] px-4 py-3.5 text-left transition-colors active:bg-white/[0.06] disabled:opacity-45">
-                <span><span className="block text-[12px] font-medium text-white/90">Test REST API</span><span className="mt-0.5 block text-[10px] text-white/40">Send a fresh request to the backend health endpoint</span></span>
-                <span className="text-[11px] font-semibold text-white/65">{testingRest ? 'Testing…' : 'Test'}</span>
-              </button>
-              <button type="button" onClick={async () => {
-                const nextRunning = !(runtimeSnapshot?.running ?? engineStatus.running);
-                setTestingConnection(true);
-                setHealthMessage('');
-                try {
-                  await apiClient.updateEngineControl(nextRunning ? 'resume' : 'pause');
-                  setRuntimeSnapshot({ running: nextRunning });
-                  setHealthMessage(nextRunning ? 'Resume command accepted by the backend.' : 'Pause command accepted by the backend.');
-                  window.setTimeout(() => void refreshConnectionStatus(), 700);
-                } catch (error) {
-                  setHealthMessage(error instanceof Error ? error.message : 'Engine control command failed.');
-                } finally {
-                  setTestingConnection(false);
-                }
-              }} disabled={testingConnection || !settings.adminApiKey} className="flex w-full items-center justify-between rounded-xl bg-white px-4 py-3.5 text-left text-black transition-transform active:scale-[0.99] disabled:opacity-45">
-                <span><span className="block text-[12px] font-semibold">{runtimeSnapshot?.running ?? engineStatus.running ? 'Pause Engine' : 'Resume Engine'}</span><span className="mt-0.5 block text-[10px] text-black/55">Control background token monitoring and processing</span></span>
-                <span className="text-[11px] font-semibold">{testingConnection ? 'Sending…' : '→'}</span>
-              </button>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Connection controls</p>
+            <div className="space-y-3">
+              <div className="rounded-lg bg-[#101010] p-3">
+                <p className="text-[12px] font-semibold text-white/90">Test WebSocket</p>
+                <p className="mt-1 text-[10px] text-white/40">Verify the authenticated live-stream handshake.</p>
+                <button type="button" onClick={testWebSocket} disabled={testingWs || !settings.adminApiKey || !settings.backendUrl} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/[0.16] bg-white/[0.04] px-4 py-2.5 text-[11px] font-semibold text-white transition-colors active:bg-white/[0.10] disabled:opacity-40">
+                  <Wifi className={`h-4 w-4 ${testingWs ? 'animate-pulse' : ''}`} />
+                  {testingWs ? 'Testing WebSocket…' : 'Test WebSocket'}
+                </button>
+              </div>
+
+              <div className="rounded-lg bg-[#101010] p-3">
+                <p className="text-[12px] font-semibold text-white/90">Test REST API</p>
+                <p className="mt-1 text-[10px] text-white/40">Send a fresh request to the backend health endpoint.</p>
+                <button type="button" onClick={testRestConnection} disabled={testingRest || !settings.backendUrl} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/[0.16] bg-white/[0.04] px-4 py-2.5 text-[11px] font-semibold text-white transition-colors active:bg-white/[0.10] disabled:opacity-40">
+                  <RefreshCw className={`h-4 w-4 ${testingRest ? 'animate-spin' : ''}`} />
+                  {testingRest ? 'Testing REST API…' : 'Test REST API'}
+                </button>
+              </div>
+
+              <div className="rounded-lg bg-[#101010] p-3">
+                <p className="text-[12px] font-semibold text-white/90">Engine control</p>
+                <p className="mt-1 text-[10px] text-white/40">Control background token monitoring and processing.</p>
+                <button type="button" onClick={async () => {
+                  const nextRunning = !(runtimeSnapshot?.running ?? engineStatus.running);
+                  setTestingConnection(true);
+                  setHealthMessage('');
+                  try {
+                    await apiClient.updateEngineControl(nextRunning ? 'resume' : 'pause');
+                    setRuntimeSnapshot({ running: nextRunning });
+                    setHealthMessage(nextRunning ? 'Resume command accepted by the backend.' : 'Pause command accepted by the backend.');
+                    window.setTimeout(() => void refreshConnectionStatus(), 700);
+                  } catch (error) {
+                    setHealthMessage(error instanceof Error ? error.message : 'Engine control command failed.');
+                  } finally {
+                    setTestingConnection(false);
+                  }
+                }} disabled={testingConnection || !settings.adminApiKey} className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-[11px] font-bold text-black transition-transform active:scale-[0.99] disabled:opacity-40">
+                  {testingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : (runtimeSnapshot?.running ?? engineStatus.running) ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
+                  {testingConnection ? 'Sending command…' : (runtimeSnapshot?.running ?? engineStatus.running) ? 'Pause Engine' : 'Resume Engine'}
+                </button>
+              </div>
             </div>
             {(wsTestMessage || restTestMessage || healthMessage) && (
-              <div className="mt-3 space-y-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3" role="status">
+              <div className="mt-3 space-y-2 rounded-lg bg-white/[0.025] p-3" role="status">
                 {wsTestMessage && <p className="break-words text-[10px] text-white/70">WebSocket: {wsTestMessage}</p>}
                 {restTestMessage && <p className="break-words text-[10px] text-white/70">REST API: {restTestMessage}</p>}
                 {healthMessage && <p className="break-words text-[10px] text-white/70">Engine: {healthMessage}</p>}
@@ -479,21 +500,21 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             )}
           </div>
 
-          <button type="button" onClick={() => setConnectionSheetOpen(true)} className="flex w-full items-center justify-between rounded-xl border border-white/[0.10] bg-[#101010] px-4 py-4 text-left transition-colors active:bg-white/[0.05]">
+          <button type="button" onClick={() => setConnectionSheetOpen(true)} className="flex w-full items-center justify-between rounded-lg bg-[#101010] px-3 py-3.5 text-left transition-colors active:bg-white/[0.05]">
             <span className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.07]"><PlugZap className="h-4 w-4 text-white/75" /></span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06]"><PlugZap className="h-4 w-4 text-white/75" /></span>
               <span><span className="block text-[12px] font-semibold text-white/90">Configuration settings</span><span className="mt-0.5 block text-[10px] text-white/40">Server URL, WebSocket URL and API key</span></span>
             </span>
-            <ChevronRight className="h-4 w-4 rotate-90 text-white/40" />
+            <ChevronRight className="h-4 w-4 text-white/40" />
           </button>
 
           {connectionSheetOpen && (
             <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setConnectionSheetOpen(false); }}>
-              <section role="dialog" aria-modal="true" aria-labelledby="connection-sheet-title" className="max-h-[88dvh] w-full max-w-xl overflow-y-auto rounded-t-[26px] border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
+              <section role="dialog" aria-modal="true" aria-labelledby="connection-sheet-title" className="max-h-[88dvh] w-full max-w-xl overflow-y-auto rounded-t-xl border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
                 <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
                 <div className="mb-5 flex items-start justify-between gap-3">
                   <div><h2 id="connection-sheet-title" className="text-[15px] font-semibold text-white">Connection configuration</h2><p className="mt-1 text-[10px] text-white/40">Credentials stay in this browser profile and are not shown on the status page.</p></div>
-                  <button type="button" onClick={() => setConnectionSheetOpen(false)} aria-label="Close configuration" className="rounded-full px-3 py-1.5 text-[11px] text-white/55">Close</button>
+                  <button type="button" onClick={() => setConnectionSheetOpen(false)} aria-label="Close configuration" className="rounded-lg px-3 py-1.5 text-[11px] text-white/55">Close</button>
                 </div>
                 <div className="space-y-4">
                   <Field label="REST API server URL" hint="Use the HTTPS origin of your NodeX backend.">
@@ -509,7 +530,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                     </div>
                   </Field>
                   {connectionMessage && <p className={`text-[11px] ${connectionSuccess ? 'text-emerald-300' : 'text-red-300'}`} role="status">{connectionMessage}</p>}
-                  <button type="button" onClick={attachConnection} disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
+                  <button type="button" onClick={attachConnection} disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
                     {savingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
                     {savingConnection ? 'Verifying connection…' : 'Save & connect'}
                   </button>
@@ -518,6 +539,12 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
               </section>
             </div>
           )}
+
+          <div className="flex justify-end pt-2">
+            <button type="button" onClick={() => navigateSection('home')} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-white px-4 py-2 text-[11px] font-semibold text-black transition-transform active:scale-95">
+              Back <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
