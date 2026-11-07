@@ -94,7 +94,11 @@ const defaultSafetyDetails: DiscoveredToken['safety_details'] = {
 };
 function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEvent): DiscoveredToken | null {
   const data = event.data || {};
-  const mint = String(event.token_mint || data.mint_address || data.token_mint || data.base_mint || '');
+  const marketPatch = data.market_patch && typeof data.market_patch === 'object' ? data.market_patch : {};
+  const identity = data.identity && typeof data.identity === 'object' ? data.identity : {};
+  const metadata = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
+  const payload = { ...data, ...marketPatch, ...identity };
+  const mint = String(event.token_mint || payload.mint_address || payload.token_mint || payload.base_mint || '');
   if (!mint) return null;
   const rawUsdPrice = Number(payload.current_price_usd ?? payload.price_usd ?? payload.price ?? payload.current_price);
   const rawSolPrice = Number(payload.price_sol ?? payload.current_price_sol);
@@ -110,8 +114,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     if (previous?.price_currency && previous.price_currency !== priceCurrency) history.length = 0;
     history.push({ time: Date.parse(event.timestamp) || Date.now(), price: historyPrice, volume: Number(payload.volume_5m_usd || 0) });
   }
-  const change1m = payload.price_change_1m_pct == null ? Number.NaN : Number(data.price_change_1m_pct);
-  const change5m = payload.price_change_5m_pct == null ? Number.NaN : Number(data.price_change_5m_pct);
+  const change1m = payload.price_change_1m_pct == null ? Number.NaN : Number(payload.price_change_1m_pct);
+  const change5m = payload.price_change_5m_pct == null ? Number.NaN : Number(payload.price_change_5m_pct);
   const venueValue = String(payload.venue || payload.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(payload.decision || payload.status || '').toLowerCase();
@@ -121,8 +125,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
-    mint, name: String(payload.name || payload.token_name || previous?.name || 'Unknown token'),
-    symbol: String(payload.symbol || payload.token_symbol || previous?.symbol || 'UNKNOWN'),
+    mint, name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
+    symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
     creator_wallet: String(payload.creator_wallet || payload.creator_address || previous?.creator_wallet || ''),
     launch_time: String(payload.launch_time || payload.detected_at || previous?.launch_time || event.timestamp),
     current_price_usd: price, current_price_sol: priceSol, price_currency: priceCurrency,
