@@ -120,9 +120,11 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const venueValue = String(payload.venue || payload.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(payload.decision || payload.status || '').toLowerCase();
+  const isUnverifiedTerminal = event.event_type === 'token_scan_failed'
+    || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase());
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
+    : isUnverifiedTerminal ? 'unverified'
     : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
-    : event.event_type === 'token_scan_failed' || event.event_type === 'token_scan_completed' && (decision.includes('unverified') || decision.includes('unknown')) ? 'unverified'
     : event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress' ? 'under_analysis'
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
@@ -386,6 +388,20 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (mint) {
           setTokens((previous) => previous.filter((token) => token.mint !== mint));
           setLaunches((previous) => previous.filter((launch) => launch.mint_address !== mint));
+        }
+      }
+      if (event.event_type === 'token_state_updated') {
+        const snapshot = event.data as Record<string, any> | undefined;
+        if (snapshot) {
+          const mint = String(snapshot.mint_address || snapshot.mint || '');
+          if (mint) {
+            setTokens((previous) => {
+              const mapped = mapTokenDetailSnapshot(snapshot, previous.find((token) => token.mint === mint));
+              return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500) : previous;
+            });
+            setSelectedToken((previous) => previous?.mint === mint
+              ? mapTokenDetailSnapshot(snapshot, previous) || previous : previous);
+          }
         }
       }
       if (event.event_type === 'token_detail_snapshot') {
