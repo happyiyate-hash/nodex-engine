@@ -92,7 +92,12 @@ export const engineEventStore = {
     }
     const portfolio = { ...snapshotPortfolio, ...state.portfolio };
     const wallet = { ...snapshotWallet, ...state.wallet };
-    const hydratedProfile = { ...profile, portfolio: { ...portfolio, positions }, wallet };
+    const hydratedProfile = {
+      ...profile,
+      paper_wallet: profile.paper_wallet ?? state.profile?.paper_wallet,
+      portfolio: { ...portfolio, positions },
+      wallet,
+    };
 
     return publish({
       profile: hydratedProfile,
@@ -114,7 +119,12 @@ export const engineEventStore = {
     switch (event.event_type) {
       case 'profile_updated': {
         const incoming = data as NodeXProfileSnapshot;
-        profile = incoming;
+        // Older profile_updated events may omit paper_wallet. Preserve the
+        // latest bootstrap value instead of clearing the Overview balance.
+        profile = {
+          ...incoming,
+          paper_wallet: incoming.paper_wallet ?? current.profile?.paper_wallet,
+        };
         portfolio = objectValue(incoming.portfolio);
         wallet = objectValue(incoming.wallet || incoming.existing_wallet);
         if (Array.isArray(portfolio.positions)) positions = portfolio.positions.map(objectValue);
