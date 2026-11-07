@@ -8,7 +8,7 @@ export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 export type Venue = 'pump.fun' | 'pumpswap' | 'raydium';
 export type PositionStatus = 'OPEN' | 'CLOSED_PROFIT' | 'CLOSED_LOSS' | 'STOP_LOSS' | 'TAKE_PROFIT' | 'TRAILING_STOP';
 export type SafetyRating = 'verified' | 'warning' | 'danger';
-export type QualificationStatus = 'newly_detected' | 'under_analysis' | 'qualified' | 'rejected' | 'bought_paper';
+export type QualificationStatus = 'newly_detected' | 'under_analysis' | 'qualified' | 'rejected' | 'unverified' | 'bought_paper';
 
 export interface PaperWalletSnapshot {
   starting_balance_lamports: number;
@@ -168,6 +168,11 @@ export type EventType =
   | 'launch_detected'
   | 'token_scan_started'
   | 'token_scan_update'
+  | 'token_scan_progress'
+  | 'token_scan_completed'
+  | 'token_scan_failed'
+  | 'token_metadata_started'
+  | 'token_metadata_failed'
   | 'creator_history_started'
   | 'creator_history_update'
   | 'pumpswap_activity'
