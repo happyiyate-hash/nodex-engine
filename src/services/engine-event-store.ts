@@ -165,6 +165,8 @@ export const engineEventStore = {
             if (Object.keys(patch).length) {
               positions = positions.slice();
               positions[index] = { ...positions[index], ...patch };
+            } else {
+              return current;
             }
           }
         }
