@@ -55,12 +55,6 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
 
       <div className="relative w-full shrink-0">
         <section className="relative w-full overflow-hidden rounded-b-xl border-x border-b border-white/[0.07] bg-[#181818] px-3 pb-3.5 pt-[calc(env(safe-area-inset-top)+3.25rem)] shadow-[0_8px_24px_rgba(0,0,0,.18)]">
-          <div className="pointer-events-none absolute left-3 top-[calc(env(safe-area-inset-top)+0.35rem)]">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65">
-              <HardDrive className="h-4 w-4" />
-            </span>
-          </div>
-          <div className="pointer-events-none absolute left-[3.25rem] top-[calc(env(safe-area-inset-top)+0.48rem)] text-[10px] font-semibold uppercase tracking-[0.12em] text-white/35">Storage overview</div>
           <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+0.35rem)]">
             <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh storage overview" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65 transition-colors hover:bg-white/[0.08] disabled:opacity-50">
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
