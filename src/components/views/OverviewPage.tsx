@@ -316,7 +316,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Open positions</div>
             </div>
             <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
-              <div className={`truncate text-[19px] font-semibold leading-none tabular-nums ${hourlyProfitLoss >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
+              <div className={`truncate text-[19px] font-semibold leading-none tabular-nums ${hourlyProfitLoss == null ? 'text-white/45' : hourlyProfitLoss >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
                 {hourlyProfitLoss == null ? '—' : `${hourlyProfitLoss >= 0 ? '+' : '−'}${formatSol(Math.abs(hourlyProfitLoss))} SOL`}
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-2">
