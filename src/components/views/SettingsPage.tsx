@@ -8,7 +8,6 @@ import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/rest';
 import { wsService } from '../../services/websocket';
 import { StrategyPage } from './StrategyPage';
-import { StorageManagementPage } from './StorageManagementPage';
 
 type RuntimeControlKey = 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled';
 type SettingsSection =
@@ -18,7 +17,6 @@ type SettingsSection =
   | 'discovery'
   | 'trading'
   | 'notifications'
-  | 'storage'
   | 'diagnostics';
 
 const sections = [
@@ -65,7 +63,7 @@ const StatusLine = ({ label, value, good }: { label: string; value: string; good
   </div>
 );
 
-export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void }> = ({ onSubpageChange }) => {
+export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void; onOpenStorage?: () => void }> = ({ onSubpageChange, onOpenStorage }) => {
   const {
     engineStatus, toggleEngine, settings, updateSettings, updateConnectionDraft, backendError,
   } = useTerminal();
@@ -313,7 +311,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </div>
             <div className="divide-y divide-white/[0.07]">
               {sections.map(({ id, title, description, icon: Icon }) => (
-                <button key={id} type="button" onClick={() => navigateSection(id)} className="group flex w-full items-center gap-3 py-4 text-left transition-colors active:bg-white/[0.025]">
+                <button key={id} type="button" onClick={() => id === 'storage' ? onOpenStorage?.() : navigateSection(id)} className="group flex w-full items-center gap-3 py-4 text-left transition-colors active:bg-white/[0.025]">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#171717] text-white/80">
                     <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
                   </span>
@@ -327,7 +325,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </div>
           </div>
         </>
-      ) : section === 'storage' ? null : section === 'connections' ? (
+      ) : section === 'connections' ? (
         <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.06] bg-black/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <h1 className="text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
@@ -598,7 +596,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </div>
       )}
 
-      {section === 'storage' && <StorageManagementPage onBack={() => navigateSection('home')} />}
 
       {section === 'diagnostics' && (
         <div className="space-y-4 pt-5">
