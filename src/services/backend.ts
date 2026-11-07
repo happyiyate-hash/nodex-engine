@@ -39,7 +39,9 @@ export const backendService = {
     const profile = await settle(apiClient.getProfile(), 'Profile');
     return {
       profile: profile.value,
-      paperWallet: null,
+      // The profile endpoint now returns the authoritative paper wallet too.
+      // Keep the bootstrap to one HTTP request.
+      paperWallet: profile.value?.paper_wallet ?? null,
       launches: null,
       engineStatus: null,
       strategy: null,
