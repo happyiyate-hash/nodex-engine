@@ -327,8 +327,11 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </>
       ) : section === 'connections' ? (
         <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.06] bg-black/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
-          <div className="flex min-h-10 items-center">
+          <div className="flex min-h-10 items-center justify-between gap-3">
             <h1 className="text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
+            <button type="button" onClick={() => navigateSection('home')} className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg bg-white px-4 py-2 text-[11px] font-semibold text-black transition-transform active:scale-95">
+              Back <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </div>
           <p className="mt-0.5 text-[10px] text-white/40">Connect this app to your NodeX backend.</p>
         </header>
@@ -540,11 +543,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </div>
           )}
 
-          <div className="flex justify-end pt-2">
-            <button type="button" onClick={() => navigateSection('home')} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-white px-4 py-2 text-[11px] font-semibold text-black transition-transform active:scale-95">
-              Back <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
         </div>
       )}
 
