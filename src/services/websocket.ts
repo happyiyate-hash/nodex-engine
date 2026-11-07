@@ -63,6 +63,7 @@ export class NodeXWebSocketService {
   private heartbeatWatchdog:ReturnType<typeof setInterval>|null=null;
   private lastMessageAt=0; private connecting=false;
   private reconnectAttempts=0; private manuallyClosed=false; private seen=new Set<string>();
+  private tokenSubscriptions=new Map<string,string>();
   constructor(){this.connect();}
   public connect():void {
     this.manuallyClosed=false;
@@ -91,6 +92,11 @@ export class NodeXWebSocketService {
         },10000);
         this.setStatus('connected',0);
         this.emitLocalEvent('websocket_connected','info','frontend_websocket','Authenticated browser WebSocket connected to the NodeX backend.',{url:settings.wsUrl});
+        // Restore page-level subscriptions after every successful reconnect.
+        for (const [mint,timeframe] of this.tokenSubscriptions) {
+          this.send({command:'subscribe_token',mint});
+          this.send({command:'set_chart_timeframe',mint,timeframe});
+        }
       };
       socket.onmessage=(message)=>{
         try {
@@ -98,7 +104,7 @@ export class NodeXWebSocketService {
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
           this.lastMessageAt=Date.now();if(raw.type==='heartbeat')return;
           recordLiveEvent(raw.type, raw);
-          const visibleTypes=new Set(['connection_status','engine_state','launch_detected','launch_snapshot','token_scan_started','token_scan_update','market_price_update','price_updated','liquidity_updated','token_metadata_updated','new_token_detected','new_token','buy_signal_generated','paper_buy_executed','paper_buy_failed','sell_signal_generated','paper_sell_executed','safety_check_completed','safety_check_passed','pump_fun_migration_detected','pumpswap_pool_discovered','strategy_rejected_token','diagnostic','provider_status','market_account_update','market_curve_completed','market_monitor_status','market_subscription_requested','market_subscription_active','creator_history_started','creator_history_update','stream_warning','reconnect_recovery_status','pumpswap_activity','pumpswap_volume_update','command_rejected']);
+          const visibleTypes=new Set(['connection_status','engine_state','launch_detected','launch_snapshot','token_removed','token_approval_pending','token_scan_started','token_scan_update','token_scan_progress','token_state_updated','token_detail_snapshot','market_price_update','market_tick','token_market_update','token_statistics_update','chart_history_snapshot','chart_candle_update','chart_candle_closed','position_updated','portfolio_summary_updated','profile_updated','price_updated','liquidity_updated','token_metadata_updated','new_token_detected','new_token','buy_signal_generated','paper_buy_executed','paper_buy_failed','sell_signal_generated','paper_sell_executed','safety_check_completed','safety_check_passed','pump_fun_migration_detected','pumpswap_pool_discovered','strategy_rejected_token','diagnostic','provider_status','market_account_update','market_curve_completed','market_monitor_status','market_subscription_requested','market_subscription_active','creator_history_started','creator_history_update','stream_warning','reconnect_recovery_status','pumpswap_activity','pumpswap_volume_update','command_rejected','token_unsubscribed','chart_history_snapshot']);
           if(!visibleTypes.has(raw.type))return;
           const event=normalizeBackendEvent(raw);if(this.seen.has(event.event_id))return;
           this.seen.add(event.event_id);if(this.seen.size>3000)this.seen.delete(this.seen.values().next().value as string);
@@ -146,6 +152,49 @@ export class NodeXWebSocketService {
     this.manuallyClosed=true;this.connecting=false;if(this.reconnectTimer)clearTimeout(this.reconnectTimer);
     if(this.heartbeatWatchdog)clearInterval(this.heartbeatWatchdog);
     this.heartbeatWatchdog=null;this.reconnectTimer=null;this.ws?.close();this.ws=null;this.setStatus('disconnected',0);
+  }
+  public async testConnection(): Promise<void> {
+    const settings=apiClient.getSettings();
+    if(!settings.wsUrl) throw new Error('WebSocket URL is missing. Save the backend connection in Settings.');
+    const ticket=await apiClient.issueWebSocketTicket();
+    const separator=settings.wsUrl.includes('?')?'&':'?';
+    const socketUrl=settings.wsUrl+separator+'ticket='+encodeURIComponent(ticket);
+    await new Promise<void>((resolve,reject)=>{
+      let settled=false;
+      const socket=new WebSocket(socketUrl);
+      const timeout=window.setTimeout(()=>finish(new Error('WebSocket handshake timed out after 10 seconds.')),10000);
+      const finish=(error?:Error)=>{
+        if(settled)return;
+        settled=true;
+        window.clearTimeout(timeout);
+        try{socket.close(1000,'Connection test complete');}catch{/* already closed */}
+        if(error)reject(error);else resolve();
+      };
+      socket.onopen=()=>finish();
+      socket.onerror=()=>finish(new Error('Authenticated WebSocket handshake failed. Check TLS/WSS and reverse-proxy upgrade settings.'));
+      socket.onclose=(event)=>{if(!settled)finish(new Error(`WebSocket closed before connecting (code ${event.code}).`));};
+    });
+  }
+  public subscribeToken(mint:string,timeframe='5m'):void {
+    const normalized=mint.trim();
+    if(!normalized)return;
+    this.tokenSubscriptions.set(normalized,timeframe);
+    if(this.ws?.readyState===WebSocket.OPEN){
+      this.send({command:'subscribe_token',mint:normalized});
+      this.send({command:'set_chart_timeframe',mint:normalized,timeframe});
+    }
+  }
+  public setChartTimeframe(mint:string,timeframe:'1m'|'5m'|'15m'|'1h'|'24h'):void {
+    const normalized=mint.trim();
+    if(!normalized)return;
+    this.tokenSubscriptions.set(normalized,timeframe);
+    if(this.ws?.readyState===WebSocket.OPEN)this.send({command:'set_chart_timeframe',mint:normalized,timeframe});
+  }
+  public unsubscribeToken(mint:string):void {
+    const normalized=mint.trim();
+    if(!normalized)return;
+    this.tokenSubscriptions.delete(normalized);
+    if(this.ws?.readyState===WebSocket.OPEN)this.send({command:'unsubscribe_token',mint:normalized});
   }
   public sendCommand(command:'pause'|'resume'|'start'|'status'|'set_mode',mode?:'paper'):boolean {
     if(!this.ws||this.ws.readyState!==WebSocket.OPEN)return false;
