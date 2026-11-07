@@ -91,7 +91,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4">
-      <section className="w-full">
+      <section className="w-full px-3">
         <div className="mb-2.5 flex items-end justify-between gap-3">
           <div>
             <h2 className="text-[14px] font-semibold text-white">Storage breakdown</h2>
