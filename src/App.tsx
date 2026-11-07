@@ -6,6 +6,7 @@ import { LiveFeedPage } from './components/views/LiveFeedPage';
 import { StrategyPage } from './components/views/StrategyPage';
 import { TokenIntelligencePage } from './components/views/TokenIntelligencePage';
 import { SettingsPage } from './components/views/SettingsPage';
+import { StorageManagementPage } from './components/views/StorageManagementPage';
 import { TokenDetailPage } from './components/views/TokenDetailPage';
 import { LogsPage } from './components/views/LogsPage';
 import { installFetchLogger } from './services/engineLogs';
@@ -33,6 +34,7 @@ const getScrollableAncestor = (target: EventTarget | null, boundary: HTMLElement
 
 const MainLayout: React.FC = () => {
   const [settingsSubpage, setSettingsSubpage] = useState(false);
+  const [storagePageOpen, setStoragePageOpen] = useState(false);
   const { activeTab, selectedToken } = useTerminal();
   const mainRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
@@ -52,7 +54,9 @@ const MainLayout: React.FC = () => {
       case 'event_monitor': return <LogsPage />;
       case 'strategy': return <StrategyPage />;
       case 'token_intelligence': return <TokenIntelligencePage />;
-      case 'settings': return <SettingsPage onSubpageChange={setSettingsSubpage} />;
+      case 'settings': return storagePageOpen
+        ? <StorageManagementPage onBack={() => { setStoragePageOpen(false); setSettingsSubpage(false); }} />
+        : <SettingsPage onSubpageChange={setSettingsSubpage} onOpenStorage={() => { setStoragePageOpen(true); setSettingsSubpage(true); }} />;
       default: return null;
     }
   };
