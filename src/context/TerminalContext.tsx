@@ -375,11 +375,14 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'portfolio_updated', 'wallet_updated', 'wallet_balance_updated', 'balance_updated',
         'market_tick', 'market_price_update', 'token_market_update',
       ].includes(event.event_type)) {
+        const previousRuntime = engineEventStore.getSnapshot();
         const runtime = engineEventStore.apply(event);
-        if (runtime.profile) setProfile(runtime.profile);
-        const mappedPositions = runtime.positions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null);
-        setPositions(mappedPositions);
-        setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
+        if (runtime !== previousRuntime) {
+          if (runtime.profile) setProfile(runtime.profile);
+          const mappedPositions = runtime.positions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null);
+          setPositions(mappedPositions);
+          setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
+        }
       }
       if (event.event_type === 'launch_snapshot') {
         const snapshot = Array.isArray(event.data.launches) ? event.data.launches : [];
