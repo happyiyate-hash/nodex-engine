@@ -102,19 +102,19 @@ export interface Position {
 }
 
 export interface SafetyDetails {
-  mint_authority: 'renounced' | 'active';
-  freeze_authority: 'revoked' | 'active';
+  mint_authority: 'renounced' | 'active' | 'unknown';
+  freeze_authority: 'revoked' | 'active' | 'unknown';
   top_10_holders_pct: number;
   liquidity_locked: boolean;
   liquidity_locked_pct: number;
-  honeypot_risk: 'none' | 'low' | 'high';
+  honeypot_risk: 'none' | 'low' | 'high' | 'unknown';
   dev_holding_pct: number;
   dev_sold_all: boolean;
   bundled_snipers_detected: boolean;
   risk_flags: string[];
   safety_score: number; // 0-100
   holders_count: number;
-  creator_reputation: 'clean' | 'first_deploy' | 'flagged';
+  creator_reputation: 'clean' | 'first_deploy' | 'flagged' | 'unknown';
   largest_holders: Array<{
     address: string;
     percentage: number;
