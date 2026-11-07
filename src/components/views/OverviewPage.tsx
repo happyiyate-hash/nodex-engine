@@ -287,7 +287,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                 <span className="mr-0.5 shrink-0 text-white/65" style={{ fontSize: 'clamp(14px, 5.8vw, 25px)', lineHeight: 1 }}>$</span>
                 <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
-              <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available ${formatUsd(availableBalance)}</span><span>Invested ${formatUsd(investedBalance)}</span></div>
+              <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available {availableBalanceSol == null ? '—' : `${availableBalanceSol.toFixed(4)} SOL`}</span><span>Invested {investedBalanceSol == null ? '—' : `${investedBalanceSol.toFixed(4)} SOL`}</span></div>
             </div>
           </div>
         </div>
@@ -299,7 +299,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <p className="mt-0.5 text-[10px] text-white/40 sm:text-[11px]">Solana launch intelligence</p>
             </div>
             <div className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] ${connected ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-[#83b982]' : 'border-white/10 bg-white/[0.035] text-white/50'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-[#83b982] animate-pulse' : 'bg-white/35'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-[#83b982]' : 'bg-white/35'}`} />
               {engineLabel}
             </div>
           </div>
@@ -443,7 +443,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         {isQualified
                           ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
                           : <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
-                            {status === 'ANALYZING' && <span className="h-1 w-1 animate-pulse rounded-full bg-current" />}
+                            {status === 'ANALYZING' && <span className="h-1 w-1 rounded-full bg-current" />}
                             {status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
                           </span>}
                       </div>
