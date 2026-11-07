@@ -76,6 +76,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [connectionMessage, setConnectionMessage] = useState('');
   const [connectionErrorField, setConnectionErrorField] = useState<'url' | 'key' | ''>('');
   const [connectionSuccess, setConnectionSuccess] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [healthMessage, setHealthMessage] = useState('');
   const [clearingHistory, setClearingHistory] = useState(false);
   const [storageMessage, setStorageMessage] = useState('');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -198,6 +200,20 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       }
     } finally {
       setSavingConnection(false);
+    }
+  };
+
+  const testConnection = async () => {
+    setTestingConnection(true);
+    setHealthMessage('');
+    try {
+      const result = await apiClient.getHealth();
+      await apiClient.testWebSocketConnection();
+      setHealthMessage(`REST API healthy · authenticated live stream connected · ${result.service || 'NodeX'}`);
+    } catch (error) {
+      setHealthMessage(error instanceof Error ? error.message : 'Connection test failed.');
+    } finally {
+      setTestingConnection(false);
     }
   };
 
@@ -477,6 +493,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] text-white/80 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${testingConnection ? 'animate-spin' : ''}`} /> {testingConnection ? 'Checking…' : 'Check backend health'}
           </button>
+          {healthMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{healthMessage}</p>}
           {backendError && <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-[10px] text-amber-100/75"><AlertTriangle className="h-4 w-4 shrink-0" />{backendError}</div>}
         </div>
       )}
