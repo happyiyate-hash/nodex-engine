@@ -219,7 +219,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const availableBalanceSol = paperWallet ? paperWallet.available_balance_lamports / 1_000_000_000 : null;
   const investedBalanceSol = paperWallet ? paperWallet.invested_balance_lamports / 1_000_000_000 : null;
   const markedPositionsSol = Number(profile?.portfolio?.total_value_sol || 0);
-  const portfolioValue = (availableBalanceSol ?? 0) + markedPositionsSol;
+  const portfolioValue = Number(
+    profile?.portfolio?.portfolio_balance_sol ??
+    profile?.portfolio?.total_portfolio_value_sol ??
+    ((availableBalanceSol ?? 0) + markedPositionsSol)
+  );
   const profitLoss = Number(profile?.portfolio?.unrealized_pnl_sol || 0) + Number(profile?.portfolio?.realized_pnl_sol || 0);
   const startingBalanceSol = paperWallet ? paperWallet.starting_balance_lamports / 1_000_000_000 : 0;
   const profitLossPct = startingBalanceSol > 0 ? (profitLoss / startingBalanceSol) * 100 : 0;
