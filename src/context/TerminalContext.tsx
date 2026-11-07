@@ -96,8 +96,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const data = event.data || {};
   const mint = String(event.token_mint || data.mint_address || data.token_mint || data.base_mint || '');
   if (!mint) return null;
-  const rawUsdPrice = Number(data.current_price_usd ?? data.price_usd ?? data.price ?? data.current_price);
-  const rawSolPrice = Number(data.price_sol ?? data.current_price_sol);
+  const rawUsdPrice = Number(payload.current_price_usd ?? payload.price_usd ?? payload.price ?? payload.current_price);
+  const rawSolPrice = Number(payload.price_sol ?? payload.current_price_sol);
   const hasUsdPrice = Number.isFinite(rawUsdPrice) && rawUsdPrice > 0;
   const hasSolPrice = Number.isFinite(rawSolPrice) && rawSolPrice > 0;
   const price = hasUsdPrice ? rawUsdPrice : previous?.current_price_usd || 0;
@@ -108,37 +108,37 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const previousHistoryPrice = previous?.price_currency === 'SOL' ? previous?.current_price_sol : previous?.current_price_usd;
   if (historyPrice > 0 && historyPrice !== previousHistoryPrice) {
     if (previous?.price_currency && previous.price_currency !== priceCurrency) history.length = 0;
-    history.push({ time: Date.parse(event.timestamp) || Date.now(), price: historyPrice, volume: Number(data.volume_5m_usd || 0) });
+    history.push({ time: Date.parse(event.timestamp) || Date.now(), price: historyPrice, volume: Number(payload.volume_5m_usd || 0) });
   }
-  const change1m = data.price_change_1m_pct == null ? Number.NaN : Number(data.price_change_1m_pct);
-  const change5m = data.price_change_5m_pct == null ? Number.NaN : Number(data.price_change_5m_pct);
-  const venueValue = String(data.venue || data.source || previous?.venue || 'pump.fun').toLowerCase();
+  const change1m = payload.price_change_1m_pct == null ? Number.NaN : Number(data.price_change_1m_pct);
+  const change5m = payload.price_change_5m_pct == null ? Number.NaN : Number(data.price_change_5m_pct);
+  const venueValue = String(payload.venue || payload.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
-  const decision = String(data.decision || data.status || '').toLowerCase();
+  const decision = String(payload.decision || payload.status || '').toLowerCase();
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
     : event.event_type === 'token_scan_started' ? 'under_analysis'
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
-    mint, name: String(data.name || data.token_name || previous?.name || 'Unknown token'),
-    symbol: String(data.symbol || data.token_symbol || previous?.symbol || 'UNKNOWN'),
-    creator_wallet: String(data.creator_wallet || data.creator_address || previous?.creator_wallet || ''),
-    launch_time: String(data.launch_time || data.detected_at || previous?.launch_time || event.timestamp),
+    mint, name: String(payload.name || payload.token_name || previous?.name || 'Unknown token'),
+    symbol: String(payload.symbol || payload.token_symbol || previous?.symbol || 'UNKNOWN'),
+    creator_wallet: String(payload.creator_wallet || payload.creator_address || previous?.creator_wallet || ''),
+    launch_time: String(payload.launch_time || payload.detected_at || previous?.launch_time || event.timestamp),
     current_price_usd: price, current_price_sol: priceSol, price_currency: priceCurrency,
     price_change_1m_pct: Number.isFinite(change1m) ? change1m : previous?.price_change_1m_pct,
     price_change_5m_pct: Number.isFinite(change5m) ? change5m : previous?.price_change_5m_pct,
-    market_cap_sol: Number(data.market_cap_sol ?? previous?.market_cap_sol ?? 0),
-    market_cap_usd: Number(data.market_cap_usd ?? data.market_cap ?? previous?.market_cap_usd ?? 0),
-    liquidity_usd: Number(data.liquidity_usd ?? previous?.liquidity_usd ?? 0),
-    volume_5m_usd: Number(data.volume_5m_usd ?? previous?.volume_5m_usd ?? 0),
-    volume_1h_usd: Number(data.volume_1h_usd ?? previous?.volume_1h_usd ?? 0),
-    tx_buys_5m: Number(data.tx_buys_5m ?? previous?.tx_buys_5m ?? 0),
-    tx_sells_5m: Number(data.tx_sells_5m ?? previous?.tx_sells_5m ?? 0),
-    bonding_curve_progress_pct: Number(data.bonding_curve_progress_pct ?? previous?.bonding_curve_progress_pct ?? 0),
-    venue, safety_status: data.safety_status || previous?.safety_status || 'warning',
-    qualification_status: qualification, rejection_reason: data.reason || data.decision_reason || previous?.rejection_reason,
-    safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(data.safety_details || {}) },
+    market_cap_sol: Number(payload.market_cap_sol ?? previous?.market_cap_sol ?? 0),
+    market_cap_usd: Number(payload.market_cap_usd ?? payload.market_cap ?? previous?.market_cap_usd ?? 0),
+    liquidity_usd: Number(payload.liquidity_usd ?? previous?.liquidity_usd ?? 0),
+    volume_5m_usd: Number(payload.volume_5m_usd ?? previous?.volume_5m_usd ?? 0),
+    volume_1h_usd: Number(payload.volume_1h_usd ?? previous?.volume_1h_usd ?? 0),
+    tx_buys_5m: Number(payload.tx_buys_5m ?? payload.buys_5m ?? previous?.tx_buys_5m ?? 0),
+    tx_sells_5m: Number(payload.tx_sells_5m ?? payload.sells_5m ?? previous?.tx_sells_5m ?? 0),
+    bonding_curve_progress_pct: Number(payload.bonding_curve_progress_pct ?? payload.bonding_curve_pct ?? previous?.bonding_curve_progress_pct ?? 0),
+    venue, safety_status: payload.safety_status || previous?.safety_status || 'warning',
+    qualification_status: qualification, rejection_reason: payload.reason || payload.decision_reason || previous?.rejection_reason,
+    safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(payload.safety_details || {}) },
     price_history_5m: history.slice(-300),
   };
 }
