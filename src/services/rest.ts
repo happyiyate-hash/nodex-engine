@@ -62,10 +62,23 @@ export interface NodeXProfileSnapshot {
   };
   wallet?: { sol_balance?: number; last_updated?: string | null; [key: string]: unknown };
   existing_wallet?: { sol_balance?: number; last_synced?: string | null; [key: string]: unknown };
+  /** Paper-trading wallet returned by GET /api/v1/profile (lamports). */
+  paper_wallet?: PaperWalletSnapshot;
+  trading_settings?: Record<string, unknown>;
   portfolio?: {
+    portfolio_balance_sol?: number;
+    total_portfolio_value_sol?: number;
     total_value_sol?: number;
+    available_balance_sol?: number;
+    invested_balance_sol?: number;
+    locked_rent_sol?: number;
+    starting_balance_sol?: number;
+    total_invested_sol?: number;
     unrealized_pnl_sol?: number;
+    unrealized_pnl_pct?: number;
     realized_pnl_sol?: number;
+    total_pnl_sol?: number;
+    total_pnl_pct?: number;
     position_count?: number;
     positions?: Array<Record<string, unknown>>;
     [key: string]: unknown;
