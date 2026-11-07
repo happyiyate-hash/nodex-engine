@@ -15,7 +15,7 @@ const HIGH_FREQUENCY_EVENTS = new Set([
 ]);
 let fetchLoggerInstalled = false;
 let pendingEvents: EngineLogEntry[] = [];
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let flushTimer: number | null = null;
 
 function read(): EngineLogEntry[] {
   if (typeof window === 'undefined') return [];
