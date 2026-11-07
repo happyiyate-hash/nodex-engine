@@ -17,31 +17,28 @@ function websocketUrlFor(backendUrl: string): string {
 const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
 
-export interface StorageDataCategory {
-  logical_bytes: number | null;
-  records: number | null;
-  physical_bytes: number | null;
-  note: string;
-}
 export interface StorageOverview {
   disk: null | {
-    filesystem: string; total_bytes: number; used_bytes: number;
-    available_bytes: number; used_percent: string;
+    filesystem: string;
+    mountpoint: string;
+    total_bytes: number;
+    used_bytes: number;
+    available_bytes: number;
+    used_percent: string;
   };
+  disk_error: string | null;
   database: {
-    path: string | null; database_bytes: number; wal_bytes: number;
-    shm_bytes: number; total_file_bytes: number;
-  };
-  categories: {
-    tokens: StorageDataCategory; launches: StorageDataCategory;
-    events: StorageDataCategory; discovery: StorageDataCategory;
-    chart_data: StorageDataCategory; paper_trading: StorageDataCategory;
-    engine_logs: StorageDataCategory; system_logs: StorageDataCategory;
-    database: StorageDataCategory; other: StorageDataCategory;
+    path: string | null;
+    database_bytes: number;
+    wal_bytes: number;
+    shm_bytes: number;
+    total_file_bytes: number;
   };
   system_journal: {
-    available: boolean; reported_size_bytes: number | null;
-    raw_report: string | null; note: string;
+    available: boolean;
+    reported_size_bytes: number | null;
+    raw_report: string | null;
+    note: string;
   };
   updated_at: string;
 }
