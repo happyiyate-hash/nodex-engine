@@ -157,7 +157,7 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[]): LaunchV
     event.token_mint === launch.mint_address || event.data?.mint_address === launch.mint_address
   );
   const findEvent = (type: string) => related.find((event) => event.event_type === type);
-  const scanUpdate = findEvent('token_scan_update') || findEvent('safety_check_completed');
+  const scanUpdate = findEvent('token_scan_update') || findEvent('token_scan_progress') || findEvent('safety_check_completed');
   const scanStarted = Boolean(findEvent('token_scan_started'));
   const paperBuy = findEvent('paper_buy_executed');
   const paperBuyFailed = findEvent('paper_buy_failed');
@@ -215,7 +215,7 @@ const statusStyle: Record<PipelineStatus, string> = {
 };
 
 export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
-  const { launches, events, engineStatus, openTokenDetailByMint, paperWallet, profile, positions } = useTerminal();
+  const { launches, events, engineStatus, openTokenDetailByMint, paperWallet, profile, positions, tokens } = useTerminal();
   const availableBalanceSol = paperWallet ? paperWallet.available_balance_lamports / 1_000_000_000 : null;
   const investedBalanceSol = paperWallet ? paperWallet.invested_balance_lamports / 1_000_000_000 : null;
   const markedPositionsSol = Number(profile?.portfolio?.total_value_sol || 0);
@@ -421,10 +421,10 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="space-y-1.5 pb-2">
                 {filteredLaunches.map((item) => {
                   const { launch, status, reason, updatedAt } = item;
-                                    const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
+                                    const reportEvent = events.find((event) => (event.event_type === 'token_scan_update' || event.event_type === 'token_scan_progress') && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const report = reportEvent?.data;
                   const checks = Array.isArray(report?.checks) ? report.checks : [];
-                  const tokenData = launch as any;
+                  const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
                   const price = Number(tokenData.current_price ?? tokenData.price_usd ?? tokenData.price ?? report?.price_usd ?? report?.current_price);
                   const marketCap = Number(tokenData.market_cap ?? tokenData.market_cap_usd ?? report?.market_cap_usd);
                   const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
