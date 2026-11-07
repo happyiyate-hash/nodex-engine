@@ -8,6 +8,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/rest';
 import { wsService } from '../../services/websocket';
 import { StrategyPage } from './StrategyPage';
+import { StorageManagementPage } from './StorageManagementPage';
 
 type RuntimeControlKey = 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled';
 type SettingsSection =
@@ -26,7 +27,7 @@ const sections = [
   { id: 'discovery', title: 'Token Discovery', description: 'Scanning sources, approval modes and filters.', icon: Radar },
   { id: 'trading', title: 'Trading Configuration', description: 'Stop loss, take profit, position sizing and risk.', icon: SlidersHorizontal },
   { id: 'notifications', title: 'Notifications', description: 'Choose which engine events should alert you.', icon: Bell },
-  { id: 'storage', title: 'Data & Storage', description: 'Database records, history and cleanup tools.', icon: Database },
+  { id: 'storage', title: 'Storage Management', description: 'Inspect disk usage, engine data and log storage.', icon: Database },
   { id: 'diagnostics', title: 'Diagnostics & Monitoring', description: 'Engine health, connections and runtime logs.', icon: Activity },
 ] as const;
 
@@ -597,29 +598,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </div>
       )}
 
-      {section === 'storage' && (
-        <div className="space-y-5 pt-5">
-          <div><p className="text-[13px] font-semibold">Engine data maintenance</p><p className="mt-1 text-[10px] text-white/40">Manage stored token and raw event history on the backend.</p></div>
-          <div className="flex items-start gap-3 border-b border-white/[0.08] pb-4">
-            <HardDrive className="mt-0.5 h-5 w-5 text-white/55" />
-            <div><p className="text-[12px] text-white/85">Clear engine history</p><p className="mt-1 text-[10px] leading-relaxed text-white/40">Uses the existing backend maintenance endpoint to remove token records and raw event records. Paper-trading records are preserved by the endpoint.</p></div>
-          </div>
-          {!showClearConfirm ? (
-            <button type="button" onClick={() => setShowClearConfirm(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/25 py-3 text-[12px] font-medium text-red-300"><Trash2 className="h-4 w-4" /> Review history cleanup</button>
-          ) : (
-            <div className="space-y-3 rounded-xl border border-red-500/25 bg-red-500/[0.05] p-3">
-              <p className="text-[12px] font-semibold text-red-200">Clear stored engine history?</p>
-              <p className="text-[10px] leading-relaxed text-red-100/65">This action cannot be undone. Token and raw event history will be removed. Paper-trading records are preserved by the current endpoint.</p>
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setShowClearConfirm(false)} className="flex-1 rounded-lg border border-white/15 py-2 text-[11px] text-white/70">Cancel</button>
-                <button type="button" onClick={clearEngineHistory} disabled={clearingHistory || !settings.adminApiKey} className="flex-1 rounded-lg bg-red-500 py-2 text-[11px] font-semibold text-white disabled:opacity-40">{clearingHistory ? 'Cleaning…' : 'Confirm cleanup'}</button>
-              </div>
-              {!settings.adminApiKey && <p className="text-[10px] text-amber-200/80">This maintenance action requires backend operator authorization. Configure that authorization in the backend deployment; it is intentionally not exposed in this app.</p>}
-            </div>
-          )}
-          {storageMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{storageMessage}</p>}
-        </div>
-      )}
+      {section === 'storage' && <StorageManagementPage />}
 
       {section === 'diagnostics' && (
         <div className="space-y-4 pt-5">
