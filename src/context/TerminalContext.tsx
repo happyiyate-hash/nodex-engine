@@ -293,13 +293,12 @@ function mapDashboardSummary(profile: NodeXProfileSnapshot | null, positions: Po
   };
   const openPositions = positions.filter((position) => position.status === 'OPEN');
   const investedUsd = n(portfolio.total_invested_usd, portfolio.invested_capital_usd, portfolio.total_cost_basis_usd);
-  const unrealizedUsd = n(portfolio.unrealized_pnl_usd, portfolio.unrealised_pnl_usd);
+  const unrealizedUsd = n(portfolio.total_unrealized_pnl_usd, portfolio.total_unrealised_pnl_usd, portfolio.unrealized_pnl_usd, portfolio.unrealised_pnl_usd);
   const realizedUsd = n(portfolio.realized_pnl_usd, portfolio.realised_pnl_usd);
-  const totalUsd = n(portfolio.total_value_usd, portfolio.portfolio_value_usd, portfolio.current_value_usd);
-  const investedSol = n(portfolio.total_invested_sol, portfolio.invested_sol, portfolio.total_cost_basis_sol);
-  const unrealizedSol = n(portfolio.unrealized_pnl_sol, portfolio.unrealised_pnl_sol);
+  const totalUsd = n(portfolio.total_portfolio_value_usd, portfolio.portfolio_balance_usd, portfolio.total_value_usd, portfolio.portfolio_value_usd, portfolio.current_value_usd);
+  const unrealizedSol = n(portfolio.total_unrealized_pnl_sol, portfolio.total_unrealised_pnl_sol, portfolio.unrealized_pnl_sol, portfolio.unrealised_pnl_sol);
   const realizedSol = n(portfolio.realized_pnl_sol, portfolio.realised_pnl_sol);
-  const totalSol = n(portfolio.total_value_sol, portfolio.portfolio_value_sol, portfolio.current_value_sol);
+  const totalSol = n(portfolio.total_portfolio_value_sol, portfolio.portfolio_balance_sol, portfolio.total_value_sol, portfolio.portfolio_value_sol, portfolio.current_value_sol);
   return {
     ...emptySummary,
     total_portfolio_value_usd: totalUsd,
