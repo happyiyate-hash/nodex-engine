@@ -13,6 +13,7 @@ export interface CandleDataPoint {
 interface MobileTradingChartProps {
   symbol: string;
   currentPrice: number;
+  data?: CandleDataPoint[];
   entryPrice?: number;
   isPositive?: boolean;
   timeframe?: string;
@@ -23,6 +24,7 @@ interface MobileTradingChartProps {
 export const MobileTradingChart: React.FC<MobileTradingChartProps> = ({
   symbol,
   currentPrice,
+  data,
   entryPrice,
   isPositive = true,
   timeframe = '24H',
@@ -36,49 +38,13 @@ export const MobileTradingChart: React.FC<MobileTradingChartProps> = ({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [containerWidth, setContainerWidth] = useState(600);
 
-  // Generate realistic candles based on current token price and timeframe
-  const candles = useMemo<CandleDataPoint[]>(() => {
-    const count = 48;
-    const now = Date.now();
-    const stepMs = timeframe === '1m' ? 60000 : timeframe === '5m' ? 300000 : timeframe === '15m' ? 900000 : timeframe === '1H' ? 3600000 : 86400000 / 48;
-    const result: CandleDataPoint[] = [];
+  // Chart history must come from the backend; no local price path is generated.
+  const candles = useMemo<CandleDataPoint[]>(() => (data || [])
+    .filter((point) => Number.isFinite(point.close) && point.close > 0)
+    .slice()
+    .sort((a, b) => a.timestamp - b.timestamp), [data]);
 
-    // Seed predictable fluctuations starting below/near entry
-    let price = entryPrice ? entryPrice * 0.96 : currentPrice * 0.88;
-    const target = currentPrice;
 
-    for (let i = 0; i < count; i++) {
-      const progress = i / (count - 1);
-      // Trend toward target with natural crypto volatility
-      const trend = price + (target - price) * (0.05 + progress * 0.1);
-      const volatility = currentPrice * 0.025;
-      const noise = (Math.sin(i * 1.3) * 0.5 + Math.cos(i * 2.1) * 0.5) * volatility;
-      
-      const open = i === 0 ? price : result[i - 1].close;
-      let close = i === count - 1 ? target : Math.max(open * 0.85, trend + noise);
-      
-      const high = Math.max(open, close) + Math.random() * volatility * 0.6;
-      const low = Math.min(open, close) - Math.random() * volatility * 0.6;
-      const vol = Math.floor(10000 + Math.random() * 80000 + (progress > 0.8 ? 50000 : 0));
-
-      const timeDate = new Date(now - (count - 1 - i) * stepMs);
-      const timeStr = timeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      result.push({
-        time: timeStr,
-        timestamp: timeDate.getTime(),
-        open,
-        high,
-        low,
-        close,
-        volume: vol,
-      });
-
-      price = close;
-    }
-
-    return result;
-  }, [currentPrice, entryPrice, timeframe]);
 
   // Responsive width observer
   useEffect(() => {
@@ -417,7 +383,7 @@ export const MobileTradingChart: React.FC<MobileTradingChartProps> = ({
         </button>
       </div>
 
-      {/* Canvas Layer for 60fps Mobile Performance */}
+      {/* Canvas draws only backend-provided candle history. */}
       <canvas
         ref={canvasRef}
         style={{ width: containerWidth, height }}
@@ -432,19 +398,14 @@ export const MobileTradingChart: React.FC<MobileTradingChartProps> = ({
         }}
         onTouchEnd={handlePointerLeave}
       />
+      {candles.length === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-white/40">Waiting for backend chart data…</div>}
 
-      {/* Signature Pump.fun Pulsing Beacon Dot at the live tick */}
+      {/* Static latest-price marker */}
       {hoverIndex === null && latestDotPosition && latestDotPosition.x > 0 && latestDotPosition.y > 0 && (
         <div
           className="absolute pointer-events-none z-20 -translate-x-1/2 -translate-y-1/2"
           style={{ left: latestDotPosition.x, top: latestDotPosition.y }}
         >
-          {/* Radar ping wave */}
-          <span
-            className={`absolute -inset-2.5 rounded-full animate-ping opacity-75 ${
-              isPositive ? 'bg-emerald-400' : 'bg-red-400'
-            }`}
-          />
           {/* Glowing blur halo */}
           <span
             className={`absolute -inset-1 rounded-full blur-[3px] opacity-90 ${
