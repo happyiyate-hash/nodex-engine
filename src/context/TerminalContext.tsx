@@ -225,10 +225,12 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   const priceUsd = Number(market.price_usd ?? previous?.current_price_usd ?? 0);
   const venueValue = String(market.venue || identity.venue || previous?.venue || 'pump.fun').toLowerCase();
   const securityDecision = String(snapshot.security?.decision || '').toUpperCase();
+  const securityStatus = String(snapshot.security?.status || '').toLowerCase();
   const qualificationStatus: DiscoveredToken['qualification_status'] =
     securityDecision === 'APPROVED' ? 'qualified'
       : securityDecision === 'REJECTED' ? 'rejected'
-      : snapshot.security?.status === 'scanning' ? 'under_analysis'
+      : securityDecision === 'UNVERIFIED' || ['unverified', 'failed'].includes(securityStatus) ? 'unverified'
+      : securityStatus === 'scanning' ? 'under_analysis'
       : previous?.qualification_status || 'newly_detected';
   return {
     mint,
