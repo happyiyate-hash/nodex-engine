@@ -143,6 +143,53 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   };
 }
 
+function mapBackendPosition(raw: Record<string, any>): Position | null {
+  const mint = String(raw.mint_address || raw.mint || '');
+  if (!mint) return null;
+  const quantity = Number(raw.token_quantity ?? raw.quantity ?? 0);
+  const costBasisSol = Number(raw.cost_basis_sol ?? raw.invested_sol ?? 0);
+  const currentValueSol = Number(raw.current_value_sol ?? raw.marked_value_sol ?? 0);
+  const pnlSol = Number(raw.unrealized_pnl_sol ?? (currentValueSol - costBasisSol));
+  const pnlPct = Number(raw.unrealized_pnl_pct ?? (costBasisSol > 0 ? pnlSol / costBasisSol * 100 : 0));
+  const entryPriceSol = Number(raw.entry_price_sol ?? raw.average_entry_price_sol ?? (quantity > 0 ? costBasisSol / quantity : 0));
+  const currentPriceSol = Number(raw.current_price_sol ?? (quantity > 0 ? currentValueSol / quantity : 0));
+  const rawStatus = String(raw.status || 'open').toLowerCase();
+  const status: Position['status'] = rawStatus === 'open' ? 'OPEN'
+    : rawStatus.includes('stop') ? 'STOP_LOSS'
+    : rawStatus.includes('take') ? 'TAKE_PROFIT'
+    : pnlSol >= 0 ? 'CLOSED_PROFIT' : 'CLOSED_LOSS';
+  const venueValue = String(raw.venue || raw.source || 'pump.fun').toLowerCase();
+  const venue: Position['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
+  return {
+    id: String(raw.id || raw.position_id || mint),
+    mint,
+    name: String(raw.name || raw.token_name || ''),
+    symbol: String(raw.symbol || raw.token_symbol || ''),
+    entry_price_sol: entryPriceSol,
+    entry_price_usd: Number(raw.entry_price_usd || 0),
+    current_price_sol: currentPriceSol,
+    current_price_usd: Number(raw.current_price_usd || 0),
+    amount_tokens: quantity,
+    initial_investment_usd: Number(raw.cost_basis_usd || raw.invested_usd || 0),
+    initial_investment_sol: costBasisSol,
+    current_position_value_usd: Number(raw.current_value_usd || 0),
+    current_position_value_sol: currentValueSol,
+    pnl_usd: Number(raw.unrealized_pnl_usd || 0),
+    pnl_sol: pnlSol,
+    pnl_pct: pnlPct,
+    status,
+    entry_time: String(raw.opened_at || raw.entry_time || raw.created_at || ''),
+    exit_time: raw.closed_at || raw.exit_time || undefined,
+    exit_price_usd: raw.exit_price_usd == null ? undefined : Number(raw.exit_price_usd),
+    take_profit_target_pct: Number(raw.take_profit_pct || 0),
+    stop_loss_target_pct: Number(raw.stop_loss_pct || 0),
+    trailing_stop_pct: raw.trailing_stop_pct == null ? undefined : Number(raw.trailing_stop_pct),
+    highest_price_usd: raw.highest_price_usd == null ? undefined : Number(raw.highest_price_usd),
+    venue,
+    tx_signature: String(raw.tx_signature || raw.signature || ''),
+  };
+}
+
 function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: DiscoveredToken): DiscoveredToken | null {
   const mint = String(snapshot.mint_address || snapshot.mint || previous?.mint || '');
   if (!mint) return null;
@@ -196,7 +243,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
   const [engineStatus, setEngineStatus] = useState<EngineStatus>(emptyStatus);
   const [summary] = useState<DashboardSummary>(emptySummary);
-  const [positions] = useState<Position[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [tokens, setTokens] = useState<DiscoveredToken[]>(() => readPersistedState().tokens || []);
   const [launches, setLaunches] = useState<TokenLaunchRecord[]>(() => readPersistedState().launches || []);
   const [paperWallet, setPaperWallet] = useState<PaperWalletSnapshot | null>(null);
@@ -221,7 +268,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     backendService.loadInitialData().then((snapshot) => {
       if (!active) return;
-      if (snapshot.profile) setProfile(snapshot.profile);
+      if (snapshot.profile) {
+        setProfile(snapshot.profile);
+        const rawPositions = snapshot.profile.portfolio?.positions;
+        if (Array.isArray(rawPositions)) setPositions(rawPositions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null));
+      }
       if (snapshot.paperWallet) setPaperWallet(snapshot.paperWallet);
       if (snapshot.launches) setLaunches(snapshot.launches);
       if (snapshot.engineStatus) {
@@ -295,7 +346,17 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setSelectedToken((previous) => previous?.mint === mint ? append(previous) : previous);
         }
       }
-      if (event.event_type === 'profile_updated') setProfile(event.data as NodeXProfileSnapshot);
+      if (event.event_type === 'profile_updated') {
+        const nextProfile = event.data as NodeXProfileSnapshot;
+        setProfile(nextProfile);
+        const rawPositions = nextProfile.portfolio?.positions;
+        if (Array.isArray(rawPositions)) setPositions(rawPositions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null));
+      }
+      if (event.event_type === 'position_updated') {
+        const rawPosition = (event.data?.position || event.data) as Record<string, any>;
+        const mappedPosition = mapBackendPosition(rawPosition);
+        if (mappedPosition) setPositions((previous) => [mappedPosition, ...previous.filter((position) => position.id !== mappedPosition.id)]);
+      }
       if (event.event_type === 'portfolio_summary_updated') {
         setProfile((previous) => ({
           ...(previous || {}),
