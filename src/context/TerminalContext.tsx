@@ -271,8 +271,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     let active = true;
-    wsService.connect();
-
     // Raw Solana notifications are backend-internal and are deliberately not
     // restored into the browser event feed. The feed is driven by curated live
     // application events only.
@@ -515,6 +513,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setBackendError(typeof event.data.message === 'string' ? event.data.message : 'Backend diagnostic received.');
       }
     });
+    // Register all listeners before opening the socket so the first launch and
+    // scan events cannot arrive during the provider's subscription setup.
+    wsService.connect();
     return () => {
       active = false;
       unsubscribeStatus();
