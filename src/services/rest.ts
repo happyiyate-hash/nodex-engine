@@ -16,6 +16,36 @@ function websocketUrlFor(backendUrl: string): string {
 
 const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
+
+export interface StorageDataCategory {
+  logical_bytes: number | null;
+  records: number | null;
+  physical_bytes: number | null;
+  note: string;
+}
+export interface StorageOverview {
+  disk: null | {
+    filesystem: string; total_bytes: number; used_bytes: number;
+    available_bytes: number; used_percent: string;
+  };
+  database: {
+    path: string | null; database_bytes: number; wal_bytes: number;
+    shm_bytes: number; total_file_bytes: number;
+  };
+  categories: {
+    tokens: StorageDataCategory; launches: StorageDataCategory;
+    events: StorageDataCategory; discovery: StorageDataCategory;
+    chart_data: StorageDataCategory; paper_trading: StorageDataCategory;
+    engine_logs: StorageDataCategory; system_logs: StorageDataCategory;
+    database: StorageDataCategory; other: StorageDataCategory;
+  };
+  system_journal: {
+    available: boolean; reported_size_bytes: number | null;
+    raw_report: string | null; note: string;
+  };
+  updated_at: string;
+}
+
 export interface EngineControlSnapshot {
   paused: boolean;
   mode: 'paper' | 'real';
@@ -230,6 +260,27 @@ export class NodeXRestClient {
   }>> {
     return this.request(`/api/v1/events/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
+
+  public getStorageOverview(): Promise<StorageOverview> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings before loading server storage.');
+    return this.request<StorageOverview>('/api/v1/admin/storage/overview', {
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
+  public cleanupSystemJournal(): Promise<{
+    status: string; category: 'system_logs'; cleanup_output: string;
+    storage_before_bytes: number | null; storage_after_bytes: number | null;
+    bytes_freed: number | null; overview: StorageOverview;
+  }> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings before cleaning system logs.');
+    return this.request('/api/v1/admin/storage/system-journal/cleanup', {
+      method: 'POST',
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
+
   public clearEngineHistory(adminKey: string): Promise<{
     status: string; deleted_token_records: number; deleted_raw_event_records: number;
     preserved: string[];
