@@ -365,6 +365,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setBackendError(snapshot.errors[0] || null);
     }).catch((error: unknown) => {
       if (active) setBackendError(error instanceof Error ? error.message : 'Could not load initial backend data.');
+    }).finally(() => {
+      if (active) wsService.connect();
     });
     const unsubscribeStatus = wsService.onStatusChange((status: ConnectionStatus) => {
       setEngineStatus((previous) => ({ ...previous, ws_status: status }));
@@ -598,9 +600,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setBackendError(typeof event.data.message === 'string' ? event.data.message : 'Backend diagnostic received.');
       }
     });
-    // Register all listeners before opening the socket so the first launch and
-    // scan events cannot arrive during the provider's subscription setup.
-    wsService.connect();
+
     return () => {
       active = false;
       unsubscribeStatus();
