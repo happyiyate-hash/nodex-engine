@@ -12,6 +12,8 @@ const HIGH_FREQUENCY_EVENTS = new Set([
   'heartbeat', 'market_tick', 'market_price_update', 'token_market_update',
   'token_statistics_update', 'chart_candle_update', 'chart_candle_closed',
   'pumpswap_activity', 'pumpswap_volume_update', 'market_account_update',
+  'position_updated', 'trade_opened', 'trade_closed', 'portfolio_summary_updated',
+  'portfolio_updated', 'wallet_updated', 'wallet_balance_updated', 'balance_updated',
 ]);
 let fetchLoggerInstalled = false;
 let pendingEvents: EngineLogEntry[] = [];
