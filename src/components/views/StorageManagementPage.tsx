@@ -52,6 +52,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const localStorageProgress = browserStorage.usage !== null && browserStorage.quota !== null
     ? Math.min(100, (browserStorage.usage / browserStorage.quota) * 100)
     : null;
+  const browserStorageRemaining = browserStorage.usage !== null && browserStorage.quota !== null
+    ? Math.max(0, browserStorage.quota - browserStorage.usage)
+    : null;
 
   useEffect(() => {
     let active = true;
@@ -186,7 +189,10 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 <div className="ml-11 mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
                   <div
                     className={`h-full rounded-full ${tint}`}
-                    style={{ width: isLocalStorage && localStorageProgress !== null ? `${localStorageProgress}%` : '0%' }}
+                    style={{
+                    width: isLocalStorage && localStorageProgress !== null ? `${localStorageProgress}%` : '0%',
+                    minWidth: isLocalStorage && browserStorage.usage !== null && browserStorage.usage > 0 ? '2px' : '0',
+                  }}
                   />
                 </div>
                 <p className="ml-11 mt-1 text-[9px] text-white/30">
@@ -238,12 +244,18 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               {selected.id === 'local-storage' && (
                 <>
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-                    <div className="h-full rounded-full bg-fuchsia-400" style={{ width: localStorageProgress === null ? '0%' : `${localStorageProgress}%` }} />
+                    <div className="h-full rounded-full bg-fuchsia-400" style={{
+                      width: localStorageProgress === null ? '0%' : `${localStorageProgress}%`,
+                      minWidth: browserStorage.usage !== null && browserStorage.usage > 0 ? '2px' : '0',
+                    }} />
                   </div>
-                  <div className="mt-2 flex items-center justify-between text-[9px] text-white/40">
-                    <span>{localStorageProgress === null ? 'Quota unavailable' : `${localStorageProgress.toFixed(1)}% used`}</span>
-                    <span>{browserStorage.quota === null ? 'Quota —' : `Quota ${formatMegabytes(browserStorage.quota)}`}</span>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-[9px] text-white/40">
+                    <span>{localStorageProgress === null ? 'Usage percentage unavailable' : `${localStorageProgress.toFixed(2)}% of quota used`}</span>
+                    <span>{browserStorageRemaining === null ? 'Remaining —' : `${formatMegabytes(browserStorageRemaining)} remaining`}</span>
                   </div>
+                  <p className="mt-1 text-[9px] text-white/30">
+                    {browserStorage.quota === null ? 'Browser quota unavailable' : `Origin quota: ${formatMegabytes(browserStorage.quota)}`}
+                  </p>
                 </>
               )}
             </div>
