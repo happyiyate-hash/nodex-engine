@@ -508,13 +508,24 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
 
-  // Keep the shared token registry durable and synchronized between tabs.
+  // Debounce and bound persistence: never serialize hundreds of full token/event
+  // objects synchronously for every incoming WebSocket tick.
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ tokens, launches, events }));
-    } catch (error) {
-      console.warn('Could not persist NodeX terminal state:', error);
-    }
+    const timer = window.setTimeout(() => {
+      try {
+        const durableEvents = events.filter((event) =>
+          !['market_tick','market_price_update','token_market_update','token_statistics_update','chart_candle_update','chart_candle_closed'].includes(event.event_type)
+        ).slice(0, 100);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          tokens: tokens.slice(0, 200),
+          launches: launches.slice(0, 200),
+          events: durableEvents,
+        }));
+      } catch (error) {
+        console.warn('Could not persist NodeX terminal state:', error);
+      }
+    }, 750);
+    return () => window.clearTimeout(timer);
   }, [tokens, launches, events]);
 
   useEffect(() => {
