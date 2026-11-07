@@ -21,7 +21,24 @@ function read(): EngineLogEntry[] {
   if (typeof window === 'undefined') return [];
   try {
     const value = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '[]');
-    return Array.isArray(value) ? value as EngineLogEntry[] : [];
+    if (!Array.isArray(value)) return [];
+    return (value as EngineLogEntry[]).slice(0, MAX_LOGS).map((entry) => {
+      if (entry.kind !== 'event') return entry;
+      const raw = entry.response && typeof entry.response === 'object' ? entry.response as Record<string, any> : {};
+      const data = raw.data && typeof raw.data === 'object' ? raw.data as Record<string, any> : {};
+      return {
+        ...entry,
+        response: {
+          type: raw.type || entry.eventType,
+          mint_address: data.mint_address || data.token_mint || null,
+          stage: data.stage || null,
+          progress: data.progress ?? null,
+          decision: data.decision || data.status || null,
+          message: data.message || null,
+          severity: data.severity || null,
+        },
+      };
+    });
   } catch { return []; }
 }
 
