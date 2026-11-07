@@ -224,7 +224,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const startingBalanceSol = paperWallet ? paperWallet.starting_balance_lamports / 1_000_000_000 : 0;
   const profitLossPct = startingBalanceSol > 0 ? (profitLoss / startingBalanceSol) * 100 : 0;
   const openPositionCount = Number(profile?.portfolio?.position_count ?? positions.filter((position) => position.status === 'OPEN').length);
-  const hourlyProfitLoss: number | null = null;
+  const hourlyProfitLoss = typeof profile?.portfolio?.hourly_pnl_sol === 'number' ? profile.portfolio.hourly_pnl_sol : null;
   const portfolioFlash: ChangeDirection = null;
   const balanceDirection: ChangeDirection = null;
   const [filter, setFilter] = useState<FeedFilter>('detected');
