@@ -5,7 +5,8 @@ import {
   SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu, ArrowLeft,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
-import { apiClient } from '../../services/api';
+import { apiClient } from '../../services/rest';
+import { wsService } from '../../services/websocket';
 import { StrategyPage } from './StrategyPage';
 
 type RuntimeControlKey = 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled';
@@ -254,7 +255,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setTestingWs(true);
     setWsTestMessage('');
     try {
-      await apiClient.testWebSocketConnection();
+      await wsService.testConnection();
       setWsTestMessage('Authenticated WebSocket handshake succeeded.');
     } catch (error) {
       setWsTestMessage(error instanceof Error ? error.message : 'WebSocket test failed.');
