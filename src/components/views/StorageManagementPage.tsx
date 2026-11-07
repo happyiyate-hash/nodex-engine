@@ -137,14 +137,12 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
 
       {notice && <div role="status" className="rounded-xl border border-amber-400/15 bg-amber-400/[0.045] p-3 text-[10px] leading-relaxed text-amber-100/75">{notice}</div>}
 
-      <div className="flex justify-start px-1 pt-3">
-        <button type="button" onClick={onBack} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 text-[12px] font-semibold text-black shadow-[0_5px_20px_rgba(255,255,255,.10)] transition-transform active:scale-[0.97]">
-          <ArrowLeft className="h-4 w-4" strokeWidth={2.3} />
-          Back
-        </button>
       </div>
 
-      </div>
+      <button type="button" onClick={onBack} className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] right-4 z-[80] inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 text-[12px] font-semibold text-black shadow-[0_5px_20px_rgba(255,255,255,.16)] transition-transform active:scale-[0.97]" aria-label="Go back">
+        <ArrowLeft className="h-4 w-4" strokeWidth={2.3} />
+        Back
+      </button>
 
       {selected && (
         <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/80 px-0 backdrop-blur-sm sm:items-center sm:px-4" onClick={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
