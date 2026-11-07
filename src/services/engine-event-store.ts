@@ -76,19 +76,30 @@ export const engineEventStore = {
   },
 
   hydrate(profile: NodeXProfileSnapshot): EngineEventSnapshot {
-    const portfolio = objectValue(profile.portfolio);
-    const wallet = objectValue(profile.wallet || profile.existing_wallet);
-    const positions = Array.isArray(portfolio.positions)
-      ? portfolio.positions.map(objectValue)
+    const snapshotPortfolio = objectValue(profile.portfolio);
+    const snapshotWallet = objectValue(profile.wallet || profile.existing_wallet);
+    const snapshotPositions = Array.isArray(snapshotPortfolio.positions)
+      ? snapshotPortfolio.positions.map(objectValue)
       : Array.isArray((profile as any).positions)
         ? (profile as any).positions.map(objectValue)
         : [];
+
+    // The WebSocket may deliver an event while the bootstrap HTTP request is
+    // still in flight. Preserve those newer live patches over the older snapshot.
+    let positions = snapshotPositions;
+    for (const livePosition of state.positions) {
+      positions = mergePosition(positions, livePosition);
+    }
+    const portfolio = { ...snapshotPortfolio, ...state.portfolio };
+    const wallet = { ...snapshotWallet, ...state.wallet };
+    const hydratedProfile = { ...profile, portfolio: { ...portfolio, positions }, wallet };
+
     return publish({
-      profile,
+      profile: hydratedProfile,
       positions,
-      portfolio,
+      portfolio: { ...portfolio, positions },
       wallet,
-      lastUpdatedAt: new Date().toISOString(),
+      lastUpdatedAt: state.lastUpdatedAt || new Date().toISOString(),
     });
   },
 
