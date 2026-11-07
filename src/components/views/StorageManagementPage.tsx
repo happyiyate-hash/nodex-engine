@@ -4,12 +4,17 @@ import {
   FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X, KeyRound,
 } from 'lucide-react';
 
-const getBrowserStorageUsage = async (): Promise<number> => {
+type BrowserStorageEstimate = { usage: number | null; quota: number | null };
+
+const getBrowserStorageEstimate = async (): Promise<BrowserStorageEstimate> => {
   try {
     const estimate = await navigator.storage?.estimate();
-    return estimate?.usage ?? 0;
+    return {
+      usage: typeof estimate?.usage === 'number' ? estimate.usage : null,
+      quota: typeof estimate?.quota === 'number' && estimate.quota > 0 ? estimate.quota : null,
+    };
   } catch {
-    return 0;
+    return { usage: null, quota: null };
   }
 };
 
@@ -41,17 +46,21 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const [selected, setSelected] = useState<StorageCategory | null>(null);
   const [notice, setNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [localStorageBytes, setLocalStorageBytes] = useState(0);
+  const [browserStorage, setBrowserStorage] = useState<BrowserStorageEstimate>({ usage: null, quota: null });
+  const localStorageBytes = browserStorage.usage ?? 0;
+  const localStorageProgress = browserStorage.usage !== null && browserStorage.quota !== null
+    ? Math.min(100, (browserStorage.usage / browserStorage.quota) * 100)
+    : null;
 
   useEffect(() => {
     let active = true;
-    getBrowserStorageUsage().then((bytes) => { if (active) setLocalStorageBytes(bytes); });
+    getBrowserStorageEstimate().then((estimate) => { if (active) setBrowserStorage(estimate); });
     return () => { active = false; };
   }, []);
 
   const refresh = async () => {
     setRefreshing(true);
-    setLocalStorageBytes(await getBrowserStorageUsage());
+    setBrowserStorage(await getBrowserStorageEstimate());
     setNotice('Browser storage usage refreshed. Server storage readings still require the storage overview API.');
     window.setTimeout(() => setRefreshing(false), 350);
   };
@@ -80,7 +89,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
           await Promise.all(registrations.map((registration) => registration.unregister()));
         }
 
-        setLocalStorageBytes(await getBrowserStorageUsage());
+        setBrowserStorage(await getBrowserStorageEstimate());
         setSelected(null);
         setNotice('Browser storage cleanup completed. You may need to sign in again or restore app preferences.');
       } catch {
@@ -155,7 +164,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[12px] font-semibold text-white/90">{title}</p>
-                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">{id === "local-storage" ? formatMegabytes(localStorageBytes) : "—"}</p>
+                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">{id === "local-storage" ? (browserStorage.usage === null ? "—" : formatMegabytes(localStorageBytes)) : "—"}</p>
                   </div>
                   <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
                 </div>
@@ -170,9 +179,16 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 </div>
               </div>
               <div className="ml-11 mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
-                <div className={`h-full w-0 rounded-full ${tint}`} />
+                <div
+                  className={`h-full rounded-full ${tint}`}
+                  style={{ width: id === "local-storage" && localStorageProgress !== null ? `${localStorageProgress}%` : '0%' }}
+                />
               </div>
-              <p className="ml-11 mt-1 text-[9px] text-white/30">{id === "local-storage" ? "Browser storage used" : "Not measured"}</p>
+              <p className="ml-11 mt-1 text-[9px] text-white/30">
+                {id === "local-storage"
+                  ? (localStorageProgress === null ? "Browser quota unavailable" : `${localStorageProgress.toFixed(1)}% of browser storage quota used`)
+                  : "Not measured"}
+              </p>
             </div>
           ))}
         </div>
