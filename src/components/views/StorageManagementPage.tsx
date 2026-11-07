@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Activity, AlertTriangle, Archive, CheckCircle2, Coins, Database,
+  Activity, AlertTriangle, Archive, ArrowLeft, CheckCircle2, Coins, Database,
   FileText, Folder, HardDrive, Radar, RefreshCw, Terminal, Trash2, X,
 } from 'lucide-react';
 
@@ -9,150 +9,167 @@ type StorageCategory = {
   title: string;
   description: string;
   icon: React.ElementType;
+  accent: string;
+  tint: string;
   cleanable: boolean;
   note: string;
 };
 
 const categories: StorageCategory[] = [
-  { id: 'tokens', title: 'Token data', description: 'Discovered tokens, metadata and token intelligence records.', icon: Coins, cleanable: false, note: 'Token records are protected from log cleanup.' },
-  { id: 'events', title: 'Market events', description: 'Raw Solana events, decoded activity and event history.', icon: Activity, cleanable: true, note: 'Event history cleanup will be available through a dedicated backend operation.' },
-  { id: 'discovery', title: 'Discovery data', description: 'Launch discovery, qualification and scan records.', icon: Radar, cleanable: false, note: 'Discovery records are protected from log cleanup.' },
-  { id: 'engine-logs', title: 'Engine logs', description: 'NodeX application output, warnings and backend errors.', icon: FileText, cleanable: true, note: 'Only rotated or archived NodeX logs should be removed. The active log must remain intact.' },
-  { id: 'system-logs', title: 'System logs', description: 'Linux system journal and service-level messages.', icon: Terminal, cleanable: true, note: 'System journal cleanup requires a narrowly scoped privileged backend operation.' },
-  { id: 'database', title: 'SQLite database', description: 'Database files, write-ahead log and shared-memory files.', icon: Database, cleanable: false, note: 'Database files are never removed by log cleanup.' },
-  { id: 'other', title: 'Other files', description: 'Other files and directories used by the engine.', icon: Folder, cleanable: false, note: 'Inspect before changing or deleting any files.' },
+  { id: 'tokens', title: 'Token data', description: 'Discovered tokens and intelligence records', icon: Coins, accent: 'text-sky-300', tint: 'bg-sky-400', cleanable: false, note: 'Token records remain protected.' },
+  { id: 'events', title: 'Market events', description: 'Raw Solana events and market activity', icon: Activity, accent: 'text-violet-300', tint: 'bg-violet-400', cleanable: true, note: 'Event cleanup needs its own retention-safe backend operation.' },
+  { id: 'discovery', title: 'Discovery data', description: 'Launch discovery and qualification history', icon: Radar, accent: 'text-cyan-300', tint: 'bg-cyan-400', cleanable: false, note: 'Discovery records remain protected.' },
+  { id: 'engine-logs', title: 'Engine logs', description: 'NodeX output, warnings and backend errors', icon: FileText, accent: 'text-amber-300', tint: 'bg-amber-400', cleanable: false, note: 'Engine output is currently captured by the system journal. It cannot be cleaned separately yet.' },
+  { id: 'system-logs', title: 'System logs', description: 'Linux journal and service messages', icon: Terminal, accent: 'text-rose-300', tint: 'bg-rose-400', cleanable: true, note: 'This operation affects archived system-wide journal data, not only NodeX logs.' },
+  { id: 'database', title: 'SQLite database', description: 'Database, write-ahead log and shared memory', icon: Database, accent: 'text-emerald-300', tint: 'bg-emerald-400', cleanable: false, note: 'Database files, wallet data and paper-trading history are protected.' },
+  { id: 'other', title: 'Other files', description: 'Remaining engine and host files', icon: Folder, accent: 'text-orange-300', tint: 'bg-orange-400', cleanable: false, note: 'Other files must be inspected before any cleanup.' },
 ];
 
-const MetricCard = ({ label, value, detail, icon: Icon }: { label: string; value: string; detail: string; icon: React.ElementType }) => (
-  <div className="min-w-0 rounded-2xl border border-white/[0.09] bg-[#111113] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,.025)]">
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] font-medium text-white/45">{label}</span>
-      <Icon className="h-4 w-4 text-white/35" strokeWidth={1.8} />
-    </div>
-    <p className="mt-3 text-[27px] font-semibold leading-none tracking-tight text-white tabular-nums">{value}</p>
-    <p className="mt-2 text-[10px] text-white/35">{detail}</p>
-  </div>
-);
-
-export const StorageManagementPage: React.FC = () => {
+export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [selected, setSelected] = useState<StorageCategory | null>(null);
   const [notice, setNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = async () => {
     setRefreshing(true);
-    setNotice('Storage metrics will populate when the backend storage overview endpoint is available.');
+    setNotice('Live storage readings will appear here when the app is connected to the storage overview API.');
     window.setTimeout(() => setRefreshing(false), 350);
   };
 
   const confirmCleanup = () => {
     setSelected(null);
-    setNotice('No files were deleted. The backend cleanup endpoint must be implemented and connected before cleanup can run.');
+    setNotice('No files were deleted. Connect the approved cleanup operation before running this action.');
   };
 
   return (
-    <div className="space-y-5 pb-8 pt-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[13px] font-semibold text-white">Storage overview</p>
-          <p className="mt-1 text-[10px] leading-relaxed text-white/40">Live disk and data usage for the NodeX engine host.</p>
-        </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-2.5 py-1.5 text-[9px] font-medium text-amber-200/80">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+    <div className="relative w-full space-y-7 pb-8" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 14px)' }}>
+      <div className="pointer-events-none fixed right-4 top-[calc(env(safe-area-inset-top)+12px)] z-50">
+        <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-[#17130c]/95 px-3 py-2 text-[10px] font-semibold text-amber-200 shadow-[0_8px_28px_rgba(0,0,0,.45)] backdrop-blur-xl">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-300/60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-300" />
+          </span>
           Awaiting backend
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <MetricCard label="Total disk capacity" value="—" detail="Physical / virtual EC2 disk" icon={HardDrive} />
-        <MetricCard label="Available space" value="—" detail="Free space on root filesystem" icon={Database} />
+      <div className="pt-8">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">Storage</p>
+            <h1 className="mt-1 text-[19px] font-semibold tracking-tight text-white">Overview</h1>
+          </div>
+          <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh storage overview" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65 transition-colors hover:bg-white/[0.08] disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+
+        <section className="relative overflow-hidden rounded-[26px] border border-white/[0.12] bg-gradient-to-br from-[#202329] via-[#141619] to-[#101113] px-5 pb-5 pt-5 shadow-[0_18px_50px_rgba(0,0,0,.32)]">
+          <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full bg-sky-400/[0.09] blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center gap-2 text-white/55">
+              <HardDrive className="h-4 w-4" />
+              <span className="text-[11px] font-medium">Root storage capacity</span>
+            </div>
+            <div className="mt-4 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[32px] font-semibold leading-none tracking-tight text-white tabular-nums">— <span className="text-[13px] font-medium text-white/45">GB free</span></p>
+                <p className="mt-2 text-[10px] text-white/40">Remaining storage</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[17px] font-semibold leading-none text-white/85 tabular-nums">— GB</p>
+                <p className="mt-2 text-[10px] text-white/40">Total capacity</p>
+              </div>
+            </div>
+            <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-white/[0.10]">
+              <div className="h-full w-0 rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300" />
+            </div>
+            <div className="mt-2.5 flex items-center justify-between text-[10px] text-white/45">
+              <span>Used: — GB</span>
+              <span>—% used</span>
+            </div>
+            <div className="mt-5 flex items-start gap-2 border-t border-white/[0.09] pt-3">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/80" />
+              <p className="text-[10px] leading-relaxed text-white/45">Filesystem capacity is shown separately from the attached EC2 disk size. Values will populate from the backend.</p>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <section className="rounded-2xl border border-white/[0.09] bg-[#111113] p-4">
-        <div className="flex items-center justify-between gap-3">
+      <section>
+        <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <p className="text-[12px] font-semibold text-white/90">Storage utilization</p>
-            <p className="mt-1 text-[10px] text-white/35">Filesystem usage, not just the attached disk size</p>
+            <h2 className="text-[14px] font-semibold text-white">Storage breakdown</h2>
+            <p className="mt-1 text-[10px] text-white/40">Usage by engine data category</p>
           </div>
-          <span className="text-[11px] font-semibold tabular-nums text-white/50">—%</span>
+          <span className="text-[9px] text-white/30">7 categories</span>
         </div>
-        <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/[0.08]">
-          <div className="h-full w-0 rounded-full bg-white/75" />
-        </div>
-        <div className="mt-2 flex justify-between text-[9px] text-white/35">
-          <span>Used: —</span><span>Free: —</span>
-        </div>
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-200/65" />
-          <p className="text-[10px] leading-relaxed text-white/45">The earlier terminal output showed an 80 GB NVMe device but an 8 GB root partition. This page will report both values separately once the backend metrics API is connected.</p>
+
+        <div className="divide-y divide-white/[0.075]">
+          {categories.map(({ id, title, description, icon: Icon, accent, tint, cleanable, note }) => (
+            <div key={id} className="py-3.5">
+              <div className="flex items-center gap-3">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] ${accent}`}>
+                  <Icon className="h-[17px] w-[17px]" strokeWidth={1.8} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[12px] font-semibold text-white/90">{title}</p>
+                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">—</p>
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
+                </div>
+                <div className="ml-1 flex shrink-0 items-center gap-1.5">
+                  {cleanable ? (
+                    <button type="button" onClick={() => { setNotice(''); setSelected({ id, title, description, icon: Icon, accent, tint, cleanable, note }); }} aria-label={`Clean ${title}`} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/[0.12] px-3 text-[9px] font-semibold text-white/65 transition-colors hover:bg-white/[0.07]">
+                      <Trash2 className="h-3 w-3" /> Clean
+                    </button>
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-white/25" />
+                  )}
+                </div>
+              </div>
+              <div className="ml-12 mt-3 h-1 overflow-hidden rounded-full bg-white/[0.07]">
+                <div className={`h-full w-0 rounded-full ${tint}`} />
+              </div>
+              <p className="ml-12 mt-1.5 text-[9px] text-white/30">Not measured</p>
+            </div>
+          ))}
         </div>
       </section>
 
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex items-start gap-3 border-t border-white/[0.08] pt-4">
+        <Archive className="mt-0.5 h-4 w-4 shrink-0 text-white/40" />
         <div>
-          <p className="text-[13px] font-semibold text-white">Storage breakdown</p>
-          <p className="mt-1 text-[10px] text-white/35">Select a category to inspect its files and usage.</p>
+          <p className="text-[11px] font-semibold text-white/75">Protected storage</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-white/38">Wallet data, paper balances, trades and the SQLite database are never included in routine log cleanup.</p>
         </div>
-        <button type="button" onClick={refresh} disabled={refreshing} className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.10] bg-white/[0.035] px-3 text-[10px] font-medium text-white/65 transition-colors hover:bg-white/[0.07] disabled:opacity-50">
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
-        </button>
-      </div>
-
-      <div className="space-y-2.5">
-        {categories.map(({ id, title, description, icon: Icon, cleanable, note }) => (
-          <section key={id} className="rounded-2xl border border-white/[0.085] bg-[#101012] p-3.5 transition-colors hover:border-white/[0.14]">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.045] text-white/65">
-                <Icon className="h-[17px] w-[17px]" strokeWidth={1.8} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-semibold text-white/90">{title}</p>
-                <p className="mt-0.5 text-[10px] leading-relaxed text-white/40">{description}</p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[11px] font-semibold tabular-nums text-white/65">—</p>
-                <p className="mt-0.5 text-[9px] text-white/30">Not measured</p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2.5">
-              <span className="text-[9px] text-white/30">{cleanable ? 'Cleanup eligible · confirmation required' : 'Protected category'}</span>
-              {cleanable ? (
-                <button type="button" onClick={() => { setNotice(''); setSelected({ id, title, description, icon: Icon, cleanable, note }); }} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.045] px-3 text-[10px] font-semibold text-white/75 transition-colors hover:bg-white/[0.09]">
-                  <Trash2 className="h-3 w-3" /> Clean
-                </button>
-              ) : (
-                <span className="inline-flex items-center gap-1 text-[9px] text-white/35"><CheckCircle2 className="h-3 w-3" /> Protected</span>
-              )}
-            </div>
-          </section>
-        ))}
-      </div>
-
-      <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
-        <div className="flex items-center gap-2">
-          <Archive className="h-4 w-4 text-white/45" />
-          <p className="text-[11px] font-semibold text-white/75">Safe cleanup policy</p>
-        </div>
-        <p className="mt-1.5 text-[10px] leading-relaxed text-white/40">Cleanup will target only the selected category. Active logs, SQLite databases, wallet data and paper-trading records must remain protected unless a separate explicit maintenance operation is designed for them.</p>
       </div>
 
       {notice && <div role="status" className="rounded-xl border border-amber-400/15 bg-amber-400/[0.045] p-3 text-[10px] leading-relaxed text-amber-100/75">{notice}</div>}
 
+      <div className="flex justify-start pt-1">
+        <button type="button" onClick={onBack} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 text-[12px] font-semibold text-black shadow-[0_5px_20px_rgba(255,255,255,.10)] transition-transform active:scale-[0.97]">
+          <ArrowLeft className="h-4 w-4" strokeWidth={2.3} />
+          Back
+        </button>
+      </div>
+
       {selected && (
         <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/80 px-0 backdrop-blur-sm sm:items-center sm:px-4" onClick={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="storage-clean-title" className="w-full max-w-lg rounded-t-2xl border border-white/[0.10] bg-[#111113] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 shadow-[0_-18px_60px_rgba(0,0,0,.65)] sm:rounded-2xl">
+          <section role="dialog" aria-modal="true" aria-labelledby="storage-clean-title" className="w-full max-w-lg rounded-t-[26px] border border-white/[0.10] bg-[#111315] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 shadow-[0_-18px_60px_rgba(0,0,0,.65)] sm:rounded-[26px]">
             <div className="mb-4 flex items-center justify-between">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.05]"><Trash2 className="h-4 w-4 text-white/70" /></span>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Close cleanup confirmation" className="rounded-lg p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setSelected(null)} aria-label="Close cleanup confirmation" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
             </div>
             <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">Confirm {selected.title.toLowerCase()} cleanup?</h2>
             <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
-            <div className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.045] p-3">
-              <p className="text-[10px] leading-relaxed text-amber-100/75">Storage cleanup is not connected yet. Confirming here will not delete anything until the backend cleanup endpoint is implemented.</p>
+            <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/[0.045] p-3">
+              <p className="text-[10px] leading-relaxed text-amber-100/75">Cleanup is not connected to this control yet. Confirming will not delete anything.</p>
             </div>
             <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setSelected(null)} className="min-h-11 flex-1 rounded-xl border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-xl bg-white text-[11px] font-bold text-black">Acknowledge</button>
+              <button type="button" onClick={() => setSelected(null)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
+              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">Acknowledge</button>
             </div>
           </section>
         </div>
