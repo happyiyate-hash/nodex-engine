@@ -387,7 +387,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const mint = String(event.data?.mint_address || '');
         const candles = Array.isArray(event.data?.candles) ? event.data.candles : [];
         const history = candles.map((candle: Record<string, any>) => ({
-          time: Number(candle.time ?? candle.timestamp ?? Date.now()),
+          time: (() => { const rawTime = candle.time ?? candle.timestamp ?? Date.now(); const value = Number(rawTime); return Number.isFinite(value) && value < 10_000_000_000 ? value * 1000 : value; })(),
           price: Number(candle.close ?? candle.close_price ?? candle.price ?? 0),
           open: Number(candle.open ?? candle.open_price ?? candle.close ?? 0),
           high: Number(candle.high ?? candle.high_price ?? candle.close ?? 0),
