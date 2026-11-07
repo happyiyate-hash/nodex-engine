@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight,
   Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
-  SlidersHorizontal, Trash2, Wifi,
+  SlidersHorizontal, Trash2, Wifi, Eye, EyeOff,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/api';
@@ -65,13 +65,15 @@ const StatusLine = ({ label, value, good }: { label: string; value: string; good
 
 export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void }> = ({ onSubpageChange }) => {
   const {
-    engineStatus, toggleEngine, settings, updateSettings, backendError,
+    engineStatus, toggleEngine, settings, updateSettings, updateConnectionDraft, backendError,
   } = useTerminal();
   const [section, setSection] = useState<SettingsSection>('home');
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [websocketUrl, setWebsocketUrl] = useState(settings.wsUrlOverride);
   const [operatorKey, setOperatorKey] = useState(settings.adminApiKey);
+  const [showOperatorKey, setShowOperatorKey] = useState(false);
+  const [connectionNeedsAttach, setConnectionNeedsAttach] = useState(false);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [connectionErrorField, setConnectionErrorField] = useState<'url' | 'key' | ''>('');
@@ -140,10 +142,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setOperatorKey(settings.adminApiKey);
   }, [settings.backendUrl, settings.wsUrl, settings.adminApiKey]);
 
-  const connectionDirty =
-    backendUrl.trim() !== settings.backendUrl ||
-    websocketUrl.trim() !== settings.wsUrlOverride ||
-    operatorKey.trim() !== settings.adminApiKey;
 
   const attachConnection = async () => {
     setSavingConnection(true);
@@ -185,6 +183,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         wsUrlOverride: cleanWsUrl,
         adminApiKey: operatorKey.trim(),
       });
+      setConnectionNeedsAttach(false);
       setConnectionSuccess(true);
       setConnectionMessage('Attached to NodeX backend.');
     } catch (error) {
@@ -351,7 +350,15 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
               className={`${inputClass} ${connectionErrorField === 'url' ? 'border-red-400 focus:border-red-400' : ''}`}
               type="url"
               value={backendUrl}
-              onChange={(e) => { setBackendUrl(e.target.value); setConnectionErrorField(''); setConnectionMessage(''); setConnectionSuccess(false); }}
+              onChange={(e) => {
+                const value = e.target.value;
+                setBackendUrl(value);
+                setConnectionNeedsAttach(true);
+                setConnectionErrorField('');
+                setConnectionMessage('');
+                setConnectionSuccess(false);
+                updateConnectionDraft({ backendUrl: value });
+              }}
               placeholder="https://your-server.com"
               autoCapitalize="none"
               autoCorrect="off"
@@ -363,7 +370,14 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
               className={inputClass}
               type="url"
               value={websocketUrl}
-              onChange={(e) => { setWebsocketUrl(e.target.value); setConnectionMessage(''); setConnectionSuccess(false); }}
+              onChange={(e) => {
+                const value = e.target.value;
+                setWebsocketUrl(value);
+                setConnectionNeedsAttach(true);
+                setConnectionMessage('');
+                setConnectionSuccess(false);
+                updateConnectionDraft({ wsUrlOverride: value });
+              }}
               placeholder="wss://your-server.com/api/v1/ws"
               autoCapitalize="none"
               autoCorrect="off"
@@ -371,23 +385,42 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             />
           </Field>
           <Field label="Backend API key">
+            <div className="relative">
             <input
-              className={`${inputClass} ${connectionErrorField === 'key' ? 'border-red-400 focus:border-red-400' : ''}`}
-              type="password"
+              type={showOperatorKey ? 'text' : 'password'}
               value={operatorKey}
-              onChange={(e) => { setOperatorKey(e.target.value); setConnectionErrorField(''); setConnectionMessage(''); setConnectionSuccess(false); }}
+              onChange={(e) => {
+                const value = e.target.value;
+                setOperatorKey(value);
+                setConnectionNeedsAttach(true);
+                setConnectionErrorField('');
+                setConnectionMessage('');
+                setConnectionSuccess(false);
+                updateConnectionDraft({ adminApiKey: value });
+              }}
               placeholder="Paste operator API key"
               autoCapitalize="none"
               autoCorrect="off"
               autoComplete="new-password"
+              className={`pr-11 ${inputClass} ${connectionErrorField === 'key' ? 'border-red-400 focus:border-red-400' : ''}`}
             />
+            <button
+              type="button"
+              onClick={() => setShowOperatorKey((visible) => !visible)}
+              aria-label={showOperatorKey ? 'Hide API key' : 'Show API key'}
+              title={showOperatorKey ? 'Hide API key' : 'Show API key'}
+              className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white/85"
+            >
+              {showOperatorKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+            </div>
           </Field>
           {connectionMessage && (
             <p className={`text-[11px] ${connectionSuccess ? 'text-emerald-300' : 'text-red-300'}`} role="status">
               {connectionMessage}
             </p>
           )}
-          {connectionDirty && (
+          {connectionNeedsAttach && (
             <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-50 flex justify-center px-5 pointer-events-none">
               <button
                 type="button"
