@@ -54,7 +54,6 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const [browserStorage, setBrowserStorage] = useState<BrowserStorageEstimate>({ usage: null, quota: null });
   const [serverStorage, setServerStorage] = useState<StorageOverview | null>(null);
   const [serverStorageError, setServerStorageError] = useState('');
-  const [lastServerRefresh, setLastServerRefresh] = useState<string | null>(null);
   const localStorageBytes = browserStorage.usage ?? 0;
   const localStorageProgress = browserStorage.usage !== null && browserStorage.quota !== null
     ? Math.min(100, (browserStorage.usage / browserStorage.quota) * 100)
@@ -71,7 +70,6 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       const overview = await apiClient.getStorageOverview();
       setServerStorage(overview);
       setServerStorageError('');
-      setLastServerRefresh(overview.updated_at);
       if (showNotice) setNotice('Browser and server storage readings refreshed.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load server storage overview.';
@@ -125,7 +123,6 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       try {
         const result = await apiClient.cleanupSystemJournal();
         setServerStorage(result.overview);
-        setLastServerRefresh(result.overview.updated_at);
         setNotice(result.bytes_freed === null
           ? 'System journal cleanup completed. The backend could not calculate the exact space freed.'
           : `System journal cleanup completed. Freed ${formatMegabytes(result.bytes_freed)}.`);
@@ -314,7 +311,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-white/45">{selected.id === 'local-storage' ? selected.note : (serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.note || selected.note)}</p>
             {selected.id !== 'local-storage' && serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.records != null && (
-              <p className="mt-2 text-[10px] text-white/40">Records: {serverStorage.categories[selected.id as keyof StorageOverview['categories']].records?.toLocaleString()}</p>
+              <p className="mt-2 text-[10px] text-white/40">Records: {serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.records?.toLocaleString()}</p>
             )}
             {selected.id === 'system_logs' ? (
               <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
