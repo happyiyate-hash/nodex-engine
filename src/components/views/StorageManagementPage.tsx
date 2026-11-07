@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Activity, AlertTriangle, Archive, ArrowLeft, CheckCircle2, Coins, Database,
-  FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X, KeyRound,
+  AlertTriangle, Archive, ArrowLeft, Database, HardDrive, KeyRound,
+  RefreshCw, Signal, Terminal, Trash2, X,
 } from 'lucide-react';
 import { apiClient, StorageOverview } from '../../services/rest';
 
@@ -33,17 +33,36 @@ type StorageCategory = {
 };
 
 const categories: StorageCategory[] = [
-  { id: 'tokens', title: 'Token data', description: 'Discovered tokens and intelligence records', icon: Coins, accent: 'text-sky-300', tint: 'bg-sky-400', cleanable: false, note: 'Token records remain protected.' },
-  { id: 'launches', title: 'Launch records', description: 'Detected token launches and qualification history', icon: Radar, accent: 'text-cyan-300', tint: 'bg-cyan-400', cleanable: false, note: 'Launch history remains protected.' },
-  { id: 'events', title: 'Market events', description: 'Raw Solana events and market activity', icon: Activity, accent: 'text-violet-300', tint: 'bg-violet-400', cleanable: false, note: 'The backend measures event records. A retention-safe event cleanup endpoint is not implemented, so no event data can be deleted here.' },
-  { id: 'discovery', title: 'Discovery data', description: 'Launch discovery and qualification history', icon: Radar, accent: 'text-cyan-300', tint: 'bg-cyan-400', cleanable: false, note: 'Discovery data is represented by launch records and overlaps Launch records.' },
-  { id: 'chart_data', title: 'Chart data', description: 'Stored chart candles and price history', icon: Activity, accent: 'text-indigo-300', tint: 'bg-indigo-400', cleanable: false, note: 'Chart history is measured by the backend and is protected from cleanup.' },
-  { id: 'paper_trading', title: 'Paper trading', description: 'Paper ledger and simulated positions', icon: Coins, accent: 'text-emerald-300', tint: 'bg-emerald-400', cleanable: false, note: 'Paper balances, ledger entries and simulated positions are protected.' },
-  { id: 'engine_logs', title: 'Engine logs', description: 'NodeX output, warnings and backend errors', icon: FileText, accent: 'text-amber-300', tint: 'bg-amber-400', cleanable: false, note: 'Engine output is captured by the system journal and cannot be isolated from system-wide journal storage.' },
-  { id: 'system_logs', title: 'System logs', description: 'Linux journal and service messages', icon: Terminal, accent: 'text-rose-300', tint: 'bg-rose-400', cleanable: true, note: 'Cleanup affects archived system-wide journal data, not only NodeX logs. The backend must have OS permission and NODEX_ALLOW_SYSTEM_JOURNAL_CLEANUP=true.' },
-  { id: 'database', title: 'SQLite database', description: 'Database, write-ahead log and shared memory', icon: Database, accent: 'text-emerald-300', tint: 'bg-emerald-400', cleanable: false, note: 'Database files, wallet data and paper-trading history are protected.' },
-  { id: 'local-storage', title: 'Local storage', description: 'Browser tokens, settings, cache and app records', icon: KeyRound, accent: 'text-fuchsia-300', tint: 'bg-fuchsia-400', cleanable: true, note: 'Clears browser storage for this app origin. This may sign you out and reset locally saved preferences.' },
-  { id: 'other', title: 'Other files', description: 'Remaining engine and host files', icon: Folder, accent: 'text-orange-300', tint: 'bg-orange-400', cleanable: false, note: 'Other files are not currently attributed by the backend and must be inspected before cleanup.' },
+  {
+    id: 'database',
+    title: 'Database files',
+    description: 'SQLite database, WAL and SHM files',
+    icon: Database,
+    accent: 'text-emerald-300',
+    tint: 'bg-emerald-400',
+    cleanable: false,
+    note: 'These files contain NodeX persisted application data. Their size is already included in root disk usage.',
+  },
+  {
+    id: 'system_logs',
+    title: 'System journal',
+    description: 'Linux journal shared by NodeX and other services',
+    icon: Terminal,
+    accent: 'text-amber-300',
+    tint: 'bg-amber-400',
+    cleanable: true,
+    note: 'This is a system-wide journal measurement, not a NodeX-only log size. It is already included in root disk usage.',
+  },
+  {
+    id: 'local-storage',
+    title: 'Local storage',
+    description: 'Browser storage used by this NodeX app',
+    icon: KeyRound,
+    accent: 'text-fuchsia-300',
+    tint: 'bg-fuchsia-400',
+    cleanable: true,
+    note: 'Clears browser storage for this app origin. This may sign you out and reset locally saved preferences.',
+  },
 ];
 
 export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -153,17 +172,17 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
           <div>
             <div className="flex items-center gap-2 text-white/55">
               <HardDrive className="h-4 w-4" />
-              <span className="text-[11px] font-medium">Root storage capacity</span>
+              <span className="text-[11px] font-medium">EC2 root filesystem</span>
             </div>
             <div className="mt-2.5 flex items-end justify-between gap-4">
               <div>
                 <p className="text-[25px] font-semibold leading-none tracking-tight text-white tabular-nums">
-                  {serverStorage?.disk ? (serverStorage.disk.available_bytes / (1024 ** 3)).toFixed(2) : '—'} <span className="text-[13px] font-medium text-white/45">GB free</span>
+                  {serverStorage?.disk ? (serverStorage.disk.available_bytes / (1024 ** 3)).toFixed(2) : '—'} <span className="text-[13px] font-medium text-white/45">GiB free</span>
                 </p>
-                <p className="mt-2 text-[10px] text-white/40">Remaining filesystem space</p>
+                <p className="mt-2 text-[10px] text-white/40">Available on root volume</p>
               </div>
               <div className="text-right">
-                <p className="text-[17px] font-semibold leading-none text-white/85 tabular-nums">{serverStorage?.disk ? `${(serverStorage.disk.total_bytes / (1024 ** 3)).toFixed(2)} GB` : '— GB'}</p>
+                <p className="text-[17px] font-semibold leading-none text-white/85 tabular-nums">{serverStorage?.disk ? `${(serverStorage.disk.total_bytes / (1024 ** 3)).toFixed(2)} GiB` : '— GiB'}</p>
                 <p className="mt-2 text-[10px] text-white/40">Total capacity</p>
               </div>
             </div>
@@ -171,13 +190,13 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <div className="h-full rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300" style={{ width: serverStorage?.disk ? `${Math.min(100, serverStorage.disk.used_bytes / Math.max(1, serverStorage.disk.total_bytes) * 100)}%` : '0%' }} />
             </div>
             <div className="mt-2 flex items-center justify-between text-[10px] text-white/45">
-              <span>Used: {serverStorage?.disk ? `${(serverStorage.disk.used_bytes / (1024 ** 3)).toFixed(2)} GB` : '— GB'}</span>
+              <span>Used: {serverStorage?.disk ? `${(serverStorage.disk.used_bytes / (1024 ** 3)).toFixed(2)} GiB` : '— GiB'}</span>
               <span>{serverStorage?.disk ? `${serverStorage.disk.used_percent} used` : '—% used'}</span>
             </div>
             <div className="mt-3 flex items-start gap-2 border-t border-white/[0.07] pt-2.5">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/80" />
               <p className="text-[10px] leading-relaxed text-white/45">
-                {serverStorageError || (serverStorage?.disk ? `Filesystem: ${serverStorage.disk.filesystem}. Values are from the backend root filesystem snapshot.` : 'Waiting for the authenticated backend storage overview. Check the backend URL and operator key in Settings.')}
+                {serverStorageError || (serverStorage?.disk ? `Device: ${serverStorage.disk.filesystem} · Mount: ${serverStorage.disk.mountpoint}. Capacity is read from the EC2 root filesystem.` : serverStorage?.disk_error || 'Waiting for the authenticated backend storage overview. Check the backend URL and operator key in Settings.')}
               </p>
             </div>
           </div>
@@ -188,20 +207,31 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       <section className="w-full px-3">
         <div className="mb-2.5 flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-[14px] font-semibold text-white">Storage breakdown</h2>
-            <p className="mt-1 text-[10px] text-white/40">Usage by engine data category</p>
+            <h2 className="text-[14px] font-semibold text-white">Storage details</h2>
+            <p className="mt-1 text-[10px] text-white/40">Measured files and browser storage; these are subsets, not extra disk capacity.</p>
           </div>
-          <span className="text-[9px] text-white/30">10 server · 1 browser</span>
+          <span className="text-[9px] text-white/30">2 server · 1 browser</span>
         </div>
 
         <div className="divide-y divide-white/[0.075]">
           {categories.map((category) => {
             const { id, title, description, icon: Icon, accent, tint } = category;
             const isLocalStorage = id === 'local-storage';
-            const serverCategory = serverStorage?.categories?.[id as keyof StorageOverview['categories']];
-            const categoryBytes = isLocalStorage ? browserStorage.usage : (serverCategory?.physical_bytes ?? serverCategory?.logical_bytes ?? (id === 'system_logs' ? serverStorage?.system_journal.reported_size_bytes : null));
-            const categoryRecords = serverCategory?.records;
-            const categoryNote = isLocalStorage ? category.note : (serverCategory?.note || category.note);
+            const categoryBytes = isLocalStorage
+              ? browserStorage.usage
+              : id === 'database'
+                ? serverStorage?.database.total_file_bytes ?? null
+                : serverStorage?.system_journal.reported_size_bytes ?? null;
+            const progress = isLocalStorage
+              ? localStorageProgress
+              : categoryBytes !== null && categoryBytes !== undefined && serverStorage?.disk
+                ? Math.min(100, (categoryBytes / Math.max(1, serverStorage.disk.total_bytes)) * 100)
+                : null;
+            const detailNote = isLocalStorage
+              ? category.note
+              : id === 'database'
+                ? 'Physical SQLite database, WAL and SHM files. Included in root filesystem used space.'
+                : serverStorage?.system_journal.note || category.note;
             return (
               <button
                 key={id}
@@ -218,7 +248,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[12px] font-semibold text-white/90">{title}</p>
                       <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">
-                        {categoryBytes == null ? "—" : formatMegabytes(categoryBytes)}
+                        {categoryBytes == null ? '—' : formatMegabytes(categoryBytes)}
                       </p>
                     </div>
                     <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
@@ -228,21 +258,15 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   <div
                     className={`h-full rounded-full ${tint}`}
                     style={{
-                    width: isLocalStorage && localStorageProgress !== null
-                      ? `${localStorageProgress}%`
-                      : !isLocalStorage && categoryBytes != null && serverStorage?.disk
-                        ? `${Math.min(100, categoryBytes / Math.max(1, serverStorage.disk.total_bytes) * 100)}%`
-                        : '0%',
-                    minWidth: categoryBytes != null && categoryBytes > 0 ? '2px' : '0',
-                  }}
+                      width: progress === null ? '0%' : `${progress}%`,
+                      minWidth: categoryBytes !== null && categoryBytes !== undefined && categoryBytes > 0 ? '2px' : '0',
+                    }}
                   />
                 </div>
                 <p className="ml-11 mt-1 text-[9px] text-white/30">
                   {isLocalStorage
-                    ? (localStorageProgress === null ? "Browser quota unavailable" : `${localStorageProgress.toFixed(1)}% of browser storage quota used`)
-                    : serverCategory?.records != null
-                      ? `${categoryRecords?.toLocaleString()} records · ${serverCategory.note}`
-                      : categoryBytes != null ? serverCategory?.note || category.note : 'Not reported by backend'}
+                    ? (localStorageProgress === null ? 'Browser quota unavailable' : `${localStorageProgress.toFixed(1)}% of browser storage quota used`)
+                    : detailNote}
                 </p>
               </button>
             );
@@ -284,11 +308,11 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 <span className="text-[13px] font-semibold tabular-nums text-white/85">
                   {selected.id === 'local-storage'
                     ? (browserStorage.usage === null ? 'Unavailable' : formatMegabytes(localStorageBytes))
-                    : (() => {
-                        const item = serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']];
-                        const bytes = item?.physical_bytes ?? item?.logical_bytes ?? (selected.id === 'system_logs' ? serverStorage?.system_journal.reported_size_bytes : null);
-                        return bytes == null ? 'Not reported' : formatMegabytes(bytes);
-                      })()}
+                    : selected.id === 'database'
+                      ? formatMegabytes(serverStorage?.database.total_file_bytes ?? 0)
+                      : serverStorage?.system_journal.reported_size_bytes == null
+                        ? 'Not reported'
+                        : formatMegabytes(serverStorage.system_journal.reported_size_bytes)}
                 </span>
               </div>
               {selected.id === 'local-storage' && (
@@ -308,11 +332,21 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   </p>
                 </>
               )}
+              {selected.id === 'database' && serverStorage && (
+                <div className="mt-3 space-y-1.5 border-t border-white/[0.07] pt-3 text-[10px] text-white/45">
+                  <div className="flex justify-between gap-3"><span>Main database</span><span className="tabular-nums">{formatMegabytes(serverStorage.database.database_bytes)}</span></div>
+                  <div className="flex justify-between gap-3"><span>Write-ahead log</span><span className="tabular-nums">{formatMegabytes(serverStorage.database.wal_bytes)}</span></div>
+                  <div className="flex justify-between gap-3"><span>Shared memory</span><span className="tabular-nums">{formatMegabytes(serverStorage.database.shm_bytes)}</span></div>
+                </div>
+              )}
             </div>
-            <p className="mt-3 text-[10px] leading-relaxed text-white/45">{selected.id === 'local-storage' ? selected.note : (serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.note || selected.note)}</p>
-            {selected.id !== 'local-storage' && serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.records != null && (
-              <p className="mt-2 text-[10px] text-white/40">Records: {serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.records?.toLocaleString()}</p>
-            )}
+            <p className="mt-3 text-[10px] leading-relaxed text-white/45">
+              {selected.id === 'local-storage'
+                ? selected.note
+                : selected.id === 'database'
+                  ? 'This is one combined SQLite file measurement. It is already counted inside the EC2 root filesystem usage above.'
+                  : serverStorage?.system_journal.note || selected.note}
+            </p>
             {selected.id === 'system_logs' ? (
               <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
                 <Trash2 className="h-3.5 w-3.5" /> Clean system journal
