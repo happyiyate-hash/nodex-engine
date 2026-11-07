@@ -608,7 +608,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             <StatusLine label="RPC latency" value={engineStatus.rpc_latency_ms ? `${engineStatus.rpc_latency_ms} ms` : 'Not reported'} />
             <StatusLine label="Reconnect attempts" value={String(engineStatus.reconnection_count ?? 0)} />
           </div>
-          <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] text-white/80 disabled:opacity-50">
+          <button type="button" onClick={testRestConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] text-white/80 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${testingConnection ? 'animate-spin' : ''}`} /> {testingConnection ? 'Checking…' : 'Check backend health'}
           </button>
           {healthMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{healthMessage}</p>}
