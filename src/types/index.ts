@@ -137,6 +137,10 @@ export interface DiscoveredToken {
   mint: string;
   name: string;
   symbol: string;
+  metadata_uri?: string;
+  logo_url?: string;
+  decimals?: number;
+  total_supply_raw?: string;
   creator_wallet: string;
   launch_time: string;
   current_price_usd: number;
