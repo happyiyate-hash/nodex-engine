@@ -404,7 +404,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
-      if (tokenMint || ['launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_state_updated', 'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update', 'chart_candle_update', 'chart_candle_closed', 'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed', 'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated'].includes(event.event_type)) {
+      if (tokenMint && !['token_state_updated', 'token_detail_snapshot', 'chart_candle_update', 'chart_candle_closed', 'chart_history_snapshot'].includes(event.event_type)) {
         setTokens((previous) => {
           const mint = String(tokenMint || '');
           const merged = mergeTokenEvent(previous.find((item) => item.mint === mint), event);
@@ -413,7 +413,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSelectedToken((previous) => previous && previous.mint === String(tokenMint || '')
           ? (mergeTokenEvent(previous, event) || previous) : previous);
       }
-      setEvents((previous) => {
+      const isHighFrequencyMarketEvent = ['market_tick', 'market_price_update', 'token_market_update', 'token_statistics_update', 'chart_candle_update', 'chart_candle_closed'].includes(event.event_type);
+      if (!isHighFrequencyMarketEvent) setEvents((previous) => {
         const severity = String(event.data?.severity || '').toLowerCase();
         const isRepeatableDiagnostic =
           (event.event_type === 'diagnostic' || event.event_type === 'stream_warning') &&
