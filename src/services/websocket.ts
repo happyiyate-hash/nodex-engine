@@ -200,7 +200,7 @@ export class NodeXWebSocketService {
     if(!this.ws||this.ws.readyState!==WebSocket.OPEN)return false;
     this.ws.send(JSON.stringify(mode?{command,mode}:{command}));return true;
   }
-  public send(payload:{command:string;mode?:string}):void {
+  public send(payload:{command:string;mode?:string;mint?:string;timeframe?:string}):void {
     if(!this.ws||this.ws.readyState!==WebSocket.OPEN)throw new Error('NodeX WebSocket is not connected.');
     this.ws.send(JSON.stringify(payload));
   }
