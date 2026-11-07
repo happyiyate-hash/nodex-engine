@@ -262,6 +262,53 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
         return;
       }
+      if (event.event_type === 'token_state_updated') {
+        const stateData = event.data?.data && typeof event.data.data === 'object'
+          ? { ...event.data.data, mint_address: event.data.mint_address }
+          : event.data;
+        const mint = String(stateData?.mint_address || '');
+        const mapped = mapTokenDetailSnapshot(stateData || {});
+        if (mapped) {
+          setTokens((previous) => [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500));
+          setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(stateData, previous) || previous : previous);
+        }
+      }
+      if (event.event_type === 'chart_candle_update' || event.event_type === 'chart_candle_closed') {
+        const mint = String(event.data?.mint_address || '');
+        const candle = event.data?.candle || event.data;
+        const rawTime = candle.time ?? candle.timestamp ?? candle.open_time ?? candle.start_time;
+        const parsedTime = typeof rawTime === 'number' ? (rawTime < 10_000_000_000 ? rawTime * 1000 : rawTime) : Date.parse(String(rawTime || ''));
+        const point = {
+          time: Number.isFinite(parsedTime) ? parsedTime : Date.now(),
+          price: Number(candle.close ?? candle.close_price ?? candle.price ?? 0),
+          open: Number(candle.open ?? candle.open_price ?? candle.close ?? 0),
+          high: Number(candle.high ?? candle.high_price ?? candle.close ?? 0),
+          low: Number(candle.low ?? candle.low_price ?? candle.close ?? 0),
+          volume: Number(candle.volume ?? candle.volume_sol ?? 0),
+        };
+        if (mint && point.price > 0) {
+          const append = (token: DiscoveredToken) => ({
+            ...token,
+            price_history_5m: [...(token.price_history_5m || []).filter((item) => item.time !== point.time), point].slice(-500),
+          });
+          setTokens((previous) => previous.map((token) => token.mint === mint ? append(token) : token));
+          setSelectedToken((previous) => previous?.mint === mint ? append(previous) : previous);
+        }
+      }
+      if (event.event_type === 'profile_updated') setProfile(event.data as NodeXProfileSnapshot);
+      if (event.event_type === 'portfolio_summary_updated') {
+        setProfile((previous) => ({
+          ...(previous || {}),
+          portfolio: { ...(previous?.portfolio || {}), ...(event.data || {}) },
+        }));
+      }
+      if (event.event_type === 'token_removed') {
+        const mint = String(event.data?.mint_address || '');
+        if (mint) {
+          setTokens((previous) => previous.filter((token) => token.mint !== mint));
+          setLaunches((previous) => previous.filter((launch) => launch.mint_address !== mint));
+        }
+      }
       if (event.event_type === 'token_detail_snapshot') {
         const snapshot = event.data?.snapshot as Record<string, any> | undefined;
         if (snapshot) {
