@@ -3,6 +3,7 @@ import {
   Activity, AlertTriangle, Archive, ArrowLeft, CheckCircle2, Coins, Database,
   FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X, KeyRound,
 } from 'lucide-react';
+import { apiClient, StorageOverview } from '../../services/rest';
 
 type BrowserStorageEstimate = { usage: number | null; quota: number | null };
 
@@ -33,13 +34,16 @@ type StorageCategory = {
 
 const categories: StorageCategory[] = [
   { id: 'tokens', title: 'Token data', description: 'Discovered tokens and intelligence records', icon: Coins, accent: 'text-sky-300', tint: 'bg-sky-400', cleanable: false, note: 'Token records remain protected.' },
-  { id: 'events', title: 'Market events', description: 'Raw Solana events and market activity', icon: Activity, accent: 'text-violet-300', tint: 'bg-violet-400', cleanable: true, note: 'Event cleanup needs its own retention-safe backend operation.' },
-  { id: 'discovery', title: 'Discovery data', description: 'Launch discovery and qualification history', icon: Radar, accent: 'text-cyan-300', tint: 'bg-cyan-400', cleanable: false, note: 'Discovery records remain protected.' },
-  { id: 'engine-logs', title: 'Engine logs', description: 'NodeX output, warnings and backend errors', icon: FileText, accent: 'text-amber-300', tint: 'bg-amber-400', cleanable: false, note: 'Engine output is currently captured by the system journal. It cannot be cleaned separately yet.' },
-  { id: 'system-logs', title: 'System logs', description: 'Linux journal and service messages', icon: Terminal, accent: 'text-rose-300', tint: 'bg-rose-400', cleanable: true, note: 'This operation affects archived system-wide journal data, not only NodeX logs.' },
+  { id: 'launches', title: 'Launch records', description: 'Detected token launches and qualification history', icon: Radar, accent: 'text-cyan-300', tint: 'bg-cyan-400', cleanable: false, note: 'Launch history remains protected.' },
+  { id: 'events', title: 'Market events', description: 'Raw Solana events and market activity', icon: Activity, accent: 'text-violet-300', tint: 'bg-violet-400', cleanable: false, note: 'The backend measures event records. A retention-safe event cleanup endpoint is not implemented, so no event data can be deleted here.' },
+  { id: 'discovery', title: 'Discovery data', description: 'Launch discovery and qualification history', icon: Radar, accent: 'text-cyan-300', tint: 'bg-cyan-400', cleanable: false, note: 'Discovery data is represented by launch records and overlaps Launch records.' },
+  { id: 'chart_data', title: 'Chart data', description: 'Stored chart candles and price history', icon: Activity, accent: 'text-indigo-300', tint: 'bg-indigo-400', cleanable: false, note: 'Chart history is measured by the backend and is protected from cleanup.' },
+  { id: 'paper_trading', title: 'Paper trading', description: 'Paper ledger and simulated positions', icon: Coins, accent: 'text-emerald-300', tint: 'bg-emerald-400', cleanable: false, note: 'Paper balances, ledger entries and simulated positions are protected.' },
+  { id: 'engine_logs', title: 'Engine logs', description: 'NodeX output, warnings and backend errors', icon: FileText, accent: 'text-amber-300', tint: 'bg-amber-400', cleanable: false, note: 'Engine output is captured by the system journal and cannot be isolated from system-wide journal storage.' },
+  { id: 'system_logs', title: 'System logs', description: 'Linux journal and service messages', icon: Terminal, accent: 'text-rose-300', tint: 'bg-rose-400', cleanable: true, note: 'Cleanup affects archived system-wide journal data, not only NodeX logs. The backend must have OS permission and NODEX_ALLOW_SYSTEM_JOURNAL_CLEANUP=true.' },
   { id: 'database', title: 'SQLite database', description: 'Database, write-ahead log and shared memory', icon: Database, accent: 'text-emerald-300', tint: 'bg-emerald-400', cleanable: false, note: 'Database files, wallet data and paper-trading history are protected.' },
-  { id: 'local-storage', title: 'Local storage', description: 'Browser tokens, settings, cache and app records', icon: KeyRound, accent: 'text-fuchsia-300', tint: 'bg-fuchsia-400', cleanable: true, note: 'Clears all browser localStorage for this app origin. This may sign you out and reset locally saved preferences.' },
-  { id: 'other', title: 'Other files', description: 'Remaining engine and host files', icon: Folder, accent: 'text-orange-300', tint: 'bg-orange-400', cleanable: false, note: 'Other files must be inspected before any cleanup.' },
+  { id: 'local-storage', title: 'Local storage', description: 'Browser tokens, settings, cache and app records', icon: KeyRound, accent: 'text-fuchsia-300', tint: 'bg-fuchsia-400', cleanable: true, note: 'Clears browser storage for this app origin. This may sign you out and reset locally saved preferences.' },
+  { id: 'other', title: 'Other files', description: 'Remaining engine and host files', icon: Folder, accent: 'text-orange-300', tint: 'bg-orange-400', cleanable: false, note: 'Other files are not currently attributed by the backend and must be inspected before cleanup.' },
 ];
 
 export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -48,6 +52,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const [notice, setNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [browserStorage, setBrowserStorage] = useState<BrowserStorageEstimate>({ usage: null, quota: null });
+  const [serverStorage, setServerStorage] = useState<StorageOverview | null>(null);
+  const [serverStorageError, setServerStorageError] = useState('');
+  const [lastServerRefresh, setLastServerRefresh] = useState<string | null>(null);
   const localStorageBytes = browserStorage.usage ?? 0;
   const localStorageProgress = browserStorage.usage !== null && browserStorage.quota !== null
     ? Math.min(100, (browserStorage.usage / browserStorage.quota) * 100)
@@ -56,18 +63,28 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
     ? Math.max(0, browserStorage.quota - browserStorage.usage)
     : null;
 
-  useEffect(() => {
-    let active = true;
-    getBrowserStorageEstimate().then((estimate) => { if (active) setBrowserStorage(estimate); });
-    return () => { active = false; };
-  }, []);
-
-  const refresh = async () => {
+  const refresh = async (showNotice = true) => {
     setRefreshing(true);
-    setBrowserStorage(await getBrowserStorageEstimate());
-    setNotice('Browser storage usage refreshed. Server storage readings still require the storage overview API.');
-    window.setTimeout(() => setRefreshing(false), 350);
+    const browserEstimate = await getBrowserStorageEstimate();
+    setBrowserStorage(browserEstimate);
+    try {
+      const overview = await apiClient.getStorageOverview();
+      setServerStorage(overview);
+      setServerStorageError('');
+      setLastServerRefresh(overview.updated_at);
+      if (showNotice) setNotice('Browser and server storage readings refreshed.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load server storage overview.';
+      setServerStorageError(message);
+      if (showNotice) setNotice(`Browser storage refreshed. Server storage could not be loaded: ${message}`);
+    } finally {
+      setRefreshing(false);
+    }
   };
+
+  useEffect(() => {
+    void refresh(false);
+  }, []);
 
   const confirmCleanup = async () => {
     if (selected?.id === 'local-storage') {
@@ -102,8 +119,24 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       }
       return;
     }
+    if (selected?.id === 'system_logs') {
+      setShowCleanupConfirmation(false);
+      setNotice('Cleaning system journal…');
+      try {
+        const result = await apiClient.cleanupSystemJournal();
+        setServerStorage(result.overview);
+        setLastServerRefresh(result.overview.updated_at);
+        setNotice(result.bytes_freed === null
+          ? 'System journal cleanup completed. The backend could not calculate the exact space freed.'
+          : `System journal cleanup completed. Freed ${formatMegabytes(result.bytes_freed)}.`);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'System journal cleanup failed.');
+      }
+      setSelected(null);
+      return;
+    }
     setShowCleanupConfirmation(false);
-    setNotice('No files were deleted. This category does not have an active cleanup operation yet.');
+    setNotice('No files were deleted. This category does not have an active cleanup operation.');
     setSelected(null);
   };
 
@@ -113,7 +146,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         <section className="relative w-full overflow-hidden rounded-b-xl border-x border-b border-white/[0.07] bg-[#181818] px-3 pb-3.5 pt-[calc(env(safe-area-inset-top)+3.25rem)] shadow-[0_8px_24px_rgba(0,0,0,.18)]">
           <div className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.55rem)] inline-flex h-7 items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#121212] px-2 text-[9px] font-medium text-white/45">
             <Signal className="h-3 w-3 text-white/35" strokeWidth={1.8} />
-            Awaiting
+            {serverStorage ? 'Live snapshot' : 'Awaiting'}
           </div>
           <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+0.35rem)]">
             <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh storage overview" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65 transition-colors hover:bg-white/[0.08] disabled:opacity-50">
@@ -127,24 +160,28 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             </div>
             <div className="mt-2.5 flex items-end justify-between gap-4">
               <div>
-                <p className="text-[25px] font-semibold leading-none tracking-tight text-white tabular-nums">— <span className="text-[13px] font-medium text-white/45">GB free</span></p>
-                <p className="mt-2 text-[10px] text-white/40">Remaining storage</p>
+                <p className="text-[25px] font-semibold leading-none tracking-tight text-white tabular-nums">
+                  {serverStorage?.disk ? (serverStorage.disk.available_bytes / (1024 ** 3)).toFixed(2) : '—'} <span className="text-[13px] font-medium text-white/45">GB free</span>
+                </p>
+                <p className="mt-2 text-[10px] text-white/40">Remaining filesystem space</p>
               </div>
               <div className="text-right">
-                <p className="text-[17px] font-semibold leading-none text-white/85 tabular-nums">— GB</p>
+                <p className="text-[17px] font-semibold leading-none text-white/85 tabular-nums">{serverStorage?.disk ? `${(serverStorage.disk.total_bytes / (1024 ** 3)).toFixed(2)} GB` : '— GB'}</p>
                 <p className="mt-2 text-[10px] text-white/40">Total capacity</p>
               </div>
             </div>
             <div className="mt-3.5 h-1.5 overflow-hidden rounded-full bg-white/[0.10]">
-              <div className="h-full w-0 rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300" />
+              <div className="h-full rounded-full bg-gradient-to-r from-sky-400 via-cyan-300 to-emerald-300" style={{ width: serverStorage?.disk ? `${Math.min(100, serverStorage.disk.used_bytes / Math.max(1, serverStorage.disk.total_bytes) * 100)}%` : '0%' }} />
             </div>
             <div className="mt-2 flex items-center justify-between text-[10px] text-white/45">
-              <span>Used: — GB</span>
-              <span>—% used</span>
+              <span>Used: {serverStorage?.disk ? `${(serverStorage.disk.used_bytes / (1024 ** 3)).toFixed(2)} GB` : '— GB'}</span>
+              <span>{serverStorage?.disk ? `${serverStorage.disk.used_percent} used` : '—% used'}</span>
             </div>
             <div className="mt-3 flex items-start gap-2 border-t border-white/[0.07] pt-2.5">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/80" />
-              <p className="text-[10px] leading-relaxed text-white/45">Filesystem capacity is shown separately from the attached EC2 disk size. Values will populate from the backend.</p>
+              <p className="text-[10px] leading-relaxed text-white/45">
+                {serverStorageError || (serverStorage?.disk ? `Filesystem: ${serverStorage.disk.filesystem}. Values are from the backend root filesystem snapshot.` : 'Waiting for the authenticated backend storage overview. Check the backend URL and operator key in Settings.')}
+              </p>
             </div>
           </div>
         </section>
@@ -157,13 +194,17 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             <h2 className="text-[14px] font-semibold text-white">Storage breakdown</h2>
             <p className="mt-1 text-[10px] text-white/40">Usage by engine data category</p>
           </div>
-          <span className="text-[9px] text-white/30">8 categories</span>
+          <span className="text-[9px] text-white/30">10 server · 1 browser</span>
         </div>
 
         <div className="divide-y divide-white/[0.075]">
           {categories.map((category) => {
             const { id, title, description, icon: Icon, accent, tint } = category;
             const isLocalStorage = id === 'local-storage';
+            const serverCategory = serverStorage?.categories?.[id as keyof StorageOverview['categories']];
+            const categoryBytes = isLocalStorage ? browserStorage.usage : (serverCategory?.physical_bytes ?? serverCategory?.logical_bytes ?? (id === 'system_logs' ? serverStorage?.system_journal.reported_size_bytes : null));
+            const categoryRecords = serverCategory?.records;
+            const categoryNote = isLocalStorage ? category.note : (serverCategory?.note || category.note);
             return (
               <button
                 key={id}
@@ -180,7 +221,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-[12px] font-semibold text-white/90">{title}</p>
                       <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">
-                        {isLocalStorage ? (browserStorage.usage === null ? "—" : formatMegabytes(localStorageBytes)) : "—"}
+                        {categoryBytes == null ? "—" : formatMegabytes(categoryBytes)}
                       </p>
                     </div>
                     <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
@@ -190,15 +231,21 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   <div
                     className={`h-full rounded-full ${tint}`}
                     style={{
-                    width: isLocalStorage && localStorageProgress !== null ? `${localStorageProgress}%` : '0%',
-                    minWidth: isLocalStorage && browserStorage.usage !== null && browserStorage.usage > 0 ? '2px' : '0',
+                    width: isLocalStorage && localStorageProgress !== null
+                      ? `${localStorageProgress}%`
+                      : !isLocalStorage && categoryBytes != null && serverStorage?.disk
+                        ? `${Math.min(100, categoryBytes / Math.max(1, serverStorage.disk.total_bytes) * 100)}%`
+                        : '0%',
+                    minWidth: categoryBytes != null && categoryBytes > 0 ? '2px' : '0',
                   }}
                   />
                 </div>
                 <p className="ml-11 mt-1 text-[9px] text-white/30">
                   {isLocalStorage
                     ? (localStorageProgress === null ? "Browser quota unavailable" : `${localStorageProgress.toFixed(1)}% of browser storage quota used`)
-                    : "Not measured"}
+                    : serverCategory?.records != null
+                      ? `${categoryRecords?.toLocaleString()} records · ${serverCategory.note}`
+                      : categoryBytes != null ? serverCategory?.note || category.note : 'Not reported by backend'}
                 </p>
               </button>
             );
@@ -238,7 +285,13 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] text-white/45">Storage used</span>
                 <span className="text-[13px] font-semibold tabular-nums text-white/85">
-                  {selected.id === 'local-storage' ? (browserStorage.usage === null ? 'Unavailable' : formatMegabytes(localStorageBytes)) : 'Not measured'}
+                  {selected.id === 'local-storage'
+                    ? (browserStorage.usage === null ? 'Unavailable' : formatMegabytes(localStorageBytes))
+                    : (() => {
+                        const item = serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']];
+                        const bytes = item?.physical_bytes ?? item?.logical_bytes ?? (selected.id === 'system_logs' ? serverStorage?.system_journal.reported_size_bytes : null);
+                        return bytes == null ? 'Not reported' : formatMegabytes(bytes);
+                      })()}
                 </span>
               </div>
               {selected.id === 'local-storage' && (
@@ -259,14 +312,21 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 </>
               )}
             </div>
-            <p className="mt-3 text-[10px] leading-relaxed text-white/45">{selected.note}</p>
-            {selected.id === 'local-storage' ? (
+            <p className="mt-3 text-[10px] leading-relaxed text-white/45">{selected.id === 'local-storage' ? selected.note : (serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.note || selected.note)}</p>
+            {selected.id !== 'local-storage' && serverStorage?.categories?.[selected.id as keyof StorageOverview['categories']]?.records != null && (
+              <p className="mt-2 text-[10px] text-white/40">Records: {serverStorage.categories[selected.id as keyof StorageOverview['categories']].records?.toLocaleString()}</p>
+            )}
+            {selected.id === 'system_logs' ? (
+              <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
+                <Trash2 className="h-3.5 w-3.5" /> Clean system journal
+              </button>
+            ) : selected.id === 'local-storage' ? (
               <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
                 <Trash2 className="h-3.5 w-3.5" /> Clear local storage
               </button>
             ) : (
               <p className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] leading-relaxed text-white/40">
-                {selected.cleanable ? 'Cleanup is not connected yet. No data can be deleted from this category.' : 'This category is protected from cleanup.'}
+                {selected.cleanable ? 'No cleanup operation is available for this category.' : 'This category is protected from cleanup.'}
               </p>
             )}
           </section>
@@ -280,11 +340,13 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-400/[0.12] bg-amber-400/[0.05]"><Trash2 className="h-4 w-4 text-amber-200/80" /></span>
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} aria-label="Close cleanup confirmation" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
             </div>
-            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">Clear local storage?</h2>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/50">This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included.</p>
+            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">{selected.id === 'system_logs' ? 'Clean system journal?' : 'Clear local storage?'}</h2>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.id === 'system_logs'
+              ? 'This sends an authenticated request to the backend to rotate and vacuum archived system-wide journal files. It does not clean SQLite, token records, paper-trading data or browser storage. The server may reject the request if cleanup is disabled or OS permissions are insufficient.'
+              : "This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included."}</p>
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">Clear everything</button>
+              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">{selected.id === 'system_logs' ? 'Clean journal' : 'Clear everything'}</button>
             </div>
           </section>
         </div>
