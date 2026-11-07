@@ -327,7 +327,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </div>
           </div>
         </>
-      ) : section === 'connections' ? (
+      ) : section === 'storage' ? null : section === 'connections' ? (
         <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.06] bg-black/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
           <div className="flex min-h-10 items-center justify-between gap-3">
             <h1 className="text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
@@ -598,7 +598,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </div>
       )}
 
-      {section === 'storage' && <StorageManagementPage />}
+      {section === 'storage' && <StorageManagementPage onBack={() => navigateSection('home')} />}
 
       {section === 'diagnostics' && (
         <div className="space-y-4 pt-5">
