@@ -142,6 +142,55 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   };
 }
 
+function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: DiscoveredToken): DiscoveredToken | null {
+  const mint = String(snapshot.mint_address || snapshot.mint || previous?.mint || '');
+  if (!mint) return null;
+  const identity = snapshot.identity || {};
+  const market = snapshot.market || {};
+  const statistics = snapshot.statistics || {};
+  const candles = Array.isArray(snapshot.chart?.candles) ? snapshot.chart.candles : [];
+  const priceHistory = candles.map((candle: Record<string, any>) => {
+    const rawTime = candle.time ?? candle.timestamp ?? candle.open_time ?? candle.start_time;
+    const parsedTime = typeof rawTime === 'number' ? (rawTime < 10_000_000_000 ? rawTime * 1000 : rawTime) : Date.parse(String(rawTime || ''));
+    return {
+      time: Number.isFinite(parsedTime) ? parsedTime : Date.now(),
+      price: Number(candle.close ?? candle.close_price ?? candle.price ?? 0),
+      open: Number(candle.open ?? candle.open_price ?? candle.close ?? 0),
+      high: Number(candle.high ?? candle.high_price ?? candle.close ?? 0),
+      low: Number(candle.low ?? candle.low_price ?? candle.close ?? 0),
+      volume: Number(candle.volume ?? candle.volume_sol ?? 0),
+    };
+  }).filter((point: { price: number }) => point.price > 0);
+  const priceSol = Number(market.price_sol ?? previous?.current_price_sol ?? 0);
+  const priceUsd = Number(market.price_usd ?? previous?.current_price_usd ?? 0);
+  const venueValue = String(market.venue || identity.venue || previous?.venue || 'pump.fun').toLowerCase();
+  return {
+    mint,
+    name: String(identity.name ?? previous?.name ?? ''),
+    symbol: String(identity.symbol ?? previous?.symbol ?? ''),
+    creator_wallet: String(identity.creator_address ?? identity.creator_wallet ?? previous?.creator_wallet ?? ''),
+    launch_time: String(snapshot.detected_at ?? snapshot.updated_at ?? previous?.launch_time ?? ''),
+    current_price_usd: priceUsd,
+    current_price_sol: priceSol,
+    price_currency: priceSol > 0 ? 'SOL' : 'USD',
+    price_change_1m_pct: Number(market.price_change_1m_pct ?? previous?.price_change_1m_pct ?? 0),
+    price_change_5m_pct: Number(market.price_change_5m_pct ?? market.price_change_24h_pct ?? previous?.price_change_5m_pct ?? 0),
+    market_cap_sol: Number(market.market_cap_sol ?? statistics.market_cap_sol ?? previous?.market_cap_sol ?? 0),
+    market_cap_usd: Number(market.market_cap_usd ?? previous?.market_cap_usd ?? 0),
+    liquidity_usd: Number(market.liquidity_usd ?? previous?.liquidity_usd ?? 0),
+    volume_5m_usd: Number(market.volume_5m_usd ?? statistics.volume_5m_usd ?? previous?.volume_5m_usd ?? 0),
+    volume_1h_usd: Number(market.volume_1h_usd ?? statistics.volume_1h_usd ?? previous?.volume_1h_usd ?? 0),
+    tx_buys_5m: Number(market.buys_5m ?? statistics.buys_5m ?? previous?.tx_buys_5m ?? 0),
+    tx_sells_5m: Number(market.sells_5m ?? statistics.sells_5m ?? previous?.tx_sells_5m ?? 0),
+    bonding_curve_progress_pct: Number(market.bonding_curve_pct ?? statistics.bonding_curve_pct ?? previous?.bonding_curve_progress_pct ?? 0),
+    venue: venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun',
+    safety_status: snapshot.security?.decision === 'APPROVED' ? 'verified' : previous?.safety_status || 'warning',
+    qualification_status: 'qualified',
+    safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(snapshot.security || {}) },
+    price_history_5m: priceHistory.length ? priceHistory.slice(-500) : previous?.price_history_5m || [],
+  };
+}
+
 export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
   const [engineStatus, setEngineStatus] = useState<EngineStatus>(emptyStatus);
@@ -212,8 +261,37 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
         return;
       }
+      if (event.event_type === 'token_detail_snapshot') {
+        const snapshot = event.data?.snapshot as Record<string, any> | undefined;
+        if (snapshot) {
+          const mint = String(event.data?.mint_address || snapshot.mint_address || '');
+          setTokens((previous) => {
+            const mapped = mapTokenDetailSnapshot(snapshot, previous.find((token) => token.mint === mint));
+            return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500) : previous;
+          });
+          setSelectedToken((previous) => {
+            if (!previous || previous.mint !== mint) return previous;
+            return mapTokenDetailSnapshot(snapshot, previous) || previous;
+          });
+        }
+      } else if (event.event_type === 'chart_history_snapshot') {
+        const mint = String(event.data?.mint_address || '');
+        const candles = Array.isArray(event.data?.candles) ? event.data.candles : [];
+        const history = candles.map((candle: Record<string, any>) => ({
+          time: Number(candle.time ?? candle.timestamp ?? Date.now()),
+          price: Number(candle.close ?? candle.close_price ?? candle.price ?? 0),
+          open: Number(candle.open ?? candle.open_price ?? candle.close ?? 0),
+          high: Number(candle.high ?? candle.high_price ?? candle.close ?? 0),
+          low: Number(candle.low ?? candle.low_price ?? candle.close ?? 0),
+          volume: Number(candle.volume ?? candle.volume_sol ?? 0),
+        })).filter((point: { price: number }) => point.price > 0);
+        if (mint && history.length) {
+          setTokens((previous) => previous.map((token) => token.mint === mint ? { ...token, price_history_5m: history.slice(-500) } : token));
+          setSelectedToken((previous) => previous?.mint === mint ? { ...previous, price_history_5m: history.slice(-500) } : previous);
+        }
+      }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
-      if (tokenMint || ['launch_detected', 'token_scan_started', 'token_scan_update', 'market_price_update', 'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed', 'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated'].includes(event.event_type)) {
+      if (tokenMint || ['launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_state_updated', 'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update', 'chart_candle_update', 'chart_candle_closed', 'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed', 'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated'].includes(event.event_type)) {
         setTokens((previous) => {
           const mint = String(tokenMint || '');
           const merged = mergeTokenEvent(previous.find((item) => item.mint === mint), event);
