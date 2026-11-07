@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight,
-  Database, HardDrive, LockKeyhole, Pause, Play, PlugZap, Radar, RefreshCw,
+  Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
   SlidersHorizontal, Trash2, Wifi,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
@@ -74,8 +74,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [operatorKey, setOperatorKey] = useState(settings.adminApiKey);
   const [savingConnection, setSavingConnection] = useState(false);
   const [connectionMessage, setConnectionMessage] = useState('');
-  const [testingConnection, setTestingConnection] = useState(false);
-  const [healthMessage, setHealthMessage] = useState('');
+  const [connectionErrorField, setConnectionErrorField] = useState<'url' | 'key' | ''>('');
+  const [connectionSuccess, setConnectionSuccess] = useState(false);
   const [clearingHistory, setClearingHistory] = useState(false);
   const [storageMessage, setStorageMessage] = useState('');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -138,46 +138,66 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setOperatorKey(settings.adminApiKey);
   }, [settings.backendUrl, settings.wsUrl, settings.adminApiKey]);
 
-  const saveConnections = (event: React.FormEvent) => {
-    event.preventDefault();
+  const connectionDirty =
+    backendUrl.trim() !== settings.backendUrl ||
+    websocketUrl.trim() !== settings.wsUrlOverride ||
+    operatorKey.trim() !== settings.adminApiKey;
+
+  const attachConnection = async () => {
     setSavingConnection(true);
     setConnectionMessage('');
+    setConnectionErrorField('');
+    setConnectionSuccess(false);
     try {
-      if (!backendUrl.trim()) throw new Error('Enter the NodeX backend address.');
-      const parsedBackend = new URL(backendUrl.trim());
-      if (!['http:', 'https:'].includes(parsedBackend.protocol)) throw new Error('Backend address must start with https:// or http://.');
-      if (parsedBackend.pathname !== '/' || parsedBackend.search || parsedBackend.hash) {
-        throw new Error('Enter only the backend base address, without an API path or query string.');
+      const cleanBackendUrl = backendUrl.trim().replace(/\\/$/, '');
+      if (!cleanBackendUrl) {
+        setConnectionErrorField('url');
+        throw new Error('Enter the REST API server URL.');
+      }
+      const parsedBackend = new URL(cleanBackendUrl);
+      if (!['http:', 'https:'].includes(parsedBackend.protocol) || parsedBackend.pathname !== '/' || parsedBackend.search || parsedBackend.hash) {
+        setConnectionErrorField('url');
+        throw new Error('Enter a valid server origin, e.g. https://your-domain.com.');
       }
       const cleanWsUrl = websocketUrl.trim();
       if (cleanWsUrl) {
         const parsedWs = new URL(cleanWsUrl);
-        if (!['ws:', 'wss:'].includes(parsedWs.protocol)) throw new Error('WebSocket address must start with ws:// or wss://.');
+        if (!['ws:', 'wss:'].includes(parsedWs.protocol)) {
+          setConnectionErrorField('url');
+          throw new Error('WebSocket URL must start with ws:// or wss://.');
+        }
       }
-      updateSettings({
-        backendUrl: backendUrl.trim().replace(/\/$/, ''),
+      if (!operatorKey.trim()) {
+        setConnectionErrorField('key');
+        throw new Error('Enter the backend API key.');
+      }
+
+      await apiClient.verifyConnection({
+        backendUrl: cleanBackendUrl,
         wsUrlOverride: cleanWsUrl,
         adminApiKey: operatorKey.trim(),
       });
-      setConnectionMessage('Connection settings saved. REST and WebSocket connections have been refreshed.');
+
+      updateSettings({
+        backendUrl: cleanBackendUrl,
+        wsUrlOverride: cleanWsUrl,
+        adminApiKey: operatorKey.trim(),
+      });
+      setConnectionSuccess(true);
+      setConnectionMessage('Attached to NodeX backend.');
     } catch (error) {
-      setConnectionMessage(error instanceof Error ? error.message : 'Could not update connection settings.');
+      const message = error instanceof Error ? error.message : 'Could not attach to the backend.';
+      if (/401|403|unauthori[sz]ed|forbidden|operator api key|admin key/i.test(message)) {
+        setConnectionErrorField('key');
+        setConnectionMessage('API key not accepted. Check the key and try again.');
+      } else {
+        setConnectionErrorField('url');
+        setConnectionMessage(/could not reach|timed out|failed to fetch|networkerror/i.test(message)
+          ? 'Backend not reachable. Check the REST URL, server and CORS settings.'
+          : message);
+      }
     } finally {
       setSavingConnection(false);
-    }
-  };
-
-  const testConnection = async () => {
-    setTestingConnection(true);
-    setHealthMessage('');
-    try {
-      const result = await apiClient.getHealth();
-      await apiClient.testWebSocketConnection();
-      setHealthMessage(`REST API healthy · authenticated live stream connected · ${result.service || 'NodeX'}`);
-    } catch (error) {
-      setHealthMessage(error instanceof Error ? error.message : 'Connection test failed.');
-    } finally {
-      setTestingConnection(false);
     }
   };
 
@@ -309,33 +329,62 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       )}
 
       {section === 'connections' && (
-        <form onSubmit={saveConnections} className="space-y-5 pt-5">
-          <div>
-            <p className="text-[13px] font-semibold text-white">NodeX connection endpoints</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">Connect this frontend to any compatible NodeX Rust backend. Nothing is preconfigured: enter the server address and operator key supplied by that backend administrator.</p>
-          </div>
-          <Field label="REST API base URL" hint="The address used for /health and /api/v1 routes. Enter the host only, without a route.">
-            <input className={inputClass} type="url" value={backendUrl} onChange={(e) => setBackendUrl(e.target.value)} placeholder="https://api.example.com" autoCapitalize="none" autoCorrect="off" />
+        <div className="space-y-4 pt-5 pb-28">
+          <Field label="REST API server URL">
+            <input
+              className={`${inputClass} ${connectionErrorField === 'url' ? 'border-red-400 focus:border-red-400' : ''}`}
+              type="url"
+              value={backendUrl}
+              onChange={(e) => { setBackendUrl(e.target.value); setConnectionErrorField(''); setConnectionMessage(''); setConnectionSuccess(false); }}
+              placeholder="https://your-server.com"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
           </Field>
-          <Field label="WebSocket URL (optional override)" hint="Use the full WSS endpoint, e.g. wss://api.example.com/api/v1/ws. Leave blank to derive it from the REST API URL.">
-            <input className={inputClass} type="url" value={websocketUrl} onChange={(e) => setWebsocketUrl(e.target.value)} placeholder="wss://api.example.com/api/v1/ws" autoCapitalize="none" autoCorrect="off" />
+          <Field label="WebSocket URL (optional)">
+            <input
+              className={inputClass}
+              type="url"
+              value={websocketUrl}
+              onChange={(e) => { setWebsocketUrl(e.target.value); setConnectionMessage(''); setConnectionSuccess(false); }}
+              placeholder="wss://your-server.com/api/v1/ws"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
           </Field>
-          <Field label="Backend operator API key" hint="Paste the operator key configured by the Rust backend administrator. It authorizes protected controls and requests a short-lived WebSocket ticket.">
-            <input className={inputClass} type="password" value={operatorKey} onChange={(e) => setOperatorKey(e.target.value)} placeholder="Enter your NodeX operator key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" />
+          <Field label="Backend API key">
+            <input
+              className={`${inputClass} ${connectionErrorField === 'key' ? 'border-red-400 focus:border-red-400' : ''}`}
+              type="password"
+              value={operatorKey}
+              onChange={(e) => { setOperatorKey(e.target.value); setConnectionErrorField(''); setConnectionMessage(''); setConnectionSuccess(false); }}
+              placeholder="Paste operator API key"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="new-password"
+            />
           </Field>
-          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-            <div className="flex items-center gap-2 text-[11px] text-white/70"><LockKeyhole className="h-4 w-4" /> Credential storage and server secrets</div>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/45">The operator key is saved in this browser's local storage so it remains available on this device. Anyone who can access this browser profile or run malicious script in this app may be able to read it. For shared or public deployments, use individual backend user authentication instead of distributing one shared operator key. Solana RPC provider keys, Helius/gRPC credentials, wallet private keys and signing secrets belong only in the Rust backend's server environment — never in this frontend.</p>
-          </div>
-          <button type="submit" disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-[12px] font-semibold text-black disabled:opacity-50">
-            <Check className="h-4 w-4" /> {savingConnection ? 'Saving…' : 'Save connection settings'}
-          </button>
-          {connectionMessage && <p className="text-[10px] leading-relaxed text-white/60">{connectionMessage}</p>}
-          <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] font-medium text-white/80 disabled:opacity-50">
-            <Wifi className="h-4 w-4" /> {testingConnection ? 'Testing REST + live stream…' : 'Test full connection'}
-          </button>
-          {healthMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{healthMessage}</p>}
-        </form>
+          {connectionMessage && (
+            <p className={`text-[11px] ${connectionSuccess ? 'text-emerald-300' : 'text-red-300'}`} role="status">
+              {connectionMessage}
+            </p>
+          )}
+          {connectionDirty && (
+            <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-50 flex justify-center px-5 pointer-events-none">
+              <button
+                type="button"
+                onClick={attachConnection}
+                disabled={savingConnection}
+                className="pointer-events-auto flex min-w-32 items-center justify-center gap-2 rounded-xl bg-white px-7 py-3 text-[13px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.55)] transition-transform active:scale-95 disabled:opacity-60"
+              >
+                {savingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+                {savingConnection ? 'Attaching…' : 'Attach'}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {section === 'discovery' && (
@@ -428,7 +477,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           <button type="button" onClick={testConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] text-white/80 disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${testingConnection ? 'animate-spin' : ''}`} /> {testingConnection ? 'Checking…' : 'Check backend health'}
           </button>
-          {healthMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{healthMessage}</p>}
           {backendError && <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-[10px] text-amber-100/75"><AlertTriangle className="h-4 w-4 shrink-0" />{backendError}</div>}
         </div>
       )}
