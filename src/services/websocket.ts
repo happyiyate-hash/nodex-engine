@@ -66,7 +66,7 @@ export class NodeXWebSocketService {
   private tokenSubscriptions=new Map<string,string>();
   private pendingMarketEvents=new Map<string,NodeXEvent>();
   private marketFlushTimer:ReturnType<typeof setTimeout>|null=null;
-  constructor(){this.connect();}
+  constructor() {}
   public connect():void {
     this.manuallyClosed=false;
     if(this.ws&&(this.ws.readyState===WebSocket.OPEN||this.ws.readyState===WebSocket.CONNECTING))return;
