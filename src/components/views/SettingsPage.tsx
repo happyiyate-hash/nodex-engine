@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight,
   Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
-  SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu, ArrowRight,
+  SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu, ArrowLeft,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { apiClient } from '../../services/api';
@@ -330,7 +330,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           <div className="flex min-h-10 items-center justify-between gap-3">
             <h1 className="text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
             <button type="button" onClick={() => navigateSection('home')} className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg bg-white px-4 py-2 text-[11px] font-semibold text-black transition-transform active:scale-95">
-              Back <ArrowRight className="h-3.5 w-3.5" />
+              Back <ArrowLeft className="h-3.5 w-3.5" />
             </button>
           </div>
           <p className="mt-0.5 text-[10px] text-white/40">Connect this app to your NodeX backend.</p>
