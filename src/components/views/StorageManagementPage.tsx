@@ -191,7 +191,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             </div>
             <div className="mt-2 flex items-center justify-between text-[10px] text-white/45">
               <span>Used: {serverStorage?.disk ? `${(serverStorage.disk.used_bytes / (1024 ** 3)).toFixed(2)} GiB` : '— GiB'}</span>
-              <span>{serverStorage?.disk ? `${serverStorage.disk.used_percent} used` : '—% used'}</span>
+              <span>{serverStorage?.disk ? `${serverStorage.disk.used_percent}% used` : '—% used'}</span>
             </div>
             <div className="mt-3 flex items-start gap-2 border-t border-white/[0.07] pt-2.5">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300/80" />
@@ -309,7 +309,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   {selected.id === 'local-storage'
                     ? (browserStorage.usage === null ? 'Unavailable' : formatMegabytes(localStorageBytes))
                     : selected.id === 'database'
-                      ? formatMegabytes(serverStorage?.database.total_file_bytes ?? 0)
+                      ? serverStorage ? formatMegabytes(serverStorage.database.total_file_bytes) : 'Not reported'
                       : serverStorage?.system_journal.reported_size_bytes == null
                         ? 'Not reported'
                         : formatMegabytes(serverStorage.system_journal.reported_size_bytes)}
