@@ -54,7 +54,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       </div>
 
       <div className="relative w-full shrink-0 pt-[calc(env(safe-area-inset-top)+2.25rem)]">
-        <div className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.35rem)] flex items-center justify-end gap-3">
+        <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+0.35rem)] flex items-center justify-start gap-3">
           <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh storage overview" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65 transition-colors hover:bg-white/[0.08] disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
