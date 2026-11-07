@@ -417,7 +417,13 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
-      if (tokenMint && !['token_state_updated', 'token_detail_snapshot', 'chart_candle_update', 'chart_candle_closed', 'chart_history_snapshot'].includes(event.event_type)) {
+      const tokenStateEvent = [
+        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress',
+        'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
+        'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed',
+        'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
+      ].includes(event.event_type);
+      if (tokenMint && tokenStateEvent) {
         setTokens((previous) => {
           const mint = String(tokenMint || '');
           const index = previous.findIndex((item) => item.mint === mint);
