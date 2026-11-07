@@ -252,7 +252,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       String(item.launch.source || '').toLowerCase().includes(query);
   });
 
-  const filteredPositions: any[] = [];
+  const filteredPositions = positions.filter((position) => {
+    if (!search.trim()) return true;
+    const query = search.trim().toLowerCase();
+    return position.name.toLowerCase().includes(query) || position.symbol.toLowerCase().includes(query) || position.mint.toLowerCase().includes(query);
+  });
   const backendPaperEntries = launchViews.filter((item) => item.status === 'PAPER ENTRY' && (
     !search.trim() || item.launch.mint_address.toLowerCase().includes(search.trim().toLowerCase()) ||
     String(item.launch.source || '').toLowerCase().includes(search.trim().toLowerCase())
@@ -280,7 +284,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
               <div aria-live="polite" className={`mt-1 flex h-[14px] items-center gap-1 truncate text-[14px] font-semibold leading-none tracking-tight tabular-nums sm:text-base ${isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
                 <span aria-hidden="true" className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '▲' : '▼'}</span>
-                <span className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '+' : '−'}</span><AutoFitNumber fullText={formatUsd(Math.abs(profitLossPct)) + '%'} compactText={compactNumber(Math.abs(profitLossPct)) + '%'} maxFontSize={14} minFontSize={9} balanceDirection={balanceDirection} className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" />
+                <span className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '+' : '−'}</span><AutoFitNumber fullText={formatSol(Math.abs(profitLossPct)) + '%'} compactText={compactNumber(Math.abs(profitLossPct)) + '%'} maxFontSize={14} minFontSize={9} balanceDirection={balanceDirection} className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" />
               </div>
             </div>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
@@ -350,43 +354,46 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   </div>
                 ) : (
                   <>
-                    {filteredPositions.map((position) => <article key={position.id} role="button" tabIndex={0} onClick={() => openTokenDetailByMint(position.mint, {
+                    {filteredPositions.map((position) => <article key={position.id} role="button" tabIndex={0}
+                      onClick={() => openTokenDetailByMint(position.mint, {
                         name: position.name,
                         symbol: position.symbol,
-                        launch_time: new Date(position.openedAt).toISOString(),
-                        current_price_usd: position.currentPrice,
-                        market_cap_usd: 0,
-                        venue: 'pump.fun',
+                        launch_time: position.entry_time,
+                        current_price_sol: position.current_price_sol,
+                        venue: position.venue,
                         qualification_status: 'bought_paper',
                         safety_status: 'warning',
-                      })} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(position.mint, { name: position.name, symbol: position.symbol, launch_time: new Date(position.openedAt).toISOString(), current_price_usd: position.currentPrice, venue: 'pump.fun', qualification_status: 'bought_paper', safety_status: 'warning' }); } }} className="cursor-pointer border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 focus:outline-none focus:ring-1 focus:ring-white/30">
+                      })}
+                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(position.mint); } }}
+                      className="cursor-pointer border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
-                          <span className="text-[12px] font-semibold text-white/75">{String(position.symbol || position.name).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>
+                          <span className="text-[12px] font-semibold text-white/75">{String(position.symbol || position.name || position.mint).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate text-[11px] font-semibold text-white">{position.name}</span>
-                            <span className="shrink-0 text-[8px] font-medium text-white/40">${position.symbol}</span>
+                            <span className="truncate text-[11px] font-semibold text-white">{position.name || position.mint.slice(0, 7) + '…' + position.mint.slice(-5)}</span>
+                            {position.symbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${position.symbol}</span>}
                           </div>
-                          <div className="mt-0.5 text-[8px] text-white/35">{position.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} tokens · {position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'}</div>
+                          <div className="mt-0.5 text-[8px] text-white/35">{position.amount_tokens.toLocaleString('en-US',{maximumFractionDigits:2})} tokens · {position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'}</div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className={`text-[16px] font-bold leading-none tracking-tight tabular-nums ${position.pnl >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>{position.pnl >= 0 ? '+' : '−'}${formatUsd(Math.abs(position.pnl))}</div>
-                          <div className={`mt-1 text-[9px] font-semibold tabular-nums ${position.pnlPct >= 0 ? 'text-[#83b982]/80' : 'text-[#c77b7b]/80'}`}>{position.pnlPct >= 0 ? '+' : ''}{position.pnlPct.toFixed(2)}%</div>
+                          <div className={'text-[15px] font-bold leading-none tracking-tight tabular-nums ' + ((position.pnl_sol ?? 0) >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]')}>
+                            {position.pnl_sol == null ? '—' : (position.pnl_sol >= 0 ? '+' : '−') + formatSol(Math.abs(position.pnl_sol)) + ' SOL'}
+                          </div>
+                          <div className={'mt-1 text-[9px] font-semibold tabular-nums ' + (position.pnl_pct >= 0 ? 'text-[#83b982]/80' : 'text-[#c77b7b]/80')}>{position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct.toFixed(2)}%</div>
                         </div>
                       </div>
                       <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
-                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.entryPrice.toFixed(6)}</div></div>
-                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${position.currentPrice.toFixed(6)}</div></div>
-                        <div><div className="text-white/30">Value</div><div className="mt-0.5 font-medium tabular-nums text-white/75">${formatUsd(position.value)}</div></div>
+                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.entry_price_sol > 0 ? position.entry_price_sol.toFixed(8) + ' SOL' : '—'}</div></div>
+                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.current_price_sol > 0 ? position.current_price_sol.toFixed(8) + ' SOL' : '—'}</div></div>
+                        <div><div className="text-white/30">Value</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.current_position_value_sol == null ? '—' : formatSol(position.current_position_value_sol) + ' SOL'}</div></div>
                       </div>
                       <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[8px] text-white/35">
-                        <span>Peak <span className="font-medium text-[#83b982]">+{position.peakPnlPct.toFixed(2)}%</span></span>
-                        <span>Stop <span className="font-medium text-white/65">${position.trailingStopPrice.toFixed(6)}</span></span>
-                        <span>{position.status === 'CLOSED' ? (position.exitReason || 'Closed') : position.trailingActivated ? 'TRAILING' : 'PROTECTING'}</span>
+                        <span>{position.take_profit_target_pct > 0 ? 'Take profit ' + position.take_profit_target_pct + '%' : 'Take profit —'}</span>
+                        <span>{position.stop_loss_target_pct > 0 ? 'Stop loss ' + position.stop_loss_target_pct + '%' : 'Stop loss —'}</span>
+                        <span>{position.venue}</span>
                       </div>
-                      <div className="mt-1 text-[8px] text-white/30">{position.status === 'CLOSED' ? `Exit: ${position.exitReason || 'Stop reached'}` : position.trailingActivated ? 'Take-profit armed · tracking peak with 8% trailing stop' : 'Initial 8% stop · trailing activates after +10%'}</div>
                     </article>)}
                     {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} role="button" tabIndex={0} onClick={() => openTokenDetailByMint(item.launch.mint_address)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(item.launch.mint_address); } }} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
