@@ -72,8 +72,6 @@ export class NodeXWebSocketService {
   private lastMessageAt=0; private connecting=false;
   private reconnectAttempts=0; private manuallyClosed=false; private seen=new Set<string>();
   private tokenSubscriptions=new Map<string,string>();
-  private pendingMarketEvents=new Map<string,NodeXEvent>();
-  private marketFlushTimer:ReturnType<typeof setTimeout>|null=null;
   constructor() {}
   public connect():void {
     this.manuallyClosed=false;
@@ -118,17 +116,9 @@ export class NodeXWebSocketService {
           // Forward every typed event so pages do not silently lose new backend event types.
           const event=normalizeBackendEvent(raw);if(this.seen.has(event.event_id))return;
           this.seen.add(event.event_id);if(this.seen.size>3000)this.seen.delete(this.seen.values().next().value as string);
-          if (['market_tick','market_price_update','token_market_update','chart_candle_update','pumpswap_activity','pumpswap_volume_update','market_account_update'].includes(event.event_type)) {
-            const mint = String(event.token_mint || event.data?.mint_address || '');
-            const key = mint ? `${event.event_type}:${mint}` : event.event_id;
-            this.pendingMarketEvents.set(key, event);
-            if (!this.marketFlushTimer) this.marketFlushTimer = setTimeout(() => {
-              this.marketFlushTimer = null;
-              const batch = Array.from(this.pendingMarketEvents.values());
-              this.pendingMarketEvents.clear();
-              batch.forEach((item) => this.dispatch(item));
-            }, 100);
-          } else this.dispatch(event);
+          // Deliver every engine event immediately. The Rust engine owns update
+          // frequency and sends one lightweight event per changed token/portfolio.
+          this.dispatch(event);
         }catch(error){
           console.warn('Unable to parse NodeX WebSocket message',error);
           this.emitLocalEvent('diagnostic','warning','frontend_websocket','Received a WebSocket message that could not be parsed as NodeX JSON.',{error:error instanceof Error?error.message:String(error)});
@@ -172,8 +162,6 @@ export class NodeXWebSocketService {
     this.manuallyClosed=true;this.connecting=false;if(this.reconnectTimer)clearTimeout(this.reconnectTimer);
     if(this.heartbeatWatchdog)clearInterval(this.heartbeatWatchdog);
     this.heartbeatWatchdog=null;this.reconnectTimer=null;
-    if(this.marketFlushTimer)clearTimeout(this.marketFlushTimer);
-    this.marketFlushTimer=null;this.pendingMarketEvents.clear();
     this.ws?.close();this.ws=null;this.setStatus('disconnected',0);
   }
   public async testConnection(): Promise<void> {

@@ -34,22 +34,16 @@ async function settle<T>(request: Promise<T>, label: string): Promise<{ value: T
 
 export const backendService = {
   async loadInitialData(): Promise<InitialBackendSnapshot> {
-    const [profile, paperWallet, launches, engineStatus, strategy] = await Promise.all([
-      settle(apiClient.getProfile(), 'Profile'),
-      settle(apiClient.getPaperWallet(), 'Paper wallet'),
-      settle(apiClient.getRecentTokens(100), 'Recent launches'),
-      settle(apiClient.getEngineStatus(), 'Engine status'),
-      settle(apiClient.getStrategy(), 'Trading configuration'),
-    ]);
-
+    // One authoritative bootstrap request. The persistent WebSocket supplies
+    // subsequent position, market and portfolio changes without polling.
+    const profile = await settle(apiClient.getProfile(), 'Profile');
     return {
       profile: profile.value,
-      paperWallet: paperWallet.value,
-      launches: launches.value,
-      engineStatus: engineStatus.value,
-      strategy: strategy.value,
-      errors: [profile, paperWallet, launches, engineStatus, strategy]
-        .flatMap((result) => result.error ? [result.error] : []),
+      paperWallet: null,
+      launches: null,
+      engineStatus: null,
+      strategy: null,
+      errors: profile.error ? [profile.error] : [],
     };
   },
 
