@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Activity, AlertTriangle, Archive, ArrowLeft, CheckCircle2, Coins, Database,
-  FileText, Folder, HardDrive, Radar, RefreshCw, Terminal, Trash2, X,
+  FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X,
 } from 'lucide-react';
 
 type StorageCategory = {
@@ -43,18 +43,12 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black px-0 text-white">
-      <div className="pointer-events-none fixed right-4 top-[calc(env(safe-area-inset-top)+12px)] z-50">
-        <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-[#17130c]/95 px-3 py-2 text-[10px] font-semibold text-amber-200 shadow-[0_8px_28px_rgba(0,0,0,.45)] backdrop-blur-xl">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-300/60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-300" />
-          </span>
-          Awaiting backend
-        </span>
-      </div>
-
       <div className="relative w-full shrink-0">
         <section className="relative w-full overflow-hidden rounded-b-xl border-x border-b border-white/[0.07] bg-[#181818] px-3 pb-3.5 pt-[calc(env(safe-area-inset-top)+3.25rem)] shadow-[0_8px_24px_rgba(0,0,0,.18)]">
+          <div className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.55rem)] inline-flex h-7 items-center gap-1.5 rounded-lg border border-white/[0.07] bg-[#121212] px-2 text-[9px] font-medium text-white/45">
+            <Signal className="h-3 w-3 text-white/35" strokeWidth={1.8} />
+            Awaiting
+          </div>
           <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+0.35rem)]">
             <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh storage overview" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65 transition-colors hover:bg-white/[0.08] disabled:opacity-50">
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
