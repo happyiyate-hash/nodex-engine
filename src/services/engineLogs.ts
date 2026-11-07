@@ -11,7 +11,7 @@ const MAX_LOGS = 120;
 const HIGH_FREQUENCY_EVENTS = new Set([
   'heartbeat', 'market_tick', 'market_price_update', 'token_market_update',
   'token_statistics_update', 'chart_candle_update', 'chart_candle_closed',
-  'pumpswap_activity', 'market_account_update',
+  'pumpswap_activity', 'pumpswap_volume_update', 'market_account_update',
 ]);
 let fetchLoggerInstalled = false;
 let pendingEvents: EngineLogEntry[] = [];
