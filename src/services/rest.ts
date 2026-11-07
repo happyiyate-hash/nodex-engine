@@ -64,7 +64,6 @@ export interface NodeXProfileSnapshot {
   existing_wallet?: { sol_balance?: number; last_synced?: string | null; [key: string]: unknown };
   /** Paper-trading wallet returned by GET /api/v1/profile (lamports). */
   paper_wallet?: PaperWalletSnapshot;
-  trading_settings?: Record<string, unknown>;
   portfolio?: {
     portfolio_balance_sol?: number;
     total_portfolio_value_sol?: number;
