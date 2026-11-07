@@ -80,6 +80,14 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [connectionSuccess, setConnectionSuccess] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [healthMessage, setHealthMessage] = useState('');
+  const [connectionSheetOpen, setConnectionSheetOpen] = useState(false);
+  const [restOnline, setRestOnline] = useState<boolean | null>(null);
+  const [runtimeSnapshot, setRuntimeSnapshot] = useState<{ running: boolean } | null>(null);
+  const [testingRest, setTestingRest] = useState(false);
+  const [testingWs, setTestingWs] = useState(false);
+  const [restTestMessage, setRestTestMessage] = useState('');
+  const [wsTestMessage, setWsTestMessage] = useState('');
+  const [statusCheckedAt, setStatusCheckedAt] = useState<Date | null>(null);
   const [clearingHistory, setClearingHistory] = useState(false);
   const [storageMessage, setStorageMessage] = useState('');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -186,6 +194,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       setConnectionNeedsAttach(false);
       setConnectionSuccess(true);
       setConnectionMessage('Attached to NodeX backend.');
+      setConnectionSheetOpen(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not attach to the backend.';
       if (/401|403|unauthori[sz]ed|forbidden|operator api key|admin key/i.test(message)) {
@@ -202,17 +211,55 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     }
   };
 
-  const testConnection = async () => {
-    setTestingConnection(true);
-    setHealthMessage('');
+  const refreshConnectionStatus = async () => {
+    try {
+      const health = await apiClient.getHealth();
+      setRestOnline(health.status === 'ok' || health.status === 'healthy' || Boolean(health.service));
+    } catch {
+      setRestOnline(false);
+    }
+    try {
+      const runtime = await apiClient.getEngineStatus();
+      setRuntimeSnapshot({ running: runtime.running });
+    } catch {
+      setRuntimeSnapshot(null);
+    }
+    setStatusCheckedAt(new Date());
+  };
+
+  useEffect(() => {
+    if (section !== 'connections') return;
+    void refreshConnectionStatus();
+    const timer = window.setInterval(() => void refreshConnectionStatus(), 8000);
+    return () => window.clearInterval(timer);
+  }, [section, settings.backendUrl]);
+
+  const testRestConnection = async () => {
+    setTestingRest(true);
+    setRestTestMessage('');
     try {
       const result = await apiClient.getHealth();
-      await apiClient.testWebSocketConnection();
-      setHealthMessage(`REST API healthy · authenticated live stream connected · ${result.service || 'NodeX'}`);
+      setRestOnline(true);
+      setRestTestMessage(`REST API responded successfully · ${result.service || 'NodeX'}`);
     } catch (error) {
-      setHealthMessage(error instanceof Error ? error.message : 'Connection test failed.');
+      setRestOnline(false);
+      setRestTestMessage(error instanceof Error ? error.message : 'REST API test failed.');
     } finally {
-      setTestingConnection(false);
+      setTestingRest(false);
+      setStatusCheckedAt(new Date());
+    }
+  };
+
+  const testWebSocket = async () => {
+    setTestingWs(true);
+    setWsTestMessage('');
+    try {
+      await apiClient.testWebSocketConnection();
+      setWsTestMessage('Authenticated WebSocket handshake succeeded.');
+    } catch (error) {
+      setWsTestMessage(error instanceof Error ? error.message : 'WebSocket test failed.');
+    } finally {
+      setTestingWs(false);
     }
   };
 
@@ -344,93 +391,131 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       )}
 
       {section === 'connections' && (
-        <div className="space-y-4 pt-5 pb-28">
-          <Field label="REST API server URL">
-            <input
-              className={`${inputClass} ${connectionErrorField === 'url' ? 'border-red-400 focus:border-red-400' : ''}`}
-              type="url"
-              value={backendUrl}
-              onChange={(e) => {
-                const value = e.target.value;
-                setBackendUrl(value);
-                setConnectionNeedsAttach(true);
-                setConnectionErrorField('');
-                setConnectionMessage('');
-                setConnectionSuccess(false);
-                updateConnectionDraft({ backendUrl: value });
-              }}
-              placeholder="https://your-server.com"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </Field>
-          <Field label="WebSocket URL (optional)">
-            <input
-              className={inputClass}
-              type="url"
-              value={websocketUrl}
-              onChange={(e) => {
-                const value = e.target.value;
-                setWebsocketUrl(value);
-                setConnectionNeedsAttach(true);
-                setConnectionMessage('');
-                setConnectionSuccess(false);
-                updateConnectionDraft({ wsUrlOverride: value });
-              }}
-              placeholder="wss://your-server.com/api/v1/ws"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </Field>
-          <Field label="Backend API key">
-            <div className="relative">
-            <input
-              type={showOperatorKey ? 'text' : 'password'}
-              value={operatorKey}
-              onChange={(e) => {
-                const value = e.target.value;
-                setOperatorKey(value);
-                setConnectionNeedsAttach(true);
-                setConnectionErrorField('');
-                setConnectionMessage('');
-                setConnectionSuccess(false);
-                updateConnectionDraft({ adminApiKey: value });
-              }}
-              placeholder="Paste operator API key"
-              autoCapitalize="none"
-              autoCorrect="off"
-              autoComplete="new-password"
-              className={`pr-11 ${inputClass} ${connectionErrorField === 'key' ? 'border-red-400 focus:border-red-400' : ''}`}
-            />
-            <button
-              type="button"
-              onClick={() => setShowOperatorKey((visible) => !visible)}
-              aria-label={showOperatorKey ? 'Hide API key' : 'Show API key'}
-              title={showOperatorKey ? 'Hide API key' : 'Show API key'}
-              className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white/85"
-            >
-              {showOperatorKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
+        <div className="space-y-5 pt-5 pb-28">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">System connectivity</p>
+            <p className="mt-1 text-[12px] text-white/55">Live health of your NodeX backend and engine.</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div className="min-w-0 rounded-2xl border border-white/[0.09] bg-[#101010] p-3">
+              <div className="mb-3 flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${engineStatus.ws_status === 'connected' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                <span className="truncate text-[9px] font-semibold uppercase tracking-wider text-white/40">WebSocket</span>
+              </div>
+              <p className={`truncate text-[12px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : 'text-red-300'}`}>
+                {engineStatus.ws_status === 'connected' ? 'Connected' : engineStatus.ws_status === 'reconnecting' ? 'Connecting' : 'Disconnected'}
+              </p>
+              <p className="mt-1 text-[9px] leading-relaxed text-white/35">Live event stream</p>
             </div>
-          </Field>
-          {connectionMessage && (
-            <p className={`text-[11px] ${connectionSuccess ? 'text-emerald-300' : 'text-red-300'}`} role="status">
-              {connectionMessage}
-            </p>
-          )}
-          {connectionNeedsAttach && (
-            <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] z-50 flex justify-center px-5 pointer-events-none">
-              <button
-                type="button"
-                onClick={attachConnection}
-                disabled={savingConnection}
-                className="pointer-events-auto flex min-w-32 items-center justify-center gap-2 rounded-xl bg-white px-7 py-3 text-[13px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.55)] transition-transform active:scale-95 disabled:opacity-60"
-              >
-                {savingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                {savingConnection ? 'Attaching…' : 'Attach'}
+
+            <div className="min-w-0 rounded-2xl border border-white/[0.09] bg-[#101010] p-3">
+              <div className="mb-3 flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${restOnline === true ? 'bg-emerald-400' : restOnline === false ? 'bg-red-400' : 'bg-white/30'}`} />
+                <span className="truncate text-[9px] font-semibold uppercase tracking-wider text-white/40">REST API</span>
+              </div>
+              <p className={`truncate text-[12px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/60'}`}>
+                {restOnline === true ? 'Online' : restOnline === false ? 'Unavailable' : 'Checking'}
+              </p>
+              <p className="mt-1 text-[9px] leading-relaxed text-white/35">HTTP health endpoint</p>
+            </div>
+
+            <div className="min-w-0 rounded-2xl border border-white/[0.09] bg-[#101010] p-3">
+              <div className="mb-3 flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${runtimeSnapshot?.running ?? engineStatus.running ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                <span className="truncate text-[9px] font-semibold uppercase tracking-wider text-white/40">Engine</span>
+              </div>
+              <p className={`truncate text-[12px] font-semibold ${runtimeSnapshot?.running ?? engineStatus.running ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {runtimeSnapshot?.running ?? engineStatus.running ? 'Running' : 'Paused'}
+              </p>
+              <p className="mt-1 text-[9px] leading-relaxed text-white/35">Background processing</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] text-white/45">Last status check</span>
+              <span className="text-[10px] tabular-nums text-white/60">{statusCheckedAt ? statusCheckedAt.toLocaleTimeString() : 'Checking…'}</span>
+            </div>
+            <p className="mt-1 text-[9px] leading-relaxed text-white/30">Connection indicators refresh automatically while this page is open.</p>
+          </div>
+
+          <div>
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Connection controls</p>
+            <div className="space-y-2">
+              <button type="button" onClick={testWebSocket} disabled={testingWs || !settings.adminApiKey || !settings.backendUrl} className="flex w-full items-center justify-between rounded-xl border border-white/[0.10] bg-[#111] px-4 py-3.5 text-left transition-colors active:bg-white/[0.06] disabled:opacity-45">
+                <span><span className="block text-[12px] font-medium text-white/90">Test WebSocket</span><span className="mt-0.5 block text-[10px] text-white/40">Verify the authenticated live-stream handshake</span></span>
+                <span className="text-[11px] font-semibold text-white/65">{testingWs ? 'Testing…' : 'Test'}</span>
               </button>
+              <button type="button" onClick={testRestConnection} disabled={testingRest || !settings.backendUrl} className="flex w-full items-center justify-between rounded-xl border border-white/[0.10] bg-[#111] px-4 py-3.5 text-left transition-colors active:bg-white/[0.06] disabled:opacity-45">
+                <span><span className="block text-[12px] font-medium text-white/90">Test REST API</span><span className="mt-0.5 block text-[10px] text-white/40">Send a fresh request to the backend health endpoint</span></span>
+                <span className="text-[11px] font-semibold text-white/65">{testingRest ? 'Testing…' : 'Test'}</span>
+              </button>
+              <button type="button" onClick={async () => {
+                const nextRunning = !(runtimeSnapshot?.running ?? engineStatus.running);
+                setTestingConnection(true);
+                setHealthMessage('');
+                try {
+                  await apiClient.updateEngineControl(nextRunning ? 'resume' : 'pause');
+                  setRuntimeSnapshot({ running: nextRunning });
+                  setHealthMessage(nextRunning ? 'Resume command accepted by the backend.' : 'Pause command accepted by the backend.');
+                  window.setTimeout(() => void refreshConnectionStatus(), 700);
+                } catch (error) {
+                  setHealthMessage(error instanceof Error ? error.message : 'Engine control command failed.');
+                } finally {
+                  setTestingConnection(false);
+                }
+              }} disabled={testingConnection || !settings.adminApiKey} className="flex w-full items-center justify-between rounded-xl bg-white px-4 py-3.5 text-left text-black transition-transform active:scale-[0.99] disabled:opacity-45">
+                <span><span className="block text-[12px] font-semibold">{runtimeSnapshot?.running ?? engineStatus.running ? 'Pause Engine' : 'Resume Engine'}</span><span className="mt-0.5 block text-[10px] text-black/55">Control background token monitoring and processing</span></span>
+                <span className="text-[11px] font-semibold">{testingConnection ? 'Sending…' : '→'}</span>
+              </button>
+            </div>
+            {(wsTestMessage || restTestMessage || healthMessage) && (
+              <div className="mt-3 space-y-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3" role="status">
+                {wsTestMessage && <p className="break-words text-[10px] text-white/70">WebSocket: {wsTestMessage}</p>}
+                {restTestMessage && <p className="break-words text-[10px] text-white/70">REST API: {restTestMessage}</p>}
+                {healthMessage && <p className="break-words text-[10px] text-white/70">Engine: {healthMessage}</p>}
+              </div>
+            )}
+          </div>
+
+          <button type="button" onClick={() => setConnectionSheetOpen(true)} className="flex w-full items-center justify-between rounded-xl border border-white/[0.10] bg-[#101010] px-4 py-4 text-left transition-colors active:bg-white/[0.05]">
+            <span className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.07]"><PlugZap className="h-4 w-4 text-white/75" /></span>
+              <span><span className="block text-[12px] font-semibold text-white/90">Configuration settings</span><span className="mt-0.5 block text-[10px] text-white/40">Server URL, WebSocket URL and API key</span></span>
+            </span>
+            <ChevronRight className="h-4 w-4 rotate-90 text-white/40" />
+          </button>
+
+          {connectionSheetOpen && (
+            <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setConnectionSheetOpen(false); }}>
+              <section role="dialog" aria-modal="true" aria-labelledby="connection-sheet-title" className="max-h-[88dvh] w-full max-w-xl overflow-y-auto rounded-t-[26px] border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
+                <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div><h2 id="connection-sheet-title" className="text-[15px] font-semibold text-white">Connection configuration</h2><p className="mt-1 text-[10px] text-white/40">Credentials stay in this browser profile and are not shown on the status page.</p></div>
+                  <button type="button" onClick={() => setConnectionSheetOpen(false)} aria-label="Close configuration" className="rounded-full px-3 py-1.5 text-[11px] text-white/55">Close</button>
+                </div>
+                <div className="space-y-4">
+                  <Field label="REST API server URL" hint="Use the HTTPS origin of your NodeX backend.">
+                    <input className={`${inputClass} ${connectionErrorField === 'url' ? 'border-red-400' : ''}`} type="url" value={backendUrl} onChange={(event) => { setBackendUrl(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); setConnectionErrorField(''); }} placeholder="https://your-server.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                  </Field>
+                  <Field label="WebSocket URL (optional)" hint="Leave blank to derive the secure WebSocket address from the REST API URL.">
+                    <input className={inputClass} type="url" value={websocketUrl} onChange={(event) => { setWebsocketUrl(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); }} placeholder="wss://your-server.com/api/v1/ws" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                  </Field>
+                  <Field label="Backend API key">
+                    <div className="relative">
+                      <input type={showOperatorKey ? 'text' : 'password'} value={operatorKey} onChange={(event) => { setOperatorKey(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); setConnectionErrorField(''); }} placeholder="Paste operator API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className={`pr-11 ${inputClass} ${connectionErrorField === 'key' ? 'border-red-400' : ''}`} />
+                      <button type="button" onClick={() => setShowOperatorKey((visible) => !visible)} aria-label={showOperatorKey ? 'Hide API key' : 'Show API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showOperatorKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                    </div>
+                  </Field>
+                  {connectionMessage && <p className={`text-[11px] ${connectionSuccess ? 'text-emerald-300' : 'text-red-300'}`} role="status">{connectionMessage}</p>}
+                  <button type="button" onClick={attachConnection} disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
+                    {savingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+                    {savingConnection ? 'Verifying connection…' : 'Save & connect'}
+                  </button>
+                  <p className="text-[9px] leading-relaxed text-white/30">Saving verifies the REST API, requests a one-time WebSocket ticket, and tests the secure WebSocket handshake before applying the new settings.</p>
+                </div>
+              </section>
             </div>
           )}
         </div>
