@@ -9,7 +9,7 @@ export function normalizeBackendEvent(raw:any, receivedAt?:string):NodeXEvent {
   const rawType=typeof raw?.type==='string'?raw.type:(isSolanaLog?'solana_logs_notification':'unknown_event');
   const value=raw?.params?.result?.value||{};
   const timestamp=String(
-    raw?.data?.received_at||raw?.data?.detected_at||receivedAt||new Date().toISOString()
+    raw?.data?.received_at||raw?.data?.detected_at||raw?.data?.timestamp||raw?.timestamp||receivedAt||new Date().toISOString()
   );
   const data:Record<string,any>=isSolanaLog?{
     component:'solana_logs',
