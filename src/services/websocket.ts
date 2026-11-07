@@ -110,7 +110,7 @@ export class NodeXWebSocketService {
           // Forward every typed event so pages do not silently lose new backend event types.
           const event=normalizeBackendEvent(raw);if(this.seen.has(event.event_id))return;
           this.seen.add(event.event_id);if(this.seen.size>3000)this.seen.delete(this.seen.values().next().value as string);
-          if (['market_tick','market_price_update','token_market_update','chart_candle_update'].includes(event.event_type)) {
+          if (['market_tick','market_price_update','token_market_update','chart_candle_update','pumpswap_activity','pumpswap_volume_update','market_account_update'].includes(event.event_type)) {
             const mint = String(event.token_mint || event.data?.mint_address || '');
             const key = mint ? `${event.event_type}:${mint}` : event.event_id;
             this.pendingMarketEvents.set(key, event);
