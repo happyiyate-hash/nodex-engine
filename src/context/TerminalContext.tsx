@@ -43,6 +43,7 @@ interface TerminalContextType {
   updatePositionRisk: (positionId: string, sl: number, tp: number) => void;
   saveStrategyConfig: (config: StrategyConfig) => Promise<boolean>;
   updateSettings: (newSettings: Partial<ApiSettings>) => void;
+  updateConnectionDraft: (newSettings: Partial<ApiSettings>) => void;
   isMobilePreview: boolean;
   setIsMobilePreview: (value: boolean | ((prev: boolean) => boolean)) => void;
   backendError: string | null;
@@ -385,6 +386,13 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     wsService.connect();
     setBackendError(null);
   };
+  // Persist connection-field edits immediately without reconnecting the live
+  // stream on every keystroke. Attach performs the verified reconnect.
+  const updateConnectionDraft = (newSettings: Partial<ApiSettings>) => {
+    const updated = apiClient.saveSettings(newSettings);
+    setSettings(updated);
+    setBackendError(null);
+  };
   const openTokenDetailByMint = (mint: string, fallback: Partial<DiscoveredToken> = {}) => {
     const existing = tokens.find((item) => item.mint === mint);
     if (existing) {
@@ -451,7 +459,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       openTokenDetailByMint, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
-      saveStrategyConfig, updateSettings, isMobilePreview, setIsMobilePreview, backendError,
+      saveStrategyConfig, updateSettings, updateConnectionDraft, isMobilePreview, setIsMobilePreview, backendError,
     }}>
       {children}
     </TerminalContext.Provider>
