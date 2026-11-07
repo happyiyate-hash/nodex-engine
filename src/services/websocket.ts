@@ -1,5 +1,5 @@
 import { ConnectionStatus, NodeXEvent } from '../types';
-import { apiClient } from './api';
+import { apiClient } from './rest';
 import { recordLiveEvent } from './engineLogs';
 type EventListener=(event:NodeXEvent)=>void;
 type StatusListener=(status:ConnectionStatus,latencyMs:number)=>void;
