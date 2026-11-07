@@ -139,6 +139,10 @@ export interface DiscoveredToken {
   symbol: string;
   metadata_uri?: string;
   logo_url?: string;
+  metadata_status?: string;
+  scan_status?: string;
+  scan_progress?: number;
+  scan_stage?: string;
   decimals?: number;
   total_supply_raw?: string;
   creator_wallet: string;
