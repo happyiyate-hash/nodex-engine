@@ -15,7 +15,6 @@ export const TokenDetailPage: React.FC = () => {
   const {
     selectedToken,
     tokens,
-    loadTokenSnapshot,
     closeTokenDetail,
     positions,
     closePosition,
@@ -41,10 +40,9 @@ export const TokenDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (!activeToken?.mint) return;
-    void loadTokenSnapshot(activeToken.mint);
     wsService.subscribeToken(activeToken.mint, '5m');
     return () => wsService.unsubscribeToken(activeToken.mint);
-  }, [activeToken?.mint, loadTokenSnapshot]);
+  }, [activeToken?.mint]);
 
   useEffect(() => {
     if (!activeToken?.mint) return;
