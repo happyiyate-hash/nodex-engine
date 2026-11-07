@@ -95,9 +95,10 @@ const defaultSafetyDetails: DiscoveredToken['safety_details'] = {
 function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEvent): DiscoveredToken | null {
   const data = event.data || {};
   const marketPatch = data.market_patch && typeof data.market_patch === 'object' ? data.market_patch : {};
+  const statisticsPatch = data.statistics_patch && typeof data.statistics_patch === 'object' ? data.statistics_patch : {};
   const identity = data.identity && typeof data.identity === 'object' ? data.identity : {};
   const metadata = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
-  const payload = { ...data, ...marketPatch, ...identity };
+  const payload = { ...data, ...marketPatch, ...statisticsPatch, ...identity };
   const mint = String(event.token_mint || payload.mint_address || payload.token_mint || payload.base_mint || '');
   if (!mint) return null;
   const rawUsdPrice = Number(payload.current_price_usd ?? payload.price_usd ?? payload.price ?? payload.current_price);
@@ -216,6 +217,12 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   const priceSol = Number(market.price_sol ?? previous?.current_price_sol ?? 0);
   const priceUsd = Number(market.price_usd ?? previous?.current_price_usd ?? 0);
   const venueValue = String(market.venue || identity.venue || previous?.venue || 'pump.fun').toLowerCase();
+  const securityDecision = String(snapshot.security?.decision || '').toUpperCase();
+  const qualificationStatus: DiscoveredToken['qualification_status'] =
+    securityDecision === 'APPROVED' ? 'qualified'
+      : securityDecision === 'REJECTED' ? 'rejected'
+      : snapshot.security?.status === 'scanning' ? 'under_analysis'
+      : previous?.qualification_status || 'newly_detected';
   return {
     mint,
     name: String(identity.name ?? previous?.name ?? ''),
@@ -237,7 +244,7 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
     bonding_curve_progress_pct: Number(market.bonding_curve_pct ?? statistics.bonding_curve_pct ?? previous?.bonding_curve_progress_pct ?? 0),
     venue: venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun',
     safety_status: snapshot.security?.decision === 'APPROVED' ? 'verified' : previous?.safety_status || 'warning',
-    qualification_status: 'qualified',
+    qualification_status: qualificationStatus,
     safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(snapshot.security || {}) },
     price_history_5m: priceHistory.length ? priceHistory.slice(-500) : previous?.price_history_5m || [],
   };
