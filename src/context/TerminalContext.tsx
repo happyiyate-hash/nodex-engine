@@ -534,8 +534,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           !['market_tick','market_price_update','token_market_update','token_statistics_update','chart_candle_update','chart_candle_closed'].includes(event.event_type)
         ).slice(0, 100);
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          tokens: tokens.slice(0, 200),
-          launches: launches.slice(0, 200),
+          tokens: tokens.slice(0, 100).map((token) => ({
+            ...token,
+            price_history_5m: (token.price_history_5m || []).slice(-60),
+          })),
+          launches: launches.slice(0, 100),
           events: durableEvents,
         }));
       } catch (error) {
