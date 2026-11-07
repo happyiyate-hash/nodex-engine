@@ -345,6 +345,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (snapshot.profile) {
         const runtime = engineEventStore.hydrate(snapshot.profile);
         setProfile(runtime.profile);
+        setPaperWallet(runtime.profile?.paper_wallet ?? snapshot.paperWallet ?? null);
         const mappedPositions = runtime.positions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null);
         setPositions(mappedPositions);
         setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
@@ -378,7 +379,10 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const previousRuntime = engineEventStore.getSnapshot();
         const runtime = engineEventStore.apply(event);
         if (runtime !== previousRuntime) {
-          if (runtime.profile) setProfile(runtime.profile);
+          if (runtime.profile) {
+            setProfile(runtime.profile);
+            if (runtime.profile.paper_wallet) setPaperWallet(runtime.profile.paper_wallet);
+          }
           const mappedPositions = runtime.positions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null);
           setPositions(mappedPositions);
           setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
