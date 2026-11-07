@@ -159,7 +159,7 @@ export class NodeXApiClient {
 
   public async verifyConnection(candidate: { backendUrl: string; wsUrlOverride: string; adminApiKey: string }): Promise<{ service: string }> {
     const previous = this.settings;
-    const backendUrl = candidate.backendUrl.trim().replace(/\\/$/, '');
+    const backendUrl = candidate.backendUrl.trim().replace(/\/$/, '');
     const wsUrlOverride = candidate.wsUrlOverride.trim();
     this.settings = {
       ...previous,
