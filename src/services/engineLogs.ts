@@ -87,7 +87,7 @@ export function installFetchLogger() {
       const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       let url: URL;
       try { url = new URL(rawUrl, window.location.href); } catch { return originalFetch(input, init); }
-      const isNodeX = /\\/api\\/v1\\//.test(url.pathname) || url.pathname === '/health';
+      const isNodeX = /\/api\/v1\//.test(url.pathname) || url.pathname === '/health';
       if (!isNodeX) return originalFetch(input, init);
       const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
       const started = performance.now();
