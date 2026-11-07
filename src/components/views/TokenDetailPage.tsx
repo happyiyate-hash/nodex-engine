@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
+import { wsService } from '../../services/websocket';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
-import { PricePoint } from '../../types';
 import {
   ArrowLeft,
   Copy,
@@ -28,11 +28,6 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [tradeMessage, setTradeMessage] = useState<string | null>(null);
   const [headerOffset, setHeaderOffset] = useState(0);
-  const [demoData, setDemoData] = useState<{
-    tick: number; price: number; changePct: number; marketCapSol: number; marketCapUsd: number;
-    liquidityUsd: number; volume5mUsd: number; volume1hUsd: number; buys: number; sells: number;
-    holders: number; bonding: number; history: PricePoint[];
-  } | null>(null);
   const headerOffsetRef = useRef(0);
   const lastScrollTop = useRef(0);
   const headerHeight = 56;
@@ -43,197 +38,27 @@ export const TokenDetailPage: React.FC = () => {
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : tokens[0];
 
-  // Helper to generate a realistic 50-bar OHLCV history ending at basePrice
-  const generateOHLCVHistory = (
-    basePrice: number,
-    changePct: number,
-    tf: '1m' | '5m' | '15m' | '1H' | '24H',
-    mintSeed: string = 'token'
-  ) => {
-    const count = 50;
-    const intervalMs =
-      tf === '1m'
-        ? 60_000
-        : tf === '5m'
-        ? 5 * 60_000
-        : tf === '15m'
-        ? 15 * 60_000
-        : tf === '1H'
-        ? 60 * 60_000
-        : 30 * 60_000; // 30m candles for 24H view = 48-50 bars across the day
-
-    const now = Date.now();
-    let seedNum = 0;
-    for (let i = 0; i < mintSeed.length; i++) {
-      seedNum = (seedNum * 31 + mintSeed.charCodeAt(i)) & 0xffffffff;
-    }
-    const pseudoRand = (offset: number) => {
-      const x = Math.sin(seedNum + offset * 12.9898) * 43758.5453;
-      return x - Math.floor(x);
-    };
-
-    const ratio = 1 + changePct / 100;
-    const startPrice = Math.max(basePrice * 0.25, basePrice / (ratio > 0.1 ? ratio : 1.15));
-
-    const bars: { time: number; price: number; open: number; high: number; low: number; volume: number }[] = [];
-    let prevClose = startPrice;
-
-    for (let i = 0; i < count; i++) {
-      const t = now - (count - 1 - i) * intervalMs;
-      const progress = i / (count - 1);
-      // Realistic curve towards basePrice
-      const baseline = startPrice + (basePrice - startPrice) * Math.pow(progress, 0.85);
-      const noise = (pseudoRand(i) - 0.48) * 0.035 * (1 - progress * 0.45);
-      const open = prevClose;
-      let close = i === count - 1 ? basePrice : Math.max(Number.EPSILON, baseline * (1 + noise));
-
-      // Occasional spike/pullback
-      if (i % 8 === 4 && i !== count - 1) {
-        close = open * (pseudoRand(i * 3) > 0.5 ? 1.025 : 0.975);
-      }
-
-      const wickHigh = Math.max(open, close) * (1 + pseudoRand(i * 5) * 0.015 + 0.003);
-      const wickLow = Math.min(open, close) * (1 - pseudoRand(i * 7) * 0.015 - 0.003);
-      const vol = Math.round(500 + pseudoRand(i * 11) * 4500 + Math.abs(close - open) / (open || 1) * 50000);
-
-      bars.push({
-        time: t,
-        price: close,
-        open,
-        high: wickHigh,
-        low: wickLow,
-        volume: vol,
-      });
-      prevClose = close;
-    }
-    return bars;
-  };
-
-  // VISUAL DEMO: isolated local market tape for previewing chart motion and
-  // every changing statistic. It never writes to TerminalContext or the backend.
   useEffect(() => {
-    if (!activeToken) {
-      setDemoData(null);
-      return;
-    }
-    const seedCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
-    const seedPrice = seedCurrency === 'SOL'
-      ? (activeToken.current_price_sol > 0 ? activeToken.current_price_sol : 0.00000125)
-      : (activeToken.current_price_usd > 0 ? activeToken.current_price_usd : 0.00000125);
-    
-    const activePositionForToken = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
-    const initialChange = activePositionForToken?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct ?? 14.8;
-    const initialHistory = generateOHLCVHistory(seedPrice, initialChange, timeframe, activeToken.mint);
+    if (!activeToken?.mint) return;
+    wsService.subscribeToken(activeToken.mint, '5m');
+    return () => wsService.unsubscribeToken(activeToken.mint);
+  }, [activeToken?.mint]);
 
-    setDemoData({
-      tick: 0,
-      price: seedPrice,
-      changePct: initialChange,
-      marketCapSol: activeToken.market_cap_sol || 128.4,
-      marketCapUsd: activeToken.market_cap_usd || 18450,
-      liquidityUsd: activeToken.liquidity_usd || 7350,
-      volume5mUsd: activeToken.volume_5m_usd || 1280,
-      volume1hUsd: activeToken.volume_1h_usd || 8940,
-      buys: activeToken.tx_buys_5m || 18,
-      sells: activeToken.tx_sells_5m || 9,
-      holders: activeToken.safety_details?.holders_count || 426,
-      bonding: activeToken.bonding_curve_progress_pct || 37.5,
-      history: initialHistory,
-    });
-
-    const timer = window.setInterval(() => {
-      setDemoData((previous) => {
-        if (!previous) return previous;
-        const tick = previous.tick + 1;
-        // Repeatable stress-test tape:
-        // pause -> +20% breakout -> steady climb -> pause -> -10% flush
-        // -> steady decline -> pause -> +12% rebound.
-        const phase = (tick - 1) % 48;
-        let movePct = 0;
-        let direction = 0;
-        if (phase === 5) {
-          movePct = 20;
-          direction = 1;
-        } else if (phase >= 6 && phase <= 17) {
-          movePct = 0.72 + (Math.sin(tick * 0.8) + 1) * 0.16;
-          direction = 1;
-        } else if (phase === 22) {
-          movePct = -10;
-          direction = -1;
-        } else if (phase >= 23 && phase <= 34) {
-          movePct = -(0.58 + (Math.sin(tick * 0.67) + 1) * 0.15);
-          direction = -1;
-        } else if (phase === 40) {
-          movePct = 12;
-          direction = 1;
-        } else if (phase >= 41 && phase <= 47) {
-          movePct = 0.42 + (Math.sin(tick * 0.74) + 1) * 0.12;
-          direction = 1;
-        } else {
-          // A near-flat tape makes the pauses obvious without freezing the UI.
-          movePct = Math.sin(tick * 0.55) * 0.025;
-        }
-
-        const price = Math.max(Number.EPSILON, previous.price * (1 + movePct / 100));
-        const changePct = ((price / seedPrice) - 1) * 100;
-        const volume = Math.abs(movePct) > 5 ? 420 : Math.abs(movePct) > 0.5 ? 80 + (tick % 7) * 13 : 8;
-        const now = Date.now();
-
-        // Update the last candle or create a new one every 18 ticks
-        const history = [...previous.history];
-        if (history.length > 0) {
-          const lastIdx = history.length - 1;
-          const lastBar = { ...history[lastIdx] };
-          lastBar.price = price;
-          lastBar.high = Math.max(lastBar.high ?? price, price);
-          lastBar.low = Math.min(lastBar.low ?? price, price);
-          lastBar.volume += volume;
-          history[lastIdx] = lastBar;
-
-          if (tick % 18 === 0) {
-            history.push({
-              time: now,
-              price,
-              open: price,
-              high: price * 1.002,
-              low: price * 0.998,
-              volume: 12,
-            });
-            if (history.length > 60) history.shift();
-          }
-        }
-
-        return {
-          tick,
-          price,
-          changePct,
-          marketCapSol: previous.marketCapSol * (price / previous.price),
-          marketCapUsd: previous.marketCapUsd * (price / previous.price),
-          liquidityUsd: Math.max(100, previous.liquidityUsd + direction * (tick % 4) * 7),
-          volume5mUsd: previous.volume5mUsd + volume,
-          volume1hUsd: previous.volume1hUsd + volume * 1.8,
-          buys: Math.max(0, previous.buys + (direction > 0 ? 2 : 0) + (tick % 3 === 0 ? 1 : 0)),
-          sells: Math.max(0, previous.sells + (direction < 0 ? 2 : 0) + (tick % 5 === 0 ? 1 : 0)),
-          holders: Math.max(1, previous.holders + (direction > 0 && tick % 4 === 0 ? 1 : direction < 0 && tick % 7 === 0 ? -1 : 0)),
-          bonding: Math.max(1, Math.min(99, previous.bonding + direction * 0.12)),
-          history,
-        };
-      });
-    }, 650);
-    return () => window.clearInterval(timer);
+  useEffect(() => {
+    if (!activeToken?.mint) return;
+    const backendTimeframe = timeframe === '1H' ? '1h' : timeframe === '24H' ? '24h' : timeframe;
+    wsService.setChartTimeframe(activeToken.mint, backendTimeframe as '1m' | '5m' | '15m' | '1h' | '24h');
   }, [activeToken?.mint, timeframe]);
 
   if (!activeToken) return null;
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
   const priceCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
-  const liveTokenPrice = demoData?.price ?? (priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd);
+  const liveTokenPrice = priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd;
   const currentPrice = scrubPrice ?? liveTokenPrice;
   // Keep the displayed percentage tied to the actual simulated price
   // relative to its seed. Do not alternate the sign by animation phase:
   // that made the header turn red while the price tape was still rising.
-  const marketChangePct = demoData
-    ? demoData.changePct
-    : activePosition?.pnl_pct ?? activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
+  const marketChangePct = activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
   const pnlPct = marketChangePct ?? 0;
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
@@ -397,7 +222,7 @@ export const TokenDetailPage: React.FC = () => {
         <DotMatrixChart
           currentPrice={liveTokenPrice}
           entryPrice={activePosition && priceCurrency === 'USD' ? entryPriceUsd : undefined}
-          priceHistory={demoData?.history || activeToken.price_history_5m}
+          priceHistory={activeToken.price_history_5m}
           isPositive={isPositive}
           timeframe={timeframe}
           chartType={chartType}
@@ -423,32 +248,32 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Token balance</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {formatMetric(demoData?.price ? 125000 * ((demoData.price / (activeToken.price_currency === 'SOL' ? (activeToken.current_price_sol || demoData.price) : (activeToken.current_price_usd || demoData.price)))) : 125000, 2)}
+                {activePosition ? formatMetric(activePosition.amount_tokens, 2) : '—'}
               </div>
-              <div className="text-[9px] text-white/30">{activeToken.symbol} · DEMO</div>
+              <div className="text-[9px] text-white/30">{activeToken.symbol}</div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Average entry price</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {formatMetric((activeToken.price_currency === 'SOL' ? (activeToken.current_price_sol || demoData?.price || 1) : (activeToken.current_price_usd || demoData?.price || 1)) * 0.91, 10)} {priceCurrency}
+                {activePosition ? formatMetric(priceCurrency === 'SOL' ? activePosition.entry_price_sol : activePosition.entry_price_usd, 10) + ' ' + priceCurrency : '—'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Total budget</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                1.2500 SOL
+                {activePosition ? `${formatMetric(activePosition.initial_investment_sol, 4)} SOL` : '—'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Current position value</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {`${formatMetric(1.25 * (1 + (demoData?.changePct || 0) / 100), 4)} SOL`}
+                {activePosition ? `${formatMetric(activePosition.current_position_value_sol, 4)} SOL` : '—'}
               </div>
             </div>
             <div className="col-span-2">
               <div className="text-[10px] text-white/40">Unrealized P&L</div>
-              <div className={`mt-0.5 text-[13px] font-semibold ${(demoData?.changePct || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                `${(demoData?.changePct || 0) >= 0 ? '+' : ''}${formatMetric(1.25 * (demoData?.changePct || 0) / 100, 4)} SOL · ${(demoData?.changePct || 0).toFixed(2)}%`
+              <div className={`mt-0.5 text-[13px] font-semibold ${(positionPnlPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                activePosition ? `${formatMetric(positionPnlSol, 4)} SOL · ${(positionPnlPct ?? 0).toFixed(2)}%` : '—'
               </div>
             </div>
           </div>
@@ -466,49 +291,49 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Market cap</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {priceCurrency === 'SOL' ? `${formatMetric(demoData?.marketCapSol ?? activeToken.market_cap_sol, 3)} SOL` : `${formatMetric(demoData?.marketCapUsd ?? activeToken.market_cap_usd, 2)}`}
+                {priceCurrency === 'SOL' ? `${formatMetric(activeToken.market_cap_sol, 3)} SOL` : `${formatMetric(activeToken.market_cap_usd, 2)}`}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Liquidity</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${formatMetric(demoData?.liquidityUsd ?? activeToken.liquidity_usd, 2)}
+                ${formatMetric(activeToken.liquidity_usd, 2)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${formatMetric(demoData?.volume5mUsd ?? activeToken.volume_5m_usd, 2)}
+                ${formatMetric(activeToken.volume_5m_usd, 2)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">1h volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${formatMetric(demoData?.volume1hUsd ?? activeToken.volume_1h_usd, 2)}
+                ${formatMetric(activeToken.volume_1h_usd, 2)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m buys</div>
               <div className="mt-0.5 text-[13px] font-semibold text-emerald-400">
-                {formatMetric(demoData?.buys ?? activeToken.tx_buys_5m, 0)}
+                {formatMetric(activeToken.tx_buys_5m, 0)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m sells</div>
               <div className="mt-0.5 text-[13px] font-semibold text-red-400">
-                {formatMetric(demoData?.sells ?? activeToken.tx_sells_5m, 0)}
+                {formatMetric(activeToken.tx_sells_5m, 0)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Holders</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {formatMetric(demoData?.holders ?? activeToken.safety_details?.holders_count, 0)}
+                {formatMetric(activeToken.safety_details?.holders_count, 0)}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Bonding curve</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {`${formatMetric(demoData?.bonding ?? activeToken.bonding_curve_progress_pct, 1)}%`}
+                {`${formatMetric(activeToken.bonding_curve_progress_pct, 1)}%`}
               </div>
             </div>
           </div>
