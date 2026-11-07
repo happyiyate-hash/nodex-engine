@@ -44,6 +44,7 @@ const categories: StorageCategory[] = [
 
 export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [selected, setSelected] = useState<StorageCategory | null>(null);
+  const [showCleanupConfirmation, setShowCleanupConfirmation] = useState(false);
   const [notice, setNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [browserStorage, setBrowserStorage] = useState<BrowserStorageEstimate>({ usage: null, quota: null });
@@ -90,6 +91,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         }
 
         setBrowserStorage(await getBrowserStorageEstimate());
+        setShowCleanupConfirmation(false);
         setSelected(null);
         setNotice('Browser storage cleanup completed. You may need to sign in again or restore app preferences.');
       } catch {
@@ -97,8 +99,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       }
       return;
     }
+    setShowCleanupConfirmation(false);
+    setNotice('No files were deleted. This category does not have an active cleanup operation yet.');
     setSelected(null);
-    setNotice('No files were deleted. Connect the approved cleanup operation before running this action.');
   };
 
   return (
@@ -155,42 +158,45 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         </div>
 
         <div className="divide-y divide-white/[0.075]">
-          {categories.map(({ id, title, description, icon: Icon, accent, tint, cleanable, note }) => (
-            <div key={id} className="py-2.5">
-              <div className="flex items-center gap-3">
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] ${accent}`}>
-                  <Icon className="h-[17px] w-[17px]" strokeWidth={1.8} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[12px] font-semibold text-white/90">{title}</p>
-                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">{id === "local-storage" ? (browserStorage.usage === null ? "—" : formatMegabytes(localStorageBytes)) : "—"}</p>
+          {categories.map((category) => {
+            const { id, title, description, icon: Icon, accent, tint } = category;
+            const isLocalStorage = id === 'local-storage';
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => { setNotice(''); setSelected(category); }}
+                className="block w-full py-2.5 text-left transition-colors active:bg-white/[0.025]"
+                aria-label={`View ${title} storage details`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] ${accent}`}>
+                    <Icon className="h-[17px] w-[17px]" strokeWidth={1.8} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[12px] font-semibold text-white/90">{title}</p>
+                      <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">
+                        {isLocalStorage ? (browserStorage.usage === null ? "—" : formatMegabytes(localStorageBytes)) : "—"}
+                      </p>
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
                   </div>
-                  <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
                 </div>
-                <div className="ml-1 flex shrink-0 items-center gap-1.5">
-                  {cleanable ? (
-                    <button type="button" onClick={() => { setNotice(''); setSelected({ id, title, description, icon: Icon, accent, tint, cleanable, note }); }} aria-label={`Clean ${title}`} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/[0.12] px-3 text-[9px] font-semibold text-white/65 transition-colors hover:bg-white/[0.07]">
-                      <Trash2 className="h-3 w-3" /> Clean
-                    </button>
-                  ) : (
-                    <CheckCircle2 className="h-3.5 w-3.5 text-white/25" />
-                  )}
+                <div className="ml-11 mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
+                  <div
+                    className={`h-full rounded-full ${tint}`}
+                    style={{ width: isLocalStorage && localStorageProgress !== null ? `${localStorageProgress}%` : '0%' }}
+                  />
                 </div>
-              </div>
-              <div className="ml-11 mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
-                <div
-                  className={`h-full rounded-full ${tint}`}
-                  style={{ width: id === "local-storage" && localStorageProgress !== null ? `${localStorageProgress}%` : '0%' }}
-                />
-              </div>
-              <p className="ml-11 mt-1 text-[9px] text-white/30">
-                {id === "local-storage"
-                  ? (localStorageProgress === null ? "Browser quota unavailable" : `${localStorageProgress.toFixed(1)}% of browser storage quota used`)
-                  : "Not measured"}
-              </p>
-            </div>
-          ))}
+                <p className="ml-11 mt-1 text-[9px] text-white/30">
+                  {isLocalStorage
+                    ? (localStorageProgress === null ? "Browser quota unavailable" : `${localStorageProgress.toFixed(1)}% of browser storage quota used`)
+                    : "Not measured"}
+                </p>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -212,22 +218,61 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       </button>
 
       {selected && (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/80 px-0 backdrop-blur-sm sm:items-center sm:px-4" onClick={(event) => { if (event.target === event.currentTarget) setSelected(null); }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="storage-clean-title" className="w-full max-w-lg rounded-t-[26px] border border-white/[0.10] bg-[#111315] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 shadow-[0_-18px_60px_rgba(0,0,0,.65)] sm:rounded-[26px]">
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/80 px-0 backdrop-blur-sm sm:items-center sm:px-4" onClick={(event) => { if (event.target === event.currentTarget) { setShowCleanupConfirmation(false); setSelected(null); } }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="storage-detail-title" className="w-full max-w-lg rounded-t-[26px] border border-white/[0.10] bg-[#111315] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 shadow-[0_-18px_60px_rgba(0,0,0,.65)] sm:rounded-[26px]">
             <div className="mb-4 flex items-center justify-between">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.05]"><Trash2 className="h-4 w-4 text-white/70" /></span>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Close cleanup confirmation" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.05] ${selected.accent}`}>
+                <selected.icon className="h-4 w-4" />
+              </span>
+              <button type="button" onClick={() => { setShowCleanupConfirmation(false); setSelected(null); }} aria-label="Close storage details" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
             </div>
-            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">Confirm {selected.title.toLowerCase()} cleanup?</h2>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
-            <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/[0.045] p-3">
-              {selected.id === "local-storage" ? (
-                <p className="text-[10px] leading-relaxed text-amber-100/75">This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included.</p>
-              ) : <p className="text-[10px] leading-relaxed text-amber-100/75">Cleanup is not connected to this control yet. Confirming will not delete anything.</p>}
+            <h2 id="storage-detail-title" className="text-[15px] font-semibold text-white">{selected.title}</h2>
+            <p className="mt-1 text-[11px] text-white/45">{selected.description}</p>
+            <div className="mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.035] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] text-white/45">Storage used</span>
+                <span className="text-[13px] font-semibold tabular-nums text-white/85">
+                  {selected.id === 'local-storage' ? (browserStorage.usage === null ? 'Unavailable' : formatMegabytes(localStorageBytes)) : 'Not measured'}
+                </span>
+              </div>
+              {selected.id === 'local-storage' && (
+                <>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div className="h-full rounded-full bg-fuchsia-400" style={{ width: localStorageProgress === null ? '0%' : `${localStorageProgress}%` }} />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[9px] text-white/40">
+                    <span>{localStorageProgress === null ? 'Quota unavailable' : `${localStorageProgress.toFixed(1)}% used`}</span>
+                    <span>{browserStorage.quota === null ? 'Quota —' : `Quota ${formatMegabytes(browserStorage.quota)}`}</span>
+                  </div>
+                </>
+              )}
             </div>
+            <p className="mt-3 text-[10px] leading-relaxed text-white/45">{selected.note}</p>
+            {selected.id === 'local-storage' ? (
+              <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
+                <Trash2 className="h-3.5 w-3.5" /> Clear local storage
+              </button>
+            ) : (
+              <p className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] leading-relaxed text-white/40">
+                {selected.cleanable ? 'Cleanup is not connected yet. No data can be deleted from this category.' : 'This category is protected from cleanup.'}
+              </p>
+            )}
+          </section>
+        </div>
+      )}
+
+      {selected && showCleanupConfirmation && (
+        <div className="fixed inset-0 z-[130] flex items-end justify-center bg-black/85 px-0 backdrop-blur-sm sm:items-center sm:px-4" onClick={(event) => { if (event.target === event.currentTarget) setShowCleanupConfirmation(false); }}>
+          <section role="alertdialog" aria-modal="true" aria-labelledby="storage-clean-title" className="w-full max-w-lg rounded-t-[26px] border border-white/[0.10] bg-[#111315] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-4 shadow-[0_-18px_60px_rgba(0,0,0,.65)] sm:rounded-[26px]">
+            <div className="mb-4 flex items-center justify-between">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-400/[0.12] bg-amber-400/[0.05]"><Trash2 className="h-4 w-4 text-amber-200/80" /></span>
+              <button type="button" onClick={() => setShowCleanupConfirmation(false)} aria-label="Close cleanup confirmation" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
+            </div>
+            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">Clear local storage?</h2>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/50">This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included.</p>
             <div className="mt-5 flex gap-2">
-              <button type="button" onClick={() => setSelected(null)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">{selected.id === "local-storage" ? "Clear all local storage" : "Acknowledge"}</button>
+              <button type="button" onClick={() => setShowCleanupConfirmation(false)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
+              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">Clear everything</button>
             </div>
           </section>
         </div>
