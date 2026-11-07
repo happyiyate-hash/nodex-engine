@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity, AlertTriangle, Archive, ArrowLeft, CheckCircle2, Coins, Database,
   FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X, KeyRound,
@@ -42,6 +42,12 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const [notice, setNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [localStorageBytes, setLocalStorageBytes] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    getBrowserStorageUsage().then((bytes) => { if (active) setLocalStorageBytes(bytes); });
+    return () => { active = false; };
+  }, []);
 
   const refresh = async () => {
     setRefreshing(true);
