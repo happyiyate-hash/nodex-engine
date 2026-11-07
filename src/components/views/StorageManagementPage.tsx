@@ -4,18 +4,16 @@ import {
   FileText, Folder, HardDrive, Radar, RefreshCw, Signal, Terminal, Trash2, X, KeyRound,
 } from 'lucide-react';
 
-type LocalStorageEntry = { key: string; bytes: number; group: string };
-const readLocalStorageEntries = (): LocalStorageEntry[] => {
+const getBrowserStorageUsage = async (): Promise<number> => {
   try {
-    return Object.keys(window.localStorage).map((key) => {
-      const value = window.localStorage.getItem(key) ?? '';
-      const normalized = key.toLowerCase();
-      const group = /token|auth|session|credential|wallet|key/.test(normalized) ? 'Credentials & tokens' : /cache|temp|recent|history/.test(normalized) ? 'Cache & history' : /setting|preference|theme|config/.test(normalized) ? 'Settings' : 'Other';
-      return { key, bytes: new Blob([key, value]).size, group };
-    }).sort((a, b) => a.group.localeCompare(b.group) || a.key.localeCompare(b.key));
-  } catch { return []; }
+    const estimate = await navigator.storage?.estimate();
+    return estimate?.usage ?? 0;
+  } catch {
+    return 0;
+  }
 };
-const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+const formatMegabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 
 type StorageCategory = {
   id: string;
@@ -43,23 +41,45 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const [selected, setSelected] = useState<StorageCategory | null>(null);
   const [notice, setNotice] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [localStorageEntries, setLocalStorageEntries] = useState<LocalStorageEntry[]>(() => readLocalStorageEntries());
+  const [localStorageBytes, setLocalStorageBytes] = useState(0);
 
   const refresh = async () => {
     setRefreshing(true);
-    setLocalStorageEntries(readLocalStorageEntries());
-    setNotice('Local storage inventory refreshed. Server storage readings still require the storage overview API.');
+    setLocalStorageBytes(await getBrowserStorageUsage());
+    setNotice('Browser storage usage refreshed. Server storage readings still require the storage overview API.');
     window.setTimeout(() => setRefreshing(false), 350);
   };
 
-  const confirmCleanup = () => {
+  const confirmCleanup = async () => {
     if (selected?.id === 'local-storage') {
       try {
         window.localStorage.clear();
-        setLocalStorageEntries([]);
+        window.sessionStorage.clear();
+
+        if ('caches' in window) {
+          const cacheNames = await window.caches.keys();
+          await Promise.all(cacheNames.map((name) => window.caches.delete(name)));
+        }
+
+        if ('databases' in indexedDB) {
+          const databases = await (indexedDB as IDBFactory & { databases: () => Promise<Array<{ name?: string }>> }).databases();
+          await Promise.all(databases.map((database) => database.name ? new Promise<void>((resolve) => {
+            const request = indexedDB.deleteDatabase(database.name!);
+            request.onsuccess = request.onerror = request.onblocked = () => resolve();
+          }) : Promise.resolve()));
+        }
+
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        }
+
+        setLocalStorageBytes(await getBrowserStorageUsage());
         setSelected(null);
-        setNotice('Local storage cleared. You may need to sign in again or restore your preferences.');
-      } catch { setNotice('The browser blocked local storage cleanup.'); }
+        setNotice('Browser storage cleanup completed. You may need to sign in again or restore app preferences.');
+      } catch {
+        setNotice('The browser blocked part of the storage cleanup. Some stored data may remain.');
+      }
       return;
     }
     setSelected(null);
@@ -129,7 +149,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[12px] font-semibold text-white/90">{title}</p>
-                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">{id === "local-storage" ? formatBytes(localStorageEntries.reduce((sum, entry) => sum + entry.bytes, 0)) : "—"}</p>
+                    <p className="shrink-0 text-[11px] font-semibold tabular-nums text-white/65">{id === "local-storage" ? formatMegabytes(localStorageBytes) : "—"}</p>
                   </div>
                   <p className="mt-0.5 text-[10px] text-white/38">{description}</p>
                 </div>
@@ -146,7 +166,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <div className="ml-11 mt-2 h-1 overflow-hidden rounded-full bg-white/[0.07]">
                 <div className={`h-full w-0 rounded-full ${tint}`} />
               </div>
-              <p className="ml-11 mt-1 text-[9px] text-white/30">{id === "local-storage" ? `${localStorageEntries.length} stored items · browser localStorage` : "Not measured"}</p>
+              <p className="ml-11 mt-1 text-[9px] text-white/30">{id === "local-storage" ? "Browser storage used" : "Not measured"}</p>
             </div>
           ))}
         </div>
@@ -180,17 +200,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.note}</p>
             <div className="mt-4 rounded-2xl border border-amber-400/15 bg-amber-400/[0.045] p-3">
               {selected.id === "local-storage" ? (
-                <div>
-                  <p className="text-[10px] leading-relaxed text-amber-100/75">This permanently removes all {localStorageEntries.length} localStorage items for this app in this browser. It does not delete server files or the SQLite database.</p>
-                  <div className="mt-3 max-h-52 space-y-2 overflow-y-auto pr-1">
-                    {localStorageEntries.length === 0 ? <p className="text-[10px] text-white/40">No local storage items found.</p> : localStorageEntries.map((entry) => (
-                      <div key={entry.key} className="flex items-center justify-between gap-3 border-b border-white/[0.06] pb-2 text-[10px]">
-                        <div className="min-w-0"><p className="truncate text-white/75">{entry.key}</p><p className="mt-0.5 text-[9px] text-white/35">{entry.group}</p></div>
-                        <span className="shrink-0 tabular-nums text-white/45">{formatBytes(entry.bytes)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-[10px] leading-relaxed text-amber-100/75">This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included.</p>
               ) : <p className="text-[10px] leading-relaxed text-amber-100/75">Cleanup is not connected to this control yet. Confirming will not delete anything.</p>}
             </div>
             <div className="mt-5 flex gap-2">
