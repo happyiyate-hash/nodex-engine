@@ -157,6 +157,27 @@ export class NodeXApiClient {
     return result.ticket;
   }
 
+  public async verifyConnection(candidate: { backendUrl: string; wsUrlOverride: string; adminApiKey: string }): Promise<{ service: string }> {
+    const previous = this.settings;
+    const backendUrl = candidate.backendUrl.trim().replace(/\\/$/, '');
+    const wsUrlOverride = candidate.wsUrlOverride.trim();
+    this.settings = {
+      ...previous,
+      backendUrl,
+      wsUrlOverride,
+      wsUrl: wsUrlOverride || websocketUrlFor(backendUrl),
+      adminApiKey: candidate.adminApiKey.trim(),
+    };
+    try {
+      const health = await this.getHealth();
+      await this.issueWebSocketTicket();
+      await this.testWebSocketConnection();
+      return { service: health.service || 'NodeX' };
+    } finally {
+      this.settings = previous;
+    }
+  }
+
   public async testWebSocketConnection(): Promise<void> {
     const ticket = await this.issueWebSocketTicket();
     const separator = this.settings.wsUrl.includes('?') ? '&' : '?';
