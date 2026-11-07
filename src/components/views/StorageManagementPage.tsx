@@ -42,7 +42,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   };
 
   return (
-    <div className="relative min-h-full w-full space-y-4 bg-black px-0 pb-8 pt-[calc(env(safe-area-inset-top)+14px)] text-white">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-black px-0 text-white">
       <div className="pointer-events-none fixed right-4 top-[calc(env(safe-area-inset-top)+12px)] z-50">
         <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-[#17130c]/95 px-3 py-2 text-[10px] font-semibold text-amber-200 shadow-[0_8px_28px_rgba(0,0,0,.45)] backdrop-blur-xl">
           <span className="relative flex h-2 w-2">
@@ -53,8 +53,8 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         </span>
       </div>
 
-      <div>
-        <div className="mb-3 flex items-center justify-end gap-3">
+      <div className="relative w-full shrink-0 pt-[calc(env(safe-area-inset-top)+2.25rem)]">
+        <div className="absolute right-3 top-[calc(env(safe-area-inset-top)+0.35rem)] flex items-center justify-end gap-3">
           <button type="button" onClick={refresh} disabled={refreshing} aria-label="Refresh storage overview" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/65 transition-colors hover:bg-white/[0.08] disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
@@ -91,6 +91,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         </section>
       </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4">
       <section className="w-full">
         <div className="mb-2.5 flex items-end justify-between gap-3">
           <div>
@@ -133,7 +134,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         </div>
       </section>
 
-      <div className="flex items-start gap-3 border-t border-white/[0.08] px-1 pt-4">
+      <div className="mt-3 flex items-start gap-3 border-t border-white/[0.08] px-1 pt-4">
         <Archive className="mt-0.5 h-4 w-4 shrink-0 text-white/40" />
         <div>
           <p className="text-[11px] font-semibold text-white/75">Protected storage</p>
@@ -143,11 +144,13 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
 
       {notice && <div role="status" className="rounded-xl border border-amber-400/15 bg-amber-400/[0.045] p-3 text-[10px] leading-relaxed text-amber-100/75">{notice}</div>}
 
-      <div className="flex justify-start px-1 pt-1">
+      <div className="flex justify-start px-1 pt-3">
         <button type="button" onClick={onBack} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-6 text-[12px] font-semibold text-black shadow-[0_5px_20px_rgba(255,255,255,.10)] transition-transform active:scale-[0.97]">
           <ArrowLeft className="h-4 w-4" strokeWidth={2.3} />
           Back
         </button>
+      </div>
+
       </div>
 
       {selected && (
