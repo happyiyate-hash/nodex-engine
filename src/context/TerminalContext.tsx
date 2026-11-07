@@ -3,7 +3,7 @@ import {
   ConnectionStatus, DashboardSummary, DiscoveredToken, EngineStatus, NodeXEvent,
   Position, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot,
 } from '../types';
-import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/api';
+import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/rest';
 import { backendService } from '../services/backend';
 import { normalizeBackendEvent, wsService } from '../services/websocket';
 
