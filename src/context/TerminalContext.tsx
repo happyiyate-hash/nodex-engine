@@ -414,8 +414,17 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (tokenMint && !['token_state_updated', 'token_detail_snapshot', 'chart_candle_update', 'chart_candle_closed', 'chart_history_snapshot'].includes(event.event_type)) {
         setTokens((previous) => {
           const mint = String(tokenMint || '');
-          const merged = mergeTokenEvent(previous.find((item) => item.mint === mint), event);
-          return merged ? [merged, ...previous.filter((item) => item.mint !== merged.mint)].slice(0, 500) : previous;
+          const index = previous.findIndex((item) => item.mint === mint);
+          const merged = mergeTokenEvent(index >= 0 ? previous[index] : undefined, event);
+          if (!merged) return previous;
+          // Price ticks update an existing row in place; they must not reorder the
+          // entire discovery list on every market event.
+          if (index >= 0 && ['market_tick', 'market_price_update', 'token_market_update'].includes(event.event_type)) {
+            const updated = previous.slice();
+            updated[index] = merged;
+            return updated;
+          }
+          return [merged, ...previous.filter((item) => item.mint !== merged.mint)].slice(0, 500);
         });
         setSelectedToken((previous) => previous && previous.mint === String(tokenMint || '')
           ? (mergeTokenEvent(previous, event) || previous) : previous);
