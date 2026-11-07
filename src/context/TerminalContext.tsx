@@ -296,8 +296,6 @@ function mapDashboardSummary(profile: NodeXProfileSnapshot | null, positions: Po
   const unrealizedUsd = n(portfolio.total_unrealized_pnl_usd, portfolio.total_unrealised_pnl_usd, portfolio.unrealized_pnl_usd, portfolio.unrealised_pnl_usd);
   const realizedUsd = n(portfolio.realized_pnl_usd, portfolio.realised_pnl_usd);
   const totalUsd = n(portfolio.total_portfolio_value_usd, portfolio.portfolio_balance_usd, portfolio.total_value_usd, portfolio.portfolio_value_usd, portfolio.current_value_usd);
-  const unrealizedSol = n(portfolio.total_unrealized_pnl_sol, portfolio.total_unrealised_pnl_sol, portfolio.unrealized_pnl_sol, portfolio.unrealised_pnl_sol);
-  const realizedSol = n(portfolio.realized_pnl_sol, portfolio.realised_pnl_sol);
   const totalSol = n(portfolio.total_portfolio_value_sol, portfolio.portfolio_balance_sol, portfolio.total_value_sol, portfolio.portfolio_value_sol, portfolio.current_value_sol);
   return {
     ...emptySummary,
