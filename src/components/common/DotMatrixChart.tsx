@@ -97,100 +97,43 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const [isPanned, setIsPanned] = useState(false);
   const dragRef = useRef<{ x: number; end: number; moved: boolean } | null>(null);
   const scaleRef = useRef<PriceScale | null>(null);
-  const animationRef = useRef<number | null>(null);
   const pointerRef = useRef<number | null>(null);
-  const radarPhaseRef = useRef(0);
 
-  // Robust multi-point calculation: guarantees continuous 50-point OHLCV series
+  // Render only real backend candle/tick history. Never synthesize market prices.
   const points = useMemo<PriceTick[]>(() => {
-    const targetPrice = currentPrice > 0 ? currentPrice : 0.000024;
     const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
-    const now = Date.now();
-
-    // Clean valid incoming history
     const validRaw = (priceHistory || [])
-      .filter((p) => Number.isFinite(p.price) && p.price > 0 && Number.isFinite(p.time) && p.time > 1000000)
+      .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.time) && point.time > 1_000_000)
       .slice()
       .sort((a, b) => a.time - b.time);
-
-    // If incoming history is rich (>= 15 points with distinct timestamps), bucket it
-    if (validRaw.length >= 15) {
-      const buckets = new Map<number, PriceTick>();
-      validRaw.forEach((point) => {
-        const bucketTime = Math.floor(point.time / interval) * interval;
-        const open = Number.isFinite(point.open) && (point.open as number) > 0 ? (point.open as number) : point.price;
-        const high = Number.isFinite(point.high) && (point.high as number) > 0 ? (point.high as number) : Math.max(open, point.price);
-        const low = Number.isFinite(point.low) && (point.low as number) > 0 ? (point.low as number) : Math.min(open, point.price);
-        const close = Number.isFinite(point.close) && (point.close as number) > 0 ? (point.close as number) : point.price;
-        const existing = buckets.get(bucketTime);
-        if (!existing) {
-          buckets.set(bucketTime, {
-            timestamp: bucketTime,
-            time: formatBucketTime(bucketTime, timeframe),
-            price: close,
-            open,
-            high,
-            low,
-            volume: Math.max(0, Number(point.volume || 0)),
-          });
-          return;
-        }
-        existing.high = Math.max(existing.high, high);
-        existing.low = Math.min(existing.low, low);
-        existing.price = close;
-        existing.volume = Math.max(0, Number(point.volume || existing.volume));
-      });
-
-      const list = Array.from(buckets.values());
-      if (list.length >= 10) {
-        // Ensure the latest point has the live targetPrice
-        const last = list[list.length - 1];
-        last.price = targetPrice;
-        last.high = Math.max(last.high, targetPrice);
-        last.low = Math.min(last.low, targetPrice);
-        return list.slice(-100);
+    const buckets = new Map<number, PriceTick>();
+    validRaw.forEach((point) => {
+      const bucketTime = Math.floor(point.time / interval) * interval;
+      const open = Number.isFinite(point.open) && (point.open as number) > 0 ? (point.open as number) : point.price;
+      const high = Number.isFinite(point.high) && (point.high as number) > 0 ? (point.high as number) : Math.max(open, point.price);
+      const low = Number.isFinite(point.low) && (point.low as number) > 0 ? (point.low as number) : Math.min(open, point.price);
+      const close = Number.isFinite(point.close) && (point.close as number) > 0 ? (point.close as number) : point.price;
+      const existing = buckets.get(bucketTime);
+      if (!existing) {
+        buckets.set(bucketTime, {
+          timestamp: bucketTime,
+          time: formatBucketTime(bucketTime, timeframe),
+          price: close,
+          open,
+          high,
+          low,
+          volume: Math.max(0, Number(point.volume || 0)),
+        });
+        return;
       }
-    }
+      existing.high = Math.max(existing.high, high);
+      existing.low = Math.min(existing.low, low);
+      existing.price = close;
+      existing.volume += Math.max(0, Number(point.volume || 0));
+    });
+    return Array.from(buckets.values()).slice(-500);
+  }, [timeframe, priceHistory]);
 
-    // Resilient Fallback Synthesizer: produces 50 realistic OHLCV candles
-    // ending at targetPrice with organic market wave behavior
-    const count = 50;
-    const ticks: PriceTick[] = [];
-    const trendMultiplier = isPositive ? 0.78 : 1.25;
-    const startPrice = targetPrice * trendMultiplier;
-
-    let prevClose = startPrice;
-    for (let i = 0; i < count; i++) {
-      const t = now - (count - 1 - i) * interval;
-      const progress = i / (count - 1);
-      // S-curve trajectory towards targetPrice
-      const base = startPrice + (targetPrice - startPrice) * (1 - Math.cos(progress * Math.PI)) / 2;
-      const wave = Math.sin(i * 0.42) * 0.022 + Math.cos(i * 0.88) * 0.015;
-      const open = prevClose;
-      let close = i === count - 1 ? targetPrice : Math.max(Number.EPSILON, base * (1 + wave));
-
-      // Occasional spike/pullback
-      if (i % 7 === 3 && i !== count - 1) {
-        close = open * (isPositive ? 1.018 : 0.982);
-      }
-
-      const wickHigh = Math.max(open, close) * (1 + (Math.abs(Math.sin(i * 1.5)) * 0.012 + 0.003));
-      const wickLow = Math.min(open, close) * (1 - (Math.abs(Math.cos(i * 1.7)) * 0.012 + 0.003));
-      const vol = Math.round(800 + Math.abs(Math.sin(i)) * 6000 + Math.abs(close - open) / (open || 1) * 60000);
-
-      ticks.push({
-        timestamp: t,
-        time: formatBucketTime(t, timeframe),
-        price: close,
-        open,
-        high: wickHigh,
-        low: wickLow,
-        volume: vol,
-      });
-      prevClose = close;
-    }
-    return ticks;
-  }, [currentPrice, timeframe, priceHistory, isPositive]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -251,7 +194,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '11px JetBrains Mono, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Loading market tape...', w / 2, h / 2);
+      ctx.fillText('Waiting for backend chart data...', w / 2, h / 2);
       return;
     }
 
@@ -436,20 +379,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Expanding pulsating radar ring
-    radarPhaseRef.current = (radarPhaseRef.current + 0.38) % 16;
-    const radius = radarPhaseRef.current;
-    const alpha = Math.max(0, 1 - radius / 16);
+    // Static latest-price marker; it moves only when a real backend tick arrives.
     ctx.save();
-    ctx.beginPath();
-    ctx.arc(latestX, latestY, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = isPositive
-      ? `rgba(184,255,53,${alpha.toFixed(3)})`
-      : `rgba(255,64,87,${alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-
-    // Solid core dot
     ctx.beginPath();
     ctx.arc(latestX, latestY, 3.2, 0, Math.PI * 2);
     ctx.fillStyle = lineColor;
@@ -533,16 +464,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.fillText(point.time, Math.max(padLeft + 27, Math.min(w - padRight - 27, hx)), padTop + plotH + 13);
     }
 
-    // Keep animation active for continuous smooth pulse and scale easing
-    animationRef.current = requestAnimationFrame(draw);
   }, [points, view, containerWidth, height, isPositive, hoverIndex, chartType]);
 
   useEffect(() => {
-    if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
     draw();
-    return () => {
-      if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
-    };
+    return undefined;
   }, [draw]);
 
   const updateHover = (clientX: number) => {
