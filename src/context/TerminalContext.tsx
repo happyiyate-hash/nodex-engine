@@ -122,7 +122,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const decision = String(payload.decision || payload.status || '').toLowerCase();
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
-    : event.event_type === 'token_scan_started' ? 'under_analysis'
+    : event.event_type === 'token_scan_failed' || event.event_type === 'token_scan_completed' && (decision.includes('unverified') || decision.includes('unknown')) ? 'unverified'
+    : event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress' ? 'under_analysis'
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
@@ -418,7 +419,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
       const tokenStateEvent = [
-        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress',
+        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed',
         'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
         'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
