@@ -122,6 +122,14 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const decision = String(payload.decision || payload.status || '').toLowerCase();
   const isUnverifiedTerminal = event.event_type === 'token_scan_failed'
     || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase());
+  const scanStatus = event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress' ? 'scanning'
+    : event.event_type === 'token_scan_completed' ? String(data.status || 'completed')
+    : event.event_type === 'token_scan_failed' ? 'failed'
+    : previous?.scan_status;
+  const metadataStatus = event.event_type === 'token_metadata_started' ? 'loading'
+    : event.event_type === 'token_metadata_updated' ? String(data.status || 'available')
+    : event.event_type === 'token_metadata_failed' ? String(data.status || 'failed')
+    : previous?.metadata_status;
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : isUnverifiedTerminal ? 'unverified'
     : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
@@ -133,6 +141,12 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
     metadata_uri: String(payload.metadata_uri || metadata.uri || previous?.metadata_uri || ''),
     logo_url: String(payload.logo_url || metadata.image || previous?.logo_url || ''),
+    metadata_status: metadataStatus,
+    scan_status: scanStatus,
+    scan_progress: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
+      ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.scan_progress ?? 0))
+      : previous?.scan_progress,
+    scan_stage: event.event_type === 'token_scan_progress' ? String(data.stage || '') : previous?.scan_stage,
     decimals: payload.decimals == null ? previous?.decimals : Number(payload.decimals),
     total_supply_raw: String(payload.total_supply_raw || payload.total_supply || previous?.total_supply_raw || ''),
     creator_wallet: String(payload.creator_wallet || payload.creator_address || previous?.creator_wallet || ''),
@@ -437,7 +451,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
       const tokenStateEvent = [
-        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed',
+        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_metadata_started', 'token_metadata_failed',
         'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
         'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
