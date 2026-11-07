@@ -1,7 +1,7 @@
 import {
   apiClient,
   NodeXProfileSnapshot,
-} from './api';
+} from './rest';
 import {
   EngineStatus,
   PaperWalletSnapshot,
