@@ -227,6 +227,8 @@ const statusStyle: Record<PipelineStatus, string> = {
   REJECTED: 'border-red-500/20 bg-red-500/[0.07] text-[#c77b7b]',
   'PAPER ENTRY': 'border-emerald-500/25 bg-emerald-500/[0.10] text-[#83b982]',
   'BUY FAILED': 'border-red-500/20 bg-red-500/[0.07] text-[#c77b7b]',
+  UNVERIFIED: 'border-amber-500/20 bg-amber-500/[0.07] text-[#d2b47c]',
+  FAILED: 'border-red-500/20 bg-red-500/[0.07] text-[#c77b7b]',
 };
 
 export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
