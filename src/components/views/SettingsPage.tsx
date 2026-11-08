@@ -687,6 +687,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
               const statusCode = Number(activity.http_status || 0);
               const failed = severity === 'error' || Boolean(activity.error) || statusCode >= 400;
               const warning = severity === 'warning' || severity === 'warn';
+              const successfulEvent = direction === 'event' && /_(completed|executed|confirmed|passed|updated)$/.test(operation);
               const request = activity.request && typeof activity.request === 'object' ? activity.request : {};
               const requestMethod = String(request.method || '');
               const requestPath = String(request.path || request.url || '');
@@ -697,8 +698,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                   : direction === 'response'
                     ? [statusCode ? 'HTTP ' + statusCode : 'Completed', activity.duration_ms !== undefined ? String(activity.duration_ms) + ' ms' : ''].filter(Boolean).join(' · ')
                     : String(activity.message || activity.event || operation);
-              const color = failed ? 'text-red-400' : warning ? 'text-amber-300' : direction === 'request' ? 'text-sky-300' : direction === 'response' ? 'text-emerald-400' : 'text-white/70';
-              const label = failed ? 'ERR' : warning ? 'WARN' : direction === 'request' ? 'REQ' : direction === 'response' ? 'OK' : 'LOG';
+              const color = failed ? 'text-red-400' : warning ? 'text-amber-300' : direction === 'request' ? 'text-sky-300' : direction === 'response' || successfulEvent ? 'text-emerald-400' : 'text-white/70';
+              const label = failed ? 'ERR' : warning ? 'WARN' : direction === 'request' ? 'REQ' : direction === 'response' || successfulEvent ? 'OK' : 'LOG';
               const mint = String(activity.token_mint || '');
               return (
                 <div key={record.id} className="w-full border-b border-white/[0.055] py-1.5">
