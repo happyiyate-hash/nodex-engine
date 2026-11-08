@@ -428,6 +428,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const { launch, status, reason, updatedAt } = item;
                                     const reportEvent = events.find((event) => (event.event_type === 'token_scan_update' || event.event_type === 'token_scan_progress') && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const report = reportEvent?.data;
+                  const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
+                  const monitoringData = monitoringEvent?.data;
+
                   const checks = Array.isArray(report?.checks) ? report.checks : [];
                   const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
                   const price = Number(tokenData.current_price ?? tokenData.price_usd ?? tokenData.price ?? report?.price_usd ?? report?.current_price);
@@ -455,6 +458,10 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${cardSymbol}</span>}
                           </div>
                           <div className="mt-0.5 truncate text-[8px] leading-tight text-white/35">{launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
+                          {monitoringData && <div className="mt-1 flex items-center gap-1.5 text-[8px] font-medium text-sky-300/75">
+                            <span className="h-1 w-1 rounded-full bg-sky-300" />
+                            WATCHING · Authorities {String(monitoringData.authority_status || 'unknown').toUpperCase()} · {Number(monitoringData.rechecks || 0)} rechecks
+                          </div>}
                         </div>
                         {isQualified
                           ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
