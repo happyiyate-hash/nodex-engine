@@ -141,7 +141,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     mint, name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
     symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
     metadata_uri: String(payload.metadata_uri || metadata.uri || previous?.metadata_uri || ''),
-    logo_url: String(payload.logo_url || metadata.image || previous?.logo_url || ''),
+    logo_url: String(payload.logo_url || payload.image_url || payload.image_uri || payload.logo_uri || payload.image || metadata.image || metadata.image_url || previous?.logo_url || ''),
     metadata_status: metadataStatus,
     scan_status: scanStatus,
     scan_progress: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
@@ -260,7 +260,7 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
     name: String(identity.name ?? previous?.name ?? ''),
     symbol: String(identity.symbol ?? previous?.symbol ?? ''),
     metadata_uri: String(identity.metadata_uri ?? previous?.metadata_uri ?? ''),
-    logo_url: String(identity.logo_url ?? previous?.logo_url ?? ''),
+    logo_url: String(identity.logo_url ?? identity.image_url ?? identity.image_uri ?? identity.logo_uri ?? identity.image ?? previous?.logo_url ?? ''),
     metadata_status: String(identity.metadata_status ?? previous?.metadata_status ?? ''),
     scan_status: securityStatus || previous?.scan_status,
     scan_progress: Number(snapshot.security?.progress ?? previous?.scan_progress ?? 0),
