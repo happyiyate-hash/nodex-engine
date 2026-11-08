@@ -2,11 +2,12 @@ import React from 'react';
 
 interface TokenAvatarProps {
   symbol: string;
+  logoUrl?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
-export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, size = 'md', className = '' }) => {
+export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size = 'md', className = '' }) => {
   const cleanSymbol = symbol.toUpperCase().trim();
 
   const sizeClasses = {
@@ -14,6 +15,24 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, size = 'md', c
     md: 'w-7 h-7 text-xs',
     lg: 'w-9 h-9 text-sm',
   }[size];
+
+  if (logoUrl?.startsWith('https://')) {
+    return (
+      <div className={`${sizeClasses} relative rounded-full overflow-hidden shrink-0 bg-[#1e2024] border border-white/10 shadow-sm ${className}`}>
+        <span className="absolute inset-0 flex items-center justify-center font-mono font-bold text-white">
+          {cleanSymbol.slice(0, 2)}
+        </span>
+        <img
+          src={logoUrl}
+          alt={`${symbol} logo`}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(event) => { event.currentTarget.style.display = 'none'; }}
+        />
+      </div>
+    );
+  }
 
   switch (cleanSymbol) {
     case 'BONK':
