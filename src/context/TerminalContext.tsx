@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   ConnectionStatus, DashboardSummary, DiscoveredToken, EngineStatus, NodeXEvent,
   Position, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot,
@@ -341,6 +341,35 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isStreamPaused, setIsStreamPaused] = useState(false);
   const [isMobilePreview, setIsMobilePreview] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const metadataRefreshInFlight = useRef<Set<string>>(new Set());
+
+  // On every app load, ask the backend to re-resolve metadata for restored
+  // tokens that still have no logo URL. Requests are deduplicated per mint
+  // for this session and throttled in small batches to avoid provider bursts.
+  useEffect(() => {
+    const missingLogos = tokens.filter((token) =>
+      token.mint && !token.logo_url && !metadataRefreshInFlight.current.has(token.mint)
+    );
+    if (!missingLogos.length) return;
+
+    let cancelled = false;
+    const refreshMissingLogos = async () => {
+      for (let index = 0; index < missingLogos.length; index += 4) {
+        if (cancelled) return;
+        const batch = missingLogos.slice(index, index + 4);
+        await Promise.all(batch.map(async (token) => {
+          metadataRefreshInFlight.current.add(token.mint);
+          try {
+            await apiClient.refreshTokenMetadata(token.mint);
+          } catch (error) {
+            console.warn(`NodeX logo metadata refresh failed for ${token.mint}:`, error);
+          }
+        }));
+      }
+    };
+    void refreshMissingLogos();
+    return () => { cancelled = true; };
+  }, [tokens]);
 
   useEffect(() => {
     let active = true;
