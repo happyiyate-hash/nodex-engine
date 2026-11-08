@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight, FileText,
+  Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight, Download, FileText,
   Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
   SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu,
 } from 'lucide-react';
