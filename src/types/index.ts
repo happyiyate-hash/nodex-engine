@@ -153,6 +153,9 @@ export interface DiscoveredToken {
   scan_status?: string;
   scan_progress?: number;
   scan_stage?: string;
+  monitoring_status?: string;
+  authority_status?: string;
+  authority_rechecks?: number;
   decimals?: number;
   total_supply_raw?: string;
   creator_wallet: string;
@@ -186,6 +189,9 @@ export type EventType =
   | 'token_scan_progress'
   | 'token_scan_completed'
   | 'token_scan_failed'
+  | 'token_monitoring_started'
+  | 'token_monitoring_update'
+  | 'token_monitoring_completed'
   | 'token_metadata_started'
   | 'token_metadata_failed'
   | 'creator_history_started'
