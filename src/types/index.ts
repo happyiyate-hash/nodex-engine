@@ -77,6 +77,7 @@ export interface Position {
   mint: string;
   name: string;
   symbol: string;
+  logo_url?: string;
   entry_price_sol: number;
   entry_price_usd: number;
   current_price_sol: number;
