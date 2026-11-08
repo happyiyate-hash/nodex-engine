@@ -10,11 +10,11 @@ export const LiveFeedPage: React.FC<LiveFeedPageProps> = ({ activeTab, visible }
   return (
     <main className={`${visible ? "relative" : "pointer-events-none invisible absolute inset-0"} flex h-full min-h-0 w-full flex-col bg-[#080808] text-white`}>
       {activeTab === "live_feed" && <div className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#080808]/95 px-3 pb-2 pt-3 backdrop-blur-xl sm:px-5">
-        <div className="mb-2 text-[13px] font-semibold tracking-wide">Live</div>
+        <div className="mb-2 flex items-center justify-between"><div className="text-[13px] font-semibold tracking-wide">Live Stream</div><span className="inline-flex items-center gap-1.5 text-[8px] font-medium uppercase tracking-wider text-white/35"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Event feed</span></div>
         <nav aria-label="Live sections" className="grid grid-cols-2 gap-1 rounded-xl border border-white/[0.07] bg-[#0d0d0d] p-1">
           {([
-            ['detected', 'Detection'],
-            ['positions', 'Position'],
+            ['detected', 'Tokens'],
+            ['positions', 'Positions'],
           ] as [LiveSection, string][]).map(([value, label]) => (
             <button
               key={value}
