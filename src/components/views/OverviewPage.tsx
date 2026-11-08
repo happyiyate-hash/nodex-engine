@@ -264,7 +264,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   }), [launchViews, openPositionCount]);
 
   const filteredLaunches = launchViews.filter((item) => {
-    if (filter === 'detected' && !['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'BUY FAILED'].includes(item.status)) return false;
+    if (filter === 'detected' && !['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'UNVERIFIED', 'FAILED', 'BUY FAILED'].includes(item.status)) return false;
     if (filter === 'qualified' && !['QUALIFIED', 'PAPER ENTRY'].includes(item.status)) return false;
     if (filter === 'positions') return false;
     if (!search.trim()) return true;
@@ -446,7 +446,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="space-y-1.5 pb-2">
                 {filteredLaunches.map((item) => {
                   const { launch, status, reason, updatedAt } = item;
-                                    const reportEvent = events.find((event) => (['token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed'].includes(event.event_type)) && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
+                  const matchesLaunch = (event: NodeXEvent) => event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address;
+                  const progressEvent = events.find((event) => event.event_type === 'token_scan_progress' && matchesLaunch(event));
+                  const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && matchesLaunch(event))
+                    || progressEvent
+                    || events.find((event) => ['token_scan_completed', 'token_scan_failed'].includes(event.event_type) && matchesLaunch(event));
                   const report = reportEvent?.data;
                   const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const monitoringData = monitoringEvent?.data;
@@ -460,7 +464,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
                   const checkRows = checks;
                   const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
-                  const scanStage = String(report?.stage || tokenData.scan_stage || '').replace(/[_-]+/g, ' ').trim();
+                  const scanStage = String(progressEvent?.data?.stage || tokenData.scan_stage || report?.stage || '').replace(/[_-]+/g, ' ').trim();
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
                   return (
                     <article key={launch.id || launch.signature} className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0">
