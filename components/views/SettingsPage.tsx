@@ -21,6 +21,7 @@ type SettingsSection =
   | 'engine_logs';
 
 const sections = [
+  { id: 'engine_logs', title: 'Live Activity Stream', description: 'Watch provider requests, responses and token scan activity in real time.', icon: FileText },
   { id: 'engine', title: 'Engine Control', description: 'Start, pause and manage engine operations.', icon: Activity },
   { id: 'connections', title: 'API & Connections', description: 'Connect this app to your NodeX backend.', icon: PlugZap },
   { id: 'discovery', title: 'Token Discovery', description: 'Scanning sources, approval modes and filters.', icon: Radar },
@@ -28,7 +29,6 @@ const sections = [
   { id: 'notifications', title: 'Notifications', description: 'Choose which engine events should alert you.', icon: Bell },
   { id: 'storage', title: 'Storage Management', description: 'Inspect disk usage, engine data and log storage.', icon: Database },
   { id: 'diagnostics', title: 'Diagnostics & Monitoring', description: 'Engine health, connections and runtime logs.', icon: Activity },
-  { id: 'engine_logs', title: 'Engine Logs', description: 'Inspect and download recent events recorded by the engine.', icon: FileText },
 ] as const;
 
 const Field = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
@@ -67,7 +67,7 @@ const StatusLine = ({ label, value, good }: { label: string; value: string; good
 
 export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void; onOpenStorage?: () => void }> = ({ onSubpageChange, onOpenStorage }) => {
   const {
-    engineStatus, toggleEngine, settings, updateSettings, updateConnectionDraft, backendError,
+    engineStatus, toggleEngine, settings, updateSettings, updateConnectionDraft, backendError, events,
   } = useTerminal();
   const [section, setSection] = useState<SettingsSection>('home');
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
@@ -105,31 +105,47 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [updatingRuntimeControl, setUpdatingRuntimeControl] = useState(false);
   const [engineMode, setEngineMode] = useState<'paper' | 'real'>('paper');
   const [availableModes, setAvailableModes] = useState({ paper: true, real: false });
-  const [engineLogRecords, setEngineLogRecords] = useState<Array<{ id: number; signature: string | null; slot: number | null; received_at: string; event: Record<string, any> }>>([]);
+  const [engineLogRecords, setEngineLogRecords] = useState<Array<{ id: number | string; recorded_at: string; activity: Record<string, any> }>>([]);
   const [engineLogsLoading, setEngineLogsLoading] = useState(false);
   const [engineLogsError, setEngineLogsError] = useState('');
+  const [expandedActivityId, setExpandedActivityId] = useState<string | number | null>(null);
 
   const loadEngineLogs = async () => {
     setEngineLogsLoading(true);
     setEngineLogsError('');
-    try { setEngineLogRecords(await apiClient.getRecentEvents(500)); }
-    catch (error) { setEngineLogsError(error instanceof Error ? error.message : 'Could not load engine events.'); }
+    try { setEngineLogRecords(await apiClient.getEngineActivityLogs(500)); }
+    catch (error) { setEngineLogsError(error instanceof Error ? error.message : 'Could not load engine activity.'); }
     finally { setEngineLogsLoading(false); }
-  };
-
-  const downloadEngineLogs = () => {
-    const payload = { exported_at: new Date().toISOString(), source: 'NodeX backend recent event history', count: engineLogRecords.length, events: engineLogRecords };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `nodex-engine-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-    document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
     if (section === 'engine_logs') void loadEngineLogs();
   }, [section]);
+
+  useEffect(() => {
+    if (section !== 'engine_logs') return;
+    const live = events.filter((event: any) => event.event_type === 'engine_activity');
+    if (!live.length) return;
+    setEngineLogRecords((current) => {
+      const additions = live.map((event: any, index: number) => ({
+        id: String(event.data?.id || `live-${event.timestamp}-${index}`),
+        recorded_at: String(event.timestamp || event.data?.timestamp || new Date().toISOString()),
+        activity: event.data || {},
+      }));
+      const seen = new Set(current.map((item) => String(item.activity.id || item.id)));
+      return [...additions.filter((item) => !seen.has(String(item.activity.id || item.id))), ...current].slice(0, 1000);
+    });
+  }, [events, section]);
+
+  const downloadEngineLogs = () => {
+    const payload = { exported_at: new Date().toISOString(), source: 'NodeX live provider activity stream', count: engineLogRecords.length, records: engineLogRecords };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `nodex-activity-stream-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     let active = true;
@@ -627,39 +643,51 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       {section === 'engine_logs' && (
         <div className="space-y-4 pt-5">
           <div className="flex items-start justify-between gap-3">
-            <div><p className="text-[13px] font-semibold">Engine event history</p><p className="mt-1 text-[10px] leading-relaxed text-white/40">Recent events saved by the backend, including token scan stages and diagnostics. This is backend event history, not raw operating-system journal output.</p></div>
-            <span className="shrink-0 rounded-lg border border-white/[0.10] bg-white/[0.04] px-2.5 py-1.5 text-[10px] text-white/60">{engineLogRecords.length} records</span>
+            <div>
+              <p className="text-[13px] font-semibold">Live engine activity</p>
+              <p className="mt-1 text-[10px] leading-relaxed text-white/40">Each card records an outbound provider request or its response. Open a card to inspect the operation, token, status, timing and returned data. Secrets are redacted and large responses are shortened.</p>
+            </div>
+            <span className="shrink-0 rounded-lg border border-white/[0.10] bg-white/[0.04] px-2.5 py-1.5 text-[10px] text-white/60">{engineLogRecords.length} cards</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] text-[11px] font-medium text-white/80 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh</button>
-            <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-[11px] font-semibold text-black disabled:opacity-40"><Download className="h-3.5 w-3.5" />Download JSON</button>
+            <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] text-[11px] font-medium text-white/80 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh history</button>
+            <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-[11px] font-semibold text-black disabled:opacity-40"><Download className="h-3.5 w-3.5" />Download stream</button>
           </div>
           {engineLogsError && <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-[11px] text-red-200/80">{engineLogsError}</div>}
-          {engineLogsLoading && !engineLogRecords.length ? <p className="py-10 text-center text-[11px] text-white/40">Loading backend events…</p> : engineLogRecords.length ? (
+          {engineLogsLoading && !engineLogRecords.length ? <p className="py-10 text-center text-[11px] text-white/40">Loading saved activity…</p> : engineLogRecords.length ? (
             <div className="space-y-2">
               {engineLogRecords.map((record) => {
-                const event = record.event || {};
-                const data = event.data || {};
-                const type = String(event.event_type || event.type || 'engine_event');
-                const mint = String(data.mint_address || data.token_mint || event.token_mint || '');
-                const message = String(data.message || event.message || data.reason || '');
-                const severity = String(data.severity || 'info').toLowerCase();
-                return <details key={record.id} className="rounded-xl border border-white/[0.09] bg-[#101010] p-3">
-                  <summary className="flex cursor-pointer list-none items-center gap-2">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${severity === 'error' ? 'bg-red-400' : severity === 'warning' ? 'bg-amber-300' : 'bg-white/40'}`} />
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-white/85">{type}</span>
-                    <span className="shrink-0 text-[9px] text-white/35">{new Date(record.received_at).toLocaleTimeString()}</span>
-                  </summary>
-                  <div className="mt-2 space-y-1 border-t border-white/[0.07] pt-2 text-[10px] text-white/55">
-                    <p>{new Date(record.received_at).toLocaleString()}</p>
-                    {mint && <p className="break-all">Mint: {mint}</p>}
-                    {message && <p className="break-words text-white/75">{message}</p>}
-                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-2 font-mono text-[9px] leading-relaxed text-white/55">{JSON.stringify(event, null, 2)}</pre>
-                  </div>
-                </details>;
+                const activity = record.activity || {};
+                const direction = String(activity.direction || 'event').toUpperCase();
+                const severity = String(activity.severity || 'info').toLowerCase();
+                const mint = String(activity.token_mint || '');
+                const title = `${activity.provider || 'Engine'} · ${activity.operation || activity.event || 'Activity'}`;
+                const expanded = expandedActivityId === record.id;
+                return <div key={record.id} className="overflow-hidden rounded-xl border border-white/[0.09] bg-[#101010]">
+                  <button type="button" onClick={() => setExpandedActivityId(expanded ? null : record.id)} className="flex w-full items-center gap-2 p-3 text-left">
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${severity === 'error' ? 'bg-red-400' : direction === 'REQUEST' ? 'bg-sky-300' : 'bg-emerald-300'}`} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-medium text-white/85">{title}</span>
+                      <span className="mt-1 block truncate text-[9px] text-white/40">{direction} {mint ? `· ${mint}` : ''}</span>
+                    </span>
+                    <span className="shrink-0 text-right text-[9px] text-white/35">{new Date(record.recorded_at).toLocaleTimeString()}<span className="block">{expanded ? 'Hide' : 'Details'}</span></span>
+                  </button>
+                  {expanded && <div className="space-y-2 border-t border-white/[0.07] p-3 text-[10px] text-white/55">
+                    <p>Time: {new Date(record.recorded_at).toLocaleString()}</p>
+                    <p>Provider: {String(activity.provider || 'Internal engine')}</p>
+                    <p>Operation: {String(activity.operation || '—')}</p>
+                    <p>Direction: {direction}</p>
+                    {mint && <p className="break-all">Token: {mint}</p>}
+                    {activity.endpoint && <p>Endpoint: {String(activity.endpoint)}</p>}
+                    {activity.http_status !== undefined && <p>HTTP status: {String(activity.http_status)}</p>}
+                    {activity.duration_ms !== undefined && <p>Duration: {String(activity.duration_ms)} ms</p>}
+                    {activity.error && <p className="break-words text-red-300">Error: {String(activity.error)}</p>}
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-2 font-mono text-[9px] leading-relaxed text-white/65">{JSON.stringify(activity.request ?? activity.response ?? activity, null, 2)}</pre>
+                  </div>}
+                </div>;
               })}
             </div>
-          ) : <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-10 text-center"><FileText className="mx-auto mb-2 h-5 w-5 text-white/30" /><p className="text-[12px] text-white/65">No backend events recorded yet</p><p className="mt-1 text-[10px] text-white/35">When the engine stores events, they will appear here.</p></div>}
+          ) : <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-10 text-center"><FileText className="mx-auto mb-2 h-5 w-5 text-white/30" /><p className="text-[12px] text-white/65">Waiting for engine activity</p><p className="mt-1 text-[10px] text-white/35">When the engine makes provider requests, request and response cards will appear here automatically.</p></div>}
         </div>
       )}
 
