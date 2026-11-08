@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight, Download, FileText,
   Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
@@ -93,12 +93,15 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [engineLogRecords, setEngineLogRecords] = useState<Array<{ id: number | string; recorded_at: string; activity: Record<string, any> }>>([]);
   const [engineLogsLoading, setEngineLogsLoading] = useState(false);
   const [engineLogsError, setEngineLogsError] = useState('');
-  const [expandedActivityId, setExpandedActivityId] = useState<string | number | null>(null);
+  const activityStreamRef = useRef<HTMLDivElement>(null);
 
   const loadEngineLogs = async () => {
     setEngineLogsLoading(true);
     setEngineLogsError('');
-    try { setEngineLogRecords(await apiClient.getEngineActivityLogs(500)); }
+    try {
+      const records = await apiClient.getEngineActivityLogs(500);
+      setEngineLogRecords([...records].sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime()));
+    }
     catch (error) { setEngineLogsError(error instanceof Error ? error.message : 'Could not load engine activity.'); }
     finally { setEngineLogsLoading(false); }
   };
@@ -118,9 +121,15 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         activity: event.data || {},
       }));
       const seen = new Set(current.map((item) => String(item.activity.id || item.id)));
-      return [...additions.filter((item) => !seen.has(String(item.activity.id || item.id))), ...current].slice(0, 1000);
+      return [...current, ...additions.filter((item) => !seen.has(String(item.activity.id || item.id)))].slice(-1000);
     });
   }, [events, section]);
+
+  useEffect(() => {
+    if (section !== 'engine_logs') return;
+    const stream = activityStreamRef.current;
+    if (stream) stream.scrollTop = stream.scrollHeight;
+  }, [engineLogRecords, section]);
 
   const downloadEngineLogs = () => {
     const payload = { exported_at: new Date().toISOString(), source: 'NodeX live provider activity stream', count: engineLogRecords.length, records: engineLogRecords };
@@ -325,7 +334,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const pageDescription = sections.find((item) => item.id === section)?.description || 'Manage your NodeX engine configuration.';
 
   return (
-    <div className={`w-full bg-black px-4 text-white ${section === 'home' ? 'min-h-[calc(100dvh-6rem)] pb-28' : 'min-h-full pb-8'}`}>
+    <div className={`w-full bg-black text-white ${section === 'engine_logs' ? 'px-0 min-h-full pb-0' : section === 'home' ? 'px-4 min-h-[calc(100dvh-6rem)] pb-28' : 'px-4 min-h-full pb-8'}`}>
       {section === 'home' ? (
         <>
           <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.08] bg-black/95 px-4 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
@@ -378,6 +387,18 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </button>
           </div>
           <p className="mt-0.5 text-[10px] text-white/40">Connect this app to your NodeX backend.</p>
+        </header>
+      ) : section === 'engine_logs' ? (
+        <header className="sticky top-0 z-40 flex min-h-14 items-center justify-between gap-2 border-b border-white/[0.10] bg-[#050505]/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.65)]" />
+            <h1 className="truncate text-[13px] font-semibold tracking-wide text-white">Live Stream</h1>
+            <span className="hidden text-[9px] font-mono text-white/30 sm:inline">TERMINAL</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] px-2.5 text-[9px] font-medium text-white/75 disabled:opacity-50"><RefreshCw className={`h-3 w-3 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh History</button>
+            <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-white px-2.5 text-[9px] font-semibold text-black disabled:opacity-40"><Download className="h-3 w-3" />Download Stream</button>
+          </div>
         </header>
       ) : (
         <SectionHeader
