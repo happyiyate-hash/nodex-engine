@@ -12,7 +12,7 @@ interface RollingDigitProps {
   balanceDirection: ChangeDirection;
 }
 
-type PipelineStatus = 'DETECTED' | 'ANALYZING' | 'QUALIFIED' | 'REJECTED' | 'PAPER ENTRY' | 'BUY FAILED';
+type PipelineStatus = 'DETECTED' | 'ANALYZING' | 'QUALIFIED' | 'REJECTED' | 'UNVERIFIED' | 'FAILED' | 'PAPER ENTRY' | 'BUY FAILED';
 
 interface LaunchView {
   launch: TokenLaunchRecord;
@@ -159,11 +159,17 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[]): LaunchV
   );
   const findEvent = (type: string) => related.find((event) => event.event_type === type);
   const scanUpdate = findEvent('token_scan_update') || findEvent('token_scan_progress') || findEvent('safety_check_completed');
+  const scanCompleted = findEvent('token_scan_completed');
+  const scanFailed = findEvent('token_scan_failed');
   const scanStarted = Boolean(findEvent('token_scan_started'));
   const paperBuy = findEvent('paper_buy_executed');
   const paperBuyFailed = findEvent('paper_buy_failed');
   const strategyRejected = findEvent('strategy_rejected_token');
-  const decision = String(scanUpdate?.data?.decision || scanUpdate?.data?.status || '').toLowerCase();
+  const decision = String(
+    scanFailed?.data?.decision || scanCompleted?.data?.decision ||
+    scanUpdate?.data?.decision || scanUpdate?.data?.status || ''
+  ).toLowerCase();
+  const terminalStatus = String(scanFailed?.data?.status || scanCompleted?.data?.status || '').toLowerCase();
 
   let status: PipelineStatus = 'DETECTED';
   let reason = 'Launch detected. Waiting for the security scanner.';
@@ -177,6 +183,14 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[]): LaunchV
     status = 'BUY FAILED';
     reason = String(paperBuyFailed.data?.reason || paperBuyFailed.data?.message || 'Paper entry was not completed.');
     updatedAt = paperBuyFailed.timestamp;
+  } else if (scanFailed || terminalStatus === 'failed') {
+    status = 'FAILED';
+    reason = String(scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || 'Security scan failed. This token remains unverified and blocked.');
+    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || launch.detected_at;
+  } else if (scanCompleted && (['unverified', 'unknown', 'failed'].includes(terminalStatus) || decision.includes('unverified') || decision.includes('unknown'))) {
+    status = 'UNVERIFIED';
+    reason = String(scanCompleted.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
+    updatedAt = scanCompleted.timestamp;
   } else if (strategyRejected || decision.includes('reject')) {
     status = 'REJECTED';
     reason = String(strategyRejected?.data?.reason || strategyRejected?.data?.message || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'The token did not pass the risk or strategy checks.');
@@ -242,7 +256,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     [launches, events]
   );
   const counts = useMemo(() => ({
-    detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'BUY FAILED'].includes(item.status)).length,
+    detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'UNVERIFIED', 'FAILED', 'BUY FAILED'].includes(item.status)).length,
     qualified: launchViews.filter((item) => ['QUALIFIED', 'PAPER ENTRY'].includes(item.status)).length,
     positions: openPositionCount,
   }), [launchViews, openPositionCount]);
@@ -430,7 +444,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="space-y-1.5 pb-2">
                 {filteredLaunches.map((item) => {
                   const { launch, status, reason, updatedAt } = item;
-                                    const reportEvent = events.find((event) => (event.event_type === 'token_scan_update' || event.event_type === 'token_scan_progress') && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
+                                    const reportEvent = events.find((event) => (['token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed'].includes(event.event_type)) && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const report = reportEvent?.data;
                   const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const monitoringData = monitoringEvent?.data;
@@ -444,6 +458,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
                   const checkRows = checks;
                   const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
+                  const scanStage = String(report?.stage || tokenData.scan_stage || '').replace(/[_-]+/g, ' ').trim();
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
                   return (
                     <article key={launch.id || launch.signature} className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0">
@@ -467,22 +482,22 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         </div>
                         {isQualified
                           ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
-                          : <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
+                          : <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' || status === 'FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : status === 'UNVERIFIED' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
                             {status === 'ANALYZING' && <span className="h-1 w-1 rounded-full bg-current" />}
-                            {status === 'ANALYZING' ? 'SCANNING' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
+                            {status === 'ANALYZING' ? 'SCANNING' : status === 'UNVERIFIED' ? 'UNVERIFIED' : status === 'FAILED' ? 'SCAN FAILED' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
                           </span>}
                       </div>
                       <div className="mt-1.5 border-t border-white/[0.055] pt-1.5">
                         {status === 'ANALYZING' ? (() => {
                           const progress = Number(report?.progress_pct ?? report?.progress);
                           return <div className="flex min-h-[22px] items-center gap-2">
-                            <span className="text-[10px] font-medium tracking-wide text-[#d2b47c]">Security scan in progress</span>
+                            <span className="text-[10px] font-medium tracking-wide text-[#d2b47c]">{scanStage ? 'Checking ' + scanStage : report?.message || 'Security scan in progress'}</span>
                             {Number.isFinite(progress) && progress >= 0 && <span className="ml-auto text-[9px] tabular-nums text-white/45">{Math.min(100, Math.round(progress))}%</span>}
                           </div>;
                         })() : (
                           <div className="flex min-h-[22px] items-center justify-between gap-2">
                             <span className={`text-[9px] font-medium ${status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'text-[#83b982]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'text-[#d2a064]' : 'text-white/45'}`}>
-                              {status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'Security checks completed' : status === 'REJECTED' || status === 'BUY FAILED' ? 'Risk checks flagged this token' : 'Waiting for security scan'}
+                              {status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'Security checks completed' : status === 'REJECTED' || status === 'BUY FAILED' ? 'Risk checks flagged this token' : status === 'UNVERIFIED' ? 'Scan incomplete — automatic entry blocked' : status === 'FAILED' ? 'Security scan failed — automatic entry blocked' : 'Waiting for security scan'}
                             </span>
                             <span className="text-[8px] text-white/30">{checkRows.length} checks</span>
                           </div>
