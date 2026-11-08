@@ -251,6 +251,14 @@ export class NodeXRestClient {
   public getTokenState(mint: string): Promise<Record<string, any>> {
     return this.request(`/api/v1/tokens/${encodeURIComponent(mint)}/state`);
   }
+
+  public refreshTokenMetadata(mint: string): Promise<{
+    status: string; mint_address: string; metadata_status: string; logo_url?: string | null;
+  }> {
+    return this.request(`/api/v1/tokens/${encodeURIComponent(mint)}/metadata/refresh`, {
+      method: 'POST',
+    });
+  }
   public getRecentEvents(limit=200): Promise<Array<{
     id: number; signature: string | null; slot: number | null;
     received_at: string; event: Record<string, any>;
