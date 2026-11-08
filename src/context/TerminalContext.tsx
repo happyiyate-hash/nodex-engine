@@ -127,6 +127,11 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : event.event_type === 'token_scan_completed' ? String(data.status || 'completed')
     : event.event_type === 'token_scan_failed' ? 'failed'
     : previous?.scan_status;
+  const incomingDiagnostic = event.event_type === 'token_diagnostic' ? {
+    ...data,
+    mint_address: mint,
+    occurred_at: String(data.occurred_at || event.timestamp),
+  } : null;
   const metadataStatus = event.event_type === 'token_metadata_started' ? 'loading'
     : event.event_type === 'token_metadata_updated' ? String(data.status || 'available')
     : event.event_type === 'token_metadata_failed' ? String(data.status || 'failed')
@@ -147,7 +152,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     scan_progress: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
       ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.scan_progress ?? 0))
       : previous?.scan_progress,
-    scan_stage: event.event_type === 'token_scan_progress' ? String(data.stage || '') : previous?.scan_stage,
+    scan_stage: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
+      ? String(data.stage || previous?.scan_stage || '')
+      : previous?.scan_stage,
     monitoring_status: event.event_type === 'token_monitoring_started' || event.event_type === 'token_monitoring_update'
       ? String(data.status || 'watching')
       : event.event_type === 'token_monitoring_completed' ? 'completed' : previous?.monitoring_status,
@@ -548,7 +555,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
       const tokenStateEvent = [
-        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_metadata_started', 'token_metadata_failed',
+        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_diagnostic', 'token_metadata_started', 'token_metadata_failed',
         'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
         'token_monitoring_started', 'token_monitoring_update', 'token_monitoring_completed',
         'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed',
