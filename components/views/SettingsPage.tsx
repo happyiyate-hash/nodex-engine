@@ -41,20 +41,20 @@ const Field = ({ label, hint, children }: { label: string; hint?: string; childr
 
 const inputClass = 'w-full rounded-xl border border-white/[0.10] bg-[#101010] px-3.5 py-3 text-[13px] text-white outline-none placeholder:text-white/25 focus:border-white/30';
 
-const SectionHeader = ({ title, description, onBack, action }: {
-  title: string; description: string; onBack: () => void; action?: React.ReactNode;
+const SectionHeader = ({ title, description, onBack, action, showBack = true }: {
+  title: string; description: string; onBack: () => void; action?: React.ReactNode; showBack?: boolean;
 }) => (
   <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.08] bg-black/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
     <div className="flex min-h-10 items-center gap-3">
-      <button type="button" onClick={onBack} aria-label="Back to Settings" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/[0.08] active:scale-95">
+      {showBack && <button type="button" onClick={onBack} aria-label="Back to Settings" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/[0.08] active:scale-95">
         <ArrowLeft className="h-[18px] w-[18px]" />
-      </button>
+      </button>}
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-[15px] font-semibold tracking-tight text-white">{title}</h1>
       </div>
       {action}
     </div>
-    <p className="ml-12 mt-0.5 text-[10px] text-white/40">{description}</p>
+    {description && <p className={`${showBack ? 'ml-12' : ''} mt-0.5 text-[10px] text-white/40`}>{description}</p>}
   </header>
 );
 
@@ -381,9 +381,19 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       ) : (
         <SectionHeader
           title={pageTitle}
-          description={pageDescription}
+          description={section === 'engine_logs' ? '' : pageDescription}
           onBack={() => navigateSection('home')}
-          action={section === 'trading' ? (
+          showBack={section !== 'engine_logs'}
+          action={section === 'engine_logs' ? (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} aria-label="Refresh history" title="Refresh history" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] px-2.5 text-[10px] font-medium text-white/80 disabled:opacity-50">
+                <RefreshCw className={`h-3.5 w-3.5 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh
+              </button>
+              <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[10px] font-semibold text-black disabled:opacity-40">
+                <Download className="h-3.5 w-3.5" />Download
+              </button>
+            </div>
+          ) : section === 'trading' ? (
             <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
               <span
                 aria-current={engineMode === 'paper' ? 'true' : undefined}
@@ -641,53 +651,58 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
 
       {section === 'engine_logs' && (
-        <div className="space-y-4 pt-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[13px] font-semibold">Live engine activity</p>
-              <p className="mt-1 text-[10px] leading-relaxed text-white/40">Each card records an outbound provider request or its response. Open a card to inspect the operation, token, status, timing and returned data. Secrets are redacted and large responses are shortened.</p>
+        <div className="mx-[-1rem] min-h-[calc(100dvh-7rem)] bg-[#050505] pt-2">
+          <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-2 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
+            <span>NodeX / live output</span>
+            <span className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${engineStatus.running ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              {engineStatus.running ? 'streaming' : 'paused'} · {engineLogRecords.length}
+            </span>
+          </div>
+          {engineLogsError && (
+            <div className="border-b border-red-500/20 px-4 py-2 font-mono text-[10px] leading-relaxed text-red-400">
+              <span className="mr-2 text-red-500">[ERROR]</span>{engineLogsError}
             </div>
-            <span className="shrink-0 rounded-lg border border-white/[0.10] bg-white/[0.04] px-2.5 py-1.5 text-[10px] text-white/60">{engineLogRecords.length} cards</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] text-[11px] font-medium text-white/80 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh history</button>
-            <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-[11px] font-semibold text-black disabled:opacity-40"><Download className="h-3.5 w-3.5" />Download stream</button>
-          </div>
-          {engineLogsError && <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-[11px] text-red-200/80">{engineLogsError}</div>}
-          {engineLogsLoading && !engineLogRecords.length ? <p className="py-10 text-center text-[11px] text-white/40">Loading saved activity…</p> : engineLogRecords.length ? (
-            <div className="space-y-2">
-              {engineLogRecords.map((record) => {
+          )}
+          {engineLogsLoading && !engineLogRecords.length ? (
+            <div className="px-4 py-8 font-mono text-[10px] text-white/40">Loading stream history…</div>
+          ) : engineLogRecords.length ? (
+            <div className="w-full font-mono text-[10px] leading-[1.75]">
+              {[...engineLogRecords].reverse().map((record) => {
                 const activity = record.activity || {};
-                const direction = String(activity.direction || 'event').toUpperCase();
-                const severity = String(activity.severity || 'info').toLowerCase();
-                const mint = String(activity.token_mint || '');
-                const title = `${activity.provider || 'Engine'} · ${activity.operation || activity.event || 'Activity'}`;
-                const expanded = expandedActivityId === record.id;
-                return <div key={record.id} className="overflow-hidden rounded-xl border border-white/[0.09] bg-[#101010]">
-                  <button type="button" onClick={() => setExpandedActivityId(expanded ? null : record.id)} className="flex w-full items-center gap-2 p-3 text-left">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${severity === 'error' ? 'bg-red-400' : direction === 'REQUEST' ? 'bg-sky-300' : 'bg-emerald-300'}`} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[11px] font-medium text-white/85">{title}</span>
-                      <span className="mt-1 block truncate text-[9px] text-white/40">{direction} {mint ? `· ${mint}` : ''}</span>
-                    </span>
-                    <span className="shrink-0 text-right text-[9px] text-white/35">{new Date(record.recorded_at).toLocaleTimeString()}<span className="block">{expanded ? 'Hide' : 'Details'}</span></span>
-                  </button>
-                  {expanded && <div className="space-y-2 border-t border-white/[0.07] p-3 text-[10px] text-white/55">
-                    <p>Time: {new Date(record.recorded_at).toLocaleString()}</p>
-                    <p>Provider: {String(activity.provider || 'Internal engine')}</p>
-                    <p>Operation: {String(activity.operation || '—')}</p>
-                    <p>Direction: {direction}</p>
-                    {mint && <p className="break-all">Token: {mint}</p>}
-                    {activity.endpoint && <p>Endpoint: {String(activity.endpoint)}</p>}
-                    {activity.http_status !== undefined && <p>HTTP status: {String(activity.http_status)}</p>}
-                    {activity.duration_ms !== undefined && <p>Duration: {String(activity.duration_ms)} ms</p>}
-                    {activity.error && <p className="break-words text-red-300">Error: {String(activity.error)}</p>}
-                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-2 font-mono text-[9px] leading-relaxed text-white/65">{JSON.stringify(activity.request ?? activity.response ?? activity, null, 2)}</pre>
-                  </div>}
-                </div>;
+                const severity = String(activity.severity || '').toLowerCase();
+                const direction = String(activity.direction || '').toLowerCase();
+                const status = Number(activity.http_status ?? activity.status_code ?? 0);
+                const errorText = activity.error || activity.error_message || activity.failure_reason;
+                const isError = severity === 'error' || Boolean(errorText) || (status >= 400);
+                const isSuccess = !isError && (severity === 'success' || severity === 'ok' || (status >= 200 && status < 400) || direction === 'response');
+                const timestamp = new Date(record.recorded_at);
+                const time = Number.isNaN(timestamp.getTime()) ? '--:--:--' : timestamp.toLocaleTimeString([], { hour12: false });
+                const message = String(
+                  errorText ||
+                  activity.message ||
+                  activity.detail ||
+                  activity.operation ||
+                  activity.event ||
+                  activity.provider ||
+                  'Activity received'
+                );
+                const label = isError ? 'ERROR' : isSuccess ? 'OK' : direction === 'request' ? 'SEND' : 'INFO';
+                const color = isError ? 'text-red-400' : isSuccess ? 'text-emerald-400' : direction === 'request' ? 'text-sky-300' : 'text-white/65';
+                return (
+                  <div key={record.id} className="flex w-full items-start gap-2 border-b border-white/[0.035] px-4 py-[3px] hover:bg-white/[0.025]">
+                    <span className="shrink-0 select-none text-white/25">{time}</span>
+                    <span className={`w-[46px] shrink-0 font-semibold ${color}`}>[{label}]</span>
+                    <span className={`min-w-0 flex-1 whitespace-pre-wrap break-words ${color}`}>{message}</span>
+                  </div>
+                );
               })}
             </div>
-          ) : <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-10 text-center"><FileText className="mx-auto mb-2 h-5 w-5 text-white/30" /><p className="text-[12px] text-white/65">Waiting for engine activity</p><p className="mt-1 text-[10px] text-white/35">When the engine makes provider requests, request and response cards will appear here automatically.</p></div>}
+          ) : (
+            <div className="px-4 py-8 font-mono text-[10px] text-white/35">
+              <span className="mr-2 text-emerald-400">›</span>Waiting for engine output…
+            </div>
+          )}
         </div>
       )}
 
