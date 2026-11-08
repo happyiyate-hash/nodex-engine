@@ -4,10 +4,10 @@ import {
   Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
   SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu,
 } from 'lucide-react';
-import { useTerminal } from '../../context/TerminalContext';
-import { apiClient } from '../../services/rest';
-import { wsService } from '../../services/websocket';
-import { StrategyPage } from './StrategyPage';
+import { useTerminal } from '../../src/context/TerminalContext';
+import { apiClient } from '../../src/services/rest';
+import { wsService } from '../../src/services/websocket';
+import { StrategyPage } from '../../src/components/views/StrategyPage';
 
 type RuntimeControlKey = 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled';
 type SettingsSection =
