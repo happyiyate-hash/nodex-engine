@@ -62,8 +62,9 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
           className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
           onLoad={() => setLoaded(true)}
           onError={() => {
+            // Let the staggered retry timer advance the attempt; don't turn a
+            // single transient network failure into an immediate fallback.
             if (attempt >= 5) setFailed(true);
-            else setAttempt((current) => current + 1);
           }}
         />
       )}
