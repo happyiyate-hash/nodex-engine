@@ -258,6 +258,16 @@ export class NodeXRestClient {
     return this.request(`/api/v1/events/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
 
+  public getEngineActivityLogs(limit=500): Promise<Array<{
+    id: number; recorded_at: string; activity: Record<string, any>;
+  }>> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings to view engine activity.');
+    return this.request(`/api/v1/admin/activity-logs?limit=${Math.min(1000,Math.max(1,limit))}`, {
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
+
   public getStorageOverview(): Promise<StorageOverview> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the operator API key in Settings before loading server storage.');
