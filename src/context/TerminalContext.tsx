@@ -344,9 +344,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [backendError, setBackendError] = useState<string | null>(null);
   const metadataRefreshInFlight = useRef<Set<string>>(new Set());
 
-  // On every app load, ask the backend to re-resolve metadata for restored
-  // tokens that still have no logo URL. Requests are deduplicated per mint
-  // for this session and throttled in small batches to avoid provider bursts.
+  // On every app load, re-resolve metadata for every restored token that
+  // has no logo URL. Retry transient backend/provider failures instead of
+  // permanently suppressing that mint for the rest of the session.
   useEffect(() => {
     const missingLogos = tokens.filter((token) =>
       token.mint && !token.logo_url && !metadataRefreshInFlight.current.has(token.mint)
@@ -361,9 +361,24 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         await Promise.all(batch.map(async (token) => {
           metadataRefreshInFlight.current.add(token.mint);
           try {
-            await apiClient.refreshTokenMetadata(token.mint);
-          } catch (error) {
-            console.warn(`NodeX logo metadata refresh failed for ${token.mint}:`, error);
+            for (let attempt = 0; attempt < 3 && !cancelled; attempt += 1) {
+              try {
+                const result = await apiClient.refreshTokenMetadata(token.mint);
+                if (result.logo_url) {
+                  setTokens((previous) => previous.map((item) =>
+                    item.mint === token.mint ? { ...item, logo_url: result.logo_url || '' } : item
+                  ));
+                  break;
+                }
+              } catch (error) {
+                console.warn('NodeX logo metadata refresh attempt failed for ' + token.mint + ':', error);
+              }
+              if (attempt < 2 && !cancelled) {
+                await new Promise((resolve) => window.setTimeout(resolve, (attempt + 1) * 3000));
+              }
+            }
+          } finally {
+            metadataRefreshInFlight.current.delete(token.mint);
           }
         }));
       }
