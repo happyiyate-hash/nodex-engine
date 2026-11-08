@@ -199,6 +199,7 @@ function mapBackendPosition(raw: Record<string, any>): Position | null {
     mint,
     name: String(raw.name || raw.token_name || ''),
     symbol: String(raw.symbol || raw.token_symbol || ''),
+    logo_url: String(raw.logo_url || raw.image_url || raw.image_uri || raw.logo_uri || ''),
     entry_price_sol: entryPriceSol,
     entry_price_usd: Number(raw.entry_price_usd || 0),
     current_price_sol: currentPriceSol,
