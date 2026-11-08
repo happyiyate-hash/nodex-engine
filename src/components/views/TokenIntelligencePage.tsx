@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { DiscoveredToken, SafetyRating } from '../../types';
+import { TokenAvatar } from '../common/TokenAvatar';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -103,7 +104,13 @@ export const TokenIntelligencePage: React.FC = () => {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-sm">${t.symbol}</span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <TokenAvatar symbol={t.symbol} logoUrl={t.logo_url} size="md" />
+                      <div className="min-w-0">
+                        <div className="truncate font-bold text-white text-sm">${t.symbol}</div>
+                        <div className="truncate text-[10px] text-white/40">{t.name}</div>
+                      </div>
+                    </div>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-semibold ${
                       t.safety_status === 'verified'
                         ? 'text-emerald-400 bg-emerald-950/40 border border-emerald-800/40'
@@ -132,6 +139,7 @@ export const TokenIntelligencePage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.08]">
               <div>
                 <div className="flex items-center gap-2">
+                  <TokenAvatar symbol={activeToken.symbol} logoUrl={activeToken.logo_url} size="lg" />
                   <span className="text-xl font-mono font-bold text-white">${activeToken.symbol}</span>
                   <span className="text-sm font-mono text-[#737373]">({activeToken.name})</span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-full glass-icon text-[#a3a3a3] uppercase">
@@ -139,7 +147,7 @@ export const TokenIntelligencePage: React.FC = () => {
                   </span>
                 </div>
                 <div className="text-xs font-mono text-[#8e8e93] mt-1">
-                  Mint: {activeToken.mint}
+                  Mint: {activeToken.mint} · Decimals: {activeToken.decimals ?? '—'}
                 </div>
               </div>
 
