@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { Position } from '../../types';
+import { TokenAvatar } from '../common/TokenAvatar';
 import {
   Search,
   Copy,
@@ -15,6 +16,7 @@ import {
 export const PositionsPage: React.FC = () => {
   const {
     positions,
+    tokens,
     summary,
     openTokenDetailByMint,
   } = useTerminal();
@@ -179,7 +181,7 @@ export const PositionsPage: React.FC = () => {
             return (
               <article key={pos.id} className="border-b border-white/[0.055] px-2.5 py-2">
                 <button type="button" onClick={() => setExpandedPositions((current) => current.includes(pos.id) ? current.filter((id) => id !== pos.id) : [...current, pos.id])} className="flex min-h-[52px] w-full items-center gap-2.5 text-left" aria-expanded={expandedPositions.includes(pos.id)}>
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.035] text-[9px] font-bold text-white/80">{pos.symbol.slice(0, 3)}</div>
+                  <TokenAvatar symbol={pos.symbol || pos.name} logoUrl={pos.logo_url || tokens.find((token) => token.mint === pos.mint)?.logo_url} size="lg" className="h-8 w-8 rounded-lg" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[11px] font-semibold text-white">{pos.symbol}/SOL</div>
                     <div className="truncate text-[9px] text-white/35">{pos.name} · {pos.mint.slice(0, 4)}…{pos.mint.slice(-4)}</div>
@@ -250,9 +252,7 @@ export const PositionsPage: React.FC = () => {
                     {/* Compact Asset Identity */}
                     <td className="py-2 px-3 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded glass-icon flex items-center justify-center font-bold text-white text-[10px] shrink-0">
-                          {pos.symbol.slice(0, 3)}
-                        </div>
+                        <TokenAvatar symbol={pos.symbol || pos.name} logoUrl={pos.logo_url || tokens.find((token) => token.mint === pos.mint)?.logo_url} size="sm" className="h-6 w-6 rounded" />
                         <div>
                           <div className="font-bold text-white text-xs leading-none">${pos.symbol}</div>
                           <div className="text-[10px] text-[#737373] leading-tight truncate max-w-[90px]">{pos.name}</div>
