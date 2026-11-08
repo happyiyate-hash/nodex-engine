@@ -114,11 +114,12 @@ export const TokenDetailPage: React.FC = () => {
       >
         <div className="flex w-full items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <TokenAvatar symbol={activeToken.symbol} size="lg" className="shadow-md" />
+            <TokenAvatar symbol={activeToken.symbol} logoUrl={activeToken.logo_url} size="lg" className="shadow-md" />
             <div className="flex min-w-0 flex-col justify-center gap-1 leading-[1.15]">
               <span className="block truncate text-[13px] font-medium tracking-[0.01em] text-white/95">
                 {activeToken.name || activeToken.symbol}
               </span>
+              <span className="text-[9px] text-white/35">Decimals: {activeToken.decimals ?? '—'}</span>
               <button
                 onClick={handleCopyMint}
                 className="flex min-w-0 items-center gap-1 text-[10px] font-normal tracking-[0.015em] text-white/40 transition-colors hover:text-white font-mono"
