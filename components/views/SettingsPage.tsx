@@ -387,10 +387,10 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           action={section === 'engine_logs' ? (
             <div className="flex shrink-0 items-center gap-1.5">
               <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} aria-label="Refresh history" title="Refresh history" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] px-2.5 text-[10px] font-medium text-white/80 disabled:opacity-50">
-                <RefreshCw className={`h-3.5 w-3.5 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh
+                <RefreshCw className={`h-3.5 w-3.5 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh history
               </button>
               <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[10px] font-semibold text-black disabled:opacity-40">
-                <Download className="h-3.5 w-3.5" />Download
+                <Download className="h-3.5 w-3.5" />Download stream
               </button>
             </div>
           ) : section === 'trading' ? (
@@ -714,18 +714,3 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             <StatusLine label="Solana stream" value={engineStatus.solana_connected ? 'Connected' : 'Disconnected'} good={engineStatus.solana_connected} />
             <StatusLine label="PumpSwap stream" value={engineStatus.pumpswap_connected ? 'Connected' : 'Disconnected'} good={engineStatus.pumpswap_connected} />
             <StatusLine label="WebSocket" value={engineStatus.ws_status || 'Unknown'} good={engineStatus.ws_status === 'connected'} />
-            <StatusLine label="Database" value={engineStatus.database_status || 'Unknown'} />
-            <StatusLine label="RPC provider" value={engineStatus.provider_name || 'Unknown'} />
-            <StatusLine label="RPC latency" value={engineStatus.rpc_latency_ms ? `${engineStatus.rpc_latency_ms} ms` : 'Not reported'} />
-            <StatusLine label="Reconnect attempts" value={String(engineStatus.reconnection_count ?? 0)} />
-          </div>
-          <button type="button" onClick={testRestConnection} disabled={testingConnection} className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.12] py-3 text-[12px] text-white/80 disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${testingConnection ? 'animate-spin' : ''}`} /> {testingConnection ? 'Checking…' : 'Check backend health'}
-          </button>
-          {healthMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{healthMessage}</p>}
-          {backendError && <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-[10px] text-amber-100/75"><AlertTriangle className="h-4 w-4 shrink-0" />{backendError}</div>}
-        </div>
-      )}
-    </div>
-  );
-};
