@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent, TokenDiagnostic } from '../../types';
 import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
+import { TokenAvatar } from '../common/TokenAvatar';
 
 type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'detected' | 'qualified' | 'positions';
@@ -372,9 +373,12 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(position.mint); } }}
                       className="cursor-pointer border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
-                          <span className="text-[12px] font-semibold text-white/75">{String(position.symbol || position.name || position.mint).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>
-                        </div>
+                        <TokenAvatar
+                          symbol={position.symbol || position.name || position.mint}
+                          logoUrl={position.logo_url || tokens.find((token) => token.mint === position.mint)?.logo_url}
+                          size="lg"
+                          className="h-9 w-9"
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <span className="truncate text-[11px] font-semibold text-white">{position.name || position.mint.slice(0, 7) + '…' + position.mint.slice(-5)}</span>
@@ -446,10 +450,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
                           {(() => {
-                            const imageUrl = tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image;
-                            return imageUrl
-                              ? <img src={imageUrl} alt="" className="h-full w-full object-cover" />
-                              : <span className="text-[11px] font-semibold text-white/75">{String(cardSymbol || cardName).replace(/[^a-z0-9]/gi, '').slice(0, 1).toUpperCase()}</span>;
+                            const imageUrl = tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image;
+                            return <TokenAvatar symbol={cardSymbol || cardName} logoUrl={imageUrl} size="lg" className="h-8 w-8 border-0" />;
                           })()}
                         </div>
                         <div className="min-w-0 flex-1">
