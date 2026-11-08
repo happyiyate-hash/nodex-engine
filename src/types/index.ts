@@ -190,6 +190,7 @@ export type EventType =
   | 'token_scan_progress'
   | 'token_scan_completed'
   | 'token_scan_failed'
+  | 'token_diagnostic'
   | 'token_monitoring_started'
   | 'token_monitoring_update'
   | 'token_monitoring_completed'
