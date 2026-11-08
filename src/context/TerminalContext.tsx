@@ -148,6 +148,13 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
       ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.scan_progress ?? 0))
       : previous?.scan_progress,
     scan_stage: event.event_type === 'token_scan_progress' ? String(data.stage || '') : previous?.scan_stage,
+    monitoring_status: event.event_type === 'token_monitoring_started' || event.event_type === 'token_monitoring_update'
+      ? String(data.status || 'watching')
+      : event.event_type === 'token_monitoring_completed' ? 'completed' : previous?.monitoring_status,
+    authority_status: event.event_type === 'token_monitoring_update'
+      ? String(data.authority_status || 'unknown') : previous?.authority_status,
+    authority_rechecks: event.event_type === 'token_monitoring_update'
+      ? Number(data.rechecks ?? previous?.authority_rechecks ?? 0) : previous?.authority_rechecks,
     decimals: payload.decimals == null ? previous?.decimals : Number(payload.decimals),
     total_supply_raw: String(payload.total_supply_raw || payload.total_supply || previous?.total_supply_raw || ''),
     creator_wallet: String(payload.creator_wallet || payload.creator_address || previous?.creator_wallet || ''),
@@ -498,6 +505,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const tokenStateEvent = [
         'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_metadata_started', 'token_metadata_failed',
         'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
+        'token_monitoring_started', 'token_monitoring_update', 'token_monitoring_completed',
         'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
       ].includes(event.event_type);
