@@ -728,6 +728,18 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </div>
       )}
 
+      {section === 'engine_logs' && (
+        <button
+          type="button"
+          onClick={() => navigateSection('home')}
+          aria-label="Go back to Settings"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] right-4 z-50 inline-flex min-h-12 items-center gap-2.5 rounded-2xl bg-white px-4 py-3 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-95"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
+          Go back
+        </button>
+      )}
+
       {section === 'diagnostics' && (
         <div className="space-y-4 pt-5">
           <div><p className="text-[13px] font-semibold">Runtime health</p><p className="mt-1 text-[10px] text-white/40">Live values currently reported by the connected backend.</p></div>
