@@ -277,6 +277,7 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
     venue: venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun',
     safety_status: snapshot.security?.decision === 'APPROVED' ? 'verified' : previous?.safety_status || 'warning',
     qualification_status: qualificationStatus,
+    diagnostics: Array.isArray(snapshot.diagnostics) ? snapshot.diagnostics : previous?.diagnostics || [],
     safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(snapshot.security || {}) },
     price_history_5m: priceHistory.length ? priceHistory.slice(-500) : previous?.price_history_5m || [],
   };
