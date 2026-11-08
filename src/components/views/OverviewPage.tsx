@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { TokenLaunchRecord, NodeXEvent } from '../../types';
+import { TokenLaunchRecord, NodeXEvent, TokenDiagnostic } from '../../types';
 import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 
 type ChangeDirection = 'up' | 'down' | null;
@@ -234,6 +234,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const [filter, setFilter] = useState<FeedFilter>('detected');
   const [search, setSearch] = useState('');
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
+  const [expandedErrors, setExpandedErrors] = useState<string[]>([]);
 
   const launchViews = useMemo(
     () => launches.map((launch) => getLaunchView(launch, events)).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
@@ -435,6 +436,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
                   const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
                   const checkRows = checks;
+                  const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
+                  const errorExpanded = expandedErrors.includes(launch.mint_address);
                   return (
                     <article key={launch.id || launch.signature} className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0">
                       <div className="flex min-w-0 items-center gap-2">
@@ -493,6 +496,30 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           {reason && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] leading-relaxed text-white/45">{reason}</div>}
                         </div>}
                       </div>
+                      {diagnostics.length > 0 && <section className="mt-2 border-t border-red-400/[0.12] pt-1.5">
+                        <button type="button" aria-expanded={errorExpanded} onClick={() => setExpandedErrors((current) => errorExpanded ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])} className="flex w-full items-center justify-between gap-2 py-1 text-left">
+                          <span className="flex min-w-0 items-center gap-1.5 text-[9px] font-semibold text-[#d28b83]">
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#c77b7b]" />
+                            {diagnostics.length} diagnostic {diagnostics.length === 1 ? 'error' : 'errors'}
+                          </span>
+                          <span className="text-[9px] text-white/40">{errorExpanded ? 'Hide error details −' : 'View error details +'}</span>
+                        </button>
+                        {errorExpanded && <div className="mt-1 space-y-2 pb-1">
+                          {diagnostics.slice().reverse().map((diagnostic, index) => <div key={diagnostic.occurred_at || index} className="rounded-lg border border-red-400/[0.12] bg-red-400/[0.035] p-2">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[8px] font-semibold uppercase tracking-wide text-[#d28b83]">
+                              <span>{diagnostic.stage || 'Processing'}</span>
+                              <span className="text-white/30">·</span>
+                              <span>{diagnostic.provider || 'Provider'}</span>
+                              {diagnostic.occurred_at && <span className="ml-auto font-normal normal-case text-white/30">{new Date(diagnostic.occurred_at).toLocaleString()}</span>}
+                            </div>
+                            <p className="mt-1 break-words text-[9px] leading-relaxed text-white/75">{diagnostic.message || 'An error occurred without a message.'}</p>
+                            {diagnostic.raw_response !== undefined && <details className="mt-2">
+                              <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">Provider response JSON</summary>
+                              <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(diagnostic.raw_response, null, 2)}</pre>
+                            </details>}
+                          </div>)}
+                        </div>}
+                      </section>}
                       <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2 border-t border-white/[0.055] pt-1.5">
                         <div className="flex min-w-0 items-center gap-3 text-[8px]">
                           <span className="whitespace-nowrap text-white/35">Price <span className="font-medium tabular-nums text-white/80">{Number.isFinite(price) && price > 0 ? `$${price.toFixed(8)}` : '—'}</span></span>
