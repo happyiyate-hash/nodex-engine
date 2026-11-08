@@ -133,6 +133,16 @@ export interface PricePoint {
   close?: number;
 }
 
+export interface TokenDiagnostic {
+  mint_address?: string;
+  stage?: string;
+  provider?: string;
+  severity?: string;
+  message?: string;
+  raw_response?: unknown;
+  occurred_at?: string;
+}
+
 export interface DiscoveredToken {
   mint: string;
   name: string;
@@ -164,6 +174,7 @@ export interface DiscoveredToken {
   safety_status: SafetyRating;
   qualification_status: QualificationStatus;
   rejection_reason?: string;
+  diagnostics?: TokenDiagnostic[];
   safety_details: SafetyDetails;
   price_history_5m: PricePoint[];
 }
