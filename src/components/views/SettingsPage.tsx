@@ -685,7 +685,9 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
               const timestamp = new Date(record.recorded_at);
               const time = Number.isNaN(timestamp.getTime()) ? '--:--:--' : timestamp.toLocaleTimeString([], { hour12: false });
               const statusCode = Number(activity.http_status || 0);
-              const failed = severity === 'error' || Boolean(activity.error) || statusCode >= 400;
+              const eventData = activity.event && typeof activity.event === 'object' ? activity.event : {};
+              const errorText = activity.error || activity.error_message || eventData.error || eventData.error_message;
+              const failed = severity === 'error' || Boolean(errorText) || statusCode >= 400;
               const warning = severity === 'warning' || severity === 'warn';
               const successfulEvent = direction === 'event' && /_(completed|executed|confirmed|passed|updated)$/.test(operation);
               const request = activity.request && typeof activity.request === 'object' ? activity.request : {};
@@ -694,10 +696,10 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
               const lineText = direction === 'request'
                 ? [requestMethod, requestPath || operation].filter(Boolean).join(' ')
                 : failed
-                  ? String(activity.error || (statusCode ? 'HTTP ' + statusCode : 'Request failed'))
+                  ? String(errorText || (statusCode ? 'HTTP ' + statusCode : 'Request failed'))
                   : direction === 'response'
                     ? [statusCode ? 'HTTP ' + statusCode : 'Completed', activity.duration_ms !== undefined ? String(activity.duration_ms) + ' ms' : ''].filter(Boolean).join(' · ')
-                    : String(activity.message || activity.event || operation);
+                    : String(activity.message || eventData.message || eventData.reason || operation);
               const color = failed ? 'text-red-400' : warning ? 'text-amber-300' : direction === 'request' ? 'text-sky-300' : direction === 'response' || successfulEvent ? 'text-emerald-400' : 'text-white/70';
               const label = failed ? 'ERR' : warning ? 'WARN' : direction === 'request' ? 'REQ' : direction === 'response' || successfulEvent ? 'OK' : 'LOG';
               const mint = String(activity.token_mint || '');
