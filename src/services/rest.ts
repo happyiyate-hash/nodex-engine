@@ -255,8 +255,11 @@ export class NodeXRestClient {
   public refreshTokenMetadata(mint: string): Promise<{
     status: string; mint_address: string; metadata_status: string; logo_url?: string | null;
   }> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings to refresh missing token metadata.');
     return this.request(`/api/v1/tokens/${encodeURIComponent(mint)}/metadata/refresh`, {
       method: 'POST',
+      headers: { 'X-NodeX-Admin-Key': key },
     });
   }
   public getRecentEvents(limit=200): Promise<Array<{
