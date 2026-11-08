@@ -663,42 +663,65 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
 
       {section === 'engine_logs' && (
-        <div className="space-y-4 pt-5">
-          <div className="flex items-start justify-between gap-3">
-            <div><p className="text-[13px] font-semibold">Live engine activity</p><p className="mt-1 text-[10px] leading-relaxed text-white/40">Each card records a provider request or response. Open it to inspect the operation, token, status, timing and returned data. Secrets are redacted; large responses are shortened.</p></div>
-            <span className="shrink-0 rounded-lg border border-white/[0.10] bg-white/[0.04] px-2.5 py-1.5 text-[10px] text-white/60">{engineLogRecords.length} cards</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] text-[11px] font-medium text-white/80 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh history</button>
-            <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-[11px] font-semibold text-black disabled:opacity-40"><Download className="h-3.5 w-3.5" />Download stream</button>
-          </div>
-          {engineLogsError && <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 text-[11px] text-red-200/80">{engineLogsError}</div>}
-          {engineLogsLoading && !engineLogRecords.length ? <p className="py-10 text-center text-[11px] text-white/40">Loading saved activity…</p> : engineLogRecords.length ? (
-            <div className="space-y-2">
-              {engineLogRecords.map((record) => {
-                const activity = record.activity || {};
-                const direction = String(activity.direction || 'event').toUpperCase();
-                const severity = String(activity.severity || 'info').toLowerCase();
-                const mint = String(activity.token_mint || '');
-                const title = `${activity.provider || 'Engine'} · ${activity.operation || activity.event || 'Activity'}`;
-                const expanded = expandedActivityId === record.id;
-                return <div key={record.id} className="overflow-hidden rounded-xl border border-white/[0.09] bg-[#101010]">
-                  <button type="button" onClick={() => setExpandedActivityId(expanded ? null : record.id)} className="flex w-full items-center gap-2 p-3 text-left">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${severity === 'error' ? 'bg-red-400' : direction === 'REQUEST' ? 'bg-sky-300' : 'bg-emerald-300'}`} />
-                    <span className="min-w-0 flex-1"><span className="block truncate text-[11px] font-medium text-white/85">{title}</span><span className="mt-1 block truncate text-[9px] text-white/40">{direction} {mint ? `· ${mint}` : ''}</span></span>
-                    <span className="shrink-0 text-right text-[9px] text-white/35">{new Date(record.recorded_at).toLocaleTimeString()}<span className="block">{expanded ? 'Hide' : 'Details'}</span></span>
-                  </button>
-                  {expanded && <div className="space-y-2 border-t border-white/[0.07] p-3 text-[10px] text-white/55">
-                    <p>Time: {new Date(record.recorded_at).toLocaleString()}</p><p>Provider: {String(activity.provider || 'Internal engine')}</p><p>Operation: {String(activity.operation || '—')}</p><p>Direction: {direction}</p>
-                    {mint && <p className="break-all">Token: {mint}</p>}{activity.endpoint && <p>Endpoint: {String(activity.endpoint)}</p>}
-                    {activity.http_status !== undefined && <p>HTTP status: {String(activity.http_status)}</p>}{activity.duration_ms !== undefined && <p>Duration: {String(activity.duration_ms)} ms</p>}
-                    {activity.error && <p className="break-words text-red-300">Error: {String(activity.error)}</p>}
-                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/70 p-2 font-mono text-[9px] leading-relaxed text-white/65">{JSON.stringify(activity.request ?? activity.response ?? activity, null, 2)}</pre>
-                  </div>}
-                </div>;
-              })}
+        <div className="w-full">
+          {engineLogsError && (
+            <div className="border-b border-red-500/20 bg-red-500/[0.06] px-3 py-2 font-mono text-[10px] leading-4 text-red-300">
+              ERROR: {engineLogsError}
             </div>
-          ) : <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-10 text-center"><FileText className="mx-auto mb-2 h-5 w-5 text-white/30" /><p className="text-[12px] text-white/65">Waiting for engine activity</p><p className="mt-1 text-[10px] text-white/35">Provider request and response cards will appear automatically when the engine makes calls.</p></div>}
+          )}
+          <div ref={activityStreamRef} className="h-[calc(100dvh-10.5rem)] min-h-[280px] overflow-y-auto overscroll-contain bg-[#030303] px-2 pb-4 font-mono">
+            {engineLogsLoading && !engineLogRecords.length && (
+              <div className="py-4 text-[10px] text-white/40">Loading stream history…</div>
+            )}
+            {!engineLogsLoading && !engineLogRecords.length && !engineLogsError && (
+              <div className="py-4 text-[10px] text-white/35">Waiting for engine output…</div>
+            )}
+            {engineLogRecords.map((record) => {
+              const activity = record.activity || {};
+              const direction = String(activity.direction || 'event').toLowerCase();
+              const severity = String(activity.severity || 'info').toLowerCase();
+              const provider = String(activity.provider || 'engine').replace(/_/g, ' ');
+              const operation = String(activity.operation || activity.event || 'activity');
+              const timestamp = new Date(record.recorded_at);
+              const time = Number.isNaN(timestamp.getTime()) ? '--:--:--' : timestamp.toLocaleTimeString([], { hour12: false });
+              const statusCode = Number(activity.http_status || 0);
+              const failed = severity === 'error' || Boolean(activity.error) || statusCode >= 400;
+              const warning = severity === 'warning' || severity === 'warn';
+              const request = activity.request && typeof activity.request === 'object' ? activity.request : {};
+              const requestMethod = String(request.method || '');
+              const requestPath = String(request.path || request.url || '');
+              const lineText = direction === 'request'
+                ? [requestMethod, requestPath || operation].filter(Boolean).join(' ')
+                : failed
+                  ? String(activity.error || (statusCode ? 'HTTP ' + statusCode : 'Request failed'))
+                  : direction === 'response'
+                    ? [statusCode ? 'HTTP ' + statusCode : 'Completed', activity.duration_ms !== undefined ? String(activity.duration_ms) + ' ms' : ''].filter(Boolean).join(' · ')
+                    : String(activity.message || activity.event || operation);
+              const color = failed ? 'text-red-400' : warning ? 'text-amber-300' : direction === 'request' ? 'text-sky-300' : direction === 'response' ? 'text-emerald-400' : 'text-white/70';
+              const label = failed ? 'ERR' : warning ? 'WARN' : direction === 'request' ? 'REQ' : direction === 'response' ? 'OK' : 'LOG';
+              const mint = String(activity.token_mint || '');
+              return (
+                <div key={record.id} className="w-full border-b border-white/[0.055] py-1.5">
+                  <div className="flex min-w-0 items-start gap-2 text-[9px] leading-[1.45]">
+                    <span className="shrink-0 text-white/30">{time}</span>
+                    <span className={'w-8 shrink-0 font-semibold ' + color}>{label}</span>
+                    <span className="min-w-0 flex-1 break-words text-white/55">
+                      <span className="mr-1 uppercase text-white/65">{provider}</span>
+                      <span className="text-white/35">· {operation}</span>
+                      {mint && <span className="ml-1 text-white/25">· {mint}</span>}
+                    </span>
+                  </div>
+                  <div className={'pl-[4.25rem] pr-1 text-[10px] leading-[1.55] break-words whitespace-pre-wrap ' + color}>
+                    {lineText}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex h-6 items-center justify-between border-t border-white/[0.07] bg-[#070707] px-3 text-[8px] font-mono text-white/30">
+            <span>{engineLogRecords.length} lines · newest output at bottom</span>
+            <span className="flex items-center gap-1.5"><span className="h-1 w-1 rounded-full bg-emerald-400" />STREAM</span>
+          </div>
         </div>
       )}
 
