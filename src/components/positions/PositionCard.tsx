@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Position } from '../../types';
+import { TokenAvatar } from '../common/TokenAvatar';
 import {
   TrendingUp,
   TrendingDown,
@@ -96,9 +97,7 @@ export const PositionCard: React.FC<PositionCardProps> = ({
         <div className="flex items-center justify-between gap-3">
           {/* Token Info */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl glass-icon flex items-center justify-center font-mono font-bold text-white shrink-0">
-              {position.symbol.slice(0, 3)}
-            </div>
+            <TokenAvatar symbol={position.symbol || position.name} logoUrl={position.logo_url} size="lg" className="h-10 w-10 rounded-xl" />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-white text-sm font-mono truncate">${position.symbol}</span>
@@ -146,9 +145,7 @@ export const PositionCard: React.FC<PositionCardProps> = ({
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl glass-icon flex items-center justify-center font-mono font-bold text-base text-white shrink-0 shadow-inner">
-              {position.symbol.slice(0, 3)}
-            </div>
+            <TokenAvatar symbol={position.symbol || position.name} logoUrl={position.logo_url} size="lg" className="h-12 w-12 rounded-2xl" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-bold text-white text-base font-mono tracking-tight">${position.symbol}</span>
@@ -291,9 +288,7 @@ export const PositionCard: React.FC<PositionCardProps> = ({
       {/* Card Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-11 h-11 rounded-2xl glass-icon flex items-center justify-center font-mono font-bold text-white shrink-0 text-sm shadow-inner">
-            {position.symbol.slice(0, 3)}
-          </div>
+          <TokenAvatar symbol={position.symbol || position.name} logoUrl={position.logo_url} size="lg" className="h-11 w-11 rounded-2xl" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-bold text-white text-base font-mono tracking-tight truncate">${position.symbol}</span>
