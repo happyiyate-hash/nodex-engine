@@ -1,14 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
-import { Check, ChevronDown, ChevronRight, ShieldAlert, ShieldCheck, TrendingUp, X } from 'lucide-react';
+import {
+  Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
+  TrendingUp, X,
+} from 'lucide-react';
 
 type RiskTarget = 'stop_loss_pct' | 'take_profit_pct';
 
 const stopLossOptions = [5, 10, 15, 20, 25, 30];
 const takeProfitOptions = [10, 20, 30, 50, 75, 100];
 
-const ToggleRow = ({ title, detail, checked, onChange }: {
+const NumberField = ({
+  label, suffix, value, onChange, hint, step = '1',
+}: {
+  label: string; suffix?: string; value: number; onChange: (value: number) => void;
+  hint?: string; step?: string;
+}) => (
+  <label className="block min-w-0 border-b border-white/[0.07] py-3">
+    <span className="mb-2 block text-[11px] font-medium text-white/60">{label}</span>
+    <span className="flex h-10 items-center border-b border-white/[0.14] focus-within:border-white/50">
+      <input
+        type="number" min="0" step={step} value={value}
+        onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))}
+        className="min-w-0 flex-1 bg-transparent text-[14px] font-medium tabular-nums text-white outline-none"
+      />
+      {suffix && <span className="ml-2 shrink-0 text-[11px] text-white/40">{suffix}</span>}
+    </span>
+    {hint && <span className="mt-1.5 block text-[10px] leading-relaxed text-white/35">{hint}</span>}
+  </label>
+);
+
+const ToggleRow = ({
+  title, detail, checked, onChange,
+}: {
   title: string; detail: string; checked: boolean; onChange: (checked: boolean) => void;
 }) => (
   <label className="flex cursor-pointer items-center justify-between gap-4 border-b border-white/[0.07] py-3">
@@ -24,7 +49,7 @@ const ToggleRow = ({ title, detail, checked, onChange }: {
 );
 
 export const StrategyPage: React.FC = () => {
-  const { strategyConfig, saveStrategyConfig } = useTerminal();
+  const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig } = useTerminal();
   const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig });
   const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
@@ -51,9 +76,9 @@ export const StrategyPage: React.FC = () => {
       const saved = await saveStrategyConfig(form);
       if (saved) {
         setAppliedConfig({ ...form });
-        setSaveMessage('Exit settings saved to the backend.');
+        setSaveMessage('Trading configuration saved to the backend.');
       } else {
-        setSaveMessage('The backend did not accept these settings.');
+        setSaveMessage('The backend did not accept this configuration.');
       }
     } finally {
       setSaving(false);
@@ -98,12 +123,7 @@ export const StrategyPage: React.FC = () => {
 
   return (
     <div className="w-full pb-24 text-white">
-      <div className="border-b border-white/[0.08] pb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Paper trading</p>
-        <p className="mt-1 text-[11px] leading-relaxed text-white/45">Set risk targets, entry limits and qualification rules for simulated positions.</p>
-      </div>
-
-      <section className="pt-2">
+      <section className="pt-0">
         <div className="border-b border-white/[0.08] pb-2">
           <h3 className="text-[13px] font-semibold text-white/90">Exit Settings</h3>
           <p className="mt-1 text-[10px] text-white/40">Manage how your paper positions exit automatically.</p>
@@ -123,14 +143,69 @@ export const StrategyPage: React.FC = () => {
           <div className="border-t border-white/[0.07] pl-1">
             <ToggleRow title="Trailing stop loss" detail="Raise the exit threshold as an open position gains value." checked={form.trailing_stop_enabled} onChange={(v) => update('trailing_stop_enabled', v)} />
             {form.trailing_stop_enabled && (
-              <label className="block min-w-0 border-b border-white/[0.07] py-3">
-                <span className="mb-2 block text-[11px] font-medium text-white/60">Trailing callback</span>
-                <span className="flex h-10 items-center border-b border-white/[0.14] focus-within:border-white/50">
-                  <input type="number" min="0" step="0.5" value={form.trailing_stop_callback_pct} onChange={(event) => update('trailing_stop_callback_pct', Math.max(0, Number(event.target.value) || 0))} className="min-w-0 flex-1 bg-transparent text-[14px] font-medium tabular-nums text-white outline-none" />
-                  <span className="ml-2 shrink-0 text-[11px] text-white/40">%</span>
-                </span>
-              </label>
+              <NumberField label="Trailing callback" suffix="%" step="0.5" value={form.trailing_stop_callback_pct} onChange={(v) => update('trailing_stop_callback_pct', v)} />
             )}
+            <p className="py-2 text-[10px] text-white/30">Break-even protection and partial profit taking can be added here later.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="pt-3">
+        <div className="flex items-center gap-2 border-b border-white/[0.08] pb-2">
+          <SlidersHorizontal className="h-4 w-4 text-white/50" />
+          <h3 className="text-[12px] font-semibold text-white/90">Entry & position limits</h3>
+        </div>
+        <p className="py-2 text-[10px] text-white/40">Define which launches qualify and how much each paper entry can use.</p>
+        <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+          <NumberField label="Minimum liquidity" suffix="USD" value={form.min_liquidity_usd} onChange={(v) => update('min_liquidity_usd', v)} />
+          <NumberField label="Maximum entry price" suffix="USD" step="0.000001" value={form.max_entry_price_usd} onChange={(v) => update('max_entry_price_usd', v)} />
+          <NumberField label="Paper position size" suffix="SOL" step="0.01" value={form.max_investment_per_token_sol} onChange={(v) => update('max_investment_per_token_sol', v)} />
+          <NumberField label="Maximum open positions" value={form.max_simultaneous_positions} onChange={(v) => update('max_simultaneous_positions', Math.floor(v))} />
+        </div>
+      </section>
+
+      <section className="pt-5">
+        <div className="flex items-center gap-2 border-b border-white/[0.08] pb-2">
+          <ShieldCheck className="h-4 w-4 text-white/50" />
+          <h3 className="text-[12px] font-semibold text-white/90">Token safety filters</h3>
+        </div>
+        <p className="py-2 text-[10px] text-white/40">Qualification thresholds applied before a paper entry.</p>
+        <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+          <NumberField label="Minimum safety score" suffix="/ 100" value={form.min_safety_score} onChange={(v) => update('min_safety_score', Math.min(100, v))} />
+          <NumberField label="Maximum slippage" suffix="%" step="0.1" value={form.max_slippage_pct} onChange={(v) => update('max_slippage_pct', v)} />
+          <NumberField label="Minimum 5m buy volume" suffix="USD" value={form.min_5m_buy_volume_usd} onChange={(v) => update('min_5m_buy_volume_usd', v)} />
+          <NumberField label="Maximum top-10 concentration" suffix="%" step="0.5" value={form.max_top10_holder_concentration_pct} onChange={(v) => update('max_top10_holder_concentration_pct', v)} />
+        </div>
+      </section>
+
+      <section className="pt-5">
+        <div className="flex items-center gap-2 border-b border-white/[0.08] pb-2">
+          <Check className="h-4 w-4 text-white/50" />
+          <h3 className="text-[12px] font-semibold text-white/90">Automation</h3>
+        </div>
+        <p className="py-2 text-[10px] text-white/40">Optional paper-trading behaviour.</p>
+        <ToggleRow title="Automated paper buys" detail="Open a simulated position when all qualification rules pass." checked={form.auto_buy_enabled} onChange={(v) => update('auto_buy_enabled', v)} />
+        <ToggleRow title="Blacklist known rug creators" detail="Reject launches linked to creators with prior rug activity." checked={form.blacklist_creators_with_prior_rugs} onChange={(v) => update('blacklist_creators_with_prior_rugs', v)} />
+      </section>
+
+      <section className="mt-6 border-t border-white/[0.08] pt-4">
+        <div className="mb-2 flex items-center gap-2">
+          <History className="h-4 w-4 text-white/45" />
+          <h3 className="text-[12px] font-semibold text-white">Recent qualification decisions</h3>
+        </div>
+        {strategyDecisions.length === 0 ? (
+          <p className="py-4 text-[11px] text-white/35">No strategy decisions recorded yet.</p>
+        ) : (
+          <div className="divide-y divide-white/[0.07]">
+            {strategyDecisions.map((decision) => (
+              <button key={decision.id} type="button" onClick={() => openTokenDetailByMint(decision.token_mint)} className="flex w-full items-center justify-between gap-3 py-3 text-left">
+                <span className="min-w-0">
+                  <span className="block truncate text-[12px] font-medium text-white/85">${decision.token_symbol} · {decision.outcome}</span>
+                  <span className="mt-0.5 block truncate text-[10px] text-white/40">{decision.reasons.join(' · ')}</span>
+                </span>
+                <span className="shrink-0 text-[10px] tabular-nums text-white/35">{new Date(decision.timestamp).toLocaleTimeString()}</span>
+              </button>
+            ))}
           </div>
         )}
       </section>
@@ -141,7 +216,7 @@ export const StrategyPage: React.FC = () => {
           onClick={applySettings}
           disabled={saving}
           className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[70] inline-flex h-11 min-w-[112px] items-center justify-center gap-2 rounded-full bg-white px-5 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97] disabled:opacity-50"
-          aria-label="Apply exit settings changes"
+          aria-label="Apply strategy configuration changes"
         >
           <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
           {saving ? 'Saving…' : 'Apply'}
@@ -155,11 +230,12 @@ export const StrategyPage: React.FC = () => {
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 id="target-sheet-title" className="text-[15px] font-semibold text-white">{activeTarget === 'stop_loss_pct' ? 'Stop loss' : 'Take profit'}</h3>
+                <h3 id="target-sheet-title" className="text-[15px] font-semibold text-white"> {activeTarget === 'stop_loss_pct' ? 'Stop loss' : 'Take profit'} </h3>
                 <p className="mt-1 text-[10px] text-white/40">Choose a preset or enter your own percentage.</p>
               </div>
               <button type="button" onClick={() => setActiveTarget(null)} aria-label="Close target settings" className="grid size-9 place-items-center rounded-full bg-white/[0.07] text-white/70"><X className="h-4 w-4" /></button>
             </div>
+
             <div className="mb-4 flex items-center justify-between border-b border-white/[0.08] pb-3">
               <div>
                 <p className="text-[12px] font-medium text-white/85">Enable target</p>
@@ -175,6 +251,7 @@ export const StrategyPage: React.FC = () => {
                 <span className={`absolute top-[3px] size-4 rounded-full transition-all ${form[activeTarget] > 0 ? 'left-[21px] bg-black' : 'left-[3px] bg-white/75'}`} />
               </button>
             </div>
+
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-white/40">Quick percentages</p>
             <div className="grid grid-cols-3 gap-2">
               {(activeTarget === 'stop_loss_pct' ? stopLossOptions : takeProfitOptions).map((option) => (
@@ -188,14 +265,31 @@ export const StrategyPage: React.FC = () => {
                 </button>
               ))}
             </div>
+
             <label className="mt-5 block">
               <span className="mb-2 block text-[10px] font-medium text-white/45">Custom percentage</span>
               <span className="flex h-12 items-center border-b border-white/[0.18] focus-within:border-white/60">
-                <input type="number" min="0.1" max="1000" step="0.1" value={customValue} onChange={(event) => setCustomValue(event.target.value)} placeholder="Enter amount" className="min-w-0 flex-1 bg-transparent text-[20px] font-semibold tabular-nums text-white outline-none placeholder:text-white/20" />
+                <input
+                  type="number"
+                  min="0.1"
+                  max="1000"
+                  step="0.1"
+                  value={customValue}
+                  onChange={(event) => setCustomValue(event.target.value)}
+                  placeholder="Enter amount"
+                  className="min-w-0 flex-1 bg-transparent text-[20px] font-semibold tabular-nums text-white outline-none placeholder:text-white/20"
+                />
                 <span className="ml-2 text-[15px] font-medium text-white/50">%</span>
               </span>
             </label>
-            <button type="button" onClick={applyCustom} disabled={!Number.isFinite(Number(customValue)) || Number(customValue) <= 0 || Number(customValue) > 1000} className="mt-5 h-12 w-full rounded-full bg-white text-[12px] font-semibold text-black disabled:opacity-35">Apply custom target</button>
+            <button
+              type="button"
+              onClick={applyCustom}
+              disabled={!Number.isFinite(Number(customValue)) || Number(customValue) <= 0 || Number(customValue) > 1000}
+              className="mt-5 h-12 w-full rounded-full bg-white text-[12px] font-semibold text-black disabled:opacity-35"
+            >
+              Apply custom target
+            </button>
           </section>
         </div>
       )}
