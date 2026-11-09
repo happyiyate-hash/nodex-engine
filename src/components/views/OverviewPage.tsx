@@ -270,12 +270,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
   const portfolioSource = livePortfolioBalance ?? profile?.portfolio;
   const portfolioValue = Number(portfolioSource?.portfolio_balance_usd ?? 0);
-  const availableBalanceUsd = portfolioSource?.available_balance_usd != null
-    ? Number(portfolioSource.available_balance_usd)
-    : null;
-  const investedBalanceUsd = portfolioSource?.invested_balance_usd != null
-    ? Number(portfolioSource.invested_balance_usd)
-    : null;
+  const availableBalanceUsd = Number(portfolioSource?.available_balance_usd ?? 0);
+  const investedBalanceUsd = Number(portfolioSource?.invested_balance_usd ?? 0);
   const profitLoss = Number(portfolioSource?.total_pnl_usd ?? 0);
   const startingBalanceUsd = Number(portfolioSource?.starting_balance_usd ?? 0);
   const profitLossPct = Number(
@@ -354,7 +350,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                 <span aria-hidden="true" className="inline-flex shrink-0 items-center text-[25px] font-bold leading-none tracking-[-0.055em] text-white">$</span>
                 <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
-              <div className="mt-1.5 flex items-baseline justify-center gap-3"><span className="inline-flex items-baseline gap-0"><span className="mr-1 text-[8px] font-medium uppercase tracking-wide text-white/35">Available</span><span className="text-[16px] font-bold leading-none tracking-tight tabular-nums text-white/90">$</span><span className="text-[16px] font-bold leading-none tracking-tight tabular-nums text-white">{availableBalanceUsd == null ? "—" : formatUsd(availableBalanceUsd)}</span></span><span className="inline-flex items-baseline gap-0 text-[8px] text-white/35"><span className="mr-1">Invested</span><span className="text-[14px] font-semibold leading-none tabular-nums text-white/65">{investedBalanceUsd == null ? "—" : `$${formatUsd(investedBalanceUsd)}`}</span></span></div>
+              <div className="mt-1.5 flex items-baseline justify-center gap-2.5"><span className="inline-flex items-baseline gap-0.5"><span className="mr-0.5 text-[8px] font-medium uppercase tracking-wide text-white/35">Available</span><span className="text-[9px] font-medium leading-none tabular-nums text-white/40">$</span><span className="text-[10px] font-medium leading-none tracking-tight tabular-nums text-white/65">{formatUsd(availableBalanceUsd)}</span></span><span className="inline-flex items-baseline gap-0.5 text-[8px] text-white/35"><span className="mr-0.5">Invested</span><span className="text-[9px] font-medium leading-none tabular-nums text-white/40">$</span><span className="text-[10px] font-medium leading-none tracking-tight tabular-nums text-white/65">{formatUsd(investedBalanceUsd)}</span></span></div>
             </div>
           </div>
         </div>
