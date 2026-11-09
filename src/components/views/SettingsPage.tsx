@@ -406,22 +406,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           title={pageTitle}
           description={section === 'trading' ? '' : pageDescription}
           onBack={() => navigateSection('home')}
-          action={section === 'trading' ? (
-            <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
-              <span
-                aria-current={engineMode === 'paper' ? 'true' : undefined}
-                title={availableModes.paper ? 'Paper trading is available' : 'Paper trading is unavailable'}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${engineMode === 'paper' ? 'bg-white text-black' : 'text-white/35'}`}
-              >Paper</span>
-              <button
-                type="button"
-                disabled={!availableModes.real}
-                aria-disabled={!availableModes.real}
-                title={availableModes.real ? 'Real trading is available' : 'Real trading is not available yet'}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-medium ${engineMode === 'real' ? 'bg-white text-black' : 'text-white/25'} disabled:cursor-not-allowed`}
-              >Real</button>
-            </div>
-          ) : undefined}
         />
       )}
 
