@@ -73,7 +73,7 @@ const AutoFitNumber: React.FC<AutoFitNumberProps> = ({ fullText, compactText, cl
     }
     return <span key={`separator-after-place-${digitPositionFromRight}`} className="inline-block h-[1em] leading-[1em]">{character}</span>;
   }).reverse();
-  return <span ref={containerRef} className="block min-w-0 w-full overflow-hidden"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{renderedCharacters}</span></span>;
+  return <span ref={containerRef} className="inline-block min-w-0 max-w-full overflow-hidden align-middle"><span ref={textRef} className={className} style={{ fontSize: compact ? minFontSize : fontSize }}>{renderedCharacters}</span></span>;
 };
 
 const compactNumber = (value: number) => {
@@ -351,7 +351,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
               <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
               <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
-                <span className="shrink-0 text-[25px] font-bold leading-none tracking-[-0.055em] text-white">$</span>
+                <span aria-hidden="true" className="inline-flex shrink-0 items-center text-[25px] font-bold leading-none tracking-[-0.055em] text-white">$</span>
                 <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
               <div className="mt-1.5 flex items-baseline justify-center gap-3"><span className="inline-flex items-baseline gap-0"><span className="mr-1 text-[8px] font-medium uppercase tracking-wide text-white/35">Available</span><span className="text-[16px] font-bold leading-none tracking-tight tabular-nums text-white/90">$</span><span className="text-[16px] font-bold leading-none tracking-tight tabular-nums text-white">{availableBalanceUsd == null ? "—" : formatUsd(availableBalanceUsd)}</span></span><span className="inline-flex items-baseline gap-0 text-[8px] text-white/35"><span className="mr-1">Invested</span><span className="text-[14px] font-semibold leading-none tabular-nums text-white/65">{investedBalanceUsd == null ? "—" : `$${formatUsd(investedBalanceUsd)}`}</span></span></div>
