@@ -67,7 +67,7 @@ const StatusLine = ({ label, value, good }: { label: string; value: string; good
 
 export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void; onOpenStorage?: () => void }> = ({ onSubpageChange, onOpenStorage }) => {
   const {
-    engineStatus, toggleEngine, settings, updateSettings, updateConnectionDraft, backendError, events,
+    engineStatus, toggleEngine, settings, updateSettings, updateConnectionDraft, backendError, events, removeTokensByMint,
   } = useTerminal();
   const [section, setSection] = useState<SettingsSection>('home');
   const navigateSection = (next: SettingsSection) => { setSection(next); onSubpageChange?.(next !== 'home'); };
@@ -321,7 +321,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setStorageMessage('');
     try {
       const result = await apiClient.clearEngineHistory(settings.adminApiKey);
-      setStorageMessage(`Cleanup completed · ${result.deleted_token_records} token records and ${result.deleted_raw_event_records} raw event records removed. Paper-trading records preserved.`);
+      removeTokensByMint(result.deleted_mints || []);
+      setStorageMessage(`Cleanup completed · ${result.deleted_token_state_records ?? result.deleted_token_records} non-paper token states, ${result.deleted_launch_records} launch records, ${result.deleted_chart_records} chart records and ${result.deleted_raw_event_records} raw events removed. Paper-traded tokens and their records were preserved.`);
       setShowClearConfirm(false);
     } catch (error) {
       setStorageMessage(error instanceof Error ? error.message : 'Engine history cleanup failed.');
