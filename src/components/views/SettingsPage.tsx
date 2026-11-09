@@ -722,6 +722,18 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </div>
       )}
 
+      {section === 'trading' && (
+        <button
+          type="button"
+          onClick={() => navigateSection('home')}
+          aria-label="Go back to Settings"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] right-4 z-[80] inline-flex min-h-12 items-center gap-2.5 rounded-2xl bg-white px-4 py-3 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-95"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
+          Go back
+        </button>
+      )}
+
       {section === 'engine_logs' && (
         <button
           type="button"
