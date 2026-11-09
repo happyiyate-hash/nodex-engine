@@ -198,7 +198,7 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
     reason = String(paperBuyFailed.data?.reason || paperBuyFailed.data?.message || 'Paper entry was not completed.');
     updatedAt = paperBuyFailed.timestamp;
   } else if (
-    scanFailed || terminalStatus === 'failed' || persistedStatus === 'failed' ||
+    Boolean(scanFailed) || terminalStatus === 'failed' || persistedStatus === 'failed' ||
     tokenScanStatus === 'failed'
   ) {
     status = 'FAILED';
