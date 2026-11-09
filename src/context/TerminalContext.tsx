@@ -38,6 +38,7 @@ interface TerminalContextType {
   toggleStreamPause: () => void;
   clearEvents: () => void;
   clearBrowserHistory: () => void;
+  removeTokensByMint: (mints: string[]) => void;
   toggleEngine: () => void;
   toggleStrategy: () => void;
   closePosition: (positionId: string, percentage: number) => void;
@@ -403,6 +404,12 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     backendService.loadInitialData().then((snapshot) => {
       if (!active) return;
       if (snapshot.profile) {
+        if (Array.isArray(snapshot.profile.tokens)) {
+          const restoredTokens = snapshot.profile.tokens
+            .map((item) => mapTokenDetailSnapshot(item))
+            .filter((token): token is DiscoveredToken => token !== null);
+          setTokens(restoredTokens.slice(0, 500));
+        }
         const runtime = engineEventStore.hydrate(snapshot.profile);
         setProfile(runtime.profile);
         setPaperWallet(runtime.profile?.paper_wallet ?? snapshot.paperWallet ?? null);
@@ -738,6 +745,13 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSelectedToken(null);
     setBackendError(null);
   };
+  const removeTokensByMint = (mints: string[]) => {
+    if (!mints.length) return;
+    const removed = new Set(mints);
+    setTokens((current) => current.filter((token) => !removed.has(token.mint)));
+    setLaunches((current) => current.filter((launch) => !removed.has(launch.mint_address)));
+    setSelectedToken((current) => current && removed.has(current.mint) ? null : current);
+  };
   const closePosition = () => setBackendError('Paper position closing is unavailable: no backend paper-order endpoint exists yet.');
   const executeManualPaperBuy = () => setBackendError('Paper buying is disabled until a real backend paper-order endpoint is implemented.');
   const updatePositionRisk = () => setBackendError('Position risk updates are unavailable until the backend provides persistent position endpoints.');
@@ -844,7 +858,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       activeTab, setActiveTab: navigateToTab, engineStatus, summary, positions, tokens,
       events, launches, paperWallet, profile, selectedEvent, setSelectedEvent, selectedToken, setSelectedToken,
       openTokenDetailByMint, loadTokenSnapshot, closeTokenDetail, strategyConfig, strategyDecisions,
-      settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, toggleEngine,
+      settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, removeTokensByMint, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
       saveStrategyConfig, updateSettings, updateConnectionDraft, isMobilePreview, setIsMobilePreview, backendError,
     }}>
