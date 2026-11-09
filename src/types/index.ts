@@ -201,6 +201,7 @@ export type EventType =
   | 'pumpswap_activity'
   | 'pumpswap_volume_update'
   | 'market_price_update'
+  | 'sol_price_update'
   | 'market_subscription_requested'
   | 'diagnostic'
   | 'connection_status'

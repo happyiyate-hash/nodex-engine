@@ -158,7 +158,8 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
   const related = events.filter((event) =>
     event.token_mint === launch.mint_address || event.data?.mint_address === launch.mint_address
   );
-  const findEvent = (type: string) => related.find((event) => event.event_type === type);
+  const findEvent = (type: string): NodeXEvent | undefined =>
+    related.find((event) => String(event.event_type) === type);
   const scanUpdate = findEvent('token_scan_update') || findEvent('token_scan_progress') || findEvent('safety_check_completed');
   const scanCompleted = findEvent('token_scan_completed');
   const scanFailed = findEvent('token_scan_failed');
