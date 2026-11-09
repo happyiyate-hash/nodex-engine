@@ -176,6 +176,12 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
   const persistedDecision = String(security.decision || '').toLowerCase();
   const persistedStatus = String(security.status || '').toLowerCase();
   const persistedReason = String(security.decision_reason || security.error || '');
+  // Scan lifecycle is also persisted on the token record. Do not rely only on
+  // the capped event history: once old scan events roll off, DETECTED must not
+  // overwrite a terminal UNVERIFIED/FAILED result.
+  const tokenScanStatus = String(token?.scan_status || '').toLowerCase();
+  const tokenQualification = String(token?.qualification_status || '').toLowerCase();
+  const tokenScanReason = String(token?.rejection_reason || '');
 
   let status: PipelineStatus = 'DETECTED';
   let reason = 'Launch detected. Waiting for the security scanner.';
@@ -189,7 +195,10 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
     status = 'BUY FAILED';
     reason = String(paperBuyFailed.data?.reason || paperBuyFailed.data?.message || 'Paper entry was not completed.');
     updatedAt = paperBuyFailed.timestamp;
-  } else if (scanFailed || terminalStatus === 'failed' || persistedStatus === 'failed') {
+  } else if (
+    scanFailed || terminalStatus === 'failed' || persistedStatus === 'failed' ||
+    tokenScanStatus === 'failed'
+  ) {
     status = 'FAILED';
     reason = String(scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || persistedReason || 'Security scan failed. This token remains unverified and blocked.');
     updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
@@ -199,10 +208,11 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
     updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
   } else if (
     persistedDecision === 'unverified' || ['unverified', 'unknown'].includes(persistedStatus) ||
+    tokenScanStatus === 'unverified' || tokenQualification === 'unverified' ||
     scanCompleted && (['unverified', 'unknown', 'failed'].includes(terminalStatus) || decision.includes('unverified') || decision.includes('unknown'))
   ) {
     status = 'UNVERIFIED';
-    reason = String(scanFailed?.data?.decision_reason || scanCompleted?.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
+    reason = String(scanFailed?.data?.decision_reason || scanCompleted?.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || tokenScanReason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
     updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
   } else if (strategyRejected || decision.includes('reject') || persistedDecision === 'rejected' || persistedStatus === 'rejected') {
     status = 'REJECTED';
@@ -212,7 +222,7 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
     status = 'QUALIFIED';
     reason = String(scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || 'Security scan completed and strategy filters passed.');
     updatedAt = scanUpdate?.timestamp || security.scanned_at || launch.detected_at;
-  } else if (scanStarted || scanUpdate || persistedStatus === 'scanning') {
+  } else if (scanStarted || scanUpdate || persistedStatus === 'scanning' || tokenScanStatus === 'scanning' || tokenQualification === 'under_analysis') {
     status = 'ANALYZING';
     reason = scanUpdate
       ? String(scanUpdate.data?.message || scanUpdate.data?.reason || 'Security scan update received.')
