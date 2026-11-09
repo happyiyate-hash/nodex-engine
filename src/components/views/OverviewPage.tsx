@@ -153,7 +153,7 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
   );
 };
 
-const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[]): LaunchView => {
+const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: any): LaunchView => {
   const related = events.filter((event) =>
     event.token_mint === launch.mint_address || event.data?.mint_address === launch.mint_address
   );
@@ -170,6 +170,12 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[]): LaunchV
     scanUpdate?.data?.decision || scanUpdate?.data?.status || ''
   ).toLowerCase();
   const terminalStatus = String(scanFailed?.data?.status || scanCompleted?.data?.status || '').toLowerCase();
+  // The event feed is intentionally capped. The persisted token snapshot is the
+  // durable source of truth when scan events age out of the browser history.
+  const security = token?.safety_details || {};
+  const persistedDecision = String(security.decision || '').toLowerCase();
+  const persistedStatus = String(security.status || '').toLowerCase();
+  const persistedReason = String(security.decision_reason || security.error || '');
 
   let status: PipelineStatus = 'DETECTED';
   let reason = 'Launch detected. Waiting for the security scanner.';
@@ -183,28 +189,31 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[]): LaunchV
     status = 'BUY FAILED';
     reason = String(paperBuyFailed.data?.reason || paperBuyFailed.data?.message || 'Paper entry was not completed.');
     updatedAt = paperBuyFailed.timestamp;
-  } else if (scanFailed || terminalStatus === 'failed') {
+  } else if (scanFailed || terminalStatus === 'failed' || persistedStatus === 'failed') {
     status = 'FAILED';
-    reason = String(scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || 'Security scan failed. This token remains unverified and blocked.');
-    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || launch.detected_at;
-  } else if (scanCompleted && (['unverified', 'unknown', 'failed'].includes(terminalStatus) || decision.includes('unverified') || decision.includes('unknown'))) {
+    reason = String(scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || persistedReason || 'Security scan failed. This token remains unverified and blocked.');
+    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
+  } else if (
+    persistedDecision === 'unverified' || ['unverified', 'unknown'].includes(persistedStatus) ||
+    scanCompleted && (['unverified', 'unknown', 'failed'].includes(terminalStatus) || decision.includes('unverified') || decision.includes('unknown'))
+  ) {
     status = 'UNVERIFIED';
-    reason = String(scanCompleted.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
-    updatedAt = scanCompleted.timestamp;
-  } else if (strategyRejected || decision.includes('reject')) {
+    reason = String(scanFailed?.data?.decision_reason || scanCompleted?.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
+    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
+  } else if (strategyRejected || decision.includes('reject') || persistedDecision === 'rejected' || persistedStatus === 'rejected') {
     status = 'REJECTED';
-    reason = String(strategyRejected?.data?.reason || strategyRejected?.data?.message || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'The token did not pass the risk or strategy checks.');
-    updatedAt = (strategyRejected || scanUpdate)!.timestamp;
-  } else if (decision.includes('approv') || decision.includes('qualif')) {
+    reason = String(strategyRejected?.data?.reason || strategyRejected?.data?.message || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || 'The token did not pass the risk or strategy checks.');
+    updatedAt = (strategyRejected || scanUpdate)?.timestamp || security.scanned_at || launch.detected_at;
+  } else if (decision.includes('approv') || decision.includes('qualif') || persistedDecision === 'approved') {
     status = 'QUALIFIED';
-    reason = String(scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'Security scan completed and strategy filters passed.');
-    updatedAt = scanUpdate!.timestamp;
-  } else if (scanStarted || scanUpdate) {
-    status = scanUpdate ? 'ANALYZING' : 'ANALYZING';
+    reason = String(scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || 'Security scan completed and strategy filters passed.');
+    updatedAt = scanUpdate?.timestamp || security.scanned_at || launch.detected_at;
+  } else if (scanStarted || scanUpdate || persistedStatus === 'scanning') {
+    status = 'ANALYZING';
     reason = scanUpdate
       ? String(scanUpdate.data?.message || scanUpdate.data?.reason || 'Security scan update received.')
       : 'Security checks are running.';
-    updatedAt = (scanUpdate || findEvent('token_scan_started'))!.timestamp;
+    updatedAt = (scanUpdate || findEvent('token_scan_started'))?.timestamp || security.scanned_at || launch.detected_at;
   }
 
   return { launch, status, reason, updatedAt, scanStarted };
@@ -254,8 +263,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const [expandedErrors, setExpandedErrors] = useState<string[]>([]);
 
   const launchViews = useMemo(
-    () => launches.map((launch) => getLaunchView(launch, events)).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
-    [launches, events]
+    () => launches.map((launch) => getLaunchView(launch, events, tokens.find((token) => token.mint === launch.mint_address))).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
+    [launches, events, tokens]
   );
   const counts = useMemo(() => ({
     detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'UNVERIFIED', 'FAILED', 'BUY FAILED'].includes(item.status)).length,
@@ -451,12 +460,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && matchesLaunch(event))
                     || progressEvent
                     || events.find((event) => ['token_scan_completed', 'token_scan_failed'].includes(event.event_type) && matchesLaunch(event));
-                  const report = reportEvent?.data;
+                  const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
+                  // Prefer the live event while present, then fall back to the full
+                  // persisted security report carried by token_state_updated.
+                  const report = reportEvent?.data || tokenData.safety_details || {};
                   const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const monitoringData = monitoringEvent?.data;
 
                   const checks = Array.isArray(report?.checks) ? report.checks : [];
-                  const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
                   const price = Number(tokenData.current_price ?? tokenData.price_usd ?? tokenData.price ?? report?.price_usd ?? report?.current_price);
                   const marketCap = Number(tokenData.market_cap ?? tokenData.market_cap_usd ?? report?.market_cap_usd);
                   const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
@@ -523,6 +534,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             </div>;
                           })}
                           {report?.risk_score !== undefined && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] text-white/55">Risk score: <span className="font-semibold text-white/80">{String(report.risk_score)}</span></div>}
+                          {report?.rugcheck?.raw_response !== undefined && <details className="col-span-2 border-t border-white/[0.06] pt-1">
+                            <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">RugCheck provider response JSON</summary>
+                            <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(report.rugcheck.raw_response, null, 2)}</pre>
+                          </details>}
+                          {Array.isArray(report?.provider_responses) && report.provider_responses.map((providerResponse: any, index: number) => <details key={providerResponse.id || providerResponse.method || index} className="col-span-2 border-t border-white/[0.06] pt-1">
+                            <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">{String(providerResponse.provider || 'Provider')} · {String(providerResponse.method || 'request')} response JSON</summary>
+                            <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(providerResponse.response ?? providerResponse, null, 2)}</pre>
+                          </details>)}
                           {reason && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] leading-relaxed text-white/45">{reason}</div>}
                         </div>}
                       </div>
