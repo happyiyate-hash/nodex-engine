@@ -626,3 +626,4 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       </div>
     </div>
   );
+};
