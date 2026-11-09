@@ -380,68 +380,40 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           </div>
         </>
       ) : section === 'connections' ? (
-        <section className="relative -mx-4 w-[calc(100%+2rem)] shrink-0 overflow-hidden rounded-b-xl border-x border-b border-white/[0.07] bg-[#181818] px-3 pb-3.5 pt-[calc(env(safe-area-inset-top)+1rem)] shadow-[0_8px_24px_rgba(0,0,0,.18)]">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <button type="button" onClick={() => navigateSection('home')} aria-label="Back to Settings" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] text-white/75 transition-colors active:bg-white/[0.10]">
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <div className="min-w-0">
-                <h1 className="truncate text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
-                <p className="mt-0.5 text-[10px] text-white/40">Live backend connectivity</p>
+        <section className="relative -mx-4 w-[calc(100%+2rem)] shrink-0 overflow-hidden border-b border-white/[0.07] bg-[#151515] px-4 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.4rem)]">
+          <h1 className="mb-2 text-[14px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
+          <div className="overflow-hidden rounded-lg border border-white/[0.07] bg-[#0d0d0d] px-3">
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Wifi className="h-4 w-4 shrink-0 text-white/55" strokeWidth={1.8} />
+                <span className="text-[11px] text-white/75">WebSocket</span>
               </div>
-            </div>
-            <button type="button" onClick={() => void refreshConnectionStatus()} aria-label="Refresh connection status" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.10] bg-[#121212] text-white/60 transition-colors active:bg-white/[0.10]">
-              <RefreshCw className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">System connectivity</p>
-              <p className="mt-1 text-[11px] text-white/55">Current status of your NodeX backend and engine.</p>
-            </div>
-            <span className="shrink-0 rounded-full border border-white/[0.08] bg-black/20 px-2 py-1 text-[9px] font-medium text-white/45">
-              {statusCheckedAt ? 'Live monitor' : 'Checking'}
-            </span>
-          </div>
-          <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-[#111111]/80 px-3">
-            <div className="flex items-center gap-3 py-3">
-              <Wifi className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-white/90">WebSocket</p>
-                <p className="mt-0.5 text-[9px] text-white/35">Live event stream</p>
-              </div>
-              <span className={`text-[11px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : engineStatus.ws_status === 'reconnecting' ? 'text-amber-300' : 'text-red-300'}`}>
+              <span className={`text-[10px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : engineStatus.ws_status === 'reconnecting' ? 'text-amber-300' : 'text-red-300'}`}>
                 {engineStatus.ws_status === 'connected' ? 'Connected' : engineStatus.ws_status === 'reconnecting' ? 'Connecting' : 'Disconnected'}
               </span>
             </div>
-            <div className="border-t border-white/[0.06]" />
-            <div className="flex items-center gap-3 py-3">
-              <Server className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-white/90">REST API</p>
-                <p className="mt-0.5 text-[9px] text-white/35">HTTP health endpoint</p>
+            <div className="border-t border-white/[0.055]" />
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Server className="h-4 w-4 shrink-0 text-white/55" strokeWidth={1.8} />
+                <span className="text-[11px] text-white/75">REST API</span>
               </div>
-              <span className={`text-[11px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/55'}`}>
+              <span className={`text-[10px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/50'}`}>
                 {restOnline === true ? 'Online' : restOnline === false ? 'Unavailable' : 'Checking'}
               </span>
             </div>
-            <div className="border-t border-white/[0.06]" />
-            <div className="flex items-center gap-3 py-3">
-              <Cpu className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-white/90">Engine</p>
-                <p className="mt-0.5 text-[9px] text-white/35">Background processing</p>
+            <div className="border-t border-white/[0.055]" />
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <Cpu className="h-4 w-4 shrink-0 text-white/55" strokeWidth={1.8} />
+                <span className="text-[11px] text-white/75">Engine</span>
               </div>
-              <span className={`text-[11px] font-semibold ${(runtimeSnapshot?.running ?? engineStatus.running) ? 'text-emerald-300' : 'text-amber-300'}`}>
+              <span className={`text-[10px] font-semibold ${(runtimeSnapshot?.running ?? engineStatus.running) ? 'text-emerald-300' : 'text-amber-300'}`}>
                 {runtimeSnapshot?.running ?? engineStatus.running ? 'Running' : 'Paused'}
               </span>
             </div>
           </div>
-          <div className="mt-2 flex items-center justify-between gap-3 px-1">
-            <span className="text-[9px] text-white/35">Last status check</span>
-            <span className="text-[9px] tabular-nums text-white/50">{statusCheckedAt ? statusCheckedAt.toLocaleTimeString() : 'Checking…'} · refreshes every 8s</span>
-          </div>
+          <p className="mt-1.5 text-right text-[9px] tabular-nums text-white/35">{statusCheckedAt ? `Updated ${statusCheckedAt.toLocaleTimeString()}` : 'Checking connection status…'}</p>
         </section>
       ) : section === 'engine_logs' ? (
         <header className="sticky top-0 z-40 flex min-h-14 items-center justify-between gap-2 border-b border-white/[0.10] bg-[#050505]/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
@@ -521,7 +493,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       )}
 
       {section === 'connections' && (
-        <div className="space-y-5 pt-4 pb-8">
+        <div className="space-y-3 pt-2 pb-24">
           <div>
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Connection controls</p>
             <div className="space-y-3">
@@ -726,6 +698,18 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             <span className="flex items-center gap-1.5"><span className="h-1 w-1 rounded-full bg-emerald-400" />STREAM</span>
           </div>
         </div>
+      )}
+
+      {section === 'connections' && (
+        <button
+          type="button"
+          onClick={() => navigateSection('home')}
+          aria-label="Go back to Settings"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] right-4 z-50 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-[11px] font-semibold text-black shadow-[0_8px_24px_rgba(0,0,0,0.4)] transition-transform active:scale-95"
+        >
+          <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
+          Go back
+        </button>
       )}
 
       {section === 'engine_logs' && (
