@@ -193,6 +193,10 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
     status = 'FAILED';
     reason = String(scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || persistedReason || 'Security scan failed. This token remains unverified and blocked.');
     updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
+  } else if (security.diagnostic_only === true) {
+    status = 'UNVERIFIED';
+    reason = String(persistedReason || 'Diagnostic-only mode is active. Provider responses are being collected; no token is being verified or approved.');
+    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
   } else if (
     persistedDecision === 'unverified' || ['unverified', 'unknown'].includes(persistedStatus) ||
     scanCompleted && (['unverified', 'unknown', 'failed'].includes(terminalStatus) || decision.includes('unverified') || decision.includes('unknown'))
@@ -534,6 +538,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             </div>;
                           })}
                           {report?.risk_score !== undefined && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] text-white/55">Risk score: <span className="font-semibold text-white/80">{String(report.risk_score)}</span></div>}
+                          {report?.diagnostic_only === true && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-amber-300/75">Diagnostic-only mode · verification disabled</div>}
+                          {report?.diagnostic_assessment !== undefined && report?.diagnostic_assessment !== null && <details className="col-span-2 border-t border-white/[0.06] pt-1">
+                            <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">Provisional parser assessment JSON (not used to verify)</summary>
+                            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(report.diagnostic_assessment, null, 2)}</pre>
+                          </details>}
                           {report?.rugcheck?.raw_response !== undefined && <details className="col-span-2 border-t border-white/[0.06] pt-1">
                             <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">RugCheck provider response JSON</summary>
                             <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(report.rugcheck.raw_response, null, 2)}</pre>
