@@ -380,15 +380,69 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           </div>
         </>
       ) : section === 'connections' ? (
-        <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.06] bg-black/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
-          <div className="flex min-h-10 items-center justify-between gap-3">
-            <h1 className="text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
-            <button type="button" onClick={() => navigateSection('home')} className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg bg-white px-4 py-2 text-[11px] font-semibold text-black transition-transform active:scale-95">
-              Back <ArrowLeft className="h-3.5 w-3.5" />
+        <section className="relative -mx-4 w-[calc(100%+2rem)] shrink-0 overflow-hidden rounded-b-xl border-x border-b border-white/[0.07] bg-[#181818] px-3 pb-3.5 pt-[calc(env(safe-area-inset-top)+1rem)] shadow-[0_8px_24px_rgba(0,0,0,.18)]">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <button type="button" onClick={() => navigateSection('home')} aria-label="Back to Settings" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] text-white/75 transition-colors active:bg-white/[0.10]">
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <div className="min-w-0">
+                <h1 className="truncate text-[15px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
+                <p className="mt-0.5 text-[10px] text-white/40">Live backend connectivity</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => void refreshConnectionStatus()} aria-label="Refresh connection status" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.10] bg-[#121212] text-white/60 transition-colors active:bg-white/[0.10]">
+              <RefreshCw className="h-4 w-4" />
             </button>
           </div>
-          <p className="mt-0.5 text-[10px] text-white/40">Connect this app to your NodeX backend.</p>
-        </header>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">System connectivity</p>
+              <p className="mt-1 text-[11px] text-white/55">Current status of your NodeX backend and engine.</p>
+            </div>
+            <span className="shrink-0 rounded-full border border-white/[0.08] bg-black/20 px-2 py-1 text-[9px] font-medium text-white/45">
+              {statusCheckedAt ? 'Live monitor' : 'Checking'}
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-[#111111]/80 px-3">
+            <div className="flex items-center gap-3 py-3">
+              <Wifi className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-white/90">WebSocket</p>
+                <p className="mt-0.5 text-[9px] text-white/35">Live event stream</p>
+              </div>
+              <span className={`text-[11px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : engineStatus.ws_status === 'reconnecting' ? 'text-amber-300' : 'text-red-300'}`}>
+                {engineStatus.ws_status === 'connected' ? 'Connected' : engineStatus.ws_status === 'reconnecting' ? 'Connecting' : 'Disconnected'}
+              </span>
+            </div>
+            <div className="border-t border-white/[0.06]" />
+            <div className="flex items-center gap-3 py-3">
+              <Server className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-white/90">REST API</p>
+                <p className="mt-0.5 text-[9px] text-white/35">HTTP health endpoint</p>
+              </div>
+              <span className={`text-[11px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/55'}`}>
+                {restOnline === true ? 'Online' : restOnline === false ? 'Unavailable' : 'Checking'}
+              </span>
+            </div>
+            <div className="border-t border-white/[0.06]" />
+            <div className="flex items-center gap-3 py-3">
+              <Cpu className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-white/90">Engine</p>
+                <p className="mt-0.5 text-[9px] text-white/35">Background processing</p>
+              </div>
+              <span className={`text-[11px] font-semibold ${(runtimeSnapshot?.running ?? engineStatus.running) ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {runtimeSnapshot?.running ?? engineStatus.running ? 'Running' : 'Paused'}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 px-1">
+            <span className="text-[9px] text-white/35">Last status check</span>
+            <span className="text-[9px] tabular-nums text-white/50">{statusCheckedAt ? statusCheckedAt.toLocaleTimeString() : 'Checking…'} · refreshes every 8s</span>
+          </div>
+        </section>
       ) : section === 'engine_logs' ? (
         <header className="sticky top-0 z-40 flex min-h-14 items-center justify-between gap-2 border-b border-white/[0.10] bg-[#050505]/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
           <div className="flex min-w-0 items-center gap-2">
@@ -467,55 +521,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       )}
 
       {section === 'connections' && (
-        <div className="space-y-5 pt-5 pb-8">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">System connectivity</p>
-            <p className="mt-1 text-[12px] text-white/55">Live health of your NodeX backend and engine.</p>
-          </div>
-
-          <div className="overflow-hidden rounded-lg bg-[#101010]">
-            <div className="flex items-center gap-3 px-3 py-3">
-              <Wifi className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-white/90">WebSocket</p>
-                <p className="mt-0.5 text-[9px] text-white/35">Live event stream</p>
-              </div>
-              <span className={`text-[11px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : engineStatus.ws_status === 'reconnecting' ? 'text-amber-300' : 'text-red-300'}`}>
-                {engineStatus.ws_status === 'connected' ? 'Connected' : engineStatus.ws_status === 'reconnecting' ? 'Connecting' : 'Disconnected'}
-              </span>
-            </div>
-            <div className="mx-3 border-t border-white/[0.05]" />
-            <div className="flex items-center gap-3 px-3 py-3">
-              <Server className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-white/90">REST API</p>
-                <p className="mt-0.5 text-[9px] text-white/35">HTTP health endpoint</p>
-              </div>
-              <span className={`text-[11px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/55'}`}>
-                {restOnline === true ? 'Online' : restOnline === false ? 'Unavailable' : 'Checking'}
-              </span>
-            </div>
-            <div className="mx-3 border-t border-white/[0.05]" />
-            <div className="flex items-center gap-3 px-3 py-3">
-              <Cpu className="h-[18px] w-[18px] shrink-0 text-white/65" strokeWidth={1.8} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-white/90">Engine</p>
-                <p className="mt-0.5 text-[9px] text-white/35">Background processing</p>
-              </div>
-              <span className={`text-[11px] font-semibold ${(runtimeSnapshot?.running ?? engineStatus.running) ? 'text-emerald-300' : 'text-amber-300'}`}>
-                {runtimeSnapshot?.running ?? engineStatus.running ? 'Running' : 'Paused'}
-              </span>
-            </div>
-          </div>
-
-          <div className="px-1">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] text-white/45">Last status check</span>
-              <span className="text-[10px] tabular-nums text-white/60">{statusCheckedAt ? statusCheckedAt.toLocaleTimeString() : 'Checking…'}</span>
-            </div>
-            <p className="mt-1 text-[9px] leading-relaxed text-white/30">Connection indicators refresh automatically while this page is open.</p>
-          </div>
-
+        <div className="space-y-5 pt-4 pb-8">
           <div>
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Connection controls</p>
             <div className="space-y-3">
