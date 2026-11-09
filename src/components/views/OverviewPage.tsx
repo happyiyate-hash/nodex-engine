@@ -463,7 +463,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
                   // Prefer the live event while present, then fall back to the full
                   // persisted security report carried by token_state_updated.
-                  const report = reportEvent?.data || tokenData.safety_details || {};
+                  const report = { ...(tokenData.safety_details || {}), ...(reportEvent?.data || {}) };
                   const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const monitoringData = monitoringEvent?.data;
 
