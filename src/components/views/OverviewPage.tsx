@@ -155,11 +155,11 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
 };
 
 const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: any): LaunchView => {
-  const related = events.filter((event) =>
+  const related: NodeXEvent[] = (events as NodeXEvent[]).filter((event: NodeXEvent) =>
     event.token_mint === launch.mint_address || event.data?.mint_address === launch.mint_address
   );
   const findEvent = (type: string): NodeXEvent | undefined =>
-    related.find((event) => String(event.event_type) === type);
+    related.find((event: NodeXEvent) => String(event.event_type) === type);
   const scanUpdate = findEvent('token_scan_update') || findEvent('token_scan_progress') || findEvent('safety_check_completed');
   const scanCompleted = findEvent('token_scan_completed');
   const scanFailed = findEvent('token_scan_failed');
