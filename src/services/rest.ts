@@ -300,7 +300,13 @@ export class NodeXRestClient {
   }
 
   public clearEngineHistory(adminKey: string): Promise<{
-    status: string; deleted_token_records: number; deleted_raw_event_records: number;
+    status: string;
+    deleted_token_records: number;
+    deleted_token_state_records: number;
+    deleted_launch_records: number;
+    deleted_chart_records: number;
+    deleted_raw_event_records: number;
+    deleted_mints: string[];
     preserved: string[];
   }> {
     return this.request('/api/v1/admin/maintenance/clear-history', {
