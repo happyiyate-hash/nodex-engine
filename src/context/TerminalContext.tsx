@@ -484,7 +484,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const mint = String(stateData?.mint_address || '');
         const mapped = mapTokenDetailSnapshot(stateData || {});
         if (mapped) {
-          setTokens((previous) => [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500));
+          setTokens((previous) => {
+            const existing = previous.find((token) => token.mint === mint);
+            const durable = mapTokenDetailSnapshot(stateData || {}, existing);
+            return durable ? [durable, ...previous.filter((token) => token.mint !== durable.mint)].slice(0, 500) : previous;
+          });
           setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(stateData, previous) || previous : previous);
         }
       }
