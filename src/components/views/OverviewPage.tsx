@@ -256,7 +256,7 @@ const statusStyle: Record<PipelineStatus, string> = {
 };
 
 export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
-  const { launches, events, engineStatus, openTokenDetailByMint, paperWallet, profile, positions, tokens } = useTerminal();
+  const { launches, events, engineStatus, openTokenDetailByMint, profile, positions, tokens } = useTerminal();
   const [livePortfolioBalance, setLivePortfolioBalance] = useState<PortfolioBalanceSnapshot | null>(null);
   const latestSolPriceUpdate = events.find((event) => event.event_type === 'sol_price_update')?.timestamp || '';
   useEffect(() => {
