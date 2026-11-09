@@ -404,7 +404,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       ) : (
         <SectionHeader
           title={pageTitle}
-          description={pageDescription}
+          description={section === 'trading' ? '' : pageDescription}
           onBack={() => navigateSection('home')}
           action={section === 'trading' ? (
             <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
@@ -630,7 +630,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       )}
 
       {section === 'trading' && (
-        <div className="pt-3">
+        <div className="pt-1">
           <div className="mb-3 flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2">
             <span className="text-[10px] text-white/45">Backend-reported mode</span>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-white/80">{engineMode}</span>
