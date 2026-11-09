@@ -95,6 +95,17 @@ export interface NodeXProfileSnapshot {
     portfolio_balance_sol?: number;
     total_portfolio_value_sol?: number;
     total_value_sol?: number;
+    portfolio_balance_usd?: number;
+    total_portfolio_value_usd?: number;
+    total_value_usd?: number;
+    available_balance_usd?: number;
+    invested_balance_usd?: number;
+    starting_balance_usd?: number;
+    unrealized_pnl_usd?: number;
+    realized_pnl_usd?: number;
+    total_pnl_usd?: number;
+    total_pnl_pct?: number;
+    sol_price_usd?: number;
     available_balance_sol?: number;
     invested_balance_sol?: number;
     locked_rent_sol?: number;
@@ -104,12 +115,31 @@ export interface NodeXProfileSnapshot {
     unrealized_pnl_pct?: number;
     realized_pnl_sol?: number;
     total_pnl_sol?: number;
-    total_pnl_pct?: number;
     position_count?: number;
     positions?: Array<Record<string, unknown>>;
     [key: string]: unknown;
   };
   [key: string]: unknown;
+}
+
+export interface PortfolioBalanceSnapshot {
+  portfolio_balance_usd: number;
+  total_value_usd: number;
+  available_balance_usd: number;
+  invested_balance_usd: number;
+  starting_balance_usd: number;
+  positions_value_usd: number;
+  locked_rent_value_usd: number;
+  unrealized_pnl_usd: number;
+  realized_pnl_usd: number;
+  total_pnl_usd: number;
+  total_pnl_pct: number;
+  sol_price_usd: number;
+  sol_price_source: string;
+  price_updated_at: string;
+  price_status: string;
+  position_count: number;
+  updated_at: string;
 }
 
 export class NodeXRestClient {
@@ -218,6 +248,9 @@ export class NodeXRestClient {
 
   public getProfile(): Promise<NodeXProfileSnapshot> {
     return this.request<NodeXProfileSnapshot>('/api/v1/profile');
+  }
+  public getPortfolioBalance(): Promise<PortfolioBalanceSnapshot> {
+    return this.request<PortfolioBalanceSnapshot>('/api/v1/portfolio/balance');
   }
   public getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
   public async getEngineStatus(): Promise<EngineStatus> {

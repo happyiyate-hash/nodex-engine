@@ -50,6 +50,7 @@ export const backendService = {
   },
 
   getProfile: () => apiClient.getProfile(),
+  getPortfolioBalance: () => apiClient.getPortfolioBalance(),
   getEngineStatus: () => apiClient.getEngineStatus(),
   getPaperWallet: () => apiClient.getPaperWallet(),
   getRecentTokens: (limit = 100) => apiClient.getRecentTokens(limit),

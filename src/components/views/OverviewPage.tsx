@@ -1,8 +1,9 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, NodeXEvent, TokenDiagnostic } from '../../types';
 import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import { TokenAvatar } from '../common/TokenAvatar';
+import { PortfolioBalanceSnapshot, restClient } from '../../services/rest';
 
 type ChangeDirection = 'up' | 'down' | null;
 type FeedFilter = 'detected' | 'qualified' | 'positions';
@@ -256,17 +257,30 @@ const statusStyle: Record<PipelineStatus, string> = {
 
 export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
   const { launches, events, engineStatus, openTokenDetailByMint, paperWallet, profile, positions, tokens } = useTerminal();
-  const availableBalanceSol = paperWallet ? paperWallet.available_balance_lamports / 1_000_000_000 : null;
-  const investedBalanceSol = paperWallet ? paperWallet.invested_balance_lamports / 1_000_000_000 : null;
-  const markedPositionsSol = Number(profile?.portfolio?.total_value_sol || 0);
-  const portfolioValue = Number(
-    profile?.portfolio?.portfolio_balance_sol ??
-    profile?.portfolio?.total_portfolio_value_sol ??
-    ((availableBalanceSol ?? 0) + markedPositionsSol)
+  const [livePortfolioBalance, setLivePortfolioBalance] = useState<PortfolioBalanceSnapshot | null>(null);
+  const latestSolPriceUpdate = events.find((event) => event.event_type === 'sol_price_update')?.timestamp || '';
+  useEffect(() => {
+    let active = true;
+    restClient.getPortfolioBalance()
+      .then((balance) => { if (active) setLivePortfolioBalance(balance); })
+      .catch(() => { /* Keep the last known profile valuation if the live endpoint is unavailable. */ });
+    return () => { active = false; };
+  }, [latestSolPriceUpdate]);
+
+  const portfolioSource = livePortfolioBalance ?? profile?.portfolio;
+  const portfolioValue = Number(portfolioSource?.portfolio_balance_usd ?? 0);
+  const availableBalanceUsd = portfolioSource?.available_balance_usd != null
+    ? Number(portfolioSource.available_balance_usd)
+    : null;
+  const investedBalanceUsd = portfolioSource?.invested_balance_usd != null
+    ? Number(portfolioSource.invested_balance_usd)
+    : null;
+  const profitLoss = Number(portfolioSource?.total_pnl_usd ?? 0);
+  const startingBalanceUsd = Number(portfolioSource?.starting_balance_usd ?? 0);
+  const profitLossPct = Number(
+    portfolioSource?.total_pnl_pct ??
+    (startingBalanceUsd > 0 ? (profitLoss / startingBalanceUsd) * 100 : 0)
   );
-  const profitLoss = Number(profile?.portfolio?.unrealized_pnl_sol || 0) + Number(profile?.portfolio?.realized_pnl_sol || 0);
-  const startingBalanceSol = paperWallet ? paperWallet.starting_balance_lamports / 1_000_000_000 : 0;
-  const profitLossPct = startingBalanceSol > 0 ? (profitLoss / startingBalanceSol) * 100 : 0;
   const openPositionCount = Number(profile?.portfolio?.position_count ?? positions.filter((position) => position.status === 'OPEN').length);
   const hourlyProfitLoss = typeof profile?.portfolio?.hourly_pnl_sol === 'number' ? profile.portfolio.hourly_pnl_sol : null;
   const portfolioFlash: ChangeDirection = null;
@@ -310,8 +324,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const connected = engineStatus.ws_status === 'connected' && engineStatus.running;
   const engineLabel = !engineStatus.running ? 'ENGINE PAUSED' : engineStatus.ws_status === 'connected' ? 'ENGINE ONLINE' : 'RECONNECTING';
   const formatSol = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+  const formatUsd = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const isProfitable = profitLoss >= 0;
-  const formattedPortfolio = formatSol(portfolioValue);
+  const formattedPortfolio = formatUsd(portfolioValue);
 
   const copyMint = async (event: React.MouseEvent, mint: string) => {
     event.stopPropagation();
@@ -335,10 +350,10 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
               <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
               <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
-                <span className="mr-1 shrink-0 text-[10px] font-semibold text-white/45">SOL</span>
+                <span className="mr-1 shrink-0 text-[10px] font-semibold text-white/45">$</span>
                 <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
               </div>
-              <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available {availableBalanceSol == null ? '—' : `${availableBalanceSol.toFixed(4)} SOL`}</span><span>Invested {investedBalanceSol == null ? '—' : `${investedBalanceSol.toFixed(4)} SOL`}</span></div>
+              <div className="mt-1 flex justify-center gap-3 text-[8px] text-white/35"><span>Available {availableBalanceUsd == null ? '—' : `${availableBalanceUsd.toFixed(2)}`}</span><span>Invested {investedBalanceUsd == null ? '—' : `${investedBalanceUsd.toFixed(2)}`}</span></div>
             </div>
           </div>
         </div>
