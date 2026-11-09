@@ -273,6 +273,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const availableBalanceUsd = Number(portfolioSource?.available_balance_usd ?? 0);
   const investedBalanceUsd = Number(portfolioSource?.invested_balance_usd ?? 0);
   const profitLoss = Number(portfolioSource?.total_pnl_usd ?? 0);
+  const unrealizedProfitUsd = Number(portfolioSource?.unrealized_pnl_usd ?? 0);
   const startingBalanceUsd = Number(portfolioSource?.starting_balance_usd ?? 0);
   const profitLossPct = Number(
     portfolioSource?.total_pnl_pct ??
@@ -373,13 +374,10 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Open positions</div>
             </div>
             <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
-              <div className={`truncate text-[19px] font-semibold leading-none tabular-nums ${hourlyProfitLoss == null ? 'text-white/45' : hourlyProfitLoss >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
-                {hourlyProfitLoss == null ? '—' : `${hourlyProfitLoss >= 0 ? '+' : '−'}${formatSol(Math.abs(hourlyProfitLoss))} SOL`}
+              <div className="flex min-w-0 items-baseline whitespace-nowrap text-[19px] font-semibold leading-none tabular-nums text-white">
+                <span className="mr-0.5">$</span><span className="truncate">{formatUsd(unrealizedProfitUsd)}</span>
               </div>
-              <div className="mt-1.5 flex items-center justify-between gap-2">
-                <span className="text-[9px] uppercase tracking-[0.09em] text-white/40">P&L · 1H</span>
-                <span className="text-[8px] text-white/25">No 1h snapshot</span>
-              </div>
+              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Unrealized P&amp;L</div>
             </div>
           </div>
         </div>
