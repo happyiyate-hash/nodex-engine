@@ -404,8 +404,24 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       ) : (
         <SectionHeader
           title={pageTitle}
-          description={section === 'trading' ? '' : pageDescription}
+          description={pageDescription}
           onBack={() => navigateSection('home')}
+          action={section === 'trading' ? (
+            <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
+              <span
+                aria-current={engineMode === 'paper' ? 'true' : undefined}
+                title={availableModes.paper ? 'Paper trading is available' : 'Paper trading is unavailable'}
+                className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${engineMode === 'paper' ? 'bg-white text-black' : 'text-white/35'}`}
+              >Paper</span>
+              <button
+                type="button"
+                disabled={!availableModes.real}
+                aria-disabled={!availableModes.real}
+                title={availableModes.real ? 'Real trading is available' : 'Real trading is not available yet'}
+                className={`rounded-full px-3 py-1.5 text-[10px] font-medium ${engineMode === 'real' ? 'bg-white text-black' : 'text-white/25'} disabled:cursor-not-allowed`}
+              >Real</button>
+            </div>
+          ) : undefined}
         />
       )}
 
@@ -614,14 +630,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       )}
 
       {section === 'trading' && (
-        <div className="pt-1">
-          <div className="mb-3 flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2">
-            <span className="text-[10px] text-white/45">Backend-reported mode</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/80">{engineMode}</span>
-          </div>
-          {!availableModes.real && (
-            <p className="mb-3 text-[10px] text-white/35">Real trading is not available yet. The backend currently supports paper trading only.</p>
-          )}
+        <div className="pt-0">
           <StrategyPage />
         </div>
       )}
