@@ -4,6 +4,7 @@ import {
   RefreshCw, Signal, Terminal, Trash2, X,
 } from 'lucide-react';
 import { apiClient, StorageOverview } from '../../services/rest';
+import { useTerminal } from '../../context/TerminalContext';
 
 type BrowserStorageEstimate = { usage: number | null; quota: number | null };
 
@@ -40,8 +41,8 @@ const categories: StorageCategory[] = [
     icon: Database,
     accent: 'text-emerald-300',
     tint: 'bg-emerald-400',
-    cleanable: false,
-    note: 'These files contain NodeX persisted application data. Their size is already included in root disk usage.',
+    cleanable: true,
+    note: 'Clean unused token records from SQLite. Tokens with any open or closed paper-trading position, paper balances, ledger entries, schema and the database file itself are preserved.',
   },
   {
     id: 'system_logs',
@@ -66,6 +67,7 @@ const categories: StorageCategory[] = [
 ];
 
 export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const { removeTokensByMint } = useTerminal();
   const [selected, setSelected] = useState<StorageCategory | null>(null);
   const [showCleanupConfirmation, setShowCleanupConfirmation] = useState(false);
   const [notice, setNotice] = useState('');
@@ -104,6 +106,22 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   }, []);
 
   const confirmCleanup = async () => {
+    if (selected?.id === 'database') {
+      setShowCleanupConfirmation(false);
+      setNotice('Cleaning unused token records…');
+      try {
+        const result = await apiClient.clearEngineHistory(apiClient.loadSettings().adminApiKey);
+        removeTokensByMint(result.deleted_mints || []);
+        setNotice(
+          `Cleanup completed · ${result.deleted_token_state_records ?? result.deleted_token_records} unused token states, ${result.deleted_launch_records} launch records, ${result.deleted_chart_records} chart records and ${result.deleted_raw_event_records} raw events removed. All tokens with paper-trading positions were preserved.`,
+        );
+        await refresh(false);
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : 'SQLite token cleanup failed.');
+      }
+      setSelected(null);
+      return;
+    }
     if (selected?.id === 'local-storage') {
       try {
         window.localStorage.clear();
@@ -278,7 +296,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         <Archive className="mt-0.5 h-4 w-4 shrink-0 text-white/40" />
         <div>
           <p className="text-[11px] font-semibold text-white/75">Protected storage</p>
-          <p className="mt-1 text-[10px] leading-relaxed text-white/38">Wallet data, paper balances, trades and the SQLite database are never included in routine log cleanup.</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-white/38">The SQLite file, schema, wallet data, paper balances and trades remain intact. Database cleanup removes only token records that have never entered paper trading.</p>
         </div>
       </div>
 
@@ -347,7 +365,11 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   ? 'This is one combined SQLite file measurement. It is already counted inside the EC2 root filesystem usage above.'
                   : serverStorage?.system_journal.note || selected.note}
             </p>
-            {selected.id === 'system_logs' ? (
+            {selected.id === 'database' ? (
+              <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
+                <Trash2 className="h-3.5 w-3.5" /> Clean unused tokens
+              </button>
+            ) : selected.id === 'system_logs' ? (
               <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
                 <Trash2 className="h-3.5 w-3.5" /> Clean system journal
               </button>
@@ -371,13 +393,15 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-400/[0.12] bg-amber-400/[0.05]"><Trash2 className="h-4 w-4 text-amber-200/80" /></span>
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} aria-label="Close cleanup confirmation" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
             </div>
-            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">{selected.id === 'system_logs' ? 'Clean system journal?' : 'Clear local storage?'}</h2>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.id === 'system_logs'
-              ? 'This sends an authenticated request to the backend to rotate and vacuum archived system-wide journal files. It does not clean SQLite, token records, paper-trading data or browser storage. The server may reject the request if cleanup is disabled or OS permissions are insufficient.'
-              : "This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included."}</p>
+            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">{selected.id === 'database' ? 'Clean unused token records?' : selected.id === 'system_logs' ? 'Clean system journal?' : 'Clear local storage?'}</h2>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.id === 'database'
+              ? 'This sends an authenticated request to SQLite cleanup. It removes rejected, failed-scan, failed-metadata and other tokens that have never entered paper trading, plus their launch and chart history. Any token with an open or closed paper position is preserved. Paper wallet, ledger, balances, schema, active discovery and the SQLite file itself are not deleted.'
+              : selected.id === 'system_logs'
+                ? 'This sends an authenticated request to the backend to rotate and vacuum archived system-wide journal files. It does not clean SQLite token records, paper-trading data or browser storage. The server may reject the request if cleanup is disabled or OS permissions are insufficient.'
+                : "This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included."}</p>
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">{selected.id === 'system_logs' ? 'Clean journal' : 'Clear everything'}</button>
+              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">{selected.id === 'database' ? 'Clean unused tokens' : selected.id === 'system_logs' ? 'Clean journal' : 'Clear everything'}</button>
             </div>
           </section>
         </div>
