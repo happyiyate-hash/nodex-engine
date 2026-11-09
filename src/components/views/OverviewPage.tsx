@@ -626,7 +626,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       </div>
     </div>
   );
-}; + formatUsd(investedBalanceUsd)}</span></span></div>
             </div>
           </div>
         </div>
