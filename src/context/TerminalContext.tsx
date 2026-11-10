@@ -186,7 +186,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     venue, safety_status: payload.safety_status || previous?.safety_status || 'warning',
     qualification_status: qualification, rejection_reason: payload.reason || payload.decision_reason || previous?.rejection_reason,
     diagnostics: incomingDiagnostic
-      ? [...(previous?.diagnostics || []).filter((item) => !(item.stage === incomingDiagnostic.stage && item.message === incomingDiagnostic.message && item.occurred_at === incomingDiagnostic.occurred_at)), incomingDiagnostic as DiscoveredToken['diagnostics'][number]].slice(-50)
+      ? [...(previous?.diagnostics || []).filter((item) => !(item.stage === incomingDiagnostic.stage && item.message === incomingDiagnostic.message && item.occurred_at === incomingDiagnostic.occurred_at)), incomingDiagnostic as NonNullable<DiscoveredToken['diagnostics']>[number]].slice(-50)
       : previous?.diagnostics || [],
     safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(payload.safety_details || {}) },
     price_history_5m: history.slice(-300),
