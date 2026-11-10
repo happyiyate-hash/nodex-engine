@@ -301,7 +301,18 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
     venue: venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun',
     safety_status: snapshot.security?.decision === 'APPROVED' ? 'verified' : previous?.safety_status || 'warning',
     qualification_status: qualificationStatus,
-    diagnostics: Array.isArray(snapshot.diagnostics) ? snapshot.diagnostics : previous?.diagnostics || [],
+    diagnostics: (() => {
+      const incoming = Array.isArray(snapshot.diagnostics) ? snapshot.diagnostics : [];
+      const combined = [...(previous?.diagnostics || [])];
+      for (const diagnostic of incoming) {
+        const duplicate = combined.some((item) =>
+          item.stage === diagnostic.stage && item.message === diagnostic.message &&
+          item.occurred_at === diagnostic.occurred_at
+        );
+        if (!duplicate) combined.push(diagnostic);
+      }
+      return combined.slice(-50);
+    })(),
     safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(snapshot.security || {}) },
     price_history_5m: priceHistory.length ? priceHistory.slice(-500) : previous?.price_history_5m || [],
   };
