@@ -357,7 +357,18 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const connected = engineStatus.ws_status === 'connected' && engineStatus.running;
   const engineLabel = !engineStatus.running ? 'ENGINE PAUSED' : engineStatus.ws_status === 'connected' ? 'ENGINE ONLINE' : 'RECONNECTING';
   const formatSol = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
-  const formatUsd = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 });
+  // Keep the USD balance at five visible decimal places in total, shifting
+  // one decimal place to the integer side for every additional integer digit.
+  // Never show fewer than two decimals; this changes display only, not value.
+  const formatUsd = (value: number) => {
+    const absolute = Math.abs(value);
+    const integerDigits = absolute >= 1 ? Math.floor(Math.log10(absolute)) + 1 : 1;
+    const fractionDigits = Math.max(2, 6 - integerDigits);
+    return absolute.toLocaleString('en-US', {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    });
+  };
   const isProfitable = profitLoss >= 0;
   const formattedPortfolio = formatUsd(portfolioValue);
 
