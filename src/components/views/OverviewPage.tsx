@@ -202,7 +202,7 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
     tokenScanStatus === 'failed'
   ) {
     status = 'FAILED';
-    reason = String(scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || persistedReason || 'Security scan failed. This token remains unverified and blocked.');
+    reason = String(persistedReason || scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || 'Security scan failed. This token remains unverified and blocked.');
     updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
   } else if (security.diagnostic_only === true) {
     status = 'UNVERIFIED';
@@ -214,15 +214,15 @@ const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: 
     scanCompleted && (['unverified', 'unknown', 'failed'].includes(terminalStatus) || decision.includes('unverified') || decision.includes('unknown'))
   ) {
     status = 'UNVERIFIED';
-    reason = String(scanFailed?.data?.decision_reason || scanCompleted?.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || tokenScanReason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
+    reason = String(persistedReason || tokenScanReason || scanFailed?.data?.decision_reason || scanCompleted?.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
     updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
   } else if (strategyRejected || decision.includes('reject') || persistedDecision === 'rejected' || persistedStatus === 'rejected') {
     status = 'REJECTED';
-    reason = String(strategyRejected?.data?.reason || strategyRejected?.data?.message || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || 'The token did not pass the risk or strategy checks.');
+    reason = String(persistedReason || strategyRejected?.data?.reason || strategyRejected?.data?.message || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'The token did not pass the risk or strategy checks.');
     updatedAt = (strategyRejected || scanUpdate)?.timestamp || security.scanned_at || launch.detected_at;
   } else if (decision.includes('approv') || decision.includes('qualif') || persistedDecision === 'approved') {
     status = 'QUALIFIED';
-    reason = String(scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || persistedReason || 'Security scan completed and strategy filters passed.');
+    reason = String(persistedReason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'Security scan completed and strategy filters passed.');
     updatedAt = scanUpdate?.timestamp || security.scanned_at || launch.detected_at;
   } else if (scanStarted || scanUpdate || persistedStatus === 'scanning' || tokenScanStatus === 'scanning' || tokenQualification === 'under_analysis') {
     status = 'ANALYZING';
@@ -542,7 +542,21 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
                   // Prefer the live event while present, then fall back to the full
                   // persisted security report carried by token_state_updated.
-                  const report = { ...(tokenData.safety_details || {}), ...(reportEvent?.data || {}) };
+                  // Persisted token state is authoritative; transient scan events are fallback only.
+                  // This prevents an older scan payload from replacing a newer authority-monitor update.
+                  const persistedReport = tokenData.safety_details && typeof tokenData.safety_details === 'object'
+                    ? tokenData.safety_details
+                    : {};
+                  const eventReport = reportEvent?.data && typeof reportEvent.data === 'object'
+                    ? reportEvent.data
+                    : {};
+                  const report = { ...eventReport, ...persistedReport };
+                  if (!Array.isArray(report.checks) || report.checks.length === 0) {
+                    if (Array.isArray(eventReport.checks) && eventReport.checks.length > 0) report.checks = eventReport.checks;
+                  }
+                  if (!Array.isArray(report.provider_responses) || report.provider_responses.length === 0) {
+                    if (Array.isArray(eventReport.provider_responses) && eventReport.provider_responses.length > 0) report.provider_responses = eventReport.provider_responses;
+                  }
                   const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const monitoringData = monitoringEvent?.data;
 
