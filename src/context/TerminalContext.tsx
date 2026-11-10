@@ -133,7 +133,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : event.event_type === 'token_scan_completed' ? String(data.status || 'completed')
     : event.event_type === 'token_scan_failed' ? 'failed'
     : previous?.scan_status;
-  const incomingDiagnostic = event.event_type === 'token_diagnostic' ? {
+  const incomingDiagnostic: NonNullable<DiscoveredToken['diagnostics']>[number] | null = event.event_type === 'token_diagnostic' ? {
     ...data,
     mint_address: mint,
     occurred_at: String(data.occurred_at || event.timestamp),
