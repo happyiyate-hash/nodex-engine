@@ -87,12 +87,8 @@ const emptyStrategy: StrategyConfig = {
 
 const TerminalContext = createContext<TerminalContextType | null>(null);
 
-const STORAGE_KEY = 'nodex.shared-terminal-state.v1';
-type PersistedTerminalState = { tokens?: DiscoveredToken[]; launches?: TokenLaunchRecord[]; events?: NodeXEvent[] };
-function readPersistedState(): PersistedTerminalState {
-  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) as PersistedTerminalState : {}; }
-  catch { return {}; }
-}
+// Discovery, scan diagnostics and event history are session-memory caches.
+// The backend remains the durable source for wallet, positions and account state.
 const defaultSafetyDetails: DiscoveredToken['safety_details'] = {
   mint_authority: 'unknown', freeze_authority: 'unknown', top_10_holders_pct: 0,
   liquidity_locked: false, liquidity_locked_pct: 0, honeypot_risk: 'unknown',
@@ -356,11 +352,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [engineStatus, setEngineStatus] = useState<EngineStatus>(emptyStatus);
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [tokens, setTokens] = useState<DiscoveredToken[]>(() => readPersistedState().tokens || []);
-  const [launches, setLaunches] = useState<TokenLaunchRecord[]>(() => readPersistedState().launches || []);
+  const [tokens, setTokens] = useState<DiscoveredToken[]>([]);
+  const [launches, setLaunches] = useState<TokenLaunchRecord[]>([]);
   const [paperWallet, setPaperWallet] = useState<PaperWalletSnapshot | null>(null);
   const [profile, setProfile] = useState<NodeXProfileSnapshot | null>(null);
-  const [events, setEvents] = useState<NodeXEvent[]>(() => readPersistedState().events || []);
+  const [events, setEvents] = useState<NodeXEvent[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<NodeXEvent | null>(null);
   const [selectedToken, setSelectedToken] = useState<DiscoveredToken | null>(null);
   const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>(emptyStrategy);
@@ -555,21 +551,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setLaunches((previous) => previous.filter((launch) => launch.mint_address !== mint));
         }
       }
-      if (event.event_type === 'token_state_updated') {
-        const snapshot = event.data as Record<string, any> | undefined;
-        if (snapshot) {
-          const mint = String(snapshot.mint_address || snapshot.mint || '');
-          if (mint) {
-            setTokens((previous) => {
-              const mapped = mapTokenDetailSnapshot(snapshot, previous.find((token) => token.mint === mint));
-              return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500) : previous;
-            });
-            setSelectedToken((previous) => previous?.mint === mint
-              ? mapTokenDetailSnapshot(snapshot, previous) || previous : previous);
-          }
-        }
-      }
-      if (event.event_type === 'token_detail_snapshot') {
+       if (event.event_type === 'token_detail_snapshot') {
         const snapshot = event.data?.snapshot as Record<string, any> | undefined;
         if (snapshot) {
           const mint = String(event.data?.mint_address || snapshot.mint_address || '');
@@ -721,50 +703,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
 
-  // Debounce and bound persistence: never serialize hundreds of full token/event
-  // objects synchronously for every incoming WebSocket tick.
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        const durableEvents = events.filter((event) =>
-          !['market_tick','market_price_update','token_market_update','token_statistics_update','chart_candle_update','chart_candle_closed','pumpswap_activity','pumpswap_volume_update','market_account_update'].includes(event.event_type)
-        ).slice(0, 100);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          tokens: tokens.slice(0, 100).map((token) => ({
-            ...token,
-            price_history_5m: (token.price_history_5m || []).slice(-60),
-          })),
-          launches: launches.slice(0, 100),
-          events: durableEvents,
-        }));
-      } catch (error) {
-        console.warn('Could not persist NodeX terminal state:', error);
-      }
-    }, 750);
-    return () => window.clearTimeout(timer);
-  }, [tokens, launches, events]);
-
-  useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || !event.newValue) return;
-      try {
-        const persisted = JSON.parse(event.newValue) as PersistedTerminalState;
-        if (Array.isArray(persisted.tokens)) {
-          setTokens(persisted.tokens);
-          setSelectedToken((current) => {
-            if (!current) return current;
-            return persisted.tokens!.find((token) => token.mint === current.mint) || current;
-          });
-        }
-        if (Array.isArray(persisted.launches)) setLaunches(persisted.launches);
-        if (Array.isArray(persisted.events)) setEvents(persisted.events);
-      } catch (error) {
-        console.warn('Ignoring invalid NodeX shared state update:', error);
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  // Discovery records, scan diagnostics and transient events intentionally stay in
+  // memory. Avoid serializing large live snapshots to localStorage on every stream
+  // update; durable wallet and position state is loaded from the backend instead.
 
   const sendPause = useCallback((pause: boolean) => {
     const sent = wsService.sendCommand(pause ? 'pause' : 'resume');
