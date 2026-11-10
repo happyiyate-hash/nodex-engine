@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
+import { useToast } from '../ui/ToastProvider';
 import {
   Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
   TrendingUp, X, Plus, Pencil, Trash2,
@@ -50,6 +51,7 @@ const ToggleRow = ({
 
 export const StrategyPage: React.FC = () => {
   const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig, engineStatus } = useTerminal();
+  const { showToast, updateToast } = useToast();
   const paperMode = engineStatus.operating_mode.toLowerCase() !== 'real';
   const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig });
   const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
@@ -57,7 +59,6 @@ export const StrategyPage: React.FC = () => {
   const [customValue, setCustomValue] = useState('');
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState('');
   const [ownerSheetOpen, setOwnerSheetOpen] = useState(false);
   const [editingOwnerIndex, setEditingOwnerIndex] = useState<number | null>(null);
   const [ownerAddress, setOwnerAddress] = useState('');
@@ -76,16 +77,38 @@ export const StrategyPage: React.FC = () => {
   };
 
   const applySettings = async () => {
+    if (saving) return;
     setSaving(true);
-    setSaveMessage('');
+    const toastId = showToast({
+      title: 'Saving trading configuration…',
+      description: 'Sending the updated strategy settings to the NodeX backend.',
+      tone: 'loading',
+    });
     try {
       const saved = await saveStrategyConfig(form);
       if (saved) {
         setAppliedConfig({ ...form });
-        setSaveMessage('Trading configuration saved to the backend.');
+        updateToast(toastId, {
+          title: 'Trading configuration saved',
+          description: 'The backend accepted the updated settings and returned the saved configuration.',
+          tone: 'success',
+          duration: 4500,
+        });
       } else {
-        setSaveMessage('The backend did not accept this configuration.');
+        updateToast(toastId, {
+          title: 'Configuration was not saved',
+          description: 'The backend did not accept the update. Review the backend error and try again.',
+          tone: 'error',
+          duration: 6500,
+        });
       }
+    } catch (error) {
+      updateToast(toastId, {
+        title: 'Configuration save failed',
+        description: error instanceof Error ? error.message : 'The backend could not save the trading configuration.',
+        tone: 'error',
+        duration: 6500,
+      });
     } finally {
       setSaving(false);
     }
@@ -115,10 +138,12 @@ export const StrategyPage: React.FC = () => {
     else next[editingOwnerIndex] = owner;
     update('preferred_owners', next);
     setOwnerSheetOpen(false);
+    showToast({ title: editingOwnerIndex === null ? 'Preferred owner added' : 'Preferred owner updated', description: 'This change is pending. Press Apply to save it to the backend.', tone: 'info' });
   };
 
   const removeOwner = (index: number) => {
     update('preferred_owners', form.preferred_owners.filter((_, itemIndex) => itemIndex !== index));
+    showToast({ title: 'Preferred owner removed from draft', description: 'Press Apply to save this change to the backend.', tone: 'info' });
   };
 
   const openTarget = (target: RiskTarget) => {
@@ -345,7 +370,6 @@ export const StrategyPage: React.FC = () => {
           {saving ? 'Saving…' : 'Apply'}
         </button>
       )}
-      {saveMessage && <p className="fixed bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] right-4 z-[70] max-w-[min(90vw,320px)] rounded-lg border border-white/[0.10] bg-[#171717] px-3 py-2 text-[10px] text-white/75">{saveMessage}</p>}
 
       {activeTarget && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveTarget(null); }}>
