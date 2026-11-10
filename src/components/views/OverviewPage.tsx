@@ -260,13 +260,23 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const { launches, events, engineStatus, openTokenDetailByMint, profile, positions, tokens } = useTerminal();
   const [livePortfolioBalance, setLivePortfolioBalance] = useState<PortfolioBalanceSnapshot | null>(null);
   const latestSolPriceUpdate = events.find((event) => event.event_type === 'sol_price_update')?.timestamp || '';
+  const latestPortfolioUpdate = events.find((event) => event.event_type === 'portfolio_summary_updated')?.timestamp || '';
   useEffect(() => {
     let active = true;
-    restClient.getPortfolioBalance()
-      .then((balance) => { if (active) setLivePortfolioBalance(balance); })
-      .catch(() => { /* Keep the last known profile valuation if the live endpoint is unavailable. */ });
-    return () => { active = false; };
-  }, [latestSolPriceUpdate]);
+    const refreshPortfolio = () => {
+      restClient.getPortfolioBalance()
+        .then((balance) => { if (active) setLivePortfolioBalance(balance); })
+        .catch(() => { /* Keep the last known authoritative valuation if REST is temporarily unavailable. */ });
+    };
+    refreshPortfolio();
+    // SOL quotes refresh every 10 seconds on the backend. Poll as a recovery
+    // path as well, so a missed WebSocket event cannot freeze the dashboard.
+    const interval = window.setInterval(refreshPortfolio, 10000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [latestSolPriceUpdate, latestPortfolioUpdate]);
 
   const portfolioSource = livePortfolioBalance ?? profile?.portfolio;
   const portfolioValue = Number(portfolioSource?.portfolio_balance_usd ?? 0);
