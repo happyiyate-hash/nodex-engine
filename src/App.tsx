@@ -10,6 +10,7 @@ import { StorageManagementPage } from './components/views/StorageManagementPage'
 import { TokenDetailPage } from './components/views/TokenDetailPage';
 import { LogsPage } from './components/views/LogsPage';
 import { installFetchLogger } from './services/engineLogs';
+import { ToastProvider } from './components/ui/ToastProvider';
 
 try {
   installFetchLogger();
@@ -198,5 +199,5 @@ const MainLayout: React.FC = () => {
 };
 
 export default function App() {
-  return <TerminalProvider><MainLayout /></TerminalProvider>;
+  return <ToastProvider><TerminalProvider><MainLayout /></TerminalProvider></ToastProvider>;
 };
