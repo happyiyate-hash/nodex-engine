@@ -359,14 +359,14 @@ export class NodeXRestClient {
   public async getToken(_mint:string): Promise<DiscoveredToken|null> { throw new Error('Complete token detail route is not implemented.'); }
   public async getEvents(_limit=100): Promise<NodeXEvent[]> { throw new Error('Historical events route is not implemented. Live events use WebSocket.'); }
   public async getStrategy(): Promise<{config:StrategyConfig;decisions:StrategyDecision[]}> {
-    const result = await this.request<{config:StrategyConfig}>('/api/v1/config/trading');
+    const result = await this.request<{config:StrategyConfig}>('/api/config');
     return { config: result.config, decisions: [] };
   }
   public async updateStrategy(config:StrategyConfig): Promise<{status:string;config:StrategyConfig}> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the Engine API key in Settings before updating trading configuration.');
-    return this.request('/api/v1/config/trading', {
-      method: 'PUT',
+    return this.request('/api/config', {
+      method: 'PATCH',
       headers: { 'X-NodeX-Admin-Key': key },
       body: JSON.stringify(config),
     });
