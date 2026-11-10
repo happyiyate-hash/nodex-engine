@@ -252,6 +252,11 @@ export interface NodeXEvent {
   data: Record<string, any>;
 }
 
+export interface PreferredOwner {
+  address: string;
+  label: string;
+}
+
 export interface StrategyConfig {
   min_liquidity_usd: number;
   max_entry_price_usd: number;
@@ -273,6 +278,8 @@ export interface StrategyConfig {
   diagnostic_mode: boolean;
   block_unverified_trades: boolean;
   execution_enabled: boolean;
+  whitelist_only_mode: boolean;
+  preferred_owners: PreferredOwner[];
 }
 
 export interface StrategyConditionCheck {
