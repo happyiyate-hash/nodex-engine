@@ -83,6 +83,8 @@ const emptyStrategy: StrategyConfig = {
   diagnostic_mode: true,
   block_unverified_trades: true,
   execution_enabled: false,
+  whitelist_only_mode: false,
+  preferred_owners: [],
 };
 
 const TerminalContext = createContext<TerminalContextType | null>(null);
