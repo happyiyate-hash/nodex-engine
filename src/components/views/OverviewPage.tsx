@@ -431,7 +431,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
               <div className="min-w-0 whitespace-nowrap text-[19px] font-semibold leading-none tabular-nums" style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}>
                 {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'
-              </div>
               <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Unrealized P&amp;L</div>
             </div>
           </div>
