@@ -358,8 +358,28 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const engineLabel = !engineStatus.running ? 'ENGINE PAUSED' : engineStatus.ws_status === 'connected' ? 'ENGINE ONLINE' : 'RECONNECTING';
   const formatSol = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
   const formatUsd = (value: number) => Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Display-only precision: start at five decimals and remove one for each
+  // additional integer digit, never showing fewer than two decimal places.
+  // Truncation keeps the displayed value from rounding up or down.
+  const formatPortfolio = (value: number) => {
+    const absolute = Math.abs(value);
+    const integerDigits = Math.max(1, Math.floor(absolute).toString().length);
+    const decimalPlaces = Math.max(2, 6 - integerDigits);
+    const factor = 10 ** decimalPlaces;
+    const truncated = Math.trunc(absolute * factor) / factor;
+    return truncated.toLocaleString('en-US', {
+      minimumFractionDigits: decimalPlaces,
+      maximumFractionDigits: decimalPlaces,
+    });
+  };
+  const formatPnlDisplay = (value: number) => {
+    const absolute = Math.abs(value);
+    const factor = 10 ** 7;
+    const truncated = Math.trunc(absolute * factor) / factor;
+    return truncated.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 7 });
+  };
   const isProfitable = profitLoss >= 0;
-  const formattedPortfolio = formatUsd(portfolioValue);
+  const formattedPortfolio = formatPortfolio(portfolioValue);
 
   const copyMint = async (event: React.MouseEvent, mint: string) => {
     event.stopPropagation();
@@ -410,7 +430,253 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             </div>
             <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
               <div className="min-w-0 whitespace-nowrap text-[19px] font-semibold leading-none tabular-nums" style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}>
-                {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'$'}{Math.abs(unrealizedProfitUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 20 })}
+                {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'
+              </div>
+              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Unrealized P&amp;L</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 flex shrink-0 flex-col px-3 pb-0 sm:px-4 sm:pb-0">
+          <div className="mb-2 flex shrink-0 items-center gap-1.5">
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mint..." aria-label="Search tokens" className="h-7 w-full rounded-md border border-white/[0.07] bg-[#101010] pl-7 pr-2 text-[9px] text-white placeholder:text-white/25 outline-none focus:border-white/20" />
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/[0.07] bg-[#0d0d0d] p-0.5" role="group" aria-label="Token feed view">
+              <button type="button" onClick={() => setFilter('detected')} aria-pressed={filter === 'detected'} className={`rounded px-2 py-1 text-[8px] font-semibold transition-colors ${filter === 'detected' ? 'bg-[#292929] text-white' : 'text-white/40 hover:text-white/70'}`}>Detect</button>
+              <button type="button" onClick={() => setFilter('positions')} aria-pressed={filter === 'positions'} className={`rounded px-2 py-1 text-[8px] font-semibold transition-colors ${filter === 'positions' ? 'bg-[#292929] text-white' : 'text-white/40 hover:text-white/70'}`}>Position</button>
+            </div>
+          </div>
+
+        </div>
+      </section>}
+
+      <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 sm:px-4 sm:pb-0"}`}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
+            {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
+              <div className="space-y-1.5 pb-2">
+                {filteredPositions.length === 0 && backendPaperEntries.length === 0 ? (
+                  <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
+                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]"><Activity className="h-4 w-4 text-white/35" /></div>
+                    <div className="text-[11px] font-medium text-white/75">No purchased tokens yet</div>
+                    <p className="mt-1.5 max-w-[230px] text-[10px] leading-relaxed text-white/35">Paper positions will appear here after a buy is executed.</p>
+                  </div>
+                ) : (
+                  <>
+                    {filteredPositions.map((position) => <article key={position.id} role="button" tabIndex={0}
+                      onClick={() => openTokenDetailByMint(position.mint, {
+                        name: position.name,
+                        symbol: position.symbol,
+                        launch_time: position.entry_time,
+                        current_price_sol: position.current_price_sol,
+                        venue: position.venue,
+                        qualification_status: 'bought_paper',
+                        safety_status: 'warning',
+                      })}
+                      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(position.mint); } }}
+                      className="cursor-pointer border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 focus:outline-none focus:ring-1 focus:ring-white/30">
+                      <div className="flex items-center gap-2.5">
+                        <TokenAvatar
+                          symbol={position.symbol || position.name || position.mint}
+                          logoUrl={position.logo_url || tokens.find((token) => token.mint === position.mint)?.logo_url}
+                          size="lg"
+                          className="h-9 w-9"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-[11px] font-semibold text-white">{position.name || position.mint.slice(0, 7) + '…' + position.mint.slice(-5)}</span>
+                            {position.symbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${position.symbol}</span>}
+                          </div>
+                          <div className="mt-0.5 text-[8px] text-white/35">{position.amount_tokens.toLocaleString('en-US',{maximumFractionDigits:2})} tokens · {position.status === 'OPEN' ? 'OPEN POSITION' : 'CLOSED'}</div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className={'text-[15px] font-bold leading-none tracking-tight tabular-nums ' + ((position.pnl_sol ?? 0) >= 0 ? 'text-[#83b982]' : 'text-[#c77b7b]')}>
+                            {position.pnl_sol == null ? '—' : (position.pnl_sol >= 0 ? '+' : '−') + formatSol(Math.abs(position.pnl_sol)) + ' SOL'}
+                          </div>
+                          <div className={'mt-1 text-[9px] font-semibold tabular-nums ' + (position.pnl_pct >= 0 ? 'text-[#83b982]/80' : 'text-[#c77b7b]/80')}>{position.pnl_pct >= 0 ? '+' : ''}{position.pnl_pct.toFixed(2)}%</div>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 border-t border-white/[0.055] pt-2 text-[8px]">
+                        <div><div className="text-white/30">Entry</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.entry_price_sol > 0 ? position.entry_price_sol.toFixed(8) + ' SOL' : '—'}</div></div>
+                        <div><div className="text-white/30">Current</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.current_price_sol > 0 ? position.current_price_sol.toFixed(8) + ' SOL' : '—'}</div></div>
+                        <div><div className="text-white/30">Value</div><div className="mt-0.5 font-medium tabular-nums text-white/75">{position.current_position_value_sol == null ? '—' : formatSol(position.current_position_value_sol) + ' SOL'}</div></div>
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[8px] text-white/35">
+                        <span>{position.take_profit_target_pct > 0 ? 'Take profit ' + position.take_profit_target_pct + '%' : 'Take profit —'}</span>
+                        <span>{position.stop_loss_target_pct > 0 ? 'Stop loss ' + position.stop_loss_target_pct + '%' : 'Stop loss —'}</span>
+                        <span>{position.venue}</span>
+                      </div>
+                    </article>)}
+                    {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} role="button" tabIndex={0} onClick={() => openTokenDetailByMint(item.launch.mint_address)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(item.launch.mint_address); } }} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-white/30">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black">
+                          <span className="text-[11px] font-semibold text-white/70">S</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[10px] font-semibold text-white">{item.launch.mint_address.slice(0, 8)}…{item.launch.mint_address.slice(-5)}</div>
+                          <div className="mt-0.5 text-[8px] text-white/35">PAPER POSITION · {item.launch.source || 'Solana'}</div>
+                        </div>
+                        <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-2 py-1 text-[8px] font-semibold text-[#83b982]">BOUGHT</span>
+                      </div>
+                      <div className="mt-2 border-t border-white/[0.055] pt-2 text-[8px] text-white/45">Mint: {item.launch.mint_address}</div>
+                    </article>)}
+                  </>
+                )}
+              </div>
+            ) : filteredLaunches.length === 0 ? (
+              <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.025]"><Activity className="h-4 w-4 text-white/35" /></div>
+                <div className="text-[11px] font-medium text-white/75">{filter === 'qualified' ? 'No qualified tokens yet' : 'Waiting for token discoveries'}</div>
+                <p className="mt-1.5 max-w-[230px] text-[10px] leading-relaxed text-white/35">{filter === 'qualified' ? 'Tokens will appear here after passing the security and strategy checks.' : 'New Solana launches will appear here as soon as the backend confirms them.'}</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5 pb-2">
+                {filteredLaunches.map((item) => {
+                  const { launch, status, reason, updatedAt } = item;
+                  const matchesLaunch = (event: NodeXEvent) => event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address;
+                  const progressEvent = events.find((event) => event.event_type === 'token_scan_progress' && matchesLaunch(event));
+                  const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && matchesLaunch(event))
+                    || progressEvent
+                    || events.find((event) => ['token_scan_completed', 'token_scan_failed'].includes(event.event_type) && matchesLaunch(event));
+                  const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
+                  // Prefer the live event while present, then fall back to the full
+                  // persisted security report carried by token_state_updated.
+                  const report = { ...(tokenData.safety_details || {}), ...(reportEvent?.data || {}) };
+                  const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
+                  const monitoringData = monitoringEvent?.data;
+
+                  const checks = Array.isArray(report?.checks) ? report.checks : [];
+                  const price = Number(tokenData.current_price ?? tokenData.price_usd ?? tokenData.price ?? report?.price_usd ?? report?.current_price);
+                  const marketCap = Number(tokenData.market_cap ?? tokenData.market_cap_usd ?? report?.market_cap_usd);
+                  const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
+                  const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
+                  const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
+                  const checkRows = checks;
+                  const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
+                  const scanStage = String(progressEvent?.data?.stage || tokenData.scan_stage || report?.stage || '').replace(/[_-]+/g, ' ').trim();
+                  const errorExpanded = expandedErrors.includes(launch.mint_address);
+                  return (
+                    <article key={launch.id || launch.signature} className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
+                          {(() => {
+                            const imageUrl = tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image;
+                            return <TokenAvatar symbol={cardSymbol || cardName} logoUrl={imageUrl} size="lg" className="h-8 w-8 border-0" />;
+                          })()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-[11px] font-semibold leading-tight text-white">{cardName}</span>
+                            {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${cardSymbol}</span>}
+                          </div>
+                          <div className="mt-0.5 truncate text-[8px] leading-tight text-white/35">{launch.source || 'Solana'} · {timeAgo(launch.detected_at)}</div>
+                          {monitoringData && <div className="mt-1 flex items-center gap-1.5 text-[8px] font-medium text-sky-300/75">
+                            <span className="h-1 w-1 rounded-full bg-sky-300" />
+                            WATCHING · Authorities {String(monitoringData.authority_status || 'unknown').toUpperCase()} · {Number(monitoringData.rechecks || 0)} rechecks
+                          </div>}
+                        </div>
+                        {isQualified
+                          ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
+                          : <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' || status === 'FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : status === 'UNVERIFIED' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
+                            {status === 'ANALYZING' && <span className="h-1 w-1 rounded-full bg-current" />}
+                            {status === 'ANALYZING' ? 'SCANNING' : status === 'UNVERIFIED' ? 'UNVERIFIED' : status === 'FAILED' ? 'SCAN FAILED' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
+                          </span>}
+                      </div>
+                      <div className="mt-1.5 border-t border-white/[0.055] pt-1.5">
+                        {status === 'ANALYZING' ? (() => {
+                          const progress = Number(report?.progress_pct ?? report?.progress);
+                          return <div className="flex min-h-[22px] items-center gap-2">
+                            <span className="text-[10px] font-medium tracking-wide text-[#d2b47c]">{scanStage ? 'Checking ' + scanStage : report?.message || 'Security scan in progress'}</span>
+                            {Number.isFinite(progress) && progress >= 0 && <span className="ml-auto text-[9px] tabular-nums text-white/45">{Math.min(100, Math.round(progress))}%</span>}
+                          </div>;
+                        })() : (
+                          <div className="flex min-h-[22px] items-center justify-between gap-2">
+                            <span className={`text-[9px] font-medium ${status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'text-[#83b982]' : status === 'REJECTED' || status === 'BUY FAILED' ? 'text-[#d2a064]' : 'text-white/45'}`}>
+                              {status === 'QUALIFIED' || status === 'PAPER ENTRY' ? 'Security checks completed' : status === 'REJECTED' || status === 'BUY FAILED' ? 'Risk checks flagged this token' : status === 'UNVERIFIED' ? 'Scan incomplete — automatic entry blocked' : status === 'FAILED' ? 'Security scan failed — automatic entry blocked' : 'Waiting for security scan'}
+                            </span>
+                            <span className="text-[8px] text-white/30">{checkRows.length} checks</span>
+                          </div>
+                        )}
+                        <button type="button" onClick={() => setExpandedScans((current) => current.includes(launch.mint_address) ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])} className="mt-1 flex w-full items-center justify-between text-left text-[8px] text-white/35 transition-colors hover:text-white/65">
+                          <span>{expandedScans.includes(launch.mint_address) ? 'Hide scan details' : 'View scan details'}</span>
+                          <span className="text-[10px]">{expandedScans.includes(launch.mint_address) ? '−' : '+'}</span>
+                        </button>
+                        {expandedScans.includes(launch.mint_address) && <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1.5 bg-transparent py-2">
+                          {checkRows.map((check: any, index: number) => {
+                            const result = String(check.status || 'PENDING').toUpperCase();
+                            const passed = ['PASSED', 'PASS', 'OK', 'SAFE', 'CLEAR'].includes(result);
+                            const flagged = ['FAILED', 'FAIL', 'REJECTED', 'RISKY', 'WARNING', 'RISK', 'DETECTED'].includes(result);
+                            return <div key={check.name || index} className="flex min-w-0 items-center justify-between gap-1 text-[8px]">
+                              <span className="truncate text-white/55">{String(check.name || 'Security check').replace(/_/g, ' ')}</span>
+                              <span className={`shrink-0 font-semibold ${passed ? 'text-[#83b982]' : flagged ? 'text-amber-300' : 'text-white/35'}`}>{passed ? 'PASS' : flagged ? (result === 'DETECTED' ? 'RISK' : result) : result}</span>
+                            </div>;
+                          })}
+                          {report?.risk_score !== undefined && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] text-white/55">Risk score: <span className="font-semibold text-white/80">{String(report.risk_score)}</span></div>}
+                          {report?.diagnostic_only === true && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-amber-300/75">Diagnostic-only mode · verification disabled</div>}
+                          {report?.diagnostic_assessment !== undefined && report?.diagnostic_assessment !== null && <details className="col-span-2 border-t border-white/[0.06] pt-1">
+                            <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">Provisional parser assessment JSON (not used to verify)</summary>
+                            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(report.diagnostic_assessment, null, 2)}</pre>
+                          </details>}
+                          {report?.rugcheck?.raw_response !== undefined && <details className="col-span-2 border-t border-white/[0.06] pt-1">
+                            <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">RugCheck provider response JSON</summary>
+                            <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(report.rugcheck.raw_response, null, 2)}</pre>
+                          </details>}
+                          {Array.isArray(report?.provider_responses) && report.provider_responses.map((providerResponse: any, index: number) => <details key={providerResponse.id || providerResponse.method || index} className="col-span-2 border-t border-white/[0.06] pt-1">
+                            <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">{String(providerResponse.provider || 'Provider')} · {String(providerResponse.method || 'request')} response JSON</summary>
+                            <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(providerResponse.response ?? providerResponse, null, 2)}</pre>
+                          </details>)}
+                          {reason && <div className="col-span-2 border-t border-white/[0.06] pt-1 text-[8px] leading-relaxed text-white/45">{reason}</div>}
+                        </div>}
+                      </div>
+                      {diagnostics.length > 0 && <section className="mt-2 border-t border-red-400/[0.12] pt-1.5">
+                        <button type="button" aria-expanded={errorExpanded} onClick={() => setExpandedErrors((current) => errorExpanded ? current.filter((mint) => mint !== launch.mint_address) : [...current, launch.mint_address])} className="flex w-full items-center justify-between gap-2 py-1 text-left">
+                          <span className="flex min-w-0 items-center gap-1.5 text-[9px] font-semibold text-[#d28b83]">
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#c77b7b]" />
+                            {diagnostics.length} diagnostic {diagnostics.length === 1 ? 'error' : 'errors'}
+                          </span>
+                          <span className="text-[9px] text-white/40">{errorExpanded ? 'Hide error details −' : 'View error details +'}</span>
+                        </button>
+                        {errorExpanded && <div className="mt-1 space-y-2 pb-1">
+                          {diagnostics.slice().reverse().map((diagnostic, index) => <div key={diagnostic.occurred_at || index} className="rounded-lg border border-red-400/[0.12] bg-red-400/[0.035] p-2">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[8px] font-semibold uppercase tracking-wide text-[#d28b83]">
+                              <span>{diagnostic.stage || 'Processing'}</span>
+                              <span className="text-white/30">·</span>
+                              <span>{diagnostic.provider || 'Provider'}</span>
+                              {diagnostic.occurred_at && <span className="ml-auto font-normal normal-case text-white/30">{new Date(diagnostic.occurred_at).toLocaleString()}</span>}
+                            </div>
+                            <p className="mt-1 break-words text-[9px] leading-relaxed text-white/75">{diagnostic.message || 'An error occurred without a message.'}</p>
+                            {diagnostic.raw_response !== undefined && <details className="mt-2">
+                              <summary className="cursor-pointer select-none text-[8px] font-medium text-white/45 hover:text-white/75">Provider response JSON</summary>
+                              <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md bg-black/60 p-2 font-mono text-[8px] leading-relaxed text-[#c9c9c9]">{JSON.stringify(diagnostic.raw_response, null, 2)}</pre>
+                            </details>}
+                          </div>)}
+                        </div>}
+                      </section>}
+                      <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2 border-t border-white/[0.055] pt-1.5">
+                        <div className="flex min-w-0 items-center gap-3 text-[8px]">
+                          <span className="whitespace-nowrap text-white/35">Price <span className="font-medium tabular-nums text-white/80">{Number.isFinite(price) && price > 0 ? `$${price.toFixed(8)}` : '—'}</span></span>
+                          <span className="whitespace-nowrap text-white/35">MCap <span className="font-medium tabular-nums text-white/80">{Number.isFinite(marketCap) && marketCap > 0 ? `$${marketCap.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—'}</span></span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2.5 text-[8px] text-white/35">
+                          <span>{`${launch.mint_address.slice(0, 5)}…${launch.mint_address.slice(-4)}`}</span>
+                          <button onClick={(event) => copyMint(event, launch.mint_address)} aria-label="Copy token mint" className="inline-flex items-center gap-0.5 text-white/45"><Copy className="h-2.5 w-2.5" />Copy</button>
+                          <a href={`https://solscan.io/token/${launch.mint_address}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-white/45">Inspect <ExternalLink className="h-2.5 w-2.5" /></a>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-4 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
+
+      </div>
+    </div>
+  );
+};
+}{formatPnlDisplay(unrealizedProfitUsd)}
               </div>
               <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Unrealized P&amp;L</div>
             </div>
