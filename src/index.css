@@ -162,3 +162,20 @@ body {
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
 }
+
+
+/* Global premium toast notifications: safe-area aware and above app navigation. */
+@keyframes nodex-toast-enter {
+  from { opacity: 0; transform: translate3d(0,-18px,0) scale(.985); filter: blur(5px); }
+  to { opacity: 1; transform: translate3d(0,0,0) scale(1); filter: blur(0); }
+}
+@keyframes nodex-toast-progress {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(260%); }
+}
+.nodex-toast { animation: nodex-toast-enter 360ms cubic-bezier(.22,1,.36,1) both; }
+.nodex-toast-progress > span { animation: nodex-toast-progress 1.25s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .nodex-toast { animation: none; }
+  .nodex-toast-progress > span { animation: none; width: 100%; }
+}
