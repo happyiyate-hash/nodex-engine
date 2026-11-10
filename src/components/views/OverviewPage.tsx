@@ -281,8 +281,43 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   );
   const openPositionCount = Number(profile?.portfolio?.position_count ?? positions.filter((position) => position.status === 'OPEN').length);
   const hourlyProfitLoss = typeof profile?.portfolio?.hourly_pnl_sol === 'number' ? profile.portfolio.hourly_pnl_sol : null;
-  const portfolioFlash: ChangeDirection = null;
-  const balanceDirection: ChangeDirection = null;
+  const [portfolioFlash, setPortfolioFlash] = useState<ChangeDirection>(null);
+  const [balanceDirection, setBalanceDirection] = useState<ChangeDirection>(null);
+  const previousPortfolioValueRef = useRef<number | null>(null);
+  const portfolioFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Animate only changes to a real, loaded portfolio snapshot. The first
+  // snapshot establishes the baseline and does not flash on initial page load.
+  useEffect(() => {
+    if (!portfolioSource || !Number.isFinite(portfolioValue)) return;
+
+    const previousValue = previousPortfolioValueRef.current;
+    previousPortfolioValueRef.current = portfolioValue;
+    if (previousValue === null) return;
+
+    const difference = portfolioValue - previousValue;
+    if (Math.abs(difference) < 0.000001) return;
+
+    const direction: ChangeDirection = difference > 0 ? 'up' : 'down';
+    setPortfolioFlash(direction);
+    setBalanceDirection(direction);
+
+    if (portfolioFlashTimeoutRef.current !== null) {
+      clearTimeout(portfolioFlashTimeoutRef.current);
+    }
+    portfolioFlashTimeoutRef.current = setTimeout(() => {
+      setPortfolioFlash(null);
+      setBalanceDirection(null);
+      portfolioFlashTimeoutRef.current = null;
+    }, 650);
+  }, [portfolioSource, portfolioValue]);
+
+  useEffect(() => () => {
+    if (portfolioFlashTimeoutRef.current !== null) {
+      clearTimeout(portfolioFlashTimeoutRef.current);
+    }
+  }, []);
+
   const [filter, setFilter] = useState<FeedFilter>('detected');
   const [search, setSearch] = useState('');
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
