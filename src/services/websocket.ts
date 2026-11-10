@@ -1,6 +1,5 @@
 import { ConnectionStatus, NodeXEvent } from '../types';
 import { apiClient } from './rest';
-import { recordLiveEvent } from './engineLogs';
 type EventListener=(event:NodeXEvent)=>void;
 type StatusListener=(status:ConnectionStatus,latencyMs:number)=>void;
 
@@ -111,7 +110,6 @@ export class NodeXWebSocketService {
           const raw=JSON.parse(String(message.data));
           if(!raw||typeof raw!=='object'||typeof raw.type!=='string')return;
           this.lastMessageAt=Date.now();if(raw.type==='heartbeat')return;
-          recordLiveEvent(raw.type, raw);
 // The backend already filters its browser stream to approved application events.
           // Forward every typed event so pages do not silently lose new backend event types.
           const event=normalizeBackendEvent(raw);if(this.seen.has(event.event_id))return;
