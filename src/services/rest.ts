@@ -312,6 +312,15 @@ export class NodeXRestClient {
     });
   }
 
+  public clearEngineActivityLogs(): Promise<{ status: string; deleted_records: number }> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings to clear engine activity.');
+    return this.request('/api/v1/admin/activity-logs/clear', {
+      method: 'POST',
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
+
   public getStorageOverview(): Promise<StorageOverview> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the operator API key in Settings before loading server storage.');
