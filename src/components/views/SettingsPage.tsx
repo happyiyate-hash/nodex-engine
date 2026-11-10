@@ -94,6 +94,9 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [engineLogsLoading, setEngineLogsLoading] = useState(false);
   const [engineLogsError, setEngineLogsError] = useState('');
   const activityStreamRef = useRef<HTMLDivElement>(null);
+  const clearedLiveBeforeRef = useRef(0);
+  const [clearingActivityLogs, setClearingActivityLogs] = useState(false);
+  const [engineLogsNotice, setEngineLogsNotice] = useState('');
 
   const loadEngineLogs = async () => {
     setEngineLogsLoading(true);
@@ -112,7 +115,11 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
   useEffect(() => {
     if (section !== 'engine_logs') return;
-    const live = events.filter((event: any) => event.event_type === 'engine_activity');
+    const live = events.filter((event: any) => {
+      if (event.event_type !== 'engine_activity') return false;
+      const timestamp = new Date(String(event.timestamp || event.data?.timestamp || '')).getTime();
+      return Number.isFinite(timestamp) && timestamp > clearedLiveBeforeRef.current;
+    });
     if (!live.length) return;
     setEngineLogRecords((current) => {
       const additions = live.map((event: any, index: number) => ({
@@ -130,6 +137,23 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     const stream = activityStreamRef.current;
     if (stream) stream.scrollTop = stream.scrollHeight;
   }, [engineLogRecords, section]);
+
+  const clearPersistedEngineLogs = async () => {
+    if (!window.confirm('Clear all saved engine activity logs from the backend database? New logs will continue to be recorded.')) return;
+    setClearingActivityLogs(true);
+    setEngineLogsError('');
+    setEngineLogsNotice('');
+    try {
+      const result = await apiClient.clearEngineActivityLogs();
+      clearedLiveBeforeRef.current = Date.now();
+      setEngineLogRecords([]);
+      setEngineLogsNotice(`Cleared ${result.deleted_records.toLocaleString()} saved log records from the backend.`);
+    } catch (error) {
+      setEngineLogsError(error instanceof Error ? error.message : 'Could not clear saved backend logs.');
+    } finally {
+      setClearingActivityLogs(false);
+    }
+  };
 
   const downloadEngineLogs = () => {
     const payload = { exported_at: new Date().toISOString(), source: 'NodeX live provider activity stream', count: engineLogRecords.length, records: engineLogRecords };
@@ -634,6 +658,11 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
       {section === 'engine_logs' && (
         <div className="w-full">
+          {engineLogsNotice && (
+            <div className="border-b border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2 font-mono text-[10px] leading-4 text-emerald-300">
+              {engineLogsNotice}
+            </div>
+          )}
           {engineLogsError && (
             <div className="border-b border-red-500/20 bg-red-500/[0.06] px-3 py-2 font-mono text-[10px] leading-4 text-red-300">
               ERROR: {engineLogsError}
@@ -707,6 +736,19 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         >
           <ArrowLeft className="h-4 w-4" strokeWidth={2.5} />
           Go back
+        </button>
+      )}
+
+      {section === 'engine_logs' && (
+        <button
+          type="button"
+          onClick={() => void clearPersistedEngineLogs()}
+          disabled={clearingActivityLogs}
+          aria-label="Clear saved backend logs"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] left-4 z-50 inline-flex min-h-12 items-center gap-2.5 rounded-2xl border border-red-400/25 bg-[#171010] px-4 py-3 text-[12px] font-semibold text-red-300 shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-95 disabled:cursor-wait disabled:opacity-50"
+        >
+          <Trash2 className="h-4 w-4" />
+          {clearingActivityLogs ? 'Clearing…' : 'Clear logs'}
         </button>
       )}
 
