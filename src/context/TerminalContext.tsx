@@ -78,6 +78,11 @@ const emptyStrategy: StrategyConfig = {
   max_top10_holder_concentration_pct: 35, auto_buy_enabled: false,
   trailing_stop_enabled: false, trailing_stop_callback_pct: 10,
   blacklist_creators_with_prior_rugs: true,
+  paper_starting_balance: 10,
+  paper_starting_balance_currency: 'USD',
+  diagnostic_mode: true,
+  block_unverified_trades: true,
+  execution_enabled: false,
 };
 
 const TerminalContext = createContext<TerminalContextType | null>(null);
@@ -351,6 +356,21 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isMobilePreview, setIsMobilePreview] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
   const metadataRefreshInFlight = useRef<Set<string>>(new Set());
+
+  // The backend SQLite config is authoritative. Load it whenever the operator
+  // connects or changes the backend URL; do not rely on browser-only defaults.
+  useEffect(() => {
+    if (!settings.backendUrl) return;
+    let active = true;
+    apiClient.getStrategy()
+      .then(({ config }) => {
+        if (active) setStrategyConfig({ ...emptyStrategy, ...config });
+      })
+      .catch((error) => {
+        if (active) setBackendError(error instanceof Error ? error.message : 'Could not load backend trading configuration.');
+      });
+    return () => { active = false; };
+  }, [settings.backendUrl]);
 
   // On every app load, re-resolve metadata for every restored token that
   // has no logo URL. Retry transient backend/provider failures instead of
