@@ -12,18 +12,18 @@ const stopLossOptions = [5, 10, 15, 20, 25, 30];
 const takeProfitOptions = [10, 20, 30, 50, 75, 100];
 
 const NumberField = ({
-  label, suffix, value, onChange, hint, step = '1',
+  label, suffix, value, onChange, hint, step = '1', disabled = false,
 }: {
   label: string; suffix?: string; value: number; onChange: (value: number) => void;
-  hint?: string; step?: string;
+  hint?: string; step?: string; disabled?: boolean;
 }) => (
   <label className="block min-w-0 border-b border-white/[0.07] py-3">
     <span className="mb-2 block text-[11px] font-medium text-white/60">{label}</span>
     <span className="flex h-10 items-center border-b border-white/[0.14] focus-within:border-white/50">
       <input
-        type="number" min="0" step={step} value={value}
+        type="number" min="0" step={step} value={value} disabled={disabled}
         onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))}
-        className="min-w-0 flex-1 bg-transparent text-[14px] font-medium tabular-nums text-white outline-none"
+        className="min-w-0 flex-1 bg-transparent text-[14px] font-medium tabular-nums text-white outline-none disabled:cursor-not-allowed disabled:text-white/35"
       />
       {suffix && <span className="ml-2 shrink-0 text-[11px] text-white/40">{suffix}</span>}
     </span>
@@ -32,16 +32,16 @@ const NumberField = ({
 );
 
 const ToggleRow = ({
-  title, detail, checked, onChange,
+  title, detail, checked, onChange, disabled = false,
 }: {
-  title: string; detail: string; checked: boolean; onChange: (checked: boolean) => void;
+  title: string; detail: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean;
 }) => (
-  <label className="flex cursor-pointer items-center justify-between gap-4 border-b border-white/[0.07] py-3">
+  <label className={`flex items-center justify-between gap-4 border-b border-white/[0.07] py-3 ${disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'}`}>
     <span className="min-w-0">
       <span className="block text-[12px] font-medium text-white/85">{title}</span>
       <span className="mt-0.5 block text-[10px] leading-relaxed text-white/40">{detail}</span>
     </span>
-    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" />
+    <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" />
     <span className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors ${checked ? 'bg-white' : 'bg-white/15'}`}>
       <span className={`absolute top-[3px] h-4 w-4 rounded-full transition-all ${checked ? 'left-[21px] bg-black' : 'left-[3px] bg-white/75'}`} />
     </span>
@@ -49,7 +49,8 @@ const ToggleRow = ({
 );
 
 export const StrategyPage: React.FC = () => {
-  const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig } = useTerminal();
+  const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig, engineStatus } = useTerminal();
+  const paperMode = engineStatus.operating_mode.toLowerCase() !== 'real';
   const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig });
   const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
@@ -65,7 +66,7 @@ export const StrategyPage: React.FC = () => {
 
   const hasUnappliedChanges = JSON.stringify(form) !== JSON.stringify(appliedConfig);
 
-  const update = (key: keyof StrategyConfig, value: number | boolean) => {
+  const update = (key: keyof StrategyConfig, value: StrategyConfig[keyof StrategyConfig]) => {
     setForm((current) => ({ ...current, [key]: value }));
   };
 
@@ -161,6 +162,26 @@ export const StrategyPage: React.FC = () => {
           <NumberField label="Maximum entry price" suffix="USD" step="0.000001" value={form.max_entry_price_usd} onChange={(v) => update('max_entry_price_usd', v)} />
           <NumberField label="Paper position size" suffix="SOL" step="0.01" value={form.max_investment_per_token_sol} onChange={(v) => update('max_investment_per_token_sol', v)} />
           <NumberField label="Maximum open positions" value={form.max_simultaneous_positions} onChange={(v) => update('max_simultaneous_positions', Math.floor(v))} />
+          <NumberField
+            label="Paper Starting Balance"
+            suffix={form.paper_starting_balance_currency}
+            value={form.paper_starting_balance}
+            disabled={!paperMode}
+            onChange={(v) => update('paper_starting_balance', v)}
+            hint={paperMode ? "Initial simulated capital. It can only be changed before the first paper trade." : "Available only in Paper mode."}
+          />
+          <label className={`block min-w-0 border-b border-white/[0.07] py-3 ${paperMode ? '' : 'opacity-40'}`}>
+            <span className="mb-2 block text-[11px] font-medium text-white/60">Balance currency</span>
+            <select
+              value={form.paper_starting_balance_currency}
+              disabled={!paperMode}
+              onChange={(event) => update('paper_starting_balance_currency', event.target.value as 'USD' | 'SOL')}
+              className="h-10 w-full border-b border-white/[0.14] bg-transparent text-[13px] text-white outline-none disabled:cursor-not-allowed"
+            >
+              <option value="USD" className="bg-[#111]">USD</option>
+              <option value="SOL" className="bg-[#111]">SOL</option>
+            </select>
+          </label>
         </div>
       </section>
 
@@ -186,6 +207,33 @@ export const StrategyPage: React.FC = () => {
         <p className="py-2 text-[10px] text-white/40">Optional paper-trading behaviour.</p>
         <ToggleRow title="Automated paper buys" detail="Open a simulated position when all qualification rules pass." checked={form.auto_buy_enabled} onChange={(v) => update('auto_buy_enabled', v)} />
         <ToggleRow title="Blacklist known rug creators" detail="Reject launches linked to creators with prior rug activity." checked={form.blacklist_creators_with_prior_rugs} onChange={(v) => update('blacklist_creators_with_prior_rugs', v)} />
+      </section>
+
+      <section className="mt-5 border-t border-white/[0.08] pt-4">
+        <div className="mb-2 flex items-center gap-2">
+          <ShieldAlert className="h-4 w-4 text-white/50" />
+          <h3 className="text-[12px] font-semibold text-white">Engine execution & diagnostics</h3>
+        </div>
+        <p className="py-2 text-[10px] text-white/40">These controls are persisted by the backend and applied to each new token scan.</p>
+        <ToggleRow
+          title="Diagnostic-only mode"
+          detail={form.diagnostic_mode ? "ON · Collect evidence for inspection without issuing a verification verdict." : "OFF · Run the scanner's full verification decision path."}
+          checked={form.diagnostic_mode}
+          onChange={(v) => update('diagnostic_mode', v)}
+        />
+        <ToggleRow
+          title="Block unverified trades"
+          detail="When ON, only scans whose security checks are all explicitly VERIFIED may pass the execution gate."
+          checked={form.block_unverified_trades}
+          onChange={(v) => update('block_unverified_trades', v)}
+        />
+        <ToggleRow
+          title="Global execution master switch"
+          detail="OFF · Locked until the paper execution module is connected. Real execution is not available."
+          checked={false}
+          onChange={() => update('execution_enabled', false)}
+          disabled
+        />
       </section>
 
       <section className="mt-6 border-t border-white/[0.08] pt-4">
