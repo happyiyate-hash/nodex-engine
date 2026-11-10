@@ -95,6 +95,29 @@ const defaultSafetyDetails: DiscoveredToken['safety_details'] = {
   dev_holding_pct: 0, dev_sold_all: false, bundled_snipers_detected: false,
   risk_flags: [], safety_score: 0, holders_count: 0, creator_reputation: 'unknown', largest_holders: [],
 };
+
+// Merge scan data as a session cache: empty/unknown follow-up payloads must not
+// erase useful values already received for this mint. Longer check lists win.
+function mergeCachedReport(previous: Record<string, any> = {}, incoming: Record<string, any> = {}): Record<string, any> {
+  const merged: Record<string, any> = { ...previous };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === null || value === undefined || value === '') continue;
+    const oldValue = merged[key];
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue;
+      if ((key === 'checks' || key === 'provider_responses') && Array.isArray(oldValue) && oldValue.length > value.length) continue;
+      merged[key] = value;
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      merged[key] = mergeCachedReport(oldValue && typeof oldValue === 'object' ? oldValue : {}, value as Record<string, any>);
+      continue;
+    }
+    if (typeof value === 'string' && ['unknown', 'unavailable', 'pending', 'not_checked'].includes(value.toLowerCase()) && oldValue != null && oldValue !== '' && !['unknown', 'unavailable', 'pending', 'not_checked'].includes(String(oldValue).toLowerCase())) continue;
+    merged[key] = value;
+  }
+  return merged;
+}
 function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEvent): DiscoveredToken | null {
   const data = event.data || {};
   const marketPatch = data.market_patch && typeof data.market_patch === 'object' ? data.market_patch : {};
@@ -184,7 +207,10 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     diagnostics: incomingDiagnostic
       ? [...(previous?.diagnostics || []).filter((item) => !(item.stage === incomingDiagnostic.stage && item.message === incomingDiagnostic.message && item.occurred_at === incomingDiagnostic.occurred_at)), incomingDiagnostic as NonNullable<DiscoveredToken['diagnostics']>[number]].slice(-50)
       : previous?.diagnostics || [],
-    safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(payload.safety_details || {}) },
+    safety_details: mergeCachedReport(
+      { ...defaultSafetyDetails, ...(previous?.safety_details || {}) },
+      payload.safety_details || {},
+    ) as DiscoveredToken['safety_details'],
     price_history_5m: history.slice(-300),
   };
 }
@@ -309,7 +335,10 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
       }
       return combined.slice(-50);
     })(),
-    safety_details: { ...defaultSafetyDetails, ...(previous?.safety_details || {}), ...(snapshot.security || {}) },
+    safety_details: mergeCachedReport(
+      { ...defaultSafetyDetails, ...(previous?.safety_details || {}) },
+      snapshot.security || {},
+    ) as DiscoveredToken['safety_details'],
     price_history_5m: priceHistory.length ? priceHistory.slice(-500) : previous?.price_history_5m || [],
   };
 }
