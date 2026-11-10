@@ -217,7 +217,7 @@ export const StrategyPage: React.FC = () => {
         <p className="py-2 text-[10px] text-white/40">These controls are persisted by the backend and applied to each new token scan.</p>
         <ToggleRow
           title="Diagnostic-only mode"
-          detail={form.diagnostic_mode ? "ON · Collect evidence for inspection without issuing a verification verdict." : "OFF · Run the scanner's full verification decision path."}
+          detail={form.diagnostic_mode ? "ON · Collect evidence for inspection without issuing a verification verdict." : "OFF · Allow the scanner's current verification decision path; incomplete provider checks remain UNVERIFIED."}
           checked={form.diagnostic_mode}
           onChange={(v) => update('diagnostic_mode', v)}
         />
