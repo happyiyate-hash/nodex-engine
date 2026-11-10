@@ -268,6 +268,11 @@ export interface StrategyConfig {
   trailing_stop_enabled: boolean;
   trailing_stop_callback_pct: number;
   blacklist_creators_with_prior_rugs: boolean;
+  paper_starting_balance: number;
+  paper_starting_balance_currency: 'USD' | 'SOL';
+  diagnostic_mode: boolean;
+  block_unverified_trades: boolean;
+  execution_enabled: boolean;
 }
 
 export interface StrategyConditionCheck {
