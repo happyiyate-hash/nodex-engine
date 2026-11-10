@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { apiClient, StorageOverview } from '../../services/rest';
 import { useTerminal } from '../../context/TerminalContext';
+import { useToast } from '../ui/ToastProvider';
 
 type BrowserStorageEstimate = { usage: number | null; quota: number | null };
 
@@ -68,9 +69,10 @@ const categories: StorageCategory[] = [
 
 export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const { removeTokensByMint } = useTerminal();
+  const { showToast, updateToast } = useToast();
   const [selected, setSelected] = useState<StorageCategory | null>(null);
   const [showCleanupConfirmation, setShowCleanupConfirmation] = useState(false);
-  const [notice, setNotice] = useState('');
+  const [cleanupBusy, setCleanupBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [browserStorage, setBrowserStorage] = useState<BrowserStorageEstimate>({ usage: null, quota: null });
   const [serverStorage, setServerStorage] = useState<StorageOverview | null>(null);
@@ -91,11 +93,11 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       const overview = await apiClient.getStorageOverview();
       setServerStorage(overview);
       setServerStorageError('');
-      if (showNotice) setNotice('Browser and server storage readings refreshed.');
+      if (showNotice) showToast({ title: 'Storage overview refreshed', description: 'Browser and server storage readings are up to date.', tone: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load server storage overview.';
       setServerStorageError(message);
-      if (showNotice) setNotice(`Browser storage refreshed. Server storage could not be loaded: ${message}`);
+      if (showNotice) showToast({ title: 'Server storage unavailable', description: message, tone: 'error' });
     } finally {
       setRefreshing(false);
     }
@@ -106,24 +108,32 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   }, []);
 
   const confirmCleanup = async () => {
-    if (selected?.id === 'database') {
-      setShowCleanupConfirmation(false);
-      setNotice('Cleaning unused token records…');
-      try {
+    if (!selected || cleanupBusy) return;
+    setCleanupBusy(true);
+    setShowCleanupConfirmation(false);
+    const categoryId = selected.id;
+    const toastId = showToast({
+      title: categoryId === 'database' ? 'Cleaning SQLite storage…' : categoryId === 'system_logs' ? 'Cleaning system journal…' : 'Clearing browser storage…',
+      description: 'The operation is running. Please wait for the backend or browser to confirm completion.',
+      tone: 'loading',
+    });
+
+    try {
+      if (categoryId === 'database') {
         const result = await apiClient.clearEngineHistory(apiClient.loadSettings().adminApiKey);
         removeTokensByMint(result.deleted_mints || []);
-        setNotice(
-          `Cleanup completed · ${result.deleted_token_state_records ?? result.deleted_token_records} unused token states, ${result.deleted_launch_records} launch records, ${result.deleted_chart_records} chart records and ${result.deleted_raw_event_records} raw events removed. All tokens with paper-trading positions were preserved.`,
-        );
+        const stateRecords = result.deleted_token_state_records ?? result.deleted_token_records ?? 0;
+        const launchRecords = result.deleted_launch_records ?? 0;
+        const chartRecords = result.deleted_chart_records ?? 0;
+        const rawEvents = result.deleted_raw_event_records ?? 0;
+        updateToast(toastId, {
+          title: 'SQLite cleanup completed',
+          description: `${stateRecords} token states, ${launchRecords} launch records, ${chartRecords} chart records and ${rawEvents} raw events removed. Tokens with paper-trading positions were preserved.`,
+          tone: 'success',
+          duration: 6500,
+        });
         await refresh(false);
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'SQLite token cleanup failed.');
-      }
-      setSelected(null);
-      return;
-    }
-    if (selected?.id === 'local-storage') {
-      try {
+      } else if (categoryId === 'local-storage') {
         window.localStorage.clear();
         window.sessionStorage.clear();
 
@@ -146,32 +156,41 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         }
 
         setBrowserStorage(await getBrowserStorageEstimate());
-        setShowCleanupConfirmation(false);
-        setSelected(null);
-        setNotice('Browser storage cleanup completed. You may need to sign in again or restore app preferences.');
-      } catch {
-        setNotice('The browser blocked part of the storage cleanup. Some stored data may remain.');
-      }
-      return;
-    }
-    if (selected?.id === 'system_logs') {
-      setShowCleanupConfirmation(false);
-      setNotice('Cleaning system journal…');
-      try {
+        updateToast(toastId, {
+          title: 'Browser storage cleanup completed',
+          description: 'Local storage, session storage, caches, IndexedDB databases and service worker registrations were cleared. You may need to sign in again.',
+          tone: 'success',
+          duration: 6500,
+        });
+      } else if (categoryId === 'system_logs') {
         const result = await apiClient.cleanupSystemJournal();
         setServerStorage(result.overview);
-        setNotice(result.bytes_freed === null
-          ? 'System journal cleanup completed. The backend could not calculate the exact space freed.'
-          : `System journal cleanup completed. Freed ${formatMegabytes(result.bytes_freed)}.`);
-      } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'System journal cleanup failed.');
+        updateToast(toastId, {
+          title: 'System journal cleanup completed',
+          description: result.bytes_freed === null
+            ? 'The backend confirmed cleanup. Exact disk space freed was not available.'
+            : `Freed ${formatMegabytes(result.bytes_freed)}.`,
+          tone: 'success',
+          duration: 5000,
+        });
+      } else {
+        updateToast(toastId, {
+          title: 'No cleanup operation available',
+          description: 'No files were deleted because this category has no active cleanup operation.',
+          tone: 'warning',
+        });
       }
+    } catch (error) {
+      updateToast(toastId, {
+        title: categoryId === 'database' ? 'SQLite cleanup failed' : categoryId === 'system_logs' ? 'System journal cleanup failed' : 'Browser storage cleanup incomplete',
+        description: error instanceof Error ? error.message : 'The operation could not be completed. The result has not been confirmed.',
+        tone: 'error',
+        duration: 7000,
+      });
+    } finally {
+      setCleanupBusy(false);
       setSelected(null);
-      return;
     }
-    setShowCleanupConfirmation(false);
-    setNotice('No files were deleted. This category does not have an active cleanup operation.');
-    setSelected(null);
   };
 
   return (
@@ -254,7 +273,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <button
                 key={id}
                 type="button"
-                onClick={() => { setNotice(''); setSelected(category); }}
+                onClick={() => { setSelected(category); }}
                 className="block w-full py-2.5 text-left transition-colors active:bg-white/[0.025]"
                 aria-label={`View ${title} storage details`}
               >
@@ -300,7 +319,6 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         </div>
       </div>
 
-      {notice && <div role="status" className="rounded-xl border border-amber-400/15 bg-amber-400/[0.045] p-3 text-[10px] leading-relaxed text-amber-100/75">{notice}</div>}
 
       </div>
 
@@ -401,7 +419,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 : "This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included."}</p>
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black">{selected.id === 'database' ? 'Clean unused tokens' : selected.id === 'system_logs' ? 'Clean journal' : 'Clear everything'}</button>
+              <button type="button" onClick={confirmCleanup} disabled={cleanupBusy} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black disabled:opacity-50">{cleanupBusy ? 'Cleaning…' : selected.id === 'database' ? 'Clean unused tokens' : selected.id === 'system_logs' ? 'Clean journal' : 'Clear everything'}</button>
             </div>
           </section>
         </div>
