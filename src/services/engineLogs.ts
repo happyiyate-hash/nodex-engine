@@ -7,7 +7,7 @@ export interface EngineLogEntry {
 }
 
 const STORAGE_KEY = 'nodex-engine-logs.v1';
-const MAX_LOGS = 120;
+const MAX_LOGS = 200;
 const HIGH_FREQUENCY_EVENTS = new Set([
   'heartbeat', 'market_tick', 'market_price_update', 'token_market_update',
   'token_statistics_update', 'chart_candle_update', 'chart_candle_closed',
@@ -106,7 +106,7 @@ export function installFetchLogger() {
       const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       let url: URL;
       try { url = new URL(rawUrl, window.location.href); } catch { return originalFetch(input, init); }
-      const isNodeX = /\/api\/v1\//.test(url.pathname) || url.pathname === '/health';
+      const isNodeX = /\/api\/v1\//.test(url.pathname) || url.pathname === '/api/config' || url.pathname === '/health';
       if (!isNodeX) return originalFetch(input, init);
       const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
       const started = performance.now();
