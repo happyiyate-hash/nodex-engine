@@ -3,7 +3,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
 import {
   Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
-  TrendingUp, X,
+  TrendingUp, X, Plus, Pencil, Trash2,
 } from 'lucide-react';
 
 type RiskTarget = 'stop_loss_pct' | 'take_profit_pct';
@@ -58,6 +58,11 @@ export const StrategyPage: React.FC = () => {
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [ownerSheetOpen, setOwnerSheetOpen] = useState(false);
+  const [editingOwnerIndex, setEditingOwnerIndex] = useState<number | null>(null);
+  const [ownerAddress, setOwnerAddress] = useState('');
+  const [ownerLabel, setOwnerLabel] = useState('');
+  const [ownerError, setOwnerError] = useState('');
 
   useEffect(() => {
     setForm({ ...strategyConfig });
@@ -84,6 +89,36 @@ export const StrategyPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openOwnerSheet = (index: number | null = null) => {
+    setEditingOwnerIndex(index);
+    setOwnerAddress(index === null ? '' : form.preferred_owners[index]?.address || '');
+    setOwnerLabel(index === null ? '' : form.preferred_owners[index]?.label || '');
+    setOwnerError('');
+    setOwnerSheetOpen(true);
+  };
+
+  const saveOwner = () => {
+    const address = ownerAddress.trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+      setOwnerError('Enter a valid-looking Solana base58 wallet address (32–44 characters).');
+      return;
+    }
+    if (form.preferred_owners.some((owner, index) => owner.address === address && index !== editingOwnerIndex)) {
+      setOwnerError('This wallet is already on your preferred-owner list.');
+      return;
+    }
+    const next = [...form.preferred_owners];
+    const owner = { address, label: ownerLabel.trim().slice(0, 80) };
+    if (editingOwnerIndex === null) next.push(owner);
+    else next[editingOwnerIndex] = owner;
+    update('preferred_owners', next);
+    setOwnerSheetOpen(false);
+  };
+
+  const removeOwner = (index: number) => {
+    update('preferred_owners', form.preferred_owners.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const openTarget = (target: RiskTarget) => {
@@ -211,6 +246,31 @@ export const StrategyPage: React.FC = () => {
 
       <section className="mt-5 border-t border-white/[0.08] pt-4">
         <div className="mb-2 flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-white/50" />
+          <h3 className="text-[12px] font-semibold text-white">Preferred owners</h3>
+        </div>
+        <p className="py-2 text-[10px] leading-relaxed text-white/40">Allowlist known Pump.fun creators/deployers. Matching only controls which launches are scanned; every accepted launch still goes through the full security checks.</p>
+        <ToggleRow title="Strict preferred-owner mode" detail="ON · Only launches whose decoded creator wallet is on this list proceed to metadata and security scanning. Unknown creators are skipped." checked={form.whitelist_only_mode} onChange={(value) => update('whitelist_only_mode', value)} />
+        <div className="flex items-center justify-between gap-3 py-3">
+          <div><p className="text-[11px] font-medium text-white/85">Wallet list</p><p className="mt-0.5 text-[10px] text-white/35">{form.preferred_owners.length} of 500 saved</p></div>
+          <button type="button" onClick={() => openOwnerSheet()} disabled={form.preferred_owners.length >= 500} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[10px] font-semibold text-white/85 disabled:opacity-35"><Plus className="h-3.5 w-3.5" /> Add owner</button>
+        </div>
+        {form.preferred_owners.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[10px] text-white/35">No preferred owners added yet.</p> : (
+          <div className="divide-y divide-white/[0.07]">
+            {form.preferred_owners.map((owner, index) => (
+              <div key={owner.address + index} className="flex min-w-0 items-center gap-3 py-3">
+                <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-medium text-white/85">{owner.label || 'Unnamed owner'}</p><p className="mt-0.5 break-all font-mono text-[9px] text-white/40">{owner.address}</p></div>
+                <button type="button" onClick={() => openOwnerSheet(index)} aria-label="Edit preferred owner" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/50 hover:bg-white/[0.06]"><Pencil className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => removeOwner(index)} aria-label="Remove preferred owner" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-rose-300/70 hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        {form.whitelist_only_mode && form.preferred_owners.length === 0 && <p className="mt-2 text-[10px] text-amber-300">Strict mode is enabled but the list is empty, so no launches will pass.</p>}
+      </section>
+
+      <section className="mt-5 border-t border-white/[0.08] pt-4">
+        <div className="mb-2 flex items-center gap-2">
           <ShieldAlert className="h-4 w-4 text-white/50" />
           <h3 className="text-[12px] font-semibold text-white">Engine execution & diagnostics</h3>
         </div>
@@ -257,6 +317,21 @@ export const StrategyPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {ownerSheetOpen && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setOwnerSheetOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="owner-sheet-title" className="w-full max-w-xl rounded-t-2xl border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
+            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
+            <div className="mb-5 flex items-center justify-between gap-3"><div><h3 id="owner-sheet-title" className="text-[14px] font-semibold text-white">{editingOwnerIndex === null ? 'Add preferred owner' : 'Edit preferred owner'}</h3><p className="mt-1 text-[10px] text-white/40">Use the creator/deployer wallet address.</p></div><button type="button" onClick={() => setOwnerSheetOpen(false)} aria-label="Close owner editor" className="rounded-lg p-2 text-white/50"><X className="h-4 w-4" /></button></div>
+            <div className="space-y-4">
+              <label className="block"><span className="mb-1.5 block text-[10px] font-medium text-white/65">Solana wallet address</span><input value={ownerAddress} onChange={(event) => { setOwnerAddress(event.target.value.trim()); setOwnerError(''); }} placeholder="Paste wallet address" autoCapitalize="none" autoCorrect="off" spellCheck={false} className="w-full rounded-xl border border-white/10 bg-[#090909] px-3 py-3 font-mono text-[11px] text-white outline-none focus:border-white/35" /></label>
+              <label className="block"><span className="mb-1.5 block text-[10px] font-medium text-white/65">Label (optional)</span><input value={ownerLabel} onChange={(event) => setOwnerLabel(event.target.value.slice(0, 80))} placeholder="e.g. Trusted creator" maxLength={80} className="w-full rounded-xl border border-white/10 bg-[#090909] px-3 py-3 text-[12px] text-white outline-none focus:border-white/35" /></label>
+              {ownerError && <p className="text-[10px] text-rose-300" role="alert">{ownerError}</p>}
+              <button type="button" onClick={saveOwner} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white py-3 text-[11px] font-bold text-black"><Check className="h-4 w-4" /> {editingOwnerIndex === null ? 'Add owner to settings' : 'Save owner changes'}</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {hasUnappliedChanges && (
         <button
