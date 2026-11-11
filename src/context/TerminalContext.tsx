@@ -150,8 +150,6 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const venueValue = String(payload.venue || payload.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(payload.decision || payload.status || '').toLowerCase();
-  const isUnverifiedTerminal = mayReplaceTerminalVerdict && (event.event_type === 'token_scan_failed'
-    || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase()));
   const isScanProgressEvent = event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress';
   const previousHasTerminalVerdict = ['qualified', 'rejected', 'unverified', 'bought_paper']
     .includes(String(previous?.qualification_status || ''));
@@ -160,6 +158,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const incomingStateVersion = Number(data.state_version ?? data.version ?? 0);
   const previousStateVersion = Number(previous?.state_version || 0);
   const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || (incomingStateVersion > 0 && incomingStateVersion > previousStateVersion);
+  const isUnverifiedTerminal = mayReplaceTerminalVerdict && (event.event_type === 'token_scan_failed'
+    || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase()));
   // Progress events can arrive late or be replayed after a final verdict. They
   // may update diagnostics, but must never move a terminal token back to scanning.
   const scanStatus = isScanProgressEvent
@@ -180,7 +180,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : previousHasTerminalVerdict && !mayReplaceTerminalVerdict ? previous!.qualification_status
     : isUnverifiedTerminal ? 'unverified'
-    : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
+    : mayReplaceTerminalVerdict && (event.event_type === 'strategy_rejected_token' || decision.includes('reject')) ? 'rejected'
     : isScanProgressEvent ? (previousHasTerminalVerdict ? previous!.qualification_status : 'under_analysis')
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
@@ -437,6 +437,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         for (const record of records) {
           if (!record.token?.mint) continue;
           const cached = record.token;
+          lifecycleCacheSignatures.current.set(record.mint, lifecycleCacheSignature(cached));
           const existing = byMint.get(record.mint);
           if (!existing) {
             byMint.set(record.mint, cached);
