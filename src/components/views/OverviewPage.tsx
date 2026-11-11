@@ -540,7 +540,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
                   const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
-                  const failedLifecycle = ['failed', 'buy_failed', 'sell_failed', 'rejected', 'strategy_rejected'].includes(lifecycleStatus);
                   const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
                     ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
                   );
