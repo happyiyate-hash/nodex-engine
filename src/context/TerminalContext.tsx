@@ -947,7 +947,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const openTokenDetailByMint = (mint: string, fallback: Partial<DiscoveredToken> = {}) => {
     // Detailed token views are reserved for active paper positions. Detection
     // cards remain identity-only and cannot trigger token-detail subscriptions.
-    if (!positions.some((position) => position.mint === mint && position.status === 'OPEN')) {
+    if (!positions.some((position) => position.mint === mint)) {
       setSelectedToken(null);
       return;
     }
@@ -1013,7 +1013,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     void loadTokenSnapshot(mint);
   };
   const loadTokenSnapshot = useCallback(async (mint: string) => {
-    if (!positions.some((position) => position.mint === mint && position.status === 'OPEN')) return;
+    if (!positions.some((position) => position.mint === mint)) return;
     try {
       const snapshot = await apiClient.getTokenState(mint);
       const mapped = mapTokenDetailSnapshot(snapshot);
@@ -1026,7 +1026,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // A token that has not passed backend approval has no detail snapshot yet.
       if (!message.includes('404')) setBackendError(message);
     }
-  }, []);
+  }, [positions]);
   const closeTokenDetail = () => setSelectedToken(null);
   const navigateToTab = (tab: NavigationTab) => { setSelectedToken(null); setActiveTab(tab); };
 
