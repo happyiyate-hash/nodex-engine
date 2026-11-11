@@ -13,7 +13,7 @@ interface RollingDigitProps {
   balanceDirection: ChangeDirection;
 }
 
-type PipelineStatus = 'DETECTED' | 'ANALYZING' | 'QUALIFIED' | 'REJECTED' | 'UNVERIFIED' | 'FAILED' | 'PAPER ENTRY' | 'BUY FAILED';
+type PipelineStatus = string;
 
 interface LaunchView {
   launch: TokenLaunchRecord;
@@ -154,85 +154,19 @@ const RollingDigit: React.FC<RollingDigitProps> = ({ digit, balanceDirection }) 
   );
 };
 
-const getLaunchView = (launch: TokenLaunchRecord, events: NodeXEvent[], token?: any): LaunchView => {
-  const related: NodeXEvent[] = (events as NodeXEvent[]).filter((event: NodeXEvent) =>
-    event.token_mint === launch.mint_address || event.data?.mint_address === launch.mint_address
-  );
-  const findEvent = (type: string): NodeXEvent | undefined =>
-    related.find((event: NodeXEvent) => String(event.event_type) === type);
-  const scanUpdate = findEvent('token_scan_update') || findEvent('token_scan_progress') || findEvent('safety_check_completed');
-  const scanCompleted = findEvent('token_scan_completed');
-  const scanFailed = findEvent('token_scan_failed');
-  const scanStarted = Boolean(findEvent('token_scan_started'));
-  const paperBuy = findEvent('paper_buy_executed');
-  const paperBuyFailed = findEvent('paper_buy_failed');
-  const strategyRejected = findEvent('strategy_rejected_token');
-  const decision = String(
-    scanFailed?.data?.decision || scanCompleted?.data?.decision ||
-    scanUpdate?.data?.decision || scanUpdate?.data?.status || ''
-  ).toLowerCase();
-  const terminalStatus = String(scanFailed?.data?.status || scanCompleted?.data?.status || '').toLowerCase();
-  // The event feed is intentionally capped. The persisted token snapshot is the
-  // durable source of truth when scan events age out of the browser history.
-  const security = token?.safety_details || {};
-  const persistedDecision = String(security.decision || '').toLowerCase();
-  const persistedStatus = String(security.status || '').toLowerCase();
-  const persistedReason = String(security.decision_reason || security.error || '');
-  // Scan lifecycle is also persisted on the token record. Do not rely only on
-  // the capped event history: once old scan events roll off, DETECTED must not
-  // overwrite a terminal UNVERIFIED/FAILED result.
-  const tokenScanStatus = String(token?.scan_status || '').toLowerCase();
-  const tokenQualification = String(token?.qualification_status || '').toLowerCase();
-  const tokenScanReason = String(token?.rejection_reason || '');
-
-  let status: PipelineStatus = 'DETECTED';
-  let reason = 'Launch detected. Waiting for the security scanner.';
-  let updatedAt = launch.detected_at;
-
-  if (paperBuy) {
-    status = 'PAPER ENTRY';
-    reason = 'Paper entry confirmed by the backend.';
-    updatedAt = paperBuy.timestamp;
-  } else if (paperBuyFailed) {
-    status = 'BUY FAILED';
-    reason = String(paperBuyFailed.data?.reason || paperBuyFailed.data?.message || 'Paper entry was not completed.');
-    updatedAt = paperBuyFailed.timestamp;
-  } else if (
-    Boolean(scanFailed) || terminalStatus === 'failed' || persistedStatus === 'failed' ||
-    tokenScanStatus === 'failed'
-  ) {
-    status = 'FAILED';
-    reason = String(persistedReason || scanFailed?.data?.decision_reason || scanFailed?.data?.message || scanFailed?.data?.error || 'Security scan failed. This token remains unverified and blocked.');
-    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
-  } else if (security.diagnostic_only === true) {
-    status = 'UNVERIFIED';
-    reason = String(persistedReason || 'Diagnostic-only mode is active. Provider responses are being collected; no token is being verified or approved.');
-    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
-  } else if (
-    persistedDecision === 'unverified' || ['unverified', 'unknown'].includes(persistedStatus) ||
-    tokenScanStatus === 'unverified' || tokenQualification === 'unverified' ||
-    scanCompleted && (['unverified', 'unknown', 'failed'].includes(terminalStatus) || decision.includes('unverified') || decision.includes('unknown'))
-  ) {
-    status = 'UNVERIFIED';
-    reason = String(persistedReason || tokenScanReason || scanFailed?.data?.decision_reason || scanCompleted?.data?.decision_reason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'Security checks did not produce a verifiable result. Automatic entry remains blocked.');
-    updatedAt = scanFailed?.timestamp || scanCompleted?.timestamp || security.scanned_at || launch.detected_at;
-  } else if (strategyRejected || decision.includes('reject') || persistedDecision === 'rejected' || persistedStatus === 'rejected') {
-    status = 'REJECTED';
-    reason = String(persistedReason || strategyRejected?.data?.reason || strategyRejected?.data?.message || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'The token did not pass the risk or strategy checks.');
-    updatedAt = (strategyRejected || scanUpdate)?.timestamp || security.scanned_at || launch.detected_at;
-  } else if (decision.includes('approv') || decision.includes('qualif') || persistedDecision === 'approved') {
-    status = 'QUALIFIED';
-    reason = String(persistedReason || scanUpdate?.data?.decision_reason || scanUpdate?.data?.reason || 'Security scan completed and strategy filters passed.');
-    updatedAt = scanUpdate?.timestamp || security.scanned_at || launch.detected_at;
-  } else if (scanStarted || scanUpdate || persistedStatus === 'scanning' || tokenScanStatus === 'scanning' || tokenQualification === 'under_analysis') {
-    status = 'ANALYZING';
-    reason = scanUpdate
-      ? String(scanUpdate.data?.message || scanUpdate.data?.reason || 'Security scan update received.')
-      : 'Security checks are running.';
-    updatedAt = (scanUpdate || findEvent('token_scan_started'))?.timestamp || security.scanned_at || launch.detected_at;
-  }
-
-  return { launch, status, reason, updatedAt, scanStarted };
+const getLaunchView = (launch: TokenLaunchRecord, token?: any): LaunchView => {
+  // The backend's persisted activity is the sole source of token lifecycle.
+  // This helper intentionally does not inspect the event history.
+  const status = String(token?.lifecycle_status || 'unknown').toLowerCase();
+  const reason = String(token?.lifecycle_sub_event || token?.lifecycle_stage || token?.safety_details?.decision_reason || '');
+  const updatedAt = String(token?.lifecycle_updated_at || launch.detected_at);
+  return {
+    launch,
+    status,
+    reason,
+    updatedAt,
+    scanStarted: status === 'scanning',
+  };
 };
 
 const timeAgo = (value: string) => {
@@ -334,18 +268,17 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const [expandedErrors, setExpandedErrors] = useState<string[]>([]);
 
   const launchViews = useMemo(
-    () => launches.map((launch) => getLaunchView(launch, events, tokens.find((token) => token.mint === launch.mint_address))).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
-    [launches, events, tokens]
+    () => launches.map((launch) => getLaunchView(launch, tokens.find((token) => token.mint === launch.mint_address))).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
+    [launches, tokens]
   );
   const counts = useMemo(() => ({
-    detected: launchViews.filter((item) => ['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'UNVERIFIED', 'FAILED', 'BUY FAILED'].includes(item.status)).length,
-    qualified: launchViews.filter((item) => ['QUALIFIED', 'PAPER ENTRY'].includes(item.status)).length,
+    detected: launchViews.length,
+    qualified: launchViews.filter((item) => item.status === 'verified').length,
     positions: openPositionCount,
   }), [launchViews, openPositionCount]);
 
   const filteredLaunches = launchViews.filter((item) => {
-    if (filter === 'detected' && !['DETECTED', 'ANALYZING', 'QUALIFIED', 'PAPER ENTRY', 'REJECTED', 'UNVERIFIED', 'FAILED', 'BUY FAILED'].includes(item.status)) return false;
-    if (filter === 'qualified' && !['QUALIFIED', 'PAPER ENTRY'].includes(item.status)) return false;
+    if (filter === 'qualified' && item.status !== 'verified') return false;
     if (filter === 'positions') return false;
     if (!search.trim()) return true;
     const query = search.trim().toLowerCase();
@@ -359,7 +292,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     const query = search.trim().toLowerCase();
     return position.name.toLowerCase().includes(query) || position.symbol.toLowerCase().includes(query) || position.mint.toLowerCase().includes(query);
   });
-  const backendPaperEntries = launchViews.filter((item) => item.status === 'PAPER ENTRY' && (
+  const backendPaperEntries = launchViews.filter((item) => item.status === 'bought_paper' && (
     !search.trim() || item.launch.mint_address.toLowerCase().includes(search.trim().toLowerCase()) ||
     String(item.launch.source || '').toLowerCase().includes(search.trim().toLowerCase())
   ));
