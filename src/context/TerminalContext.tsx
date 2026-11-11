@@ -159,7 +159,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   // Progress events can arrive late or be replayed after a final verdict. They
   // may update diagnostics, but must never move a terminal token back to scanning.
   const scanStatus = isScanProgressEvent
-    ? previousHasTerminalScanStatus ? previous?.scan_status : 'scanning'
+    ? previousHasTerminalScanStatus ? previous?.scan_status
+      : previousHasTerminalVerdict ? 'completed' : 'scanning'
     : event.event_type === 'token_scan_completed' ? String(data.status || 'completed')
     : event.event_type === 'token_scan_failed' ? 'failed'
     : previous?.scan_status;
