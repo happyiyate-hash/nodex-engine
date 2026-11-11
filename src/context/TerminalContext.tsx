@@ -151,7 +151,15 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const decision = String(payload.decision || payload.status || '').toLowerCase();
   const isUnverifiedTerminal = event.event_type === 'token_scan_failed'
     || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase());
-  const scanStatus = event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress' ? 'scanning'
+  const isScanProgressEvent = event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress';
+  const previousHasTerminalVerdict = ['qualified', 'rejected', 'unverified', 'bought_paper']
+    .includes(String(previous?.qualification_status || ''));
+  const previousHasTerminalScanStatus = ['completed', 'verified', 'failed', 'rejected', 'unverified']
+    .includes(String(previous?.scan_status || '').toLowerCase());
+  // Progress events can arrive late or be replayed after a final verdict. They
+  // may update diagnostics, but must never move a terminal token back to scanning.
+  const scanStatus = isScanProgressEvent
+    ? previousHasTerminalScanStatus ? previous?.scan_status : 'scanning'
     : event.event_type === 'token_scan_completed' ? String(data.status || 'completed')
     : event.event_type === 'token_scan_failed' ? 'failed'
     : previous?.scan_status;
@@ -167,7 +175,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : isUnverifiedTerminal ? 'unverified'
     : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
-    : event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress' ? 'under_analysis'
+    : isScanProgressEvent ? (previousHasTerminalVerdict ? previous!.qualification_status : 'under_analysis')
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
@@ -288,8 +296,12 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   const priceSol = Number(market.price_sol ?? previous?.current_price_sol ?? 0);
   const priceUsd = Number(market.price_usd ?? previous?.current_price_usd ?? 0);
   const venueValue = String(market.venue || identity.venue || previous?.venue || 'pump.fun').toLowerCase();
-  const securityDecision = String(snapshot.security?.decision || '').toUpperCase();
-  const securityStatus = String(snapshot.security?.status || '').toLowerCase();
+  const securityDecision = String(snapshot.security?.decision || snapshot.security?.diagnostic_assessment?.decision || '').toUpperCase();
+  const rawSecurityStatus = String(snapshot.security?.status || '').toLowerCase();
+  // The security decision is authoritative. Older snapshots may retain a
+  // transient "scanning" status even though the final APPROVED verdict was saved.
+  const securityStatus = securityDecision === 'APPROVED' && rawSecurityStatus === 'scanning'
+    ? 'completed' : rawSecurityStatus;
   const qualificationStatus: DiscoveredToken['qualification_status'] =
     securityDecision === 'APPROVED' ? 'qualified'
       : securityDecision === 'REJECTED' ? 'rejected'
