@@ -576,7 +576,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         />
                       )}
                       <div className="relative z-10">
-                      <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex min-w-0 items-start gap-2.5">
                         <TokenAvatar
                           symbol={cardSymbol || cardName}
                           logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
