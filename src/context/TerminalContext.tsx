@@ -189,6 +189,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   return {
     mint, state_version: Math.max(previousStateVersion, incomingStateVersion),
     security_scanned_at: Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 ? new Date(incomingSecurityScannedAt).toISOString() : previous?.security_scanned_at,
+    strategy_decision: previous?.strategy_decision,
+    strategy_reasons: previous?.strategy_reasons,
+    strategy_evaluated_at: previous?.strategy_evaluated_at,
     name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
     symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
     metadata_uri: String(payload.metadata_uri || metadata.uri || previous?.metadata_uri || ''),
