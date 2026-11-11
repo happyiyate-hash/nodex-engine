@@ -603,43 +603,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                               )}
                             </div>
                           )}
-                          {errorDetails && (
-                            <div className="mt-1">
-                              <button
-                                type="button"
-                                aria-expanded={errorExpanded}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setExpandedErrors((previous) => previous.includes(launch.mint_address)
-                                    ? previous.filter((mint) => mint !== launch.mint_address)
-                                    : [...previous, launch.mint_address]);
-                                }}
-                                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-medium text-red-200/75 transition-colors hover:bg-red-400/[0.08] hover:text-red-100"
-                              >
-                                <span className="h-1 w-1 rounded-full bg-red-300" />
-                                {errorExpanded ? 'Hide error details' : 'Error details'}
-                                <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
-                              </button>
-                              {errorExpanded && (
-                                <div className="mt-1 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
-                                  <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
-                                    {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
-                                    {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
-                                    {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
-                                    {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
-                                  </div>
-                                  <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
-                                  {errorDetails?.raw_response != null && (
-                                    <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
-                                      {typeof errorDetails.raw_response === 'string'
-                                        ? errorDetails.raw_response
-                                        : JSON.stringify(errorDetails.raw_response, null, 2)}
-                                    </pre>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
                           <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${statusTone}`}>
@@ -657,6 +620,49 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           </button>
                         </div>
                       </div>
+                      {errorDetails && (
+                        <div className="mt-1.5 border-t border-white/[0.045] pt-1.5">
+                          <button
+                            type="button"
+                            aria-expanded={errorExpanded}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setExpandedErrors((previous) => previous.includes(launch.mint_address)
+                                ? previous.filter((mint) => mint !== launch.mint_address)
+                                : [...previous, launch.mint_address]);
+                            }}
+                            className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-medium text-red-200/75 transition-colors duration-200 hover:bg-red-400/[0.08] hover:text-red-100"
+                          >
+                            <span className="h-1 w-1 rounded-full bg-red-300" />
+                            {errorExpanded ? 'Hide error details' : 'Error details'}
+                            <span aria-hidden="true" className={`inline-block transition-transform duration-300 ease-out ${errorExpanded ? 'rotate-180' : 'rotate-0'}`}>⌄</span>
+                          </button>
+                          <div
+                            className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out"
+                            style={{ gridTemplateRows: errorExpanded ? '1fr' : '0fr', opacity: errorExpanded ? 1 : 0 }}
+                            aria-hidden={!errorExpanded}
+                          >
+                            <div className="min-h-0 overflow-hidden">
+                              <div className="mt-1 rounded-md bg-black/45 p-2 text-left text-[9px] text-white/65">
+                                <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-left text-white/40">
+                                  {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
+                                  {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
+                                  {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
+                                  {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
+                                </div>
+                                <p className="whitespace-pre-wrap break-words text-left text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
+                                {errorDetails?.raw_response != null && (
+                                  <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-left text-[8px] text-white/45">
+                                    {typeof errorDetails.raw_response === 'string'
+                                      ? errorDetails.raw_response
+                                      : JSON.stringify(errorDetails.raw_response, null, 2)}
+                                  </pre>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       </div>
                     </article>
                   );
