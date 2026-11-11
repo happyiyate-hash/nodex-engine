@@ -726,7 +726,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       if (event.event_type === 'token_state_updated') {
         const stateData = event.data?.data && typeof event.data.data === 'object'
-          ? { ...event.data.data, mint_address: event.data.mint_address }
+          ? { ...event.data, ...event.data.data, mint_address: event.data.mint_address }
           : event.data;
         const mint = String(stateData?.mint_address || '');
         const mapped = mapTokenDetailSnapshot(stateData || {});
