@@ -11,11 +11,11 @@ export interface TokenLifecycleCacheRecord {
 const DATABASE_NAME = 'nodex-token-registry';
 const STORE_NAME = 'lifecycle';
 const DATABASE_VERSION = 1;
-const MAX_CACHED_TOKENS = 2000;
+const MAX_CACHED_TOKENS = 500;
 
 const LIFECYCLE_FIELDS: (keyof DiscoveredToken)[] = [
   'mint', 'name', 'symbol', 'metadata_uri', 'logo_url', 'metadata_status',
-  'scan_status', 'scan_progress', 'scan_stage', 'monitoring_status',
+  'scan_status', 'monitoring_status',
   'authority_status', 'authority_rechecks', 'creator_wallet', 'launch_time',
   'venue', 'safety_status', 'qualification_status', 'rejection_reason',
   'diagnostics', 'safety_details',
@@ -41,11 +41,11 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 function lifecycleOf(token: DiscoveredToken): Partial<DiscoveredToken> {
-  const lifecycle: Partial<DiscoveredToken> = {};
+  const lifecycle: Record<string, unknown> = {};
   for (const field of LIFECYCLE_FIELDS) {
-    (lifecycle as Record<string, unknown>)[field] = token[field];
+    lifecycle[field] = token[field];
   }
-  return lifecycle;
+  return lifecycle as Partial<DiscoveredToken>;
 }
 
 export async function loadTokenLifecycleCache(): Promise<TokenLifecycleCacheRecord[]> {
@@ -122,8 +122,6 @@ export function lifecycleCacheSignature(token: DiscoveredToken): string {
   return JSON.stringify({
     state_version: token.state_version || 0,
     scan_status: token.scan_status,
-    scan_progress: token.scan_progress,
-    scan_stage: token.scan_stage,
     monitoring_status: token.monitoring_status,
     safety_status: token.safety_status,
     qualification_status: token.qualification_status,
