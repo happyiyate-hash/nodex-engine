@@ -666,7 +666,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           </div>
 {hasScanLifecycle && (
                             <ScanLifecycleIndicator
-                              progress={lifecycleProgress}
+                              progress={lifecycleProgress ?? 0}
                               isScanning={lifecycleStatus === 'scanning'}
                               stage={lifecycleSubEvent || 'Security scan'}
                               label={lifecycleLabel}
