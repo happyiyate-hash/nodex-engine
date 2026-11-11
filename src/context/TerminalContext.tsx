@@ -43,7 +43,7 @@ interface TerminalContextType {
   toggleStrategy: () => void;
   closePosition: (positionId: string, percentage: number) => void;
   executeManualPaperBuy: (mint: string, solAmount: number) => void;
-  updatePositionRisk: (positionId: string, sl: number, tp: number) => void;
+  updatePositionRisk: (positionId: string, sl: number, tp: number) => Promise<boolean>;
   saveStrategyConfig: (config: StrategyConfig) => Promise<boolean>;
   updateSettings: (newSettings: Partial<ApiSettings>) => void;
   updateConnectionDraft: (newSettings: Partial<ApiSettings>) => void;
@@ -764,7 +764,19 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
   const closePosition = () => setBackendError('Paper position closing is unavailable: no backend paper-order endpoint exists yet.');
   const executeManualPaperBuy = () => setBackendError('Paper buying is disabled until a real backend paper-order endpoint is implemented.');
-  const updatePositionRisk = () => setBackendError('Position risk updates are unavailable until the backend provides persistent position endpoints.');
+  const updatePositionRisk = async (positionId: string, sl: number, tp: number): Promise<boolean> => {
+    try {
+      const result = await apiClient.updatePositionRisk(positionId, sl, tp);
+      const mapped = mapBackendPosition(result.position);
+      if (!mapped) throw new Error('Backend saved the risk policy but returned an invalid position snapshot.');
+      setPositions((current) => current.map((position) => position.id === positionId ? mapped : position));
+      setBackendError(null);
+      return true;
+    } catch (error) {
+      setBackendError(error instanceof Error ? error.message : 'Could not update this position risk policy.');
+      return false;
+    }
+  };
   const saveStrategyConfig = async (config: StrategyConfig): Promise<boolean> => {
     try {
       const result = await apiClient.updateStrategy(config);
