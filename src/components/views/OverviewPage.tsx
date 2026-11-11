@@ -45,20 +45,16 @@ const AnimatedCardScanProgress: React.FC<AnimatedCardScanProgressProps> = ({
 
   if (!hasProgress) return null;
   const finished = terminal && displayProgress >= 99.99;
+  if (!hasProgress) return null;
   return (
-    <>
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 left-0 rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[opacity] duration-300 ease-out"
-        style={{ width: `${displayProgress}%`, opacity: finished ? 0 : 1 }}
-      />
-      <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-[9px] leading-tight text-white/60" title={finished ? label : (subEvent || 'Backend in progress')}>
-          {finished ? <span className={`inline-flex max-w-full truncate rounded-md px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.06em] ${statusTone}`}>{label}</span> : (subEvent || 'Scanning')}
-        </span>
-        <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
-      </div>
-    </>
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-[1] rounded-xl bg-[#B8C5D5]/[0.11] transition-[opacity] duration-300 ease-out"
+      style={{
+        clipPath: `inset(0 ${100 - displayProgress}% 0 0 round 0.75rem)`,
+        opacity: terminal && displayProgress >= 99.99 ? 0 : 1,
+      }}
+    />
   );
 };
 type FeedFilter = 'detected' | 'qualified' | 'positions';
@@ -626,6 +622,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         className="pointer-events-none absolute inset-0 z-0"
                         style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
                       />
+                      <AnimatedCardScanProgress
+                        key={launch.mint_address}
+                        status={lifecycleStatus}
+                        progress={lifecycleProgress}
+                        label={lifecycleLabel}
+                        subEvent={lifecycleSubEvent}
+                        statusTone={statusTone}
+                      />
 
                       <div className="relative z-10">
                       <div className="flex min-w-0 items-start gap-2.5">
@@ -640,14 +644,12 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                             {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                           </div>
-<AnimatedCardScanProgress
-                            key={launch.mint_address}
-                            status={lifecycleStatus}
-                            progress={lifecycleProgress}
-                            label={lifecycleLabel}
-                            subEvent={lifecycleSubEvent}
-                            statusTone={statusTone}
-                          />
+<div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-[9px] leading-tight text-white/60" title={lifecycleSubEvent || 'Backend in progress'}>
+                              {lifecycleSubEvent || (lifecycleStatus === 'scanning' ? 'Scanning' : lifecycleLabel)}
+                            </span>
+                            <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{lifecycleStatus === 'scanning' ? `${Math.round(lifecycleProgress ?? 0)}%` : lifecycleLabel}</span>
+                          </div>
                           {errorDetails && (
                             <div className="mt-1">
                               <button
