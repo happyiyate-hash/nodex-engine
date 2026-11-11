@@ -571,8 +571,24 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const monitoringData = monitoringEvent?.data;
 
                   const checks = Array.isArray(report?.checks) ? report.checks : [];
-                  const price = Number(tokenData.current_price ?? tokenData.price_usd ?? tokenData.price ?? report?.price_usd ?? report?.current_price);
-                  const marketCap = Number(tokenData.market_cap ?? tokenData.market_cap_usd ?? report?.market_cap_usd);
+                  // TerminalContext normalizes market ticks to current_price_usd/current_price_sol.
+                  // Prefer USD for the card's dollar display; if only SOL is known, label it as SOL.
+                  const priceUsd = Number(
+                    tokenData.current_price_usd ??
+                    tokenData.price_usd ??
+                    report?.price_usd ??
+                    report?.current_price_usd
+                  );
+                  const priceSol = Number(
+                    tokenData.current_price_sol ??
+                    tokenData.price_sol ??
+                    report?.price_sol
+                  );
+                  const hasUsdPrice = Number.isFinite(priceUsd) && priceUsd > 0;
+                  const hasSolPrice = Number.isFinite(priceSol) && priceSol > 0;
+                  const price = hasUsdPrice ? priceUsd : hasSolPrice ? priceSol : Number.NaN;
+                  const priceCurrency = hasUsdPrice ? 'USD' : hasSolPrice ? 'SOL' : '';
+                  const marketCap = Number(tokenData.market_cap_usd ?? tokenData.market_cap ?? report?.market_cap_usd);
                   const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
                   const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
                   const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
@@ -679,7 +695,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       </section>}
                       <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2 border-t border-white/[0.055] pt-1.5">
                         <div className="flex min-w-0 items-center gap-3 text-[8px]">
-                          <span className="whitespace-nowrap text-white/35">Price <span className="font-medium tabular-nums text-white/80">{Number.isFinite(price) && price > 0 ? `$${price.toFixed(8)}` : '—'}</span></span>
+                          <span className="whitespace-nowrap text-white/35">Price <span className="font-medium tabular-nums text-white/80">{Number.isFinite(price) && price > 0 ? (priceCurrency === 'USD' ? `${price.toFixed(8)}` : `${price.toFixed(8)} SOL`) : '—'}</span></span>
                           <span className="whitespace-nowrap text-white/35">MCap <span className="font-medium tabular-nums text-white/80">{Number.isFinite(marketCap) && marketCap > 0 ? `$${marketCap.toLocaleString('en-US',{maximumFractionDigits:0})}` : '—'}</span></span>
                         </div>
                         <div className="flex shrink-0 items-center gap-2.5 text-[8px] text-white/35">
