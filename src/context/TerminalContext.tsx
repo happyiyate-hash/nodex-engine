@@ -945,6 +945,12 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setBackendError(null);
   };
   const openTokenDetailByMint = (mint: string, fallback: Partial<DiscoveredToken> = {}) => {
+    // Detailed token views are reserved for active paper positions. Detection
+    // cards remain identity-only and cannot trigger token-detail subscriptions.
+    if (!positions.some((position) => position.mint === mint && position.status === 'OPEN')) {
+      setSelectedToken(null);
+      return;
+    }
     const existing = tokens.find((item) => item.mint === mint);
     if (existing) {
       setSelectedToken(existing);
@@ -1007,6 +1013,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     void loadTokenSnapshot(mint);
   };
   const loadTokenSnapshot = useCallback(async (mint: string) => {
+    if (!positions.some((position) => position.mint === mint && position.status === 'OPEN')) return;
     try {
       const snapshot = await apiClient.getTokenState(mint);
       const mapped = mapTokenDetailSnapshot(snapshot);
