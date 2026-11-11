@@ -599,9 +599,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setTokens((previous) => {
               const byMint = new Map(previous.map((token) => [token.mint, token]));
               for (const item of recoveredTokens) {
-                const mint = String(item?.mint_address || item?.mint || '');
+                if (!item || typeof item !== 'object') continue;
+                const tokenData = item as Record<string, any>;
+                const mint = String(tokenData.mint_address || tokenData.mint || '');
                 if (!mint) continue;
-                const mapped = mapTokenDetailSnapshot(item, byMint.get(mint));
+                const mapped = mapTokenDetailSnapshot(tokenData, byMint.get(mint));
                 if (mapped) byMint.set(mapped.mint, mapped);
               }
               return Array.from(byMint.values());
