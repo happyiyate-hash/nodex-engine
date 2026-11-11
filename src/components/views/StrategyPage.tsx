@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
 import { useToast } from '../ui/ToastProvider';
@@ -17,20 +17,57 @@ const NumberField = ({
 }: {
   label: string; suffix?: string; value: number; onChange: (value: number) => void;
   hint?: string; step?: string; disabled?: boolean;
-}) => (
-  <label className="block min-w-0 border-b border-white/[0.07] py-3">
-    <span className="mb-2 block text-[11px] font-medium text-white/60">{label}</span>
-    <span className="flex h-10 items-center border-b border-white/[0.14] focus-within:border-white/50">
-      <input
-        type="number" min="0" step={step} value={value} disabled={disabled}
-        onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))}
-        className="min-w-0 flex-1 bg-transparent text-[14px] font-medium tabular-nums text-white outline-none disabled:cursor-not-allowed disabled:text-white/35"
-      />
-      {suffix && <span className="ml-2 shrink-0 text-[11px] text-white/40">{suffix}</span>}
-    </span>
-    {hint && <span className="mt-1.5 block text-[10px] leading-relaxed text-white/35">{hint}</span>}
-  </label>
-);
+}) => {
+  // Keep the editable text separate from the numeric setting. Converting an
+  // empty input to 0 on every keystroke makes the zero impossible to delete.
+  const [draft, setDraft] = useState(String(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setDraft(String(value));
+  }, [value]);
+
+  const handleChange = (raw: string) => {
+    setDraft(raw);
+    if (raw.trim() === '' || raw === '-' || raw.endsWith('.')) return;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) onChange(Math.max(0, parsed));
+  };
+
+  const handleBlur = () => {
+    if (draft.trim() === '' || draft === '-') {
+      onChange(0);
+      setDraft('0');
+      return;
+    }
+    const parsed = Number(draft);
+    if (Number.isFinite(parsed)) {
+      const normalized = Math.max(0, parsed);
+      onChange(normalized);
+      setDraft(String(normalized));
+    } else {
+      setDraft(String(value));
+    }
+  };
+
+  return (
+    <label className="block min-w-0 border-b border-white/[0.07] py-3">
+      <span className="mb-2 block text-[11px] font-medium text-white/60">{label}</span>
+      <span className="flex h-10 items-center border-b border-white/[0.14] focus-within:border-white/50">
+        <input
+          ref={inputRef}
+          type="number" inputMode="decimal" min="0" step={step}
+          value={draft} disabled={disabled}
+          onChange={(event) => handleChange(event.target.value)}
+          onBlur={handleBlur}
+          className="min-w-0 flex-1 bg-transparent text-[14px] font-medium tabular-nums text-white outline-none disabled:cursor-not-allowed disabled:text-white/35"
+        />
+        {suffix && <span className="ml-2 shrink-0 text-[11px] text-white/40">{suffix}</span>}
+      </span>
+      {hint && <span className="mt-1.5 block text-[10px] leading-relaxed text-white/35">{hint}</span>}
+    </label>
+  );
+};
 
 const ToggleRow = ({
   title, detail, checked, onChange, disabled = false,
