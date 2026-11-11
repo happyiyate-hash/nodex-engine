@@ -546,7 +546,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const statusTone = ({
                     verified: 'text-emerald-300',
                     rejected: 'text-red-300',
+                    strategy_rejected: 'text-red-300',
                     failed: 'text-red-300',
+                    sell_failed: 'text-red-300',
                     unverified: 'text-amber-200',
                     scanning: 'text-sky-200',
                     monitoring: 'text-violet-200',
