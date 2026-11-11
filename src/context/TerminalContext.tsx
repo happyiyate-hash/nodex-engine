@@ -180,30 +180,18 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : event.event_type === 'token_metadata_updated' ? String(data.status || 'available')
     : event.event_type === 'token_metadata_failed' ? String(data.status || 'failed')
     : previous?.metadata_status;
-  const lifecycleByEvent: Record<string, { status: string; label: string; stage: string }> = {
-    token_scan_started: { status: 'scanning', label: 'Scanning', stage: 'initializing' },
-    token_scan_progress: { status: 'scanning', label: 'Scanning', stage: String(data.stage || 'security_checks') },
-    token_scan_completed: { status: String(data.status || 'verified').toLowerCase(), label: String(data.status || 'Verified'), stage: 'security_complete' },
-    token_scan_failed: { status: 'failed', label: 'Scan failed', stage: 'security_failed' },
-    token_monitoring_started: { status: 'monitoring', label: 'Monitoring', stage: 'market_watch' },
-    token_monitoring_update: { status: 'monitoring', label: 'Monitoring', stage: String(data.stage || 'market_watch') },
-    token_monitoring_completed: { status: 'monitoring', label: 'Monitoring complete', stage: 'monitoring_complete' },
-    market_subscription_requested: { status: 'monitoring', label: 'Monitoring', stage: 'waiting_for_market_feed' },
-    market_subscription_waiting: { status: 'monitoring', label: 'Monitoring', stage: 'waiting_for_market_feed' },
-    market_subscription_active: { status: 'monitoring', label: 'Monitoring', stage: 'market_feed_active' },
-    paper_entry_evaluation: { status: 'evaluating', label: 'Evaluating entry', stage: 'strategy_checks' },
-    paper_buy_started: { status: 'executing_buy', label: 'Executing buy order', stage: String(data.stage || 'paper_order_start') },
-    paper_buy_executed: { status: 'bought_paper', label: 'Paper buy executed', stage: 'position_open' },
-    paper_buy_failed: { status: 'buy_failed', label: 'Buy failed', stage: 'entry_failed' },
-    paper_sell_executed: { status: 'closed', label: 'Position closed', stage: 'position_closed' },
-  };
-  const lifecycleEvent = lifecycleByEvent[event.event_type];
+  // Lifecycle is backend-owned. Ordinary event names never imply a UI status.
+  // Only an explicit activity object (or a canonical token_state_updated snapshot)
+  // can change the lifecycle displayed for this mint.
+  const incomingActivity = payload.activity && typeof payload.activity === 'object'
+    ? payload.activity as Record<string, any>
+    : null;
   const incomingLifecycleVersion = data.state_version == null && data.version == null
     ? null : Number(data.state_version ?? data.version);
   const previousLifecycleVersion = Number(previous?.lifecycle_version || 0);
   const incomingLifecycleTime = Date.parse(String(data.updated_at || event.timestamp || ''));
   const previousLifecycleTime = Date.parse(String(previous?.lifecycle_updated_at || ''));
-  const lifecycleIsNewer = Boolean(lifecycleEvent) && (
+  const lifecycleIsNewer = Boolean(incomingActivity) && (
     incomingLifecycleVersion !== null
       ? incomingLifecycleVersion > previousLifecycleVersion ||
         incomingLifecycleVersion === previousLifecycleVersion &&
@@ -211,11 +199,6 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
       : Number.isFinite(incomingLifecycleTime) &&
         (!Number.isFinite(previousLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
   );
-  const lifecycleStatus = lifecycleIsNewer
-    ? (event.event_type === 'token_scan_completed'
-      ? (String(data.decision || data.status || '').toLowerCase().includes('approv') || String(data.decision || '').toLowerCase().includes('qualif') ? 'verified' : String(data.decision || data.status || 'unverified').toLowerCase())
-      : (lifecycleEvent?.status || previous?.lifecycle_status))
-    : previous?.lifecycle_status;
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : previousHasTerminalVerdict && !mayReplaceTerminalVerdict ? previous!.qualification_status
     : isUnverifiedTerminal ? 'unverified'
@@ -238,12 +221,13 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     scan_stage: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
       ? String(data.stage || previous?.scan_stage || '')
       : previous?.scan_stage,
-    lifecycle_status: lifecycleStatus || previous?.lifecycle_status,
-    lifecycle_label: lifecycleIsNewer ? (lifecycleEvent?.label || previous?.lifecycle_label) : previous?.lifecycle_label,
-    lifecycle_stage: lifecycleIsNewer ? (lifecycleEvent?.stage || previous?.lifecycle_stage) : previous?.lifecycle_stage,
-    lifecycle_progress: lifecycleIsNewer
-      ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.lifecycle_progress ?? 0))
-      : previous?.lifecycle_progress,
+    lifecycle_status: lifecycleIsNewer ? String(incomingActivity?.status ?? '') : previous?.lifecycle_status,
+    lifecycle_label: lifecycleIsNewer ? String(incomingActivity?.label ?? '') : previous?.lifecycle_label,
+    lifecycle_stage: lifecycleIsNewer ? String(incomingActivity?.stage ?? '') : previous?.lifecycle_stage,
+    lifecycle_sub_event: lifecycleIsNewer ? String(incomingActivity?.sub_event ?? '') : previous?.lifecycle_sub_event,
+    lifecycle_progress: lifecycleIsNewer && incomingActivity?.progress != null
+      ? Number(incomingActivity.progress) : previous?.lifecycle_progress,
+    lifecycle_error: lifecycleIsNewer ? (incomingActivity?.error ?? previous?.lifecycle_error) : previous?.lifecycle_error,
     lifecycle_updated_at: lifecycleIsNewer ? String(data.updated_at || event.timestamp || new Date().toISOString()) : previous?.lifecycle_updated_at,
     lifecycle_version: Math.max(previousLifecycleVersion, incomingLifecycleVersion ?? 0),
     strategy_decision: event.event_type === 'paper_entry_evaluation' ? String(data.decision || 'wait') : previous?.strategy_decision,
