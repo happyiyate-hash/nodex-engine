@@ -544,7 +544,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="space-y-1.5 pb-2">
                 {filteredLaunches.map((item) => {
                   const { launch, status, reason, updatedAt } = item;
-                  const matchesLaunch = (event: NodeXEvent) => event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address;
+                  const matchesLaunch = (event: NodeXEvent) => event.data?.mint_address
+                    ? event.data.mint_address === launch.mint_address
+                    : event.token_mint === launch.mint_address;
                   const progressEvent = events.find((event) => event.event_type === 'token_scan_progress' && matchesLaunch(event));
                   const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && matchesLaunch(event))
                     || progressEvent
