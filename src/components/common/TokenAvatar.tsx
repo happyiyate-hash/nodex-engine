@@ -166,7 +166,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
           alt="Solana logo"
           loading="eager"
           decoding="async"
-          className="absolute inset-0 h-full w-full object-contain p-[12%]"
+          className="absolute inset-0 h-full w-full object-cover transition-opacity duration-200"
         />
       )}
       {imageUrl && (
