@@ -595,6 +595,21 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const checkRows = checks;
                   const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
                   const scanStage = String(progressEvent?.data?.stage || tokenData.scan_stage || report?.stage || '').replace(/[_-]+/g, ' ').trim();
+                  const lifecycleStatus = String(tokenData.lifecycle_status || '').toLowerCase();
+                  const lifecycleProgress = Math.max(0, Math.min(100, Number(tokenData.lifecycle_progress ?? tokenData.scan_progress ?? progressEvent?.data?.progress ?? 0)));
+                  const lifecycleLabel = tokenData.lifecycle_label || (
+                    lifecycleStatus === 'verified' || isQualified ? 'Verified'
+                    : lifecycleStatus === 'monitoring' ? 'Monitoring'
+                    : lifecycleStatus === 'evaluating' ? 'Evaluating entry'
+                    : lifecycleStatus === 'bought_paper' ? 'Paper buy executed'
+                    : lifecycleStatus === 'buy_failed' ? 'Buy failed'
+                    : lifecycleStatus === 'rejected' ? 'Rejected'
+                    : lifecycleStatus === 'unverified' ? 'Unverified'
+                    : status === 'ANALYZING' ? 'Scanning'
+                    : status === 'FAILED' ? 'Scan failed'
+                    : 'Waiting for scan'
+                  );
+                  const isLifecycleProgress = ['scanning', 'evaluating'].includes(lifecycleStatus || (status === 'ANALYZING' ? 'scanning' : ''));
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
                   return (
                     <article
@@ -614,7 +629,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${cardSymbol}</span>}
                           </div>
                           <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                            <span className="min-w-0 truncate font-mono text-[8px] text-white/35">{launch.mint_address}</span>
+                            <span className="min-w-0 truncate font-mono text-[8px] text-white/35">{launch.mint_address.slice(0, 7)}…{launch.mint_address.slice(-5)}</span>
                             <button
                               type="button"
                               aria-label="Copy token contract address"
@@ -625,11 +640,29 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             </button>
                           </div>
                         </div>
-                        {isQualified
-                          ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/[0.06] px-1.5 py-0.5 text-[7px] font-semibold tracking-wide text-[#83b982]"><ShieldCheck className="h-2.5 w-2.5" /> VERIFIED</span>
-                          : <span className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${status === 'ANALYZING' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : status === 'REJECTED' || status === 'BUY FAILED' || status === 'FAILED' ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]' : status === 'UNVERIFIED' ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]' : 'border-white/[0.08] bg-white/[0.03] text-white/50'}`}>
-                            {status === 'ANALYZING' ? 'SCANNING' : status === 'UNVERIFIED' ? 'UNVERIFIED' : status === 'FAILED' ? 'SCAN FAILED' : status === 'REJECTED' || status === 'BUY FAILED' ? status : 'DETECTED'}
-                          </span>}
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${
+                          ['verified', 'bought_paper'].includes(lifecycleStatus) || (!lifecycleStatus && isQualified)
+                            ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-[#83b982]'
+                            : ['rejected', 'failed', 'buy_failed'].includes(lifecycleStatus) || ['REJECTED', 'BUY FAILED', 'FAILED'].includes(status)
+                              ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]'
+                              : ['scanning', 'unverified', 'evaluating'].includes(lifecycleStatus) || status === 'ANALYZING' || status === 'UNVERIFIED'
+                                ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]'
+                                : 'border-white/[0.08] bg-white/[0.03] text-white/50'
+                        }`}>
+                          {['verified', 'bought_paper'].includes(lifecycleStatus) || (!lifecycleStatus && isQualified) ? <ShieldCheck className="h-2.5 w-2.5" /> : null}
+                          {(lifecycleLabel || 'Detected').toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="ml-[46px] mt-2 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 text-[8px]">
+                          <span className="truncate text-white/50">{lifecycleStatus === 'monitoring' ? 'Monitoring this token for entry conditions' : lifecycleStatus === 'evaluating' ? 'Checking paper-entry criteria' : lifecycleStatus === 'bought_paper' ? 'Paper position opened' : lifecycleStatus === 'buy_failed' ? 'Paper entry could not complete' : lifecycleStatus === 'verified' ? 'Security checks passed' : lifecycleStatus === 'rejected' ? 'Security checks rejected this token' : lifecycleStatus === 'unverified' ? 'Unable to verify this token' : scanStage ? scanStage : 'Security scan in progress'}</span>
+                          {isLifecycleProgress && <span className="shrink-0 tabular-nums text-white/45">{Math.round(lifecycleProgress)}%</span>}
+                        </div>
+                        {isLifecycleProgress && (
+                          <div className="h-[2px] overflow-hidden rounded-full bg-white/[0.08]">
+                            <div className="h-full rounded-full bg-[#b7b7b7] transition-[width] duration-300 ease-out" style={{ width: `${lifecycleProgress}%` }} />
+                          </div>
+                        )}
                       </div>
                     </article>
                   );
