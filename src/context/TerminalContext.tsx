@@ -541,10 +541,17 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!active) return;
       if (snapshot.profile) {
         if (Array.isArray(snapshot.profile.tokens)) {
-          const restoredTokens = snapshot.profile.tokens
-            .map((item) => mapTokenDetailSnapshot(item))
-            .filter((token): token is DiscoveredToken => token !== null);
-          setTokens(restoredTokens.slice(0, 500));
+          const restoredSnapshots = snapshot.profile.tokens;
+          setTokens((previous) => {
+            const byMint = new Map(previous.map((token) => [token.mint, token]));
+            for (const item of restoredSnapshots) {
+              const mint = String(item?.mint_address || item?.mint || '');
+              if (!mint) continue;
+              const mapped = mapTokenDetailSnapshot(item, byMint.get(mint));
+              if (mapped) byMint.set(mapped.mint, mapped);
+            }
+            return Array.from(byMint.values());
+          });
         }
         const runtime = engineEventStore.hydrate(snapshot.profile);
         setProfile(runtime.profile);
@@ -609,7 +616,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const merged = mergeTokenEvent(byMint.get(launch.mint_address), restoredEvent);
             if (merged) byMint.set(merged.mint, merged);
           }
-          return [...byMint.values()].slice(0, 500);
+          return [...byMint.values()];
         });
         return;
       }
