@@ -118,6 +118,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [retryPending, setRetryPending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   const sizeClasses = {
     sm: 'w-5 h-5 text-[9px]',
     md: 'w-7 h-7 text-xs',
@@ -132,6 +133,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
     setRetryAttempt(0);
     setRetryPending(false);
     setLoaded(false);
+    setLogoFailed(false);
   }, [logoUrl]);
 
   // Retry transient CDN/network failures indefinitely with a capped backoff.
@@ -158,6 +160,15 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   return (
     <div ref={rootRef} className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ' + className}>
       {fallback}
+      {(!imageUrl || logoFailed) && (
+        <img
+          src="/assets/token-fallbacks/solana-logo.png"
+          alt="Solana logo"
+          loading="eager"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-contain p-[12%]"
+        />
+      )}
       {imageUrl && (
         <img
           key={imageUrl + '-' + retryAttempt}
@@ -173,6 +184,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
               rootRef.current?.closest<HTMLElement>('[data-token-card]')?.style.setProperty('--token-accent-rgb', accent);
             }
             setLoaded(true);
+            setLogoFailed(false);
             setRetryPending(false);
           }}
           onError={() => {
@@ -181,12 +193,13 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
               setGatewayIndex((index) => index + 1);
               setRetryAttempt(0);
             } else {
+              setLogoFailed(true);
               setRetryPending(true);
             }
           }}
         />
       )}
-      {imageUrl && !loaded && (
+      {imageUrl && !loaded && !logoFailed && (
         <span className="absolute inset-0 animate-pulse bg-white/[0.06]" aria-label="Loading token logo" />
       )}
     </div>
