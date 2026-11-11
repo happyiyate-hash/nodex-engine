@@ -597,75 +597,124 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const checkRows = checks;
                   const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
                   const scanStage = String(progressEvent?.data?.stage || tokenData.scan_stage || report?.stage || '').replace(/[_-]+/g, ' ').trim();
+                  // This card is a pure view of the backend's canonical activity snapshot.
+                  // Never infer a lifecycle from event names, strategy fallbacks or missing fields.
                   const lifecycleStatus = String(tokenData.lifecycle_status || '').toLowerCase();
-                  const lifecycleProgress = Math.max(0, Math.min(100, Number(tokenData.lifecycle_progress ?? tokenData.scan_progress ?? progressEvent?.data?.progress ?? 0)));
-                  const lifecycleLabel = tokenData.lifecycle_label || (
-                    lifecycleStatus === 'verified' || isQualified ? 'Verified'
-                    : lifecycleStatus === 'monitoring' ? 'Monitoring'
-                    : lifecycleStatus === 'evaluating' ? 'Evaluating entry'
-                    : lifecycleStatus === 'bought_paper' ? 'Paper buy executed'
-                    : lifecycleStatus === 'buy_failed' ? 'Buy failed'
-                    : lifecycleStatus === 'rejected' ? 'Rejected'
-                    : lifecycleStatus === 'unverified' ? 'Unverified'
-                    : status === 'ANALYZING' ? 'Scanning'
-                    : status === 'FAILED' ? 'Scan failed'
-                    : 'Waiting for scan'
+                  const lifecycleLabel = String(tokenData.lifecycle_label || 'Awaiting backend status');
+                  const lifecycleProgressValue = Number(tokenData.lifecycle_progress);
+                  const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
+                    ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
+                  const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
+                  const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
+                  const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
+                    ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
                   );
-                  const isLifecycleProgress = ['scanning', 'evaluating'].includes(lifecycleStatus || (status === 'ANALYZING' ? 'scanning' : ''));
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
+                  const statusTone = ({
+                    verified: 'text-emerald-300',
+                    rejected: 'text-red-300',
+                    failed: 'text-red-300',
+                    unverified: 'text-amber-200',
+                    scanning: 'text-sky-200',
+                    monitoring: 'text-violet-200',
+                    evaluating: 'text-sky-200',
+                    executing_buy: 'text-amber-200',
+                    bought_paper: 'text-emerald-300',
+                    buy_failed: 'text-red-300',
+                    closed: 'text-white/60',
+                  } as Record<string, string>)[lifecycleStatus] || 'text-white/55';
+                  const errorMessage = String(errorDetails?.message || '');
                   return (
                     <article
                       key={launch.id || launch.signature}
-                      className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0"
+                      className="mb-1.5 rounded-lg bg-[#191919] px-2.5 py-2.5 last:mb-0"
                     >
-                      <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2">
+                        <span className={`truncate text-[9px] font-semibold uppercase tracking-[0.11em] ${statusTone}`}>
+                          {lifecycleLabel}
+                        </span>
+                        {isLifecycleProgress && (
+                          <span className="shrink-0 text-[9px] tabular-nums text-white/45">{Math.round(lifecycleProgress!)}%</span>
+                        )}
+                      </div>
+                      <div className="flex min-w-0 items-center gap-2">
                         <TokenAvatar
                           symbol={cardSymbol || cardName}
                           logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
                           size="lg"
-                          className="h-9 w-9 shrink-0"
+                          className="h-8 w-8 shrink-0"
                         />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate text-[11px] font-semibold leading-tight text-white">{cardName}</span>
-                            {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${cardSymbol}</span>}
-                          </div>
-                          <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                            <span className="min-w-0 truncate font-mono text-[8px] text-white/35">{launch.mint_address.slice(0, 7)}…{launch.mint_address.slice(-5)}</span>
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <span className="min-w-0 truncate text-[11px] font-semibold leading-tight text-white">{cardName}</span>
+                          {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${cardSymbol}</span>}
+                        </div>
+                        <div className="flex max-w-[46%] min-w-0 shrink-0 items-center justify-end gap-1">
+                          <span className="truncate font-mono text-[8px] text-white/40">{launch.mint_address.slice(0, 7)}…{launch.mint_address.slice(-5)}</span>
+                          <button
+                            type="button"
+                            aria-label="Copy token contract address"
+                            onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
+                            className="shrink-0 rounded p-1 text-white/35 transition-colors hover:text-white/80"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                      {(lifecycleSubEvent || isLifecycleProgress) && (
+                        <div className="mt-2 min-w-0">
+                          {lifecycleSubEvent && (
+                            <div className="truncate text-[9px] leading-snug text-white/55" title={lifecycleSubEvent}>
+                              {lifecycleSubEvent}
+                            </div>
+                          )}
+                          {isLifecycleProgress && (
+                            <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.09]">
+                              <div
+                                className="h-full rounded-full bg-sky-300/80 transition-[width] duration-300 ease-out"
+                                style={{ width: `${lifecycleProgress}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {errorMessage && (
+                        <div className="mt-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="min-w-0 flex-1 truncate text-[9px] text-red-300/90" title={errorMessage}>{errorMessage}</span>
                             <button
                               type="button"
-                              aria-label="Copy token contract address"
-                              onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
-                              className="shrink-0 rounded p-1 text-white/35 transition-colors hover:text-white/80"
+                              aria-expanded={errorExpanded}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setExpandedErrors((previous) => previous.includes(launch.mint_address)
+                                  ? previous.filter((mint) => mint !== launch.mint_address)
+                                  : [...previous, launch.mint_address]);
+                              }}
+                              className="shrink-0 text-[9px] font-medium text-red-200/80 hover:text-red-100"
                             >
-                              <Copy className="h-3 w-3" />
+                              {errorExpanded ? 'Hide details' : 'Error details'}
                             </button>
                           </div>
+                          {errorExpanded && (
+                            <div className="mt-2 rounded-md bg-black/35 p-2 text-[9px] text-white/65">
+                              <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
+                                {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
+                                {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
+                                {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
+                                {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
+                              </div>
+                              <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage}</p>
+                              {errorDetails?.raw_response != null && (
+                                <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
+                                  {typeof errorDetails.raw_response === 'string'
+                                    ? errorDetails.raw_response
+                                    : JSON.stringify(errorDetails.raw_response, null, 2)}
+                                </pre>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[7px] font-semibold tracking-wide ${
-                          ['verified', 'bought_paper'].includes(lifecycleStatus) || (!lifecycleStatus && isQualified)
-                            ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-[#83b982]'
-                            : ['rejected', 'failed', 'buy_failed'].includes(lifecycleStatus) || ['REJECTED', 'BUY FAILED', 'FAILED'].includes(status)
-                              ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]'
-                              : ['scanning', 'unverified', 'evaluating', 'executing_buy'].includes(lifecycleStatus) || status === 'ANALYZING' || status === 'UNVERIFIED'
-                                ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]'
-                                : 'border-white/[0.08] bg-white/[0.03] text-white/50'
-                        }`}>
-                          {['verified', 'bought_paper'].includes(lifecycleStatus) || (!lifecycleStatus && isQualified) ? <ShieldCheck className="h-2.5 w-2.5" /> : null}
-                          {(lifecycleLabel || 'Detected').toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="ml-[46px] mt-2 space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-[8px]">
-                          <span className="truncate text-white/50">{lifecycleStatus === 'monitoring' ? 'Monitoring this token for entry conditions' : lifecycleStatus === 'evaluating' ? 'Checking paper-entry criteria' : lifecycleStatus === 'executing_buy' ? 'Submitting simulated paper order' : lifecycleStatus === 'bought_paper' ? 'Paper position opened' : lifecycleStatus === 'buy_failed' ? 'Paper entry could not complete' : lifecycleStatus === 'verified' ? 'Security checks passed' : lifecycleStatus === 'rejected' ? 'Security checks rejected this token' : lifecycleStatus === 'unverified' ? 'Unable to verify this token' : scanStage ? scanStage : 'Security scan in progress'}</span>
-                          {isLifecycleProgress && <span className="shrink-0 tabular-nums text-white/45">{Math.round(lifecycleProgress)}%</span>}
-                        </div>
-                        {isLifecycleProgress && (
-                          <div className="h-[2px] overflow-hidden rounded-full bg-white/[0.08]">
-                            <div className="h-full rounded-full bg-[#b7b7b7] transition-[width] duration-300 ease-out" style={{ width: `${lifecycleProgress}%` }} />
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </article>
                   );
                 })}
