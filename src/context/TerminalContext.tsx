@@ -195,21 +195,20 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     paper_buy_executed: { status: 'bought_paper', label: 'Paper buy executed', stage: 'position_open' },
     paper_buy_failed: { status: 'buy_failed', label: 'Buy failed', stage: 'entry_failed' },
     paper_sell_executed: { status: 'closed', label: 'Position closed', stage: 'position_closed' },
-    paper_sell_executed: { status: 'closed', label: 'Position closed', stage: 'position_closed' },
   };
   const lifecycleEvent = lifecycleByEvent[event.event_type];
   const incomingLifecycleVersion = Number(data.state_version ?? data.version ?? 0);
   const previousLifecycleVersion = Number(previous?.lifecycle_version || 0);
   const incomingLifecycleTime = Date.parse(String(data.updated_at || event.timestamp || ''));
   const previousLifecycleTime = Date.parse(String(previous?.lifecycle_updated_at || ''));
-  const lifecycleIsNewer = lifecycleEvent && (
+  const lifecycleIsNewer = Boolean(lifecycleEvent) && (
     incomingLifecycleVersion > previousLifecycleVersion ||
     incomingLifecycleVersion === previousLifecycleVersion &&
       (!Number.isFinite(previousLifecycleTime) || !Number.isFinite(incomingLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
   );
   const lifecycleStatus = lifecycleIsNewer
     ? (event.event_type === 'token_scan_completed'
-      ? (['approved', 'verified', 'completed'].includes(String(data.status || data.decision || '').toLowerCase()) ? 'verified' : String(data.status || 'unverified').toLowerCase())
+      ? (String(data.decision || data.status || '').toLowerCase().includes('approv') || String(data.decision || '').toLowerCase().includes('qualif') ? 'verified' : String(data.decision || data.status || 'unverified').toLowerCase())
       : (lifecycleEvent?.status || previous?.lifecycle_status))
     : previous?.lifecycle_status;
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
