@@ -183,9 +183,60 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   // Lifecycle is backend-owned. Ordinary event names never imply a UI status.
   // Only an explicit activity object (or a canonical token_state_updated snapshot)
   // can change the lifecycle displayed for this mint.
+  const scanActivity: Record<string, any> | null = event.event_type === 'token_scan_started'
+    ? {
+        status: 'scanning',
+        label: 'Scanning',
+        progress: 0,
+        stage: 'initializing',
+        sub_event: data.message || 'Preparing security scan',
+      }
+    : event.event_type === 'token_scan_progress'
+      ? {
+          status: 'scanning',
+          label: 'Scanning',
+          progress: Number(data.progress ?? 0),
+          stage: data.stage || 'security_checks',
+          sub_event: data.message || data.stage || 'Security checks in progress',
+        }
+      : event.event_type === 'token_scan_completed'
+        ? (() => {
+            const approved = decision === 'approved'
+              && data.diagnostic_only !== true
+              && data.all_checks_verified === true;
+            const rejected = decision === 'rejected';
+            return {
+              status: approved ? 'verified' : rejected ? 'rejected' : 'unverified',
+              label: approved ? 'Verified' : rejected ? 'Risk detected' : 'Unverified',
+              progress: 100,
+              stage: 'security_complete',
+              sub_event: approved
+                ? 'All required security checks completed'
+                : rejected
+                  ? data.message || 'Security checks rejected this token'
+                  : 'The backend could not establish a verified result',
+            };
+          })()
+        : event.event_type === 'token_scan_failed'
+          ? {
+              status: 'failed',
+              label: 'Scan failed',
+              progress: 0,
+              stage: data.stage || 'security_failed',
+              sub_event: data.message || 'Security scan failed',
+              error: {
+                severity: 'error',
+                stage: data.stage || 'security_failed',
+                provider: data.provider ?? null,
+                message: data.message || 'Security scan failed',
+                raw_response: data.error_details ?? null,
+                occurred_at: data.received_at || event.timestamp,
+              },
+            }
+          : null;
   const incomingActivity = payload.activity && typeof payload.activity === 'object'
     ? payload.activity as Record<string, any>
-    : null;
+    : scanActivity;
   const incomingLifecycleVersion = data.state_version == null && data.version == null
     ? null : Number(data.state_version ?? data.version);
   const previousLifecycleVersion = Number(previous?.lifecycle_version || 0);
@@ -215,12 +266,16 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     logo_url: String(payload.logo_url || payload.image_url || payload.image_uri || payload.logo_uri || payload.image || metadata.image || metadata.image_url || previous?.logo_url || ''),
     metadata_status: metadataStatus,
     scan_status: scanStatus,
-    scan_progress: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
-      ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.scan_progress ?? 0))
-      : previous?.scan_progress,
-    scan_stage: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
-      ? String(data.stage || previous?.scan_stage || '')
-      : previous?.scan_stage,
+    scan_progress: event.event_type === 'token_scan_started' || event.event_type === 'token_scan_failed'
+      ? 0
+      : event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
+        ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.scan_progress ?? 0))
+        : previous?.scan_progress,
+    scan_stage: event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress'
+      ? String(data.stage || (event.event_type === 'token_scan_started' ? 'initializing' : previous?.scan_stage || ''))
+      : event.event_type === 'token_scan_completed' || event.event_type === 'token_scan_failed'
+        ? String(data.stage || 'security_complete')
+        : previous?.scan_stage,
     lifecycle_status: lifecycleIsNewer ? String(incomingActivity?.status ?? '') : previous?.lifecycle_status,
     lifecycle_label: lifecycleIsNewer ? String(incomingActivity?.label ?? '') : previous?.lifecycle_label,
     lifecycle_stage: lifecycleIsNewer ? String(incomingActivity?.stage ?? '') : previous?.lifecycle_stage,
