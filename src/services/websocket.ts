@@ -22,11 +22,22 @@ export function normalizeBackendEvent(raw:any, receivedAt?:string):NodeXEvent {
   }:(raw?.data&&typeof raw.data==='object'?raw.data:raw);
   const mint=data.mint_address||data.token_mint||data.base_mint;
   const signature=data.signature||null;
+  // Several scan/progress events can share a mint and backend timestamp.
+  // Include their changing payload fields so one stage cannot suppress another
+  // in the client's duplicate-event guard.
+  const eventDiscriminator = [
+    data.event_index ?? '',
+    data.stage ?? '',
+    data.progress ?? '',
+    data.status ?? '',
+    data.decision ?? '',
+    data.message ?? '',
+  ].map(String).join(':');
   const eventId=typeof raw?.event_id==='string' && raw.event_id.length > 0
     ? raw.event_id
     : isSolanaLog
       ? [rawType,data.program_id||raw?.nodex_program_id||'',signature||'',data.slot??''].join(':')
-      : [rawType,signature||data.pool_address||mint||'',data.event_index??'',timestamp].join(':');
+      : [rawType,signature||data.pool_address||mint||'',eventDiscriminator,timestamp].join(':');
   let message=data.message;
   if(!message){
     switch(rawType){
