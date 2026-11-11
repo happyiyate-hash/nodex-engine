@@ -6,6 +6,61 @@ import { TokenAvatar } from '../common/TokenAvatar';
 import { PortfolioBalanceSnapshot, restClient } from '../../services/rest';
 
 type ChangeDirection = 'up' | 'down' | null;
+
+interface AnimatedCardScanProgressProps {
+  status: string;
+  progress: number | null;
+  label: string;
+  subEvent: string;
+  statusTone: string;
+}
+
+const AnimatedCardScanProgress: React.FC<AnimatedCardScanProgressProps> = ({
+  status, progress, label, subEvent, statusTone,
+}) => {
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const progressRef = useRef(0);
+  const terminal = status !== 'scanning';
+  const hasProgress = status === 'scanning' || progress !== null;
+  const target = terminal ? 100 : Math.max(0, Math.min(99, progress ?? 0));
+
+  useEffect(() => {
+    if (!hasProgress) return;
+    let frame = 0;
+    let previous = 0;
+    const animate = (now: number) => {
+      if (!previous) previous = now;
+      const elapsed = Math.min(50, now - previous);
+      previous = now;
+      // Keep the original card-wide translucent overlay, but animate it locally
+      // so a fast backend completion cannot cut the visual scan short.
+      const next = Math.min(target, progressRef.current + elapsed * 0.075);
+      progressRef.current = next;
+      setDisplayProgress(next);
+      if (next + 0.01 < target) frame = requestAnimationFrame(animate);
+    };
+    if (progressRef.current < target) frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [hasProgress, target]);
+
+  if (!hasProgress) return null;
+  const finished = terminal && displayProgress >= 99.99;
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0 rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[opacity] duration-300 ease-out"
+        style={{ width: `${displayProgress}%`, opacity: finished ? 0 : 1 }}
+      />
+      <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[9px] leading-tight text-white/60" title={finished ? label : (subEvent || 'Backend in progress')}>
+          {finished ? <span className={`inline-flex max-w-full truncate rounded-md px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.06em] ${statusTone}`}>{label}</span> : (subEvent || 'Scanning')}
+        </span>
+        <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
+      </div>
+    </>
+  );
+};
 type FeedFilter = 'detected' | 'qualified' | 'positions';
 
 interface RollingDigitProps {
@@ -85,84 +140,6 @@ const compactNumber = (value: number) => {
   const scaled = absolute / unit.divisor;
   const digits = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
   return sign + scaled.toLocaleString('en-US', { maximumFractionDigits: digits }) + unit.suffix;
-};
-
-interface ScanLifecycleIndicatorProps {
-  progress: number;
-  isScanning: boolean;
-  stage: string;
-  label: string;
-  statusTone: string;
-}
-
-const ScanLifecycleIndicator: React.FC<ScanLifecycleIndicatorProps> = ({
-  progress, isScanning, stage, label, statusTone,
-}) => {
-  const [displayProgress, setDisplayProgress] = useState(0);
-  const [animationFinished, setAnimationFinished] = useState(false);
-  const progressRef = useRef(0);
-  const hasSeenScanning = useRef(isScanning);
-  const target = isScanning ? Math.min(96, Math.max(4, progress)) : 100;
-
-  useEffect(() => {
-    if (isScanning) hasSeenScanning.current = true;
-    // A restored, already-finished token should not replay an old animation.
-    // A token whose live scan was already visible continues smoothly to 100%.
-    if (!isScanning && !hasSeenScanning.current) {
-      progressRef.current = 100;
-      setDisplayProgress(100);
-      setAnimationFinished(true);
-      return;
-    }
-
-    setAnimationFinished(false);
-    let frame = 0;
-    let previousFrameAt = 0;
-    const animate = (now: number) => {
-      if (!previousFrameAt) previousFrameAt = now;
-      const elapsed = Math.min(50, now - previousFrameAt);
-      previousFrameAt = now;
-      const current = progressRef.current;
-      const next = Math.min(target, current + Math.max(0.35, elapsed * 0.09));
-      progressRef.current = next;
-      setDisplayProgress(next);
-      if (next + 0.01 < target) {
-        frame = requestAnimationFrame(animate);
-      } else {
-        setAnimationFinished(!isScanning);
-      }
-    };
-
-    if (progressRef.current >= target) {
-      setAnimationFinished(!isScanning);
-      return;
-    }
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, [target, isScanning]);
-
-  return (
-    <div className="mt-1.5 min-w-0 space-y-1">
-      <div className="flex min-w-0 items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-[9px] leading-tight text-white/60">
-          {animationFinished ? (
-            <span className={`inline-flex max-w-full truncate rounded-md px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.06em] ${statusTone}`}>
-              {label}
-            </span>
-          ) : (stage || 'Security scan')}
-        </span>
-        <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">
-          {Math.round(displayProgress)}%
-        </span>
-      </div>
-      <div className="h-1 overflow-hidden rounded-full bg-white/[0.07]">
-        <div
-          className="h-full rounded-full bg-[#B8C5D5] shadow-[0_0_8px_rgba(184,197,213,0.28)]"
-          style={{ width: `${displayProgress}%` }}
-        />
-      </div>
-    </div>
-  );
 };
 
 const REEL_CENTER = 50;
@@ -617,8 +594,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
                     ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
-                  const hasScanLifecycle = lifecycleProgress !== null
-                    && ['scanning', 'verified', 'unverified', 'rejected', 'failed'].includes(lifecycleStatus);
+                  const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
                   const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
                     ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
                   );
@@ -664,15 +640,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                             {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                           </div>
-{hasScanLifecycle && (
-                            <ScanLifecycleIndicator
-                              progress={lifecycleProgress ?? 0}
-                              isScanning={lifecycleStatus === 'scanning'}
-                              stage={lifecycleSubEvent || 'Security scan'}
-                              label={lifecycleLabel}
-                              statusTone={statusTone}
-                            />
-                          )}
+<AnimatedCardScanProgress
+                            key={launch.mint_address}
+                            status={lifecycleStatus}
+                            progress={lifecycleProgress}
+                            label={lifecycleLabel}
+                            subEvent={lifecycleSubEvent}
+                            statusTone={statusTone}
+                          />
                           {errorDetails && (
                             <div className="mt-1">
                               <button
@@ -694,6 +669,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           )}
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${statusTone}`}>
+                            {lifecycleLabel}
+                          </span>
                           <button
                             type="button"
                             aria-label={`Copy ${cardName} contract address`}
