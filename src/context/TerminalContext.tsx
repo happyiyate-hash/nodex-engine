@@ -180,6 +180,36 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : event.event_type === 'token_metadata_updated' ? String(data.status || 'available')
     : event.event_type === 'token_metadata_failed' ? String(data.status || 'failed')
     : previous?.metadata_status;
+  const lifecycleByEvent: Record<string, { status: string; label: string; stage: string }> = {
+    token_scan_started: { status: 'scanning', label: 'Scanning', stage: 'initializing' },
+    token_scan_progress: { status: 'scanning', label: 'Scanning', stage: String(data.stage || 'security_checks') },
+    token_scan_completed: { status: String(data.status || 'verified').toLowerCase(), label: String(data.status || 'Verified'), stage: 'security_complete' },
+    token_scan_failed: { status: 'failed', label: 'Scan failed', stage: 'security_failed' },
+    token_monitoring_started: { status: 'monitoring', label: 'Monitoring', stage: 'market_watch' },
+    token_monitoring_update: { status: 'monitoring', label: 'Monitoring', stage: String(data.stage || 'market_watch') },
+    market_subscription_requested: { status: 'monitoring', label: 'Monitoring', stage: 'waiting_for_market_feed' },
+    market_subscription_waiting: { status: 'monitoring', label: 'Monitoring', stage: 'waiting_for_market_feed' },
+    market_subscription_active: { status: 'monitoring', label: 'Monitoring', stage: 'market_feed_active' },
+    paper_entry_evaluation: { status: 'evaluating', label: 'Evaluating entry', stage: 'strategy_checks' },
+    paper_buy_executed: { status: 'bought_paper', label: 'Paper buy executed', stage: 'position_open' },
+    paper_buy_failed: { status: 'buy_failed', label: 'Buy failed', stage: 'entry_failed' },
+    paper_sell_executed: { status: 'closed', label: 'Position closed', stage: 'position_closed' },
+  };
+  const lifecycleEvent = lifecycleByEvent[event.event_type];
+  const incomingLifecycleVersion = Number(data.state_version ?? data.version ?? 0);
+  const previousLifecycleVersion = Number(previous?.lifecycle_version || 0);
+  const incomingLifecycleTime = Date.parse(String(data.updated_at || event.timestamp || ''));
+  const previousLifecycleTime = Date.parse(String(previous?.lifecycle_updated_at || ''));
+  const lifecycleIsNewer = lifecycleEvent && (
+    incomingLifecycleVersion > previousLifecycleVersion ||
+    incomingLifecycleVersion === previousLifecycleVersion &&
+      (!Number.isFinite(previousLifecycleTime) || !Number.isFinite(incomingLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
+  );
+  const lifecycleStatus = lifecycleIsNewer
+    ? (event.event_type === 'token_scan_completed'
+      ? (['approved', 'verified', 'completed'].includes(String(data.status || data.decision || '').toLowerCase()) ? 'verified' : String(data.status || 'unverified').toLowerCase())
+      : lifecycleEvent.status)
+    : previous?.lifecycle_status;
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : previousHasTerminalVerdict && !mayReplaceTerminalVerdict ? previous!.qualification_status
     : isUnverifiedTerminal ? 'unverified'
@@ -202,6 +232,14 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     scan_stage: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
       ? String(data.stage || previous?.scan_stage || '')
       : previous?.scan_stage,
+    lifecycle_status: lifecycleStatus || previous?.lifecycle_status,
+    lifecycle_label: lifecycleIsNewer ? lifecycleEvent.label : previous?.lifecycle_label,
+    lifecycle_stage: lifecycleIsNewer ? lifecycleEvent.stage : previous?.lifecycle_stage,
+    lifecycle_progress: lifecycleIsNewer
+      ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.lifecycle_progress ?? 0))
+      : previous?.lifecycle_progress,
+    lifecycle_updated_at: lifecycleIsNewer ? String(data.updated_at || event.timestamp || new Date().toISOString()) : previous?.lifecycle_updated_at,
+    lifecycle_version: Math.max(previousLifecycleVersion, incomingLifecycleVersion),
     strategy_decision: event.event_type === 'paper_entry_evaluation' ? String(data.decision || 'wait') : previous?.strategy_decision,
     strategy_reasons: event.event_type === 'paper_entry_evaluation' && Array.isArray(data.reasons) ? data.reasons.map(String) : previous?.strategy_reasons,
     strategy_evaluated_at: event.event_type === 'paper_entry_evaluation' ? String(data.evaluated_at || new Date().toISOString()) : previous?.strategy_evaluated_at,
@@ -344,6 +382,20 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
     scan_status: previousTerminal && !snapshotMayReplaceTerminal ? previous?.scan_status : (securityStatus || previous?.scan_status),
     scan_progress: Number(snapshot.security?.progress ?? previous?.scan_progress ?? 0),
     scan_stage: String(snapshot.security?.stage ?? previous?.scan_stage ?? ''),
+    lifecycle_status: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
+      ? String(snapshot.activity?.status ?? previous?.lifecycle_status ?? '')
+      : previous?.lifecycle_status,
+    lifecycle_label: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
+      ? String(snapshot.activity?.label ?? previous?.lifecycle_label ?? '')
+      : previous?.lifecycle_label,
+    lifecycle_stage: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
+      ? String(snapshot.activity?.stage ?? previous?.lifecycle_stage ?? '')
+      : previous?.lifecycle_stage,
+    lifecycle_progress: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
+      ? Number(snapshot.activity?.progress ?? previous?.lifecycle_progress ?? 0)
+      : previous?.lifecycle_progress,
+    lifecycle_updated_at: String(snapshot.activity?.updated_at ?? previous?.lifecycle_updated_at ?? ''),
+    lifecycle_version: Math.max(Number(previous?.lifecycle_version || 0), Number(snapshot.version || 0)),
     decimals: identity.decimals == null ? previous?.decimals : Number(identity.decimals),
     total_supply_raw: String(identity.total_supply_raw ?? identity.total_supply ?? previous?.total_supply_raw ?? ''),
     creator_wallet: String(identity.creator_address ?? identity.creator_wallet ?? previous?.creator_wallet ?? ''),
