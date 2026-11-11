@@ -201,6 +201,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     scan_stage: event.event_type === 'token_scan_progress' || event.event_type === 'token_scan_completed'
       ? String(data.stage || previous?.scan_stage || '')
       : previous?.scan_stage,
+    strategy_decision: event.event_type === 'paper_entry_evaluation' ? String(data.decision || 'wait') : previous?.strategy_decision,
+    strategy_reasons: event.event_type === 'paper_entry_evaluation' && Array.isArray(data.reasons) ? data.reasons.map(String) : previous?.strategy_reasons,
+    strategy_evaluated_at: event.event_type === 'paper_entry_evaluation' ? String(data.evaluated_at || new Date().toISOString()) : previous?.strategy_evaluated_at,
     monitoring_status: event.event_type === 'market_subscription_requested' ? 'pending'
       : event.event_type === 'market_subscription_waiting' ? String(data.status || 'waiting_for_capacity')
       : event.event_type === 'market_subscription_active' ? 'active'
@@ -749,6 +752,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'token_monitoring_started', 'token_monitoring_update', 'token_monitoring_completed',
         'market_subscription_requested', 'market_subscription_active', 'market_subscription_waiting',
         'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed',
+        'paper_entry_evaluation',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
       ].includes(event.event_type);
       if (tokenMint && tokenStateEvent) {
