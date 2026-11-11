@@ -824,6 +824,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (existing) {
       setSelectedToken(existing);
       setBackendError(null);
+      // Fetch the durable backend snapshot as soon as the detail view opens.
+      // This includes security evidence and diagnostics not present in the feed row.
+      void loadTokenSnapshot(mint);
       return;
     }
 
@@ -874,6 +877,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
     setSelectedToken(detailToken);
     setBackendError(null);
+    // Detected tokens may not yet be in the frontend cache. Fetch their
+    // canonical backend state without blocking navigation to the detail view.
+    void loadTokenSnapshot(mint);
   };
   const loadTokenSnapshot = useCallback(async (mint: string) => {
     try {
