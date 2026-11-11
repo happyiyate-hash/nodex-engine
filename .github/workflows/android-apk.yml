@@ -25,7 +25,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -55,7 +54,7 @@ jobs:
         run: npx cap add android
 
       - name: Generate native app icons and splash assets
-        run: npx --yes @capacitor/assets@4.0.0 generate --android --iconBackgroundColor '#080808' --splashBackgroundColor '#080808'
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#080808' --splashBackgroundColor '#080808'
 
       - name: Sync web application into Android
         run: npx cap sync android
