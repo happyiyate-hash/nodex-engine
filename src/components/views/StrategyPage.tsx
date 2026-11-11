@@ -336,11 +336,12 @@ export const StrategyPage: React.FC = () => {
           onChange={(v) => update('block_unverified_trades', v)}
         />
         <ToggleRow
-          title="Global execution master switch"
-          detail="OFF · Locked until the paper execution module is connected. Real execution is not available."
-          checked={false}
-          onChange={() => update('execution_enabled', false)}
-          disabled
+          title="Paper execution master switch"
+          detail={form.execution_enabled
+            ? "ON · Simulated paper orders only. Live signing and transaction submission remain unavailable."
+            : "OFF · Automatic paper entries are blocked. Turn ON only when you are ready to allow simulated entries."}
+          checked={form.execution_enabled}
+          onChange={(v) => update('execution_enabled', v)}
         />
       </section>
 
