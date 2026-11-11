@@ -165,7 +165,16 @@ export interface DiscoveredToken {
   lifecycle_status?: string;
   lifecycle_label?: string;
   lifecycle_stage?: string;
+  lifecycle_sub_event?: string;
   lifecycle_progress?: number;
+  lifecycle_error?: {
+    severity?: string;
+    stage?: string;
+    provider?: string;
+    message?: string;
+    raw_response?: unknown;
+    occurred_at?: string;
+  };
   lifecycle_updated_at?: string;
   lifecycle_version?: number;
   monitoring_status?: string;
