@@ -664,6 +664,20 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                                     : JSON.stringify(errorDetails.raw_response, null, 2)}
                                 </pre>
                               )}
+                              <div className="mt-2 flex justify-end">
+                                <button
+                                  type="button"
+                                  aria-label={`Copy ${cardName} error details`}
+                                  title="Copy full error details"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void navigator.clipboard?.writeText(JSON.stringify(errorDetails, null, 2));
+                                  }}
+                                  className="inline-flex items-center justify-center rounded-md p-1 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/85"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
