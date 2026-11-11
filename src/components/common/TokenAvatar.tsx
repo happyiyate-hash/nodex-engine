@@ -66,7 +66,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   );
 
   return (
-    <div className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 bg-[#1e2024] border border-white/10 shadow-sm ' + className}>
+    <div className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ' + className}>
       {fallback}
       {imageUrl && (
         <img
