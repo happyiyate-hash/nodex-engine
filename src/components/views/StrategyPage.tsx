@@ -207,6 +207,7 @@ export const StrategyPage: React.FC = () => {
             {form.trailing_stop_enabled && (
               <NumberField label="Trailing callback" suffix="%" step="0.5" value={form.trailing_stop_callback_pct} onChange={(v) => update('trailing_stop_callback_pct', v)} />
             )}
+            <ToggleRow title="Automatically recover token-account rent" detail="After a full sale settles and the token balance is zero, close the simulated token account and return its locked rent to available paper SOL. Rent recovery is not counted as trading profit." checked={form.auto_recover_token_account_rent} onChange={(v) => update('auto_recover_token_account_rent', v)} />
             <p className="py-2 text-[10px] text-white/30">Break-even protection and partial profit taking can be added here later.</p>
           </div>
         )}
