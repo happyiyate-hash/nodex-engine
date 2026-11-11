@@ -466,6 +466,32 @@ export const TokenDetailPage: React.FC = () => {
         )}
       </section>
 
+      <section className="w-full px-4 sm:px-6 py-4 max-w-4xl mx-auto font-mono border-b border-white/[0.10]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">Paper entry evaluation</h2>
+          <span className="text-[9px] uppercase tracking-wider text-white/40">
+            {String(activeToken.strategy_decision || 'NOT EVALUATED').replace(/_/g, ' ')}
+          </span>
+        </div>
+        {activeToken.strategy_reasons?.length ? (
+          <ul className="space-y-2">
+            {activeToken.strategy_reasons.map((reason, index) => (
+              <li key={`${index}-${reason}`} className="flex items-start gap-2 text-[10px] leading-relaxed text-white/55">
+                <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-white/35" />
+                <span>{reason}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[10px] leading-relaxed text-white/35">
+            The backend will show why this token is waiting, rejected by strategy, or eligible for a simulated paper entry when a live market update is evaluated.
+          </p>
+        )}
+        {activeToken.strategy_evaluated_at && (
+          <p className="mt-3 text-[9px] text-white/25">Last evaluated {new Date(activeToken.strategy_evaluated_at).toLocaleString()}</p>
+        )}
+      </section>
+
       </div>
 
       {/* Fixed return control: stays above the device's bottom safe area while content scrolls. */}
