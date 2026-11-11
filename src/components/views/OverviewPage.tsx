@@ -534,7 +534,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   // Never infer a lifecycle from event names, strategy fallbacks or missing fields.
                   const lifecycleStatus = String(tokenData.lifecycle_status || '').toLowerCase();
                   const lifecycleLabel = String(tokenData.lifecycle_label || 'Awaiting backend status');
-                  const lifecycleProgressValue = Number(tokenData.lifecycle_progress);
+                  const rawLifecycleProgress = tokenData.lifecycle_progress;
+                  const lifecycleProgressValue = rawLifecycleProgress == null ? Number.NaN : Number(rawLifecycleProgress);
                   const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
                     ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
@@ -613,26 +614,25 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           )}
                         </div>
                       )}
-                      {errorMessage && (
+                      {errorDetails && (
                         <div className="mt-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="min-w-0 flex-1 truncate text-[9px] text-red-300/90" title={errorMessage}>{errorMessage}</span>
-                            <button
-                              type="button"
-                              aria-expanded={errorExpanded}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setExpandedErrors((previous) => previous.includes(launch.mint_address)
-                                  ? previous.filter((mint) => mint !== launch.mint_address)
-                                  : [...previous, launch.mint_address]);
-                              }}
-                              className="shrink-0 text-[9px] font-medium text-red-200/80 hover:text-red-100"
-                            >
-                              {errorExpanded ? 'Hide details' : 'Error details'}
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            aria-expanded={errorExpanded}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setExpandedErrors((previous) => previous.includes(launch.mint_address)
+                                ? previous.filter((mint) => mint !== launch.mint_address)
+                                : [...previous, launch.mint_address]);
+                            }}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-red-400/[0.07] px-2 py-1 text-[9px] font-medium text-red-200/85 transition-colors hover:bg-red-400/[0.12] hover:text-red-100"
+                          >
+                            <span className="h-1 w-1 rounded-full bg-red-300" />
+                            {errorExpanded ? 'Hide error details' : 'Error details'}
+                            <span aria-hidden="true" className="text-[8px]">{errorExpanded ? '▴' : '▾'}</span>
+                          </button>
                           {errorExpanded && (
-                            <div className="mt-2 rounded-md bg-black/35 p-2 text-[9px] text-white/65">
+                            <div className="mt-2 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
                               <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
                                 {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
                                 {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
