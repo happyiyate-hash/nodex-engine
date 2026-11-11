@@ -576,8 +576,49 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }).finally(() => {
       if (active) wsService.connect();
     });
+    let skipFirstConnectedReconcile = true;
+    const reconcileAfterReconnect = async () => {
+      try {
+        const recovered = await backendService.loadInitialData();
+        if (!active) return;
+        if (recovered.profile) {
+          if (Array.isArray(recovered.profile.tokens)) {
+            setTokens((previous) => {
+              const byMint = new Map(previous.map((token) => [token.mint, token]));
+              for (const item of recovered.profile.tokens) {
+                const mint = String(item?.mint_address || item?.mint || '');
+                if (!mint) continue;
+                const mapped = mapTokenDetailSnapshot(item, byMint.get(mint));
+                if (mapped) byMint.set(mapped.mint, mapped);
+              }
+              return Array.from(byMint.values());
+            });
+          }
+          const runtime = engineEventStore.hydrate(recovered.profile);
+          setProfile(runtime.profile);
+          setPaperWallet(runtime.profile?.paper_wallet ?? recovered.paperWallet ?? null);
+          const mappedPositions = runtime.positions.map((item) => mapBackendPosition(item)).filter((item): item is Position => item !== null);
+          setPositions(mappedPositions);
+          setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
+        }
+        if (recovered.launches) setLaunches(recovered.launches);
+        if (recovered.engineStatus) {
+          setEngineStatus((previous) => ({ ...previous, ...recovered.engineStatus!, ws_status: 'connected' }));
+          setIsStreamPaused(recovered.engineStatus.strategy_paused);
+        }
+      } catch (error) {
+        if (active) console.warn('NodeX reconnect snapshot reconciliation failed:', error);
+      }
+    };
     const unsubscribeStatus = wsService.onStatusChange((status: ConnectionStatus) => {
       setEngineStatus((previous) => ({ ...previous, ws_status: status }));
+      if (status === 'connected') {
+        if (skipFirstConnectedReconcile) {
+          skipFirstConnectedReconcile = false;
+        } else {
+          void reconcileAfterReconnect();
+        }
+      }
     });
     const unsubscribeEvents = wsService.subscribe((event) => {
       if ([
