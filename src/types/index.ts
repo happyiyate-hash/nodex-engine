@@ -151,6 +151,9 @@ export interface DiscoveredToken {
   state_version?: number;
   /** Timestamp of the last final backend security assessment. */
   security_scanned_at?: string;
+  strategy_decision?: string;
+  strategy_reasons?: string[];
+  strategy_evaluated_at?: string;
   name: string;
   symbol: string;
   metadata_uri?: string;
