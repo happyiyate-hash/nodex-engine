@@ -7,6 +7,7 @@ import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/rest';
 import { backendService } from '../services/backend';
 import { normalizeBackendEvent, wsService } from '../services/websocket';
 import { engineEventStore } from '../services/engine-event-store';
+import { clearTokenLifecycleCache, lifecycleCacheSignature, loadTokenLifecycleCache, saveTokenLifecycleCache } from '../services/token-lifecycle-cache';
 
 export type NavigationTab =
   | 'overview' | 'positions' | 'live_feed' | 'event_monitor'
@@ -149,20 +150,23 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const venueValue = String(payload.venue || payload.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(payload.decision || payload.status || '').toLowerCase();
-  const isUnverifiedTerminal = event.event_type === 'token_scan_failed'
-    || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase());
+  const isUnverifiedTerminal = mayReplaceTerminalVerdict && (event.event_type === 'token_scan_failed'
+    || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase()));
   const isScanProgressEvent = event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress';
   const previousHasTerminalVerdict = ['qualified', 'rejected', 'unverified', 'bought_paper']
     .includes(String(previous?.qualification_status || ''));
   const previousHasTerminalScanStatus = ['completed', 'verified', 'failed', 'rejected', 'unverified']
     .includes(String(previous?.scan_status || '').toLowerCase());
+  const incomingStateVersion = Number(data.state_version ?? data.version ?? 0);
+  const previousStateVersion = Number(previous?.state_version || 0);
+  const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || (incomingStateVersion > 0 && incomingStateVersion > previousStateVersion);
   // Progress events can arrive late or be replayed after a final verdict. They
   // may update diagnostics, but must never move a terminal token back to scanning.
   const scanStatus = isScanProgressEvent
     ? previousHasTerminalScanStatus ? previous?.scan_status
       : previousHasTerminalVerdict ? 'completed' : 'scanning'
-    : event.event_type === 'token_scan_completed' ? String(data.status || 'completed')
-    : event.event_type === 'token_scan_failed' ? 'failed'
+    : event.event_type === 'token_scan_completed' && mayReplaceTerminalVerdict ? String(data.status || 'completed')
+    : event.event_type === 'token_scan_failed' && mayReplaceTerminalVerdict ? 'failed'
     : previous?.scan_status;
   const incomingDiagnostic: NonNullable<DiscoveredToken['diagnostics']>[number] | null = event.event_type === 'token_diagnostic' ? {
     ...data,
@@ -174,13 +178,14 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : event.event_type === 'token_metadata_failed' ? String(data.status || 'failed')
     : previous?.metadata_status;
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
+    : previousHasTerminalVerdict && !mayReplaceTerminalVerdict ? previous!.qualification_status
     : isUnverifiedTerminal ? 'unverified'
     : event.event_type === 'strategy_rejected_token' || decision.includes('reject') ? 'rejected'
     : isScanProgressEvent ? (previousHasTerminalVerdict ? previous!.qualification_status : 'under_analysis')
     : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
-    mint, name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
+    mint, state_version: Math.max(previousStateVersion, incomingStateVersion), name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
     symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
     metadata_uri: String(payload.metadata_uri || metadata.uri || previous?.metadata_uri || ''),
     logo_url: String(payload.logo_url || payload.image_url || payload.image_uri || payload.logo_uri || payload.image || metadata.image || metadata.image_url || previous?.logo_url || ''),
@@ -300,25 +305,31 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   const priceUsd = Number(market.price_usd ?? previous?.current_price_usd ?? 0);
   const venueValue = String(market.venue || identity.venue || previous?.venue || 'pump.fun').toLowerCase();
   const securityDecision = String(snapshot.security?.decision || snapshot.security?.diagnostic_assessment?.decision || '').toUpperCase();
+  const snapshotVersion = Number(snapshot.version || snapshot.state_version || 0);
+  const previousVersion = Number(previous?.state_version || 0);
+  const previousTerminal = ['qualified', 'rejected', 'unverified', 'bought_paper'].includes(String(previous?.qualification_status || ''));
+  const snapshotMayReplaceTerminal = !previousTerminal || (snapshotVersion > 0 && snapshotVersion > previousVersion);
   const rawSecurityStatus = String(snapshot.security?.status || '').toLowerCase();
   // The security decision is authoritative. Older snapshots may retain a
   // transient "scanning" status even though the final APPROVED verdict was saved.
   const securityStatus = securityDecision === 'APPROVED' && rawSecurityStatus === 'scanning'
     ? 'completed' : rawSecurityStatus;
-  const qualificationStatus: DiscoveredToken['qualification_status'] =
-    securityDecision === 'APPROVED' ? 'qualified'
+  const qualificationStatus: DiscoveredToken['qualification_status'] = previousTerminal && !snapshotMayReplaceTerminal
+    ? previous!.qualification_status
+    : securityDecision === 'APPROVED' ? 'qualified'
       : securityDecision === 'REJECTED' ? 'rejected'
       : securityDecision === 'UNVERIFIED' || ['unverified', 'failed'].includes(securityStatus) ? 'unverified'
       : securityStatus === 'scanning' ? 'under_analysis'
       : previous?.qualification_status || 'newly_detected';
   return {
     mint,
+    state_version: Math.max(previousVersion, snapshotVersion),
     name: String(identity.name ?? previous?.name ?? ''),
     symbol: String(identity.symbol ?? previous?.symbol ?? ''),
     metadata_uri: String(identity.metadata_uri ?? previous?.metadata_uri ?? ''),
     logo_url: String(identity.logo_url ?? identity.image_url ?? identity.image_uri ?? identity.logo_uri ?? identity.image ?? previous?.logo_url ?? ''),
     metadata_status: String(identity.metadata_status ?? previous?.metadata_status ?? ''),
-    scan_status: securityStatus || previous?.scan_status,
+    scan_status: previousTerminal && !snapshotMayReplaceTerminal ? previous?.scan_status : (securityStatus || previous?.scan_status),
     scan_progress: Number(snapshot.security?.progress ?? previous?.scan_progress ?? 0),
     scan_stage: String(snapshot.security?.stage ?? previous?.scan_stage ?? ''),
     decimals: identity.decimals == null ? previous?.decimals : Number(identity.decimals),
@@ -413,6 +424,53 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isMobilePreview, setIsMobilePreview] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
   const metadataRefreshInFlight = useRef<Set<string>>(new Set());
+  const lifecycleCacheSignatures = useRef<Map<string, string>>(new Map());
+
+  // Restore stable lifecycle/security records from IndexedDB. Market ticks are
+  // deliberately excluded from this cache and are always refreshed by the backend.
+  useEffect(() => {
+    let active = true;
+    void loadTokenLifecycleCache().then((records) => {
+      if (!active || !records.length) return;
+      setTokens((current) => {
+        const byMint = new Map(current.map((token) => [token.mint, token]));
+        for (const record of records) {
+          if (!record.token?.mint) continue;
+          const cached = record.token;
+          const existing = byMint.get(record.mint);
+          if (!existing) {
+            byMint.set(record.mint, cached);
+            continue;
+          }
+          const currentVersion = Number(existing.state_version || 0);
+          const cachedVersion = Number(record.state_version || cached.state_version || 0);
+          const existingTerminal = ['qualified', 'rejected', 'unverified', 'bought_paper'].includes(String(existing.qualification_status));
+          if (cachedVersion > currentVersion || (!existingTerminal && ['qualified', 'rejected', 'unverified', 'bought_paper'].includes(String(cached.qualification_status)))) {
+            byMint.set(record.mint, {
+              ...existing,
+              ...cached,
+              current_price_usd: existing.current_price_usd,
+              current_price_sol: existing.current_price_sol,
+              price_history_5m: existing.price_history_5m || [],
+            });
+          }
+        }
+        return Array.from(byMint.values());
+      });
+    }).catch((error) => console.warn('NodeX lifecycle cache restore failed:', error));
+    return () => { active = false; };
+  }, []);
+
+  // Only persist when identity, scan, security, or monitoring state changes.
+  // Price/statistics updates therefore do not generate IndexedDB writes.
+  useEffect(() => {
+    for (const token of tokens) {
+      const signature = lifecycleCacheSignature(token);
+      if (lifecycleCacheSignatures.current.get(token.mint) === signature) continue;
+      lifecycleCacheSignatures.current.set(token.mint, signature);
+      void saveTokenLifecycleCache(token).catch((error) => console.warn('NodeX lifecycle cache write failed:', error));
+    }
+  }, [tokens]);
 
   // The backend SQLite config is authoritative. Load it whenever the operator
   // connects or changes the backend URL; do not rely on browser-only defaults.
@@ -564,7 +622,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setTokens((previous) => {
             const existing = previous.find((token) => token.mint === mint);
             const durable = mapTokenDetailSnapshot(stateData || {}, existing);
-            return durable ? [durable, ...previous.filter((token) => token.mint !== durable.mint)].slice(0, 500) : previous;
+            return durable ? [durable, ...previous.filter((token) => token.mint !== durable.mint)] : previous;
           });
           setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(stateData, previous) || previous : previous);
         }
@@ -604,7 +662,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const mint = String(event.data?.mint_address || snapshot.mint_address || '');
           setTokens((previous) => {
             const mapped = mapTokenDetailSnapshot(snapshot, previous.find((token) => token.mint === mint));
-            return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500) : previous;
+            return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)] : previous;
           });
           setSelectedToken((previous) => {
             if (!previous || previous.mint !== mint) return previous;
@@ -649,7 +707,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             updated[index] = merged;
             return updated;
           }
-          return [merged, ...previous.filter((item) => item.mint !== merged.mint)].slice(0, 500);
+          return [merged, ...previous.filter((item) => item.mint !== merged.mint)];
         });
         setSelectedToken((previous) => previous && previous.mint === String(tokenMint || '')
           ? (mergeTokenEvent(previous, event) || previous) : previous);
@@ -768,6 +826,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setEvents([]);
     setLaunches([]);
     setTokens([]);
+    lifecycleCacheSignatures.current.clear();
+    void clearTokenLifecycleCache().catch((error) => console.warn('NodeX lifecycle cache clear failed:', error));
     setSelectedEvent(null);
     setSelectedToken(null);
     setBackendError(null);
@@ -886,7 +946,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const snapshot = await apiClient.getTokenState(mint);
       const mapped = mapTokenDetailSnapshot(snapshot);
       if (!mapped) return;
-      setTokens((previous) => [mapped, ...previous.filter((token) => token.mint !== mapped.mint)].slice(0, 500));
+      setTokens((previous) => [mapped, ...previous.filter((token) => token.mint !== mapped.mint)]);
       setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(snapshot, previous) || previous : previous);
       setBackendError(null);
     } catch (error) {
