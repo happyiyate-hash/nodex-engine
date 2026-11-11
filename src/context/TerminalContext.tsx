@@ -197,14 +197,18 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     paper_sell_executed: { status: 'closed', label: 'Position closed', stage: 'position_closed' },
   };
   const lifecycleEvent = lifecycleByEvent[event.event_type];
-  const incomingLifecycleVersion = Number(data.state_version ?? data.version ?? 0);
+  const incomingLifecycleVersion = data.state_version == null && data.version == null
+    ? null : Number(data.state_version ?? data.version);
   const previousLifecycleVersion = Number(previous?.lifecycle_version || 0);
   const incomingLifecycleTime = Date.parse(String(data.updated_at || event.timestamp || ''));
   const previousLifecycleTime = Date.parse(String(previous?.lifecycle_updated_at || ''));
   const lifecycleIsNewer = Boolean(lifecycleEvent) && (
-    incomingLifecycleVersion > previousLifecycleVersion ||
-    incomingLifecycleVersion === previousLifecycleVersion &&
-      (!Number.isFinite(previousLifecycleTime) || !Number.isFinite(incomingLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
+    incomingLifecycleVersion !== null
+      ? incomingLifecycleVersion > previousLifecycleVersion ||
+        incomingLifecycleVersion === previousLifecycleVersion &&
+          (!Number.isFinite(previousLifecycleTime) || !Number.isFinite(incomingLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
+      : Number.isFinite(incomingLifecycleTime) &&
+        (!Number.isFinite(previousLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
   );
   const lifecycleStatus = lifecycleIsNewer
     ? (event.event_type === 'token_scan_completed'
@@ -240,7 +244,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
       ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.lifecycle_progress ?? 0))
       : previous?.lifecycle_progress,
     lifecycle_updated_at: lifecycleIsNewer ? String(data.updated_at || event.timestamp || new Date().toISOString()) : previous?.lifecycle_updated_at,
-    lifecycle_version: Math.max(previousLifecycleVersion, incomingLifecycleVersion),
+    lifecycle_version: Math.max(previousLifecycleVersion, incomingLifecycleVersion ?? 0),
     strategy_decision: event.event_type === 'paper_entry_evaluation' ? String(data.decision || 'wait') : previous?.strategy_decision,
     strategy_reasons: event.event_type === 'paper_entry_evaluation' && Array.isArray(data.reasons) ? data.reasons.map(String) : previous?.strategy_reasons,
     strategy_evaluated_at: event.event_type === 'paper_entry_evaluation' ? String(data.evaluated_at || new Date().toISOString()) : previous?.strategy_evaluated_at,
