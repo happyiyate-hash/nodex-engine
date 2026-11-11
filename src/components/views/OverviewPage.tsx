@@ -617,6 +617,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     unverified: 'text-amber-200',
                     scanning: 'text-sky-200',
                     monitoring: 'text-violet-200',
+                    monitoring_stopped: 'text-white/55',
                     evaluating: 'text-sky-200',
                     executing_buy: 'text-amber-200',
                     bought_paper: 'text-emerald-300',
