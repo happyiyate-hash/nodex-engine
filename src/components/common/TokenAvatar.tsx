@@ -10,8 +10,11 @@ interface TokenAvatarProps {
 function resolveImageUrls(value?: string): string[] {
   const candidate = (value || '').trim();
   if (!candidate) return [];
-  if (candidate.startsWith('ipfs://')) {
-    const path = candidate.slice(7).replace(/^ipfs\//, '').replace(/^\//, '');
+  const ipfsPath = candidate.startsWith('ipfs://')
+    ? candidate.slice(7).replace(/^ipfs\//, '').replace(/^\//, '')
+    : candidate.match(/^https?:\/\/(?:ipfs\.io|cloudflare-ipfs\.com|dweb\.link)\/ipfs\/(.+)$/i)?.[1];
+  if (ipfsPath) {
+    const path = ipfsPath.replace(/^ipfs\//, '').replace(/^\//, '');
     return [
       'https://ipfs.io/ipfs/' + path,
       'https://cloudflare-ipfs.com/ipfs/' + path,
