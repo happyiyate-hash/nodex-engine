@@ -367,7 +367,11 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
     name: String(identity.name ?? previous?.name ?? ''),
     symbol: String(identity.symbol ?? previous?.symbol ?? ''),
     metadata_uri: String(identity.metadata_uri ?? previous?.metadata_uri ?? ''),
-    logo_url: String(identity.logo_url ?? identity.image_url ?? identity.image_uri ?? identity.logo_uri ?? identity.image ?? previous?.logo_url ?? ''),
+    // Empty strings from a partial backend snapshot must not erase a logo URL
+    // already resolved for this mint. Only replace it when a usable URL exists.
+    logo_url: String(
+      identity.logo_url || identity.image_url || identity.image_uri || identity.logo_uri || identity.image || previous?.logo_url || ''
+    ),
     metadata_status: String(identity.metadata_status ?? previous?.metadata_status ?? ''),
     scan_status: previousTerminal && !snapshotMayReplaceTerminal ? previous?.scan_status : (securityStatus || previous?.scan_status),
     scan_progress: Number(snapshot.security?.progress ?? previous?.scan_progress ?? 0),
