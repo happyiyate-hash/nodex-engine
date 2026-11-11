@@ -125,6 +125,11 @@ export const TokenDetailPage: React.FC = () => {
     value == null || !Number.isFinite(value)
       ? '—'
       : value.toLocaleString(undefined, { maximumFractionDigits: digits });
+  const securityReport = activeToken.safety_details as any;
+  const securityChecks = Array.isArray(securityReport?.checks) ? securityReport.checks : [];
+  const rugcheck = securityReport?.rugcheck || {};
+  const holderDistribution = securityReport?.holder_distribution || {};
+  const creatorHistory = securityReport?.creator_history || {};
 
   const positionValueSol = activePosition?.current_position_value_sol;
   const positionPnlSol = activePosition?.pnl_sol;
@@ -341,7 +346,7 @@ export const TokenDetailPage: React.FC = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">Market Statistics</h2>
-            <span className="text-[9px] uppercase tracking-wider text-amber-300/70">DEMO TAPE · NOT LIVE</span>
+            <span className="text-[9px] uppercase tracking-wider text-amber-300/70">ON-CHAIN DATA · PROVIDER-DEPENDENT</span>
           </div>
 
           <div className="grid grid-cols-2 gap-x-5 gap-y-3">
@@ -395,6 +400,70 @@ export const TokenDetailPage: React.FC = () => {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="w-full px-4 sm:px-6 py-4 max-w-4xl mx-auto font-mono border-b border-white/[0.10]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">Security assessment</h2>
+          <span className="text-[9px] uppercase tracking-wider text-white/35">
+            {String(securityReport?.decision || securityReport?.status || 'PENDING').replace(/_/g, ' ')}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-x-5 gap-y-3">
+          <div>
+            <div className="text-[10px] text-white/40">Mint authority</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{securityReport?.mint_authority ? 'Active' : securityReport?.mint_authority === null ? 'Disabled' : 'Unknown'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/40">Freeze authority</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{securityReport?.freeze_authority ? 'Active' : securityReport?.freeze_authority === null ? 'Disabled' : 'Unknown'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/40">RugCheck</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{String(rugcheck.status || 'Unavailable').replace(/_/g, ' ')}{rugcheck.score_normalised != null ? ` · ${rugcheck.score_normalised}/100` : ''}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/40">Top 10 observed share</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{holderDistribution.top_10_observed_owner_share_percent == null ? '—' : `${formatMetric(Number(holderDistribution.top_10_observed_owner_share_percent), 2)}%`}</div>
+            <div className="text-[9px] text-white/30">{holderDistribution.sample_is_partial === true ? 'Partial sample' : holderDistribution.sample_is_partial === false ? 'Complete sample' : 'Not supplied'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/40">Creator history</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{String(creatorHistory.status || 'Unavailable').replace(/_/g, ' ')}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-white/40">Prior launches sampled</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{formatMetric(creatorHistory.prior_pump_fun_launches, 0)}</div>
+          </div>
+        </div>
+        {securityReport?.decision_reason && <p className="mt-3 border-t border-white/[0.07] pt-3 text-[10px] leading-relaxed text-white/55">{securityReport.decision_reason}</p>}
+        <div className="mt-3 border-t border-white/[0.07] pt-3">
+          <div className="mb-2 text-[10px] uppercase tracking-[0.12em] text-white/40">Backend checks ({securityChecks.length})</div>
+          {securityChecks.length === 0 ? (
+            <p className="text-[10px] text-white/35">No security checks have been returned for this token yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {securityChecks.map((check: any, index: number) => {
+                const status = String(check.status || 'unknown').toLowerCase();
+                const passed = ['passed', 'pass', 'ok', 'clear'].includes(status);
+                const failed = ['failed', 'fail', 'rejected', 'risk'].includes(status);
+                return <div key={check.name || index} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-medium text-white/75">{String(check.name || 'Security check').replace(/_/g, ' ')}</div>
+                    {check.detail && <div className="mt-0.5 text-[9px] leading-relaxed text-white/35">{check.detail}</div>}
+                  </div>
+                  <span className={`shrink-0 text-[9px] font-semibold uppercase ${passed ? 'text-emerald-400' : failed ? 'text-red-300' : 'text-amber-300'}`}>{status}</span>
+                </div>;
+              })}
+            </div>
+          )}
+        </div>
+        {Array.isArray(securityReport?.provider_responses) && securityReport.provider_responses.length > 0 && (
+          <details className="mt-3 border-t border-white/[0.07] pt-3">
+            <summary className="cursor-pointer text-[10px] text-white/45">Provider response records ({securityReport.provider_responses.length})</summary>
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-white/[0.03] p-2 text-[9px] leading-relaxed text-white/50">{JSON.stringify(securityReport.provider_responses, null, 2)}</pre>
+          </details>
+        )}
       </section>
 
       </div>
