@@ -569,7 +569,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 z-0"
-                        style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.13), transparent 62%)' }}
+                        style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
                       />
                       {isLifecycleProgress && (
                         <div
