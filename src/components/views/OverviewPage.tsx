@@ -574,9 +574,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       {isLifecycleProgress && (
                         <div
                           aria-hidden="true"
-                          className="pointer-events-none absolute inset-y-0 left-0 rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[width,opacity] duration-500 ease-out"
+                          className={`pointer-events-none absolute inset-y-0 left-0 rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[width,opacity] duration-500 ease-out ${lifecycleProgress === 0 ? 'w-[22%] animate-pulse' : ''}`}
                           style={{
-                            width: `${lifecycleProgress}%`,
+                            width: lifecycleProgress === 0 ? '22%' : `${lifecycleProgress}%`,
                             opacity: lifecycleProgress >= 100 ? 0 : 1,
                           }}
                         />
