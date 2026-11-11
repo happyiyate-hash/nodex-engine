@@ -19,7 +19,7 @@ const AnimatedCardScanProgress: React.FC<AnimatedCardScanProgressProps> = ({
   const [displayProgress, setDisplayProgress] = useState(0);
   const progressRef = useRef(0);
   const terminal = status !== 'scanning';
-  const terminalScanStatuses = ['verified', 'unverified', 'rejected', 'failed'];
+  const terminalScanStatuses = ['verified', 'unverified', 'blocked', 'rejected', 'strategy_rejected', 'failed'];
   const hasProgress = status === 'scanning' || progress !== null || terminalScanStatuses.includes(status);
   const target = terminal ? 100 : Math.max(0, Math.min(99, progress ?? 0));
 
