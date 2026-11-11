@@ -563,7 +563,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   return (
                     <article
                       key={launch.id || launch.signature}
-                      className="relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.14] border-t-white/[0.30] border-b-white/[0.055] bg-gradient-to-b from-[#202020] via-[#121212] to-[#0b0b0b] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-3px_5px_rgba(0,0,0,0.78),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/45 before:to-transparent last:mb-0"
+                      className="relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
                     >
                       {isLifecycleProgress && (
                         <div
