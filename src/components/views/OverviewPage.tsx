@@ -597,7 +597,33 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const scanStage = String(progressEvent?.data?.stage || tokenData.scan_stage || report?.stage || '').replace(/[_-]+/g, ' ').trim();
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
                   return (
-                    <article key={launch.id || launch.signature} className="border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0">
+                    <article
+                      key={launch.id || launch.signature}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open details for ${cardName}`}
+                      onClick={() => openTokenDetailByMint(launch.mint_address, {
+                        name: cardName,
+                        symbol: cardSymbol,
+                        creator_wallet: launch.creator_address || '',
+                        launch_time: launch.detected_at,
+                        current_price_usd: hasUsdPrice ? priceUsd : 0,
+                        current_price_sol: hasSolPrice ? priceSol : 0,
+                        market_cap_usd: Number.isFinite(marketCap) ? marketCap : 0,
+                        venue: tokenData.venue || launch.source || 'pump.fun',
+                      })}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openTokenDetailByMint(launch.mint_address, {
+                            name: cardName,
+                            symbol: cardSymbol,
+                            creator_wallet: launch.creator_address || '',
+                            launch_time: launch.detected_at,
+                          });
+                        }
+                      }}
+                      className="cursor-pointer border-b border-white/[0.07] bg-transparent px-0 py-3 last:border-b-0 outline-none focus-visible:ring-1 focus-visible:ring-white/40">
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black">
                           {(() => {
