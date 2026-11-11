@@ -260,7 +260,6 @@ export interface PreferredOwner {
 export interface StrategyConfig {
   min_liquidity_usd: number;
   max_entry_price_usd: number;
-  max_investment_per_token_sol: number;
   max_investment_per_token_usd: number;
   max_simultaneous_positions: number;
   min_safety_score: number;
