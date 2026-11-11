@@ -224,7 +224,7 @@ function mapBackendPosition(raw: Record<string, any>): Position | null {
   const costBasisSol = Number(raw.cost_basis_sol ?? raw.invested_sol ?? 0);
   const currentValueSol = Number(raw.current_value_sol ?? raw.marked_value_sol ?? 0);
   const pnlSol = Number(raw.unrealized_pnl_sol ?? (currentValueSol - costBasisSol));
-  const pnlPct = Number(raw.unrealized_pnl_pct ?? (costBasisSol > 0 ? pnlSol / costBasisSol * 100 : 0));
+  const pnlPct = Number(raw.pnl_pct ?? raw.unrealized_pnl_pct ?? (costBasisSol > 0 ? pnlSol / costBasisSol * 100 : 0));
   const entryPriceSol = Number(raw.entry_price_sol ?? raw.average_entry_price_sol ?? (quantity > 0 ? costBasisSol / quantity : 0));
   const currentPriceSol = Number(raw.current_price_sol ?? (quantity > 0 ? currentValueSol / quantity : 0));
   const rawStatus = String(raw.status || 'open').toLowerCase();
@@ -245,11 +245,11 @@ function mapBackendPosition(raw: Record<string, any>): Position | null {
     current_price_sol: currentPriceSol,
     current_price_usd: Number(raw.current_price_usd || 0),
     amount_tokens: quantity,
-    initial_investment_usd: Number(raw.cost_basis_usd || raw.invested_usd || 0),
+    initial_investment_usd: Number(raw.initial_investment_usd ?? raw.cost_basis_usd ?? raw.invested_usd ?? 0),
     initial_investment_sol: costBasisSol,
-    current_position_value_usd: Number(raw.current_value_usd || 0),
+    current_position_value_usd: Number(raw.current_position_value_usd ?? raw.current_value_usd ?? 0),
     current_position_value_sol: currentValueSol,
-    pnl_usd: Number(raw.unrealized_pnl_usd || 0),
+    pnl_usd: Number(raw.pnl_usd ?? raw.unrealized_pnl_usd ?? 0),
     pnl_sol: pnlSol,
     pnl_pct: pnlPct,
     status,
