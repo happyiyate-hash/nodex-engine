@@ -203,7 +203,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
         ? (() => {
             const approved = decision === 'approved'
               && data.diagnostic_only !== true
-              && data.all_checks_verified === true;
+              && (data.verification_gate_passed === true || data.all_checks_verified === true);
             const rejected = decision === 'rejected';
             return {
               status: approved ? 'verified' : rejected ? 'rejected' : 'unverified',
@@ -211,10 +211,10 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
               progress: 100,
               stage: 'security_complete',
               sub_event: approved
-                ? 'All required security checks completed'
+                ? data.message || 'Core launch verification passed. Supplementary checks remain visible in the security report.'
                 : rejected
                   ? data.message || 'Security checks rejected this token'
-                  : 'The backend could not establish a verified result',
+                  : data.message || 'The required launch verification evidence was incomplete.',
             };
           })()
         : event.event_type === 'token_scan_failed'
