@@ -319,7 +319,7 @@ export const StrategyPage: React.FC = () => {
             ))}
           </div>
         )}
-      </se
+      </section>
 
       <section className="mt-5 border-t border-white/[0.08] pt-4">
         <button
@@ -369,7 +369,7 @@ export const StrategyPage: React.FC = () => {
             {form.whitelist_only_mode && form.preferred_owners.length === 0 && <p className="mt-2 text-[10px] text-amber-300">Strict mode is enabled but the list is empty, so no launches will pass.</p>}
           </div>
         )}
-      </section>ction>
+      </section>
 
       {ownerSheetOpen && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setOwnerSheetOpen(false); }}>
