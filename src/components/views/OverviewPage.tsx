@@ -541,9 +541,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
                   const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
                   const failedLifecycle = ['failed', 'buy_failed', 'sell_failed', 'rejected', 'strategy_rejected'].includes(lifecycleStatus);
-                  const errorDetails = tokenData.lifecycle_error || (failedLifecycle ? diagnostics.find((diagnostic) =>
+                  const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
                     ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
-                  ) : undefined);
+                  );
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
                   const statusTone = ({
                     verified: 'bg-emerald-400/[0.10] text-emerald-300',
@@ -564,8 +564,19 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   return (
                     <article
                       key={launch.id || launch.signature}
-                      className="mb-1 rounded-xl bg-[#121212] px-2.5 py-2 last:mb-0"
+                      className="relative isolate mb-1 overflow-hidden rounded-xl bg-[#121212] px-2.5 py-2 last:mb-0"
                     >
+                      {isLifecycleProgress && (
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-y-0 left-0 rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[width,opacity] duration-500 ease-out"
+                          style={{
+                            width: `${lifecycleProgress}%`,
+                            opacity: lifecycleProgress >= 100 ? 0 : 1,
+                          }}
+                        />
+                      )}
+                      <div className="relative z-10">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <TokenAvatar
                           symbol={cardSymbol || cardName}
@@ -579,20 +590,21 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                           </div>
 {(lifecycleSubEvent || isLifecycleProgress) && (
-                            <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                              {lifecycleSubEvent ? (
-                                <span className="min-w-0 truncate text-[9px] leading-tight text-white/55" title={lifecycleSubEvent}>{lifecycleSubEvent}</span>
-                              ) : (
-                                <span className="text-[9px] leading-tight text-white/45">Scanning</span>
+                            <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
+                              <span
+                                className="min-w-0 truncate text-[9px] leading-tight text-white/60"
+                                title={lifecycleSubEvent || 'Backend in progress'}
+                              >
+                                {lifecycleSubEvent || 'Backend in progress'}
+                              </span>
+                              {isLifecycleProgress && (
+                                <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">
+                                  {Math.round(lifecycleProgress)}%
+                                </span>
                               )}
                             </div>
                           )}
-                          {isLifecycleProgress && (
-                            <div className="mt-1 h-[2px] w-16 max-w-full overflow-hidden rounded-full bg-white/[0.10]">
-                              <div className="h-full rounded-full bg-white/75 transition-[width] duration-300 ease-out" style={{ width: `${lifecycleProgress}%` }} />
-                            </div>
-                          )}
-                          {errorDetails && failedLifecycle && (
+                          {errorDetails && (
                             <div className="mt-1">
                               <button
                                 type="button"
@@ -645,6 +657,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             <span className="truncate font-mono text-[8px]">{launch.mint_address.slice(0, 5)}…{launch.mint_address.slice(-4)}</span>
                           </button>
                         </div>
+                      </div>
                       </div>
                     </article>
                   );
