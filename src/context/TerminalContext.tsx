@@ -190,9 +190,6 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   return {
     mint, state_version: Math.max(previousStateVersion, incomingStateVersion),
     security_scanned_at: Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 ? new Date(incomingSecurityScannedAt).toISOString() : previous?.security_scanned_at,
-    strategy_decision: event.event_type === 'paper_entry_evaluation' ? String(data.decision || 'wait') : previous?.strategy_decision,
-    strategy_reasons: previous?.strategy_reasons,
-    strategy_evaluated_at: previous?.strategy_evaluated_at,
     name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
     symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
     metadata_uri: String(payload.metadata_uri || metadata.uri || previous?.metadata_uri || ''),
@@ -597,10 +594,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const recovered = await backendService.loadInitialData();
         if (!active) return;
         if (recovered.profile) {
-          if (Array.isArray(recovered.profile.tokens)) {
+          const recoveredTokens = (recovered.profile as { tokens?: unknown[] }).tokens;
+          if (Array.isArray(recoveredTokens)) {
             setTokens((previous) => {
               const byMint = new Map(previous.map((token) => [token.mint, token]));
-              for (const item of recovered.profile.tokens) {
+              for (const item of recoveredTokens) {
                 const mint = String(item?.mint_address || item?.mint || '');
                 if (!mint) continue;
                 const mapped = mapTokenDetailSnapshot(item, byMint.get(mint));
