@@ -147,6 +147,8 @@ export interface TokenDiagnostic {
 
 export interface DiscoveredToken {
   mint: string;
+  /** Monotonic backend token-registry version used to reject stale events. */
+  state_version?: number;
   name: string;
   symbol: string;
   metadata_uri?: string;
