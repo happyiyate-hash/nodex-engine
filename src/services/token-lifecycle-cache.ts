@@ -5,6 +5,7 @@ export interface TokenLifecycleCacheRecord {
   state_version: number;
   cached_at: number;
   lifecycle: Partial<DiscoveredToken>;
+  token: DiscoveredToken;
 }
 
 const DATABASE_NAME = 'nodex-token-registry';
@@ -68,6 +69,7 @@ export async function saveTokenLifecycleCache(token: DiscoveredToken): Promise<v
       state_version: Number(token.state_version || 0),
       cached_at: Date.now(),
       lifecycle: lifecycleOf(token),
+      token: { ...token, price_history_5m: [] },
     };
     await new Promise<void>((resolve, reject) => {
       const transaction = database.transaction(STORE_NAME, 'readwrite');
