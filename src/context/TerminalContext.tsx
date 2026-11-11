@@ -157,7 +157,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     .includes(String(previous?.scan_status || '').toLowerCase());
   const incomingStateVersion = Number(data.state_version ?? data.version ?? 0);
   const previousStateVersion = Number(previous?.state_version || 0);
-  const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || (incomingStateVersion > 0 && incomingStateVersion > previousStateVersion);
+  const incomingSecurityScannedAt = Date.parse(String(data.scanned_at || data.security?.scanned_at || ''));
+  const previousSecurityScannedAt = Date.parse(String(previous?.security_scanned_at || ''));
+  const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || (Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
   const isUnverifiedTerminal = mayReplaceTerminalVerdict && (event.event_type === 'token_scan_failed'
     || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase()));
   // Progress events can arrive late or be replayed after a final verdict. They
@@ -185,7 +187,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : mayReplaceTerminalVerdict && (decision.includes('qualif') || decision.includes('approv')) ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
-    mint, state_version: Math.max(previousStateVersion, incomingStateVersion), name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
+    mint, state_version: Math.max(previousStateVersion, incomingStateVersion),
+    security_scanned_at: Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 ? new Date(incomingSecurityScannedAt).toISOString() : previous?.security_scanned_at,
+    name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
     symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
     metadata_uri: String(payload.metadata_uri || metadata.uri || previous?.metadata_uri || ''),
     logo_url: String(payload.logo_url || payload.image_url || payload.image_uri || payload.logo_uri || payload.image || metadata.image || metadata.image_url || previous?.logo_url || ''),
@@ -309,7 +313,9 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   const snapshotVersion = Number(snapshot.version || snapshot.state_version || 0);
   const previousVersion = Number(previous?.state_version || 0);
   const previousTerminal = ['qualified', 'rejected', 'unverified', 'bought_paper'].includes(String(previous?.qualification_status || ''));
-  const snapshotMayReplaceTerminal = !previousTerminal || (snapshotVersion > 0 && snapshotVersion > previousVersion);
+  const incomingSecurityScannedAt = Date.parse(String(snapshot.security?.scanned_at || ''));
+  const previousSecurityScannedAt = Date.parse(String(previous?.security_scanned_at || ''));
+  const snapshotMayReplaceTerminal = !previousTerminal || (Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
   const rawSecurityStatus = String(snapshot.security?.status || '').toLowerCase();
   // The security decision is authoritative. Older snapshots may retain a
   // transient "scanning" status even though the final APPROVED verdict was saved.
@@ -325,6 +331,7 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   return {
     mint,
     state_version: Math.max(previousVersion, snapshotVersion),
+    security_scanned_at: Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 ? new Date(incomingSecurityScannedAt).toISOString() : previous?.security_scanned_at,
     name: String(identity.name ?? previous?.name ?? ''),
     symbol: String(identity.symbol ?? previous?.symbol ?? ''),
     metadata_uri: String(identity.metadata_uri ?? previous?.metadata_uri ?? ''),
