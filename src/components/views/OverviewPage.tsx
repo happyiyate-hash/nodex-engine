@@ -540,122 +540,108 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
                   const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
-                  const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
+                  const failedLifecycle = ['failed', 'buy_failed', 'sell_failed', 'rejected', 'strategy_rejected'].includes(lifecycleStatus);
+                  const errorDetails = tokenData.lifecycle_error || (failedLifecycle ? diagnostics.find((diagnostic) =>
                     ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
-                  );
+                  ) : undefined);
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
                   const statusTone = ({
-                    verified: 'text-emerald-300',
-                    rejected: 'text-red-300',
-                    strategy_rejected: 'text-red-300',
-                    failed: 'text-red-300',
-                    sell_failed: 'text-red-300',
-                    unverified: 'text-amber-200',
-                    scanning: 'text-sky-200',
-                    monitoring: 'text-violet-200',
-                    monitoring_stopped: 'text-white/55',
-                    evaluating: 'text-sky-200',
-                    executing_buy: 'text-amber-200',
-                    bought_paper: 'text-emerald-300',
-                    buy_failed: 'text-red-300',
-                    closed: 'text-white/60',
-                  } as Record<string, string>)[lifecycleStatus] || 'text-white/55';
+                    verified: 'bg-emerald-400/[0.10] text-emerald-300',
+                    rejected: 'bg-red-400/[0.10] text-red-300',
+                    strategy_rejected: 'bg-red-400/[0.10] text-red-300',
+                    failed: 'bg-red-400/[0.10] text-red-300',
+                    sell_failed: 'bg-red-400/[0.10] text-red-300',
+                    unverified: 'bg-amber-300/[0.10] text-amber-200',
+                    scanning: 'bg-sky-400/[0.10] text-sky-200',
+                    monitoring: 'bg-violet-400/[0.10] text-violet-200',
+                    monitoring_stopped: 'bg-white/[0.07] text-white/65',
+                    evaluating: 'bg-sky-400/[0.10] text-sky-200',
+                    executing_buy: 'bg-amber-300/[0.10] text-amber-200',
+                    bought_paper: 'bg-emerald-400/[0.10] text-emerald-300',
+                    buy_failed: 'bg-red-400/[0.10] text-red-300',
+                  } as Record<string, string>)[lifecycleStatus] || 'bg-white/[0.08] text-white/75';
                   const errorMessage = String(errorDetails?.message || '');
                   return (
                     <article
                       key={launch.id || launch.signature}
-                      className="mb-1 rounded-[12px] bg-[#121212] px-2.5 py-1.5 last:mb-0"
+                      className="mb-1 rounded-xl bg-[#121212] px-2.5 py-2 last:mb-0"
                     >
-                      <div className="flex min-w-0 items-start justify-between gap-2">
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                          <TokenAvatar
-                            symbol={cardSymbol || cardName}
-                            logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
-                            size="md"
-                            className="!h-8 !w-8 !rounded-[9px] shrink-0"
-                          />
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <TokenAvatar
+                          symbol={cardSymbol || cardName}
+                          logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
+                          size="md"
+                          className="!h-9 !w-9 !rounded-[10px] shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-baseline gap-1.5">
                             <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
-                            {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/45">${cardSymbol}</span>}
+                            {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                           </div>
-                        </div>
-                        <span className={`max-w-[38%] shrink-0 truncate rounded-md bg-[#1a1a1a] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] ${statusTone}`}>
-                          {lifecycleLabel}
-                        </span>
-                      </div>
-
-                      <div className="mt-1 flex min-h-[16px] min-w-0 items-center">
-                        {lifecycleSubEvent && (
-                          <div className="w-full truncate text-[10px] font-medium leading-snug text-white/65" title={lifecycleSubEvent}>
-                            {lifecycleSubEvent}
+                          <div className="mt-1 flex min-h-3 min-w-0 items-center gap-1.5">
+                            {lifecycleSubEvent ? (
+                              <span className="min-w-0 truncate text-[9px] leading-tight text-white/55" title={lifecycleSubEvent}>{lifecycleSubEvent}</span>
+                            ) : isLifecycleProgress ? (
+                              <span className="text-[9px] leading-tight text-white/45">Scanning</span>
+                            ) : null}
                           </div>
-                        )}
-                      </div>
-
-                      {errorDetails && (
-                        <div className="mt-0.5">
-                          <button
-                            type="button"
-                            aria-expanded={errorExpanded}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setExpandedErrors((previous) => previous.includes(launch.mint_address)
-                                ? previous.filter((mint) => mint !== launch.mint_address)
-                                : [...previous, launch.mint_address]);
-                            }}
-                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[8px] font-medium text-red-200/75 transition-colors hover:bg-red-400/[0.08] hover:text-red-100"
-                          >
-                            <span className="h-1 w-1 rounded-full bg-red-300" />
-                            {errorExpanded ? 'Hide error details' : 'Error details'}
-                            <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
-                          </button>
-                          {errorExpanded && (
-                            <div className="mt-1.5 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
-                              <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
-                                {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
-                                {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
-                                {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
-                                {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
-                              </div>
-                              <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
-                              {errorDetails?.raw_response != null && (
-                                <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
-                                  {typeof errorDetails.raw_response === 'string'
-                                    ? errorDetails.raw_response
-                                    : JSON.stringify(errorDetails.raw_response, null, 2)}
-                                </pre>
+                          {isLifecycleProgress && (
+                            <div className="mt-1 h-[2px] w-16 max-w-full overflow-hidden rounded-full bg-white/[0.10]">
+                              <div className="h-full rounded-full bg-white/75 transition-[width] duration-300 ease-out" style={{ width: `${lifecycleProgress}%` }} />
+                            </div>
+                          )}
+                          {errorDetails && failedLifecycle && (
+                            <div className="mt-1">
+                              <button
+                                type="button"
+                                aria-expanded={errorExpanded}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setExpandedErrors((previous) => previous.includes(launch.mint_address)
+                                    ? previous.filter((mint) => mint !== launch.mint_address)
+                                    : [...previous, launch.mint_address]);
+                                }}
+                                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-medium text-red-200/75 transition-colors hover:bg-red-400/[0.08] hover:text-red-100"
+                              >
+                                <span className="h-1 w-1 rounded-full bg-red-300" />
+                                {errorExpanded ? 'Hide error details' : 'Error details'}
+                                <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
+                              </button>
+                              {errorExpanded && (
+                                <div className="mt-1 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
+                                  <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
+                                    {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
+                                    {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
+                                    {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
+                                    {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
+                                  </div>
+                                  <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
+                                  {errorDetails?.raw_response != null && (
+                                    <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
+                                      {typeof errorDetails.raw_response === 'string'
+                                        ? errorDetails.raw_response
+                                        : JSON.stringify(errorDetails.raw_response, null, 2)}
+                                    </pre>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}
                         </div>
-                      )}
-
-                      <div className="mt-1 border-t border-white/[0.07] pt-1">
-                        <div className="flex min-w-0 items-center justify-between gap-2">
-                          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                            {isLifecycleProgress && (
-                              <>
-                                <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/55">{Math.round(lifecycleProgress!)}%</span>
-                                <div className="h-[2px] w-14 max-w-[28%] overflow-hidden rounded-full bg-white/[0.13]">
-                                  <div
-                                    className="h-full rounded-full bg-white/90 transition-[width] duration-300 ease-out"
-                                    style={{ width: `${lifecycleProgress}%` }}
-                                  />
-                                </div>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex max-w-[48%] min-w-0 shrink-0 items-center gap-1">
-                            <span className="truncate font-mono text-[8px] text-white/40">{launch.mint_address.slice(0, 7)}…{launch.mint_address.slice(-5)}</span>
-                            <button
-                              type="button"
-                              aria-label="Copy token contract address"
-                              onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
-                              className="shrink-0 rounded p-0.5 text-white/35 transition-colors hover:text-white/80"
-                            >
-                              <Copy className="h-2.5 w-2.5" />
-                            </button>
-                          </div>
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${statusTone}`}>
+                            {lifecycleLabel}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Copy ${cardName} contract address`}
+                            title="Copy contract address"
+                            onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
+                            className="inline-flex max-w-[116px] items-center gap-1 rounded px-1 py-0.5 text-white/40 transition-colors hover:text-white/80"
+                          >
+                            <Copy className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate font-mono text-[8px]">{launch.mint_address.slice(0, 5)}…{launch.mint_address.slice(-4)}</span>
+                          </button>
                         </div>
                       </div>
                     </article>
