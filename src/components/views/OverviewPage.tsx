@@ -10,14 +10,11 @@ type ChangeDirection = 'up' | 'down' | null;
 interface AnimatedCardScanProgressProps {
   status: string;
   progress: number | null;
-  label: string;
-  subEvent: string;
-  statusTone: string;
   children: (presentation: { complete: boolean; displayProgress: number }) => React.ReactNode;
 }
 
 const AnimatedCardScanProgress: React.FC<AnimatedCardScanProgressProps> = ({
-  status, progress, label, subEvent, statusTone, children,
+  status, progress, children,
 }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
   const progressRef = useRef(0);
@@ -630,9 +627,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         key={launch.mint_address}
                         status={lifecycleStatus}
                         progress={lifecycleProgress}
-                        label={lifecycleLabel}
-                        subEvent={lifecycleSubEvent}
-                        statusTone={statusTone}
                       >
                         {({ complete, displayProgress }) => (
                       <div className="relative z-10">
