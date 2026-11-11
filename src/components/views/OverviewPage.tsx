@@ -564,58 +564,36 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   return (
                     <article
                       key={launch.id || launch.signature}
-                      className="mb-1.5 rounded-lg bg-[#191919] px-2.5 py-2.5 last:mb-0"
+                      className="mb-1 rounded-lg bg-[#121212] px-2 py-2 last:mb-0"
                     >
-                      <div className="mb-1.5 flex min-w-0 items-center justify-between gap-2">
-                        <span className={`truncate text-[9px] font-semibold uppercase tracking-[0.11em] ${statusTone}`}>
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <TokenAvatar
+                            symbol={cardSymbol || cardName}
+                            logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
+                            size="sm"
+                            className="h-6 w-6 shrink-0"
+                          />
+                          <div className="flex min-w-0 items-baseline gap-1.5">
+                            <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
+                            {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/45">${cardSymbol}</span>}
+                          </div>
+                        </div>
+                        <span className={`max-w-[38%] shrink-0 truncate rounded-md bg-[#121212] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] ${statusTone}`}>
                           {lifecycleLabel}
                         </span>
-                        {isLifecycleProgress && (
-                          <span className="shrink-0 text-[9px] tabular-nums text-white/45">{Math.round(lifecycleProgress!)}%</span>
+                      </div>
+
+                      <div className="mt-1.5 min-h-[15px] min-w-0">
+                        {lifecycleSubEvent && (
+                          <div className="truncate text-[9px] leading-snug text-white/55" title={lifecycleSubEvent}>
+                            {lifecycleSubEvent}
+                          </div>
                         )}
                       </div>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <TokenAvatar
-                          symbol={cardSymbol || cardName}
-                          logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
-                          size="lg"
-                          className="h-8 w-8 shrink-0"
-                        />
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                          <span className="min-w-0 truncate text-[11px] font-semibold leading-tight text-white">{cardName}</span>
-                          {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/40">${cardSymbol}</span>}
-                        </div>
-                        <div className="flex max-w-[46%] min-w-0 shrink-0 items-center justify-end gap-1">
-                          <span className="truncate font-mono text-[8px] text-white/40">{launch.mint_address.slice(0, 7)}…{launch.mint_address.slice(-5)}</span>
-                          <button
-                            type="button"
-                            aria-label="Copy token contract address"
-                            onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
-                            className="shrink-0 rounded p-1 text-white/35 transition-colors hover:text-white/80"
-                          >
-                            <Copy className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-                      {(lifecycleSubEvent || isLifecycleProgress) && (
-                        <div className="mt-2 min-w-0">
-                          {lifecycleSubEvent && (
-                            <div className="truncate text-[9px] leading-snug text-white/55" title={lifecycleSubEvent}>
-                              {lifecycleSubEvent}
-                            </div>
-                          )}
-                          {isLifecycleProgress && (
-                            <div className="mt-1.5 h-[3px] w-full overflow-hidden rounded-full bg-white/[0.09]">
-                              <div
-                                className="h-full rounded-full bg-sky-300/80 transition-[width] duration-300 ease-out"
-                                style={{ width: `${lifecycleProgress}%` }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
+
                       {errorDetails && (
-                        <div className="mt-2">
+                        <div className="mt-1">
                           <button
                             type="button"
                             aria-expanded={errorExpanded}
@@ -625,21 +603,21 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                                 ? previous.filter((mint) => mint !== launch.mint_address)
                                 : [...previous, launch.mint_address]);
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-md bg-red-400/[0.07] px-2 py-1 text-[9px] font-medium text-red-200/85 transition-colors hover:bg-red-400/[0.12] hover:text-red-100"
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[8px] font-medium text-red-200/75 transition-colors hover:bg-red-400/[0.08] hover:text-red-100"
                           >
                             <span className="h-1 w-1 rounded-full bg-red-300" />
                             {errorExpanded ? 'Hide error details' : 'Error details'}
-                            <span aria-hidden="true" className="text-[8px]">{errorExpanded ? '▴' : '▾'}</span>
+                            <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
                           </button>
                           {errorExpanded && (
-                            <div className="mt-2 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
+                            <div className="mt-1.5 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
                               <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
                                 {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
                                 {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
                                 {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
                                 {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
                               </div>
-                              <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage}</p>
+                              <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
                               {errorDetails?.raw_response != null && (
                                 <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
                                   {typeof errorDetails.raw_response === 'string'
@@ -651,6 +629,35 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           )}
                         </div>
                       )}
+
+                      <div className="mt-1.5 border-t border-white/[0.08] pt-1.5">
+                        <div className="flex min-w-0 items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                            {isLifecycleProgress && (
+                              <>
+                                <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/55">{Math.round(lifecycleProgress!)}%</span>
+                                <div className="h-[2px] w-14 max-w-[28%] overflow-hidden rounded-full bg-white/[0.13]">
+                                  <div
+                                    className="h-full rounded-full bg-white/90 transition-[width] duration-300 ease-out"
+                                    style={{ width: `${lifecycleProgress}%` }}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex max-w-[48%] min-w-0 shrink-0 items-center gap-1">
+                            <span className="truncate font-mono text-[8px] text-white/40">{launch.mint_address.slice(0, 7)}…{launch.mint_address.slice(-5)}</span>
+                            <button
+                              type="button"
+                              aria-label="Copy token contract address"
+                              onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
+                              className="shrink-0 rounded p-0.5 text-white/35 transition-colors hover:text-white/80"
+                            >
+                              <Copy className="h-2.5 w-2.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </article>
                   );
                 })}
