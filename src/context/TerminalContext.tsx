@@ -187,12 +187,14 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     token_scan_failed: { status: 'failed', label: 'Scan failed', stage: 'security_failed' },
     token_monitoring_started: { status: 'monitoring', label: 'Monitoring', stage: 'market_watch' },
     token_monitoring_update: { status: 'monitoring', label: 'Monitoring', stage: String(data.stage || 'market_watch') },
+    token_monitoring_completed: { status: 'monitoring', label: 'Monitoring complete', stage: 'monitoring_complete' },
     market_subscription_requested: { status: 'monitoring', label: 'Monitoring', stage: 'waiting_for_market_feed' },
     market_subscription_waiting: { status: 'monitoring', label: 'Monitoring', stage: 'waiting_for_market_feed' },
     market_subscription_active: { status: 'monitoring', label: 'Monitoring', stage: 'market_feed_active' },
     paper_entry_evaluation: { status: 'evaluating', label: 'Evaluating entry', stage: 'strategy_checks' },
     paper_buy_executed: { status: 'bought_paper', label: 'Paper buy executed', stage: 'position_open' },
     paper_buy_failed: { status: 'buy_failed', label: 'Buy failed', stage: 'entry_failed' },
+    paper_sell_executed: { status: 'closed', label: 'Position closed', stage: 'position_closed' },
     paper_sell_executed: { status: 'closed', label: 'Position closed', stage: 'position_closed' },
   };
   const lifecycleEvent = lifecycleByEvent[event.event_type];
@@ -807,7 +809,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
         'token_monitoring_started', 'token_monitoring_update', 'token_monitoring_completed',
         'market_subscription_requested', 'market_subscription_active', 'market_subscription_waiting',
-        'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed',
+        'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed', 'paper_sell_failed', 'position_updated',
         'paper_entry_evaluation',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
       ].includes(event.event_type);
