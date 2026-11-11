@@ -533,7 +533,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   // This card is a pure view of the backend's canonical activity snapshot.
                   // Never infer a lifecycle from event names, strategy fallbacks or missing fields.
                   const lifecycleStatus = String(tokenData.lifecycle_status || '').toLowerCase();
-                  const lifecycleLabel = String(tokenData.lifecycle_label || 'Awaiting backend status');
+                  const lifecycleLabel = String(tokenData.lifecycle_label || 'Awaiting status');
                   const rawLifecycleProgress = tokenData.lifecycle_progress;
                   const lifecycleProgressValue = rawLifecycleProgress == null ? Number.NaN : Number(rawLifecycleProgress);
                   const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
@@ -564,29 +564,29 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   return (
                     <article
                       key={launch.id || launch.signature}
-                      className="mb-1 rounded-lg bg-[#121212] px-2 py-2 last:mb-0"
+                      className="mb-1 rounded-[10px] border border-white/[0.055] bg-[#121212] px-2.5 py-2 last:mb-0"
                     >
                       <div className="flex min-w-0 items-start justify-between gap-2">
                         <div className="flex min-w-0 flex-1 items-center gap-1.5">
                           <TokenAvatar
                             symbol={cardSymbol || cardName}
                             logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
-                            size="sm"
-                            className="h-6 w-6 shrink-0"
+                            size="md"
+                            className="!h-8 !w-8 !rounded-[8px] shrink-0"
                           />
                           <div className="flex min-w-0 items-baseline gap-1.5">
                             <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                             {cardSymbol && <span className="shrink-0 text-[8px] font-medium text-white/45">${cardSymbol}</span>}
                           </div>
                         </div>
-                        <span className={`max-w-[38%] shrink-0 truncate rounded-md bg-[#121212] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] ${statusTone}`}>
+                        <span className={`max-w-[38%] shrink-0 truncate rounded-md border border-white/[0.07] bg-[#1a1a1a] px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] ${statusTone}`}>
                           {lifecycleLabel}
                         </span>
                       </div>
 
-                      <div className="mt-1.5 min-h-[15px] min-w-0">
+                      <div className="mt-2 flex min-h-[24px] min-w-0 items-center">
                         {lifecycleSubEvent && (
-                          <div className="truncate text-[9px] leading-snug text-white/55" title={lifecycleSubEvent}>
+                          <div className="w-full truncate text-[10px] font-medium leading-snug text-white/65" title={lifecycleSubEvent}>
                             {lifecycleSubEvent}
                           </div>
                         )}
