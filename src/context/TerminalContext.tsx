@@ -182,7 +182,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     : isUnverifiedTerminal ? 'unverified'
     : mayReplaceTerminalVerdict && (event.event_type === 'strategy_rejected_token' || decision.includes('reject')) ? 'rejected'
     : isScanProgressEvent ? (previousHasTerminalVerdict ? previous!.qualification_status : 'under_analysis')
-    : decision.includes('qualif') || decision.includes('approv') ? 'qualified'
+    : mayReplaceTerminalVerdict && (decision.includes('qualif') || decision.includes('approv')) ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
     mint, state_version: Math.max(previousStateVersion, incomingStateVersion), name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
