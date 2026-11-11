@@ -129,7 +129,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const identity = data.identity && typeof data.identity === 'object' ? data.identity : {};
   const metadata = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
   const payload = { ...data, ...marketPatch, ...statisticsPatch, ...identity };
-  const mint = String(event.token_mint || payload.mint_address || payload.token_mint || payload.base_mint || '');
+  const mint = String(payload.mint_address || payload.token_mint || payload.base_mint || event.token_mint || '');
   if (!mint) return null;
   const rawUsdPrice = Number(payload.current_price_usd ?? payload.price_usd ?? payload.price ?? payload.current_price);
   const rawSolPrice = Number(payload.price_sol ?? payload.current_price_sol);
