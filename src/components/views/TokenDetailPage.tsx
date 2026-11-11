@@ -9,6 +9,8 @@ import {
   Check,
   ChartLine,
   ChartCandlestick,
+  Pencil,
+  X,
 } from 'lucide-react';
 
 export const TokenDetailPage: React.FC = () => {
@@ -19,6 +21,8 @@ export const TokenDetailPage: React.FC = () => {
     positions,
     closePosition,
     executeManualPaperBuy,
+    updatePositionRisk,
+    settings,
   } = useTerminal();
 
   const [copiedMint, setCopiedMint] = useState(false);
@@ -27,6 +31,11 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [tradeMessage, setTradeMessage] = useState<string | null>(null);
+  const [riskSheetOpen, setRiskSheetOpen] = useState(false);
+  const [riskStopLoss, setRiskStopLoss] = useState(15);
+  const [riskTakeProfit, setRiskTakeProfit] = useState(100);
+  const [riskSaving, setRiskSaving] = useState(false);
+  const [riskError, setRiskError] = useState<string | null>(null);
   const [headerOffset, setHeaderOffset] = useState(0);
   const headerOffsetRef = useRef(0);
   const lastScrollTop = useRef(0);
@@ -78,6 +87,32 @@ export const TokenDetailPage: React.FC = () => {
     closePosition(activePosition.id, pct);
     setTradeMessage(`Sold ${pct}% of ${activeToken.symbol}`);
     setTimeout(() => setTradeMessage(null), 3000);
+  };
+
+  const openRiskEditor = () => {
+    if (!activePosition) return;
+    setRiskStopLoss(activePosition.stop_loss_target_pct);
+    setRiskTakeProfit(activePosition.take_profit_target_pct);
+    setRiskError(null);
+    setRiskSheetOpen(true);
+  };
+
+  const savePositionRisk = async () => {
+    if (!activePosition || riskSaving) return;
+    setRiskSaving(true);
+    setRiskError(null);
+    try {
+      const saved = await updatePositionRisk(activePosition.id, riskStopLoss, riskTakeProfit);
+      if (!saved) {
+        setRiskError('The backend could not save these settings. Check your operator key and position status.');
+        return;
+      }
+      setRiskSheetOpen(false);
+      setTradeMessage('Position protection updated');
+      window.setTimeout(() => setTradeMessage(null), 3000);
+    } finally {
+      setRiskSaving(false);
+    }
   };
 
   const handleBuyMore = (sol: number) => {
@@ -280,6 +315,27 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
 
+        {activePosition && (
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-white/40">Position protection</div>
+              <div className="mt-1 flex items-center gap-4 font-mono text-[12px]">
+                <span className="text-red-300">SL {formatMetric(activePosition.stop_loss_target_pct, 2)}%</span>
+                <span className="text-emerald-300">TP {formatMetric(activePosition.take_profit_target_pct, 2)}%</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={openRiskEditor}
+              disabled={!settings.adminApiKey}
+              title={settings.adminApiKey ? 'Edit this position protection' : 'Save the operator API key in Settings to edit'}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.12] px-2.5 text-[10px] font-medium text-white/75 transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              <Pencil className="h-3 w-3" /> Edit
+            </button>
+          </div>
+        )}
+
         <div className="my-5 border-t border-white/[0.08]" />
 
         <div className="space-y-3">
@@ -353,6 +409,66 @@ export const TokenDetailPage: React.FC = () => {
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.5} />
         <span>Back</span>
       </button>
+
+      {riskSheetOpen && activePosition && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm"
+          onClick={(event) => { if (event.target === event.currentTarget && !riskSaving) setRiskSheetOpen(false); }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="position-risk-title" className="w-full max-w-xl rounded-t-2xl border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
+            <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h3 id="position-risk-title" className="text-[14px] font-semibold text-white">Position protection</h3>
+                <p className="mt-1 text-[10px] text-white/40">{activeToken.symbol} · Changes apply only to this open position.</p>
+              </div>
+              <button type="button" onClick={() => setRiskSheetOpen(false)} disabled={riskSaving} aria-label="Close position protection editor" className="rounded-lg p-2 text-white/50 disabled:opacity-30"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <label className="block min-w-0">
+                <span className="mb-2 block text-[11px] font-medium text-white/60">Stop loss</span>
+                <span className="flex h-11 items-center border-b border-white/[0.18] focus-within:border-white/60">
+                  <input type="number" min="0" max="100" step="0.5" value={riskStopLoss} onChange={(event) => setRiskStopLoss(Math.min(100, Math.max(0, Number(event.target.value) || 0)))} disabled={riskSaving} className="min-w-0 flex-1 bg-transparent text-[18px] font-semibold tabular-nums text-red-300 outline-none disabled:opacity-50" />
+                  <span className="text-[12px] text-white/40">%</span>
+                </span>
+              </label>
+              <label className="block min-w-0">
+                <span className="mb-2 block text-[11px] font-medium text-white/60">Take profit</span>
+                <span className="flex h-11 items-center border-b border-white/[0.18] focus-within:border-white/60">
+                  <input type="number" min="0" max="1000" step="1" value={riskTakeProfit} onChange={(event) => setRiskTakeProfit(Math.min(1000, Math.max(0, Number(event.target.value) || 0)))} disabled={riskSaving} className="min-w-0 flex-1 bg-transparent text-[18px] font-semibold tabular-nums text-emerald-300 outline-none disabled:opacity-50" />
+                  <span className="text-[12px] text-white/40">%</span>
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="mb-2 text-[9px] uppercase tracking-wider text-white/35">Stop-loss presets</p>
+                <div className="flex flex-wrap gap-2">
+                  {[5, 10, 15, 20, 25, 30].map((value) => (
+                    <button key={value} type="button" onClick={() => setRiskStopLoss(value)} disabled={riskSaving} className={`rounded-lg border px-3 py-1.5 text-[10px] tabular-nums ${riskStopLoss === value ? 'border-white/50 bg-white/10 text-white' : 'border-white/10 text-white/50'}`}>{value}%</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-[9px] uppercase tracking-wider text-white/35">Take-profit presets</p>
+                <div className="flex flex-wrap gap-2">
+                  {[10, 20, 30, 50, 75, 100, 150, 200].map((value) => (
+                    <button key={value} type="button" onClick={() => setRiskTakeProfit(value)} disabled={riskSaving} className={`rounded-lg border px-3 py-1.5 text-[10px] tabular-nums ${riskTakeProfit === value ? 'border-white/50 bg-white/10 text-white' : 'border-white/10 text-white/50'}`}>{value}%</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="mt-4 text-[10px] leading-relaxed text-white/35">The engine recalculates this position's trigger prices from its original entry price. Other positions and global trading settings are unchanged.</p>
+            {riskError && <p role="alert" className="mt-3 rounded-lg border border-red-500/20 bg-red-500/[0.06] p-2.5 text-[10px] text-red-200">{riskError}</p>}
+            <button type="button" onClick={() => void savePositionRisk()} disabled={riskSaving || !Number.isFinite(riskStopLoss) || !Number.isFinite(riskTakeProfit)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-[12px] font-semibold text-black transition-transform active:scale-[0.99] disabled:opacity-50">
+              {riskSaving ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/25 border-t-black" /> : <Check className="h-4 w-4" />}
+              {riskSaving ? 'Applying changes…' : 'Apply changes'}
+            </button>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
