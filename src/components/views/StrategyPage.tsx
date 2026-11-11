@@ -58,6 +58,7 @@ export const StrategyPage: React.FC = () => {
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
   const [customValue, setCustomValue] = useState('');
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
+  const [showPreferredOwners, setShowPreferredOwners] = useState(false);
   const [saving, setSaving] = useState(false);
   const [ownerSheetOpen, setOwnerSheetOpen] = useState(false);
   const [editingOwnerIndex, setEditingOwnerIndex] = useState<number | null>(null);
@@ -269,30 +270,7 @@ export const StrategyPage: React.FC = () => {
         <ToggleRow title="Blacklist known rug creators" detail="Reject launches linked to creators with prior rug activity." checked={form.blacklist_creators_with_prior_rugs} onChange={(v) => update('blacklist_creators_with_prior_rugs', v)} />
       </section>
 
-      <section className="mt-5 border-t border-white/[0.08] pt-4">
-        <div className="mb-2 flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-white/50" />
-          <h3 className="text-[12px] font-semibold text-white">Preferred owners</h3>
-        </div>
-        <p className="py-2 text-[10px] leading-relaxed text-white/40">Allowlist known Pump.fun creators/deployers. Matching only controls which launches are scanned; every accepted launch still goes through the full security checks.</p>
-        <ToggleRow title="Strict preferred-owner mode" detail="ON · Only launches whose decoded creator wallet is on this list proceed to metadata and security scanning. Unknown creators are skipped." checked={form.whitelist_only_mode} onChange={(value) => update('whitelist_only_mode', value)} />
-        <div className="flex items-center justify-between gap-3 py-3">
-          <div><p className="text-[11px] font-medium text-white/85">Wallet list</p><p className="mt-0.5 text-[10px] text-white/35">{form.preferred_owners.length} of 500 saved</p></div>
-          <button type="button" onClick={() => openOwnerSheet()} disabled={form.preferred_owners.length >= 500} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[10px] font-semibold text-white/85 disabled:opacity-35"><Plus className="h-3.5 w-3.5" /> Add owner</button>
-        </div>
-        {form.preferred_owners.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[10px] text-white/35">No preferred owners added yet.</p> : (
-          <div className="divide-y divide-white/[0.07]">
-            {form.preferred_owners.map((owner, index) => (
-              <div key={owner.address + index} className="flex min-w-0 items-center gap-3 py-3">
-                <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-medium text-white/85">{owner.label || 'Unnamed owner'}</p><p className="mt-0.5 break-all font-mono text-[9px] text-white/40">{owner.address}</p></div>
-                <button type="button" onClick={() => openOwnerSheet(index)} aria-label="Edit preferred owner" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/50 hover:bg-white/[0.06]"><Pencil className="h-3.5 w-3.5" /></button>
-                <button type="button" onClick={() => removeOwner(index)} aria-label="Remove preferred owner" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-rose-300/70 hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
-              </div>
-            ))}
-          </div>
-        )}
-        {form.whitelist_only_mode && form.preferred_owners.length === 0 && <p className="mt-2 text-[10px] text-amber-300">Strict mode is enabled but the list is empty, so no launches will pass.</p>}
-      </section>
+
 
       <section className="mt-5 border-t border-white/[0.08] pt-4">
         <div className="mb-2 flex items-center gap-2">
@@ -341,7 +319,57 @@ export const StrategyPage: React.FC = () => {
             ))}
           </div>
         )}
-      </section>
+      </se
+
+      <section className="mt-5 border-t border-white/[0.08] pt-4">
+        <button
+          type="button"
+          onClick={() => setShowPreferredOwners((current) => !current)}
+          aria-expanded={showPreferredOwners}
+          aria-controls="preferred-owners-panel"
+          className="flex w-full items-center justify-between gap-3 rounded-xl py-2 text-left transition-colors hover:bg-white/[0.025] active:bg-white/[0.045]"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-white/50" />
+            <span className="min-w-0">
+              <span className="block text-[12px] font-semibold text-white">Preferred owners</span>
+              <span className="mt-0.5 block text-[10px] text-white/40">
+                {form.preferred_owners.length} of 500 addresses · Strict mode {form.whitelist_only_mode ? 'ON' : 'OFF'}
+              </span>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="rounded-full border border-white/[0.10] px-2 py-1 text-[9px] font-semibold tabular-nums text-white/55">
+              {form.preferred_owners.length}
+            </span>
+            <ChevronDown className={`h-4 w-4 text-white/45 transition-transform duration-200 ${showPreferredOwners ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+        {showPreferredOwners && (
+          <div id="preferred-owners-panel" className="mt-2 border-t border-white/[0.07] pt-3">
+            <p className="pb-2 text-[10px] leading-relaxed text-white/40">
+              Allowlist known Pump.fun creators/deployers. Matching only controls which launches are scanned; every accepted launch still goes through the full security checks.
+            </p>
+            <ToggleRow title="Strict preferred-owner mode" detail="ON · Only launches whose decoded creator wallet is on this list proceed to metadata and security scanning. Unknown creators are skipped." checked={form.whitelist_only_mode} onChange={(value) => update('whitelist_only_mode', value)} />
+            <div className="flex items-center justify-between gap-3 py-3">
+              <div><p className="text-[11px] font-medium text-white/85">Developer addresses</p><p className="mt-0.5 text-[10px] text-white/35">{form.preferred_owners.length} of 500 added</p></div>
+              <button type="button" onClick={() => openOwnerSheet()} disabled={form.preferred_owners.length >= 500} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[10px] font-semibold text-white/85 disabled:opacity-35"><Plus className="h-3.5 w-3.5" /> Add address</button>
+            </div>
+            {form.preferred_owners.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[10px] text-white/35">No developer addresses added yet.</p> : (
+              <div className="max-h-[min(52vh,420px)] overflow-y-auto overscroll-contain divide-y divide-white/[0.07] pr-1">
+                {form.preferred_owners.map((owner, index) => (
+                  <div key={owner.address + index} className="flex min-w-0 items-center gap-3 py-3">
+                    <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-medium text-white/85">{owner.label || 'Unnamed developer'}</p><p className="mt-0.5 break-all font-mono text-[9px] text-white/40">{owner.address}</p></div>
+                    <button type="button" onClick={() => openOwnerSheet(index)} aria-label="Edit developer address" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/50 hover:bg-white/[0.06]"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button type="button" onClick={() => removeOwner(index)} aria-label="Remove developer address" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-rose-300/70 hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {form.whitelist_only_mode && form.preferred_owners.length === 0 && <p className="mt-2 text-[10px] text-amber-300">Strict mode is enabled but the list is empty, so no launches will pass.</p>}
+          </div>
+        )}
+      </section>ction>
 
       {ownerSheetOpen && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setOwnerSheetOpen(false); }}>
