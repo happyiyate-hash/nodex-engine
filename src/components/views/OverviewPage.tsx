@@ -395,7 +395,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         </div>
       </section>}
 
-      <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-0 sm:px-4 sm:pb-0"}`}>
+      <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0 sm:px-3 sm:pb-0"}`}>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
             {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
               <div className="space-y-1.5 pb-2">
