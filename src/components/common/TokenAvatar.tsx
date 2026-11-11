@@ -1,10 +1,92 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 interface TokenAvatarProps {
   symbol: string;
   logoUrl?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+}
+
+// Cache both successful and unsuccessful extractions so a logo is never
+// repeatedly sampled while its token moves through the feed.
+const logoAccentCache = new Map<string, string | null>();
+const MAX_LOGO_ACCENT_CACHE = 500;
+
+function extractDominantAccent(image: HTMLImageElement): string | null {
+  const cacheKey = image.currentSrc || image.src;
+  if (!cacheKey) return null;
+  if (logoAccentCache.has(cacheKey)) return logoAccentCache.get(cacheKey) ?? null;
+
+  let accent: string | null = null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 24;
+    canvas.height = 24;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Canvas 2D context unavailable');
+
+    context.drawImage(image, 0, 0, 24, 24);
+    const pixels = context.getImageData(0, 0, 24, 24).data;
+    const buckets = new Map<number, { count: number; red: number; green: number; blue: number; saturation: number }>();
+
+    for (let index = 0; index < pixels.length; index += 4) {
+      const alpha = pixels[index + 3] / 255;
+      if (alpha < 0.55) continue;
+
+      const red = pixels[index];
+      const green = pixels[index + 1];
+      const blue = pixels[index + 2];
+      const maximum = Math.max(red, green, blue);
+      const minimum = Math.min(red, green, blue);
+      const brightness = (red + green + blue) / 3;
+      const saturation = maximum === 0 ? 0 : (maximum - minimum) / maximum;
+
+      // Ignore near-black, near-white and neutral pixels. They should not
+      // tint a dark card or overpower the logo's actual identity.
+      if (brightness < 34 || brightness > 238 || saturation < 0.2) continue;
+
+      const redBin = red >> 4;
+      const greenBin = green >> 4;
+      const blueBin = blue >> 4;
+      const key = (redBin << 8) | (greenBin << 4) | blueBin;
+      const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0, saturation: 0 };
+      bucket.count += 1;
+      bucket.red += red;
+      bucket.green += green;
+      bucket.blue += blue;
+      bucket.saturation += saturation;
+      buckets.set(key, bucket);
+    }
+
+    let best: { count: number; red: number; green: number; blue: number; saturation: number } | null = null;
+    let bestScore = 0;
+    for (const bucket of buckets.values()) {
+      const averageSaturation = bucket.saturation / bucket.count;
+      const score = bucket.count * (0.65 + averageSaturation);
+      if (score > bestScore) {
+        best = bucket;
+        bestScore = score;
+      }
+    }
+
+    if (best) {
+      const red = Math.round(best.red / best.count);
+      const green = Math.round(best.green / best.count);
+      const blue = Math.round(best.blue / best.count);
+      accent = `${red} ${green} ${blue}`;
+    }
+  } catch {
+    // Some image hosts do not permit canvas pixel reads (CORS). The logo
+    // itself can still display normally; the card simply keeps its neutral look.
+    accent = null;
+  }
+
+  if (logoAccentCache.size >= MAX_LOGO_ACCENT_CACHE) {
+    const oldestKey = logoAccentCache.keys().next().value;
+    if (oldestKey) logoAccentCache.delete(oldestKey);
+  }
+  logoAccentCache.set(cacheKey, accent);
+  return accent;
 }
 
 function resolveImageUrls(value?: string): string[] {
@@ -31,6 +113,7 @@ function resolveImageUrls(value?: string): string[] {
 export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size = 'md', className = '' }) => {
   const cleanSymbol = (symbol || '?').toUpperCase().trim() || '?';
   const imageUrls = useMemo(() => resolveImageUrls(logoUrl), [logoUrl]);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [gatewayIndex, setGatewayIndex] = useState(0);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [retryPending, setRetryPending] = useState(false);
@@ -44,6 +127,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   const imageUrl = imageUrls[gatewayIndex] || '';
 
   useEffect(() => {
+    rootRef.current?.closest<HTMLElement>('[data-token-card]')?.style.removeProperty('--token-accent-rgb');
     setGatewayIndex(0);
     setRetryAttempt(0);
     setRetryPending(false);
@@ -72,7 +156,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   );
 
   return (
-    <div className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ' + className}>
+    <div ref={rootRef} className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ' + className}>
       {fallback}
       {imageUrl && (
         <img
@@ -83,7 +167,11 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
           decoding="async"
           fetchPriority="auto"
           className={'absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ' + (loaded ? 'opacity-100' : 'opacity-0')}
-          onLoad={() => {
+          onLoad={(event) => {
+            const accent = extractDominantAccent(event.currentTarget);
+            if (accent) {
+              rootRef.current?.closest<HTMLElement>('[data-token-card]')?.style.setProperty('--token-accent-rgb', accent);
+            }
             setLoaded(true);
             setRetryPending(false);
           }}
