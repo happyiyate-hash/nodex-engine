@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
+import { apiClient } from '../../services/rest';
 import { useToast } from '../ui/ToastProvider';
 import {
   Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
@@ -97,6 +98,8 @@ export const StrategyPage: React.FC = () => {
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
   const [showPreferredOwners, setShowPreferredOwners] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [newEntriesEnabled, setNewEntriesEnabled] = useState(false);
+  const [savingEntryPermission, setSavingEntryPermission] = useState(false);
   const [ownerSheetOpen, setOwnerSheetOpen] = useState(false);
   const [editingOwnerIndex, setEditingOwnerIndex] = useState<number | null>(null);
   const [ownerAddress, setOwnerAddress] = useState('');
@@ -107,6 +110,40 @@ export const StrategyPage: React.FC = () => {
     setForm({ ...strategyConfig });
     setAppliedConfig({ ...strategyConfig });
   }, [strategyConfig]);
+
+  useEffect(() => {
+    let active = true;
+    apiClient.getEngineControl()
+      .then((control) => { if (active) setNewEntriesEnabled(Boolean(control.new_entries_enabled)); })
+      .catch(() => { if (active) setNewEntriesEnabled(false); });
+    return () => { active = false; };
+  }, []);
+
+  const updateNewEntriesPermission = async (enabled: boolean) => {
+    if (savingEntryPermission) return;
+    setSavingEntryPermission(true);
+    try {
+      const result = await apiClient.updateEngineControl('configure', { new_entries_enabled: enabled });
+      setNewEntriesEnabled(Boolean(result.engine.new_entries_enabled));
+      showToast({
+        title: enabled ? 'Paper entries enabled' : 'Paper entries disabled',
+        description: enabled
+          ? 'The engine may now open simulated positions when every other paper-entry gate passes.'
+          : 'The engine will not open new paper positions.',
+        tone: 'success',
+        duration: 4500,
+      });
+    } catch (error) {
+      showToast({
+        title: 'Could not update paper-entry permission',
+        description: error instanceof Error ? error.message : 'The backend rejected the runtime control change.',
+        tone: 'error',
+        duration: 6500,
+      });
+    } finally {
+      setSavingEntryPermission(false);
+    }
+  };
 
   const hasUnappliedChanges = JSON.stringify(form) !== JSON.stringify(appliedConfig);
 
@@ -342,6 +379,15 @@ export const StrategyPage: React.FC = () => {
             : "OFF · Automatic paper entries are blocked. Turn ON only when you are ready to allow simulated entries."}
           checked={form.execution_enabled}
           onChange={(v) => update('execution_enabled', v)}
+        />
+        <ToggleRow
+          title="Allow new paper entries"
+          detail={newEntriesEnabled
+            ? "ON · New simulated positions are permitted when the engine is running and all strategy/security checks pass."
+            : "OFF · New paper positions are blocked regardless of market signals."}
+          checked={newEntriesEnabled}
+          onChange={updateNewEntriesPermission}
+          disabled={!paperMode || savingEntryPermission}
         />
       </section>
 
