@@ -155,6 +155,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     .includes(String(previous?.qualification_status || ''));
   const previousHasTerminalScanStatus = ['completed', 'verified', 'failed', 'rejected', 'unverified']
     .includes(String(previous?.scan_status || '').toLowerCase());
+  const isSecurityVerdictEvent = ['token_scan_update', 'token_scan_completed', 'token_scan_failed'].includes(event.event_type);
   const incomingStateVersion = Number(data.state_version ?? data.version ?? 0);
   const previousStateVersion = Number(previous?.state_version || 0);
   const incomingSecurityScannedAt = Date.parse(String(data.scanned_at || data.security?.scanned_at || ''));
@@ -182,14 +183,14 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : previousHasTerminalVerdict && !mayReplaceTerminalVerdict ? previous!.qualification_status
     : isUnverifiedTerminal ? 'unverified'
-    : mayReplaceTerminalVerdict && (event.event_type === 'strategy_rejected_token' || decision.includes('reject')) ? 'rejected'
+    : isSecurityVerdictEvent && mayReplaceTerminalVerdict && decision.includes('reject') ? 'rejected'
     : isScanProgressEvent ? (previousHasTerminalVerdict ? previous!.qualification_status : 'under_analysis')
-    : mayReplaceTerminalVerdict && (decision.includes('qualif') || decision.includes('approv')) ? 'qualified'
+    : isSecurityVerdictEvent && mayReplaceTerminalVerdict && (decision.includes('qualif') || decision.includes('approv')) ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
     mint, state_version: Math.max(previousStateVersion, incomingStateVersion),
     security_scanned_at: Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 ? new Date(incomingSecurityScannedAt).toISOString() : previous?.security_scanned_at,
-    strategy_decision: previous?.strategy_decision,
+    strategy_decision: event.event_type === 'paper_entry_evaluation' ? String(data.decision || 'wait') : previous?.strategy_decision,
     strategy_reasons: previous?.strategy_reasons,
     strategy_evaluated_at: previous?.strategy_evaluated_at,
     name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
