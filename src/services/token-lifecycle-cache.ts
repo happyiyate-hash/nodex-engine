@@ -14,7 +14,7 @@ const DATABASE_VERSION = 1;
 const MAX_CACHED_TOKENS = 500;
 
 const LIFECYCLE_FIELDS: (keyof DiscoveredToken)[] = [
-  'mint', 'state_version', 'security_scanned_at', 'name', 'symbol', 'metadata_uri', 'logo_url', 'metadata_status',
+  'mint', 'state_version', 'security_scanned_at', 'strategy_decision', 'strategy_reasons', 'strategy_evaluated_at', 'name', 'symbol', 'metadata_uri', 'logo_url', 'metadata_status',
   'scan_status', 'monitoring_status',
   'authority_status', 'authority_rechecks', 'creator_wallet', 'launch_time',
   'venue', 'safety_status', 'qualification_status', 'rejection_reason',
@@ -122,6 +122,9 @@ export function lifecycleCacheSignature(token: DiscoveredToken): string {
   return JSON.stringify({
     state_version: token.state_version || 0,
     security_scanned_at: token.security_scanned_at,
+    strategy_decision: token.strategy_decision,
+    strategy_reasons: token.strategy_reasons,
+    strategy_evaluated_at: token.strategy_evaluated_at,
     scan_status: token.scan_status,
     monitoring_status: token.monitoring_status,
     safety_status: token.safety_status,
