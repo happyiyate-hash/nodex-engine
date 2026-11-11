@@ -221,7 +221,14 @@ export const StrategyPage: React.FC = () => {
         <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
           <NumberField label="Minimum liquidity" suffix="USD" value={form.min_liquidity_usd} onChange={(v) => update('min_liquidity_usd', v)} />
           <NumberField label="Maximum entry price" suffix="USD" step="0.000001" value={form.max_entry_price_usd} onChange={(v) => update('max_entry_price_usd', v)} />
-          <NumberField label="Paper position size" suffix="SOL" step="0.01" value={form.max_investment_per_token_sol} onChange={(v) => update('max_investment_per_token_sol', v)} />
+          <NumberField
+            label="Paper position size"
+            suffix="USD"
+            step="0.50"
+            value={form.max_investment_per_token_usd}
+            onChange={(v) => update('max_investment_per_token_usd', v)}
+            hint="Fixed dollar budget per token. The backend converts it to SOL using the latest valid SOL/USD quote when preparing an order."
+          />
           <NumberField label="Maximum open positions" value={form.max_simultaneous_positions} onChange={(v) => update('max_simultaneous_positions', Math.floor(v))} />
           <NumberField
             label="Paper Starting Balance"
