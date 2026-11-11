@@ -578,13 +578,15 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                             {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                           </div>
-                          <div className="mt-1 flex min-h-3 min-w-0 items-center gap-1.5">
-                            {lifecycleSubEvent ? (
-                              <span className="min-w-0 truncate text-[9px] leading-tight text-white/55" title={lifecycleSubEvent}>{lifecycleSubEvent}</span>
-                            ) : isLifecycleProgress ? (
-                              <span className="text-[9px] leading-tight text-white/45">Scanning</span>
-                            ) : null}
-                          </div>
+{(lifecycleSubEvent || isLifecycleProgress) && (
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                              {lifecycleSubEvent ? (
+                                <span className="min-w-0 truncate text-[9px] leading-tight text-white/55" title={lifecycleSubEvent}>{lifecycleSubEvent}</span>
+                              ) : (
+                                <span className="text-[9px] leading-tight text-white/45">Scanning</span>
+                              )}
+                            </div>
+                          )}
                           {isLifecycleProgress && (
                             <div className="mt-1 h-[2px] w-16 max-w-full overflow-hidden rounded-full bg-white/[0.10]">
                               <div className="h-full rounded-full bg-white/75 transition-[width] duration-300 ease-out" style={{ width: `${lifecycleProgress}%` }} />
