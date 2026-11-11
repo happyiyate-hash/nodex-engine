@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.nodex.terminal',
+  appId: 'com.happyiyate.nodex',
   appName: 'NodeX Terminal',
   webDir: 'dist',
   server: {
