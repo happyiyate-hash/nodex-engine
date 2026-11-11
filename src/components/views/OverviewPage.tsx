@@ -581,7 +581,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           symbol={cardSymbol || cardName}
                           logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
                           size="md"
-                          className="!h-9 !w-9 !rounded-[10px] shrink-0"
+                          className="!h-9 !w-9 !rounded-2xl shrink-0"
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-baseline gap-1.5">
