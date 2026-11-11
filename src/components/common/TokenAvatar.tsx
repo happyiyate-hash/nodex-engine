@@ -43,7 +43,7 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
 
       // Ignore near-black, near-white and neutral pixels. They should not
       // tint a dark card or overpower the logo's actual identity.
-      if (brightness < 34 || brightness > 238 || saturation < 0.2) continue;
+      if (brightness < 22 || brightness > 246 || saturation < 0.12) continue;
 
       const redBin = red >> 4;
       const greenBin = green >> 4;
@@ -128,7 +128,6 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   const imageUrl = imageUrls[gatewayIndex] || '';
 
   useEffect(() => {
-    rootRef.current?.closest<HTMLElement>('[data-token-card]')?.style.removeProperty('--token-accent-rgb');
     setGatewayIndex(0);
     setRetryAttempt(0);
     setRetryPending(false);
