@@ -381,9 +381,15 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
     lifecycle_stage: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
       ? String(snapshot.activity?.stage ?? previous?.lifecycle_stage ?? '')
       : previous?.lifecycle_stage,
+    lifecycle_sub_event: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
+      ? String(snapshot.activity?.sub_event ?? previous?.lifecycle_sub_event ?? '')
+      : previous?.lifecycle_sub_event,
     lifecycle_progress: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
       ? Number(snapshot.activity?.progress ?? previous?.lifecycle_progress ?? 0)
       : previous?.lifecycle_progress,
+    lifecycle_error: Number(snapshot.version || 0) >= Number(previous?.lifecycle_version || 0)
+      ? (snapshot.activity?.error ?? previous?.lifecycle_error)
+      : previous?.lifecycle_error,
     lifecycle_updated_at: String(snapshot.activity?.updated_at ?? previous?.lifecycle_updated_at ?? ''),
     lifecycle_version: Math.max(Number(previous?.lifecycle_version || 0), Number(snapshot.version || 0)),
     decimals: identity.decimals == null ? previous?.decimals : Number(identity.decimals),
