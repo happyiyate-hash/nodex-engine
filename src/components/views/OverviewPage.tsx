@@ -87,6 +87,84 @@ const compactNumber = (value: number) => {
   return sign + scaled.toLocaleString('en-US', { maximumFractionDigits: digits }) + unit.suffix;
 };
 
+interface ScanLifecycleIndicatorProps {
+  progress: number;
+  isScanning: boolean;
+  stage: string;
+  label: string;
+  statusTone: string;
+}
+
+const ScanLifecycleIndicator: React.FC<ScanLifecycleIndicatorProps> = ({
+  progress, isScanning, stage, label, statusTone,
+}) => {
+  const [displayProgress, setDisplayProgress] = useState(0);
+  const [animationFinished, setAnimationFinished] = useState(false);
+  const progressRef = useRef(0);
+  const hasSeenScanning = useRef(isScanning);
+  const target = isScanning ? Math.min(96, Math.max(4, progress)) : 100;
+
+  useEffect(() => {
+    if (isScanning) hasSeenScanning.current = true;
+    // A restored, already-finished token should not replay an old animation.
+    // A token whose live scan was already visible continues smoothly to 100%.
+    if (!isScanning && !hasSeenScanning.current) {
+      progressRef.current = 100;
+      setDisplayProgress(100);
+      setAnimationFinished(true);
+      return;
+    }
+
+    setAnimationFinished(false);
+    let frame = 0;
+    let previousFrameAt = 0;
+    const animate = (now: number) => {
+      if (!previousFrameAt) previousFrameAt = now;
+      const elapsed = Math.min(50, now - previousFrameAt);
+      previousFrameAt = now;
+      const current = progressRef.current;
+      const next = Math.min(target, current + Math.max(0.35, elapsed * 0.09));
+      progressRef.current = next;
+      setDisplayProgress(next);
+      if (next + 0.01 < target) {
+        frame = requestAnimationFrame(animate);
+      } else {
+        setAnimationFinished(!isScanning);
+      }
+    };
+
+    if (progressRef.current >= target) {
+      setAnimationFinished(!isScanning);
+      return;
+    }
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [target, isScanning]);
+
+  return (
+    <div className="mt-1.5 min-w-0 space-y-1">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[9px] leading-tight text-white/60">
+          {animationFinished ? (
+            <span className={`inline-flex max-w-full truncate rounded-md px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.06em] ${statusTone}`}>
+              {label}
+            </span>
+          ) : (stage || 'Security scan')}
+        </span>
+        <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">
+          {Math.round(displayProgress)}%
+        </span>
+      </div>
+      <div className="h-1 overflow-hidden rounded-full bg-white/[0.07]">
+        <div
+          className="h-full rounded-full bg-[#B8C5D5] shadow-[0_0_8px_rgba(184,197,213,0.28)]"
+          style={{ width: `${displayProgress}%` }}
+        />
+      </div>
+    </div>
+  );
+};
+
 const REEL_CENTER = 50;
 const REEL_DIGITS = Array.from({ length: 100 }, (_, index) => String(index % 10));
 
@@ -539,7 +617,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
                     ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
-                  const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
+                  const hasScanLifecycle = lifecycleProgress !== null
+                    && ['scanning', 'verified', 'unverified', 'rejected', 'failed'].includes(lifecycleStatus);
                   const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
                     ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
                   );
@@ -571,16 +650,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         className="pointer-events-none absolute inset-0 z-0"
                         style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
                       />
-                      {isLifecycleProgress && (
-                        <div
-                          aria-hidden="true"
-                          className={`pointer-events-none absolute inset-y-0 left-0 rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[width,opacity] duration-500 ease-out ${lifecycleProgress === 0 ? 'w-[22%] animate-pulse' : ''}`}
-                          style={{
-                            width: lifecycleProgress === 0 ? '22%' : `${lifecycleProgress}%`,
-                            opacity: lifecycleProgress >= 100 ? 0 : 1,
-                          }}
-                        />
-                      )}
+
                       <div className="relative z-10">
                       <div className="flex min-w-0 items-start gap-2.5">
                         <TokenAvatar
@@ -594,20 +664,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                             {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                           </div>
-{(lifecycleSubEvent || isLifecycleProgress) && (
-                            <div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-                              <span
-                                className="min-w-0 truncate text-[9px] leading-tight text-white/60"
-                                title={lifecycleSubEvent || 'Backend in progress'}
-                              >
-                                {lifecycleSubEvent || 'Backend in progress'}
-                              </span>
-                              {isLifecycleProgress && (
-                                <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">
-                                  {Math.round(lifecycleProgress)}%
-                                </span>
-                              )}
-                            </div>
+{hasScanLifecycle && (
+                            <ScanLifecycleIndicator
+                              progress={lifecycleProgress}
+                              isScanning={lifecycleStatus === 'scanning'}
+                              stage={lifecycleSubEvent || 'Security scan'}
+                              label={lifecycleLabel}
+                              statusTone={statusTone}
+                            />
                           )}
                           {errorDetails && (
                             <div className="mt-1">
@@ -630,9 +694,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                           )}
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${statusTone}`}>
-                            {lifecycleLabel}
-                          </span>
                           <button
                             type="button"
                             aria-label={`Copy ${cardName} contract address`}
