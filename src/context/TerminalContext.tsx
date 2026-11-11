@@ -210,7 +210,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const lifecycleStatus = lifecycleIsNewer
     ? (event.event_type === 'token_scan_completed'
       ? (['approved', 'verified', 'completed'].includes(String(data.status || data.decision || '').toLowerCase()) ? 'verified' : String(data.status || 'unverified').toLowerCase())
-      : lifecycleEvent.status)
+      : (lifecycleEvent?.status || previous?.lifecycle_status))
     : previous?.lifecycle_status;
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : previousHasTerminalVerdict && !mayReplaceTerminalVerdict ? previous!.qualification_status
@@ -235,8 +235,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
       ? String(data.stage || previous?.scan_stage || '')
       : previous?.scan_stage,
     lifecycle_status: lifecycleStatus || previous?.lifecycle_status,
-    lifecycle_label: lifecycleIsNewer ? lifecycleEvent.label : previous?.lifecycle_label,
-    lifecycle_stage: lifecycleIsNewer ? lifecycleEvent.stage : previous?.lifecycle_stage,
+    lifecycle_label: lifecycleIsNewer ? (lifecycleEvent?.label || previous?.lifecycle_label) : previous?.lifecycle_label,
+    lifecycle_stage: lifecycleIsNewer ? (lifecycleEvent?.stage || previous?.lifecycle_stage) : previous?.lifecycle_stage,
     lifecycle_progress: lifecycleIsNewer
       ? Number(data.progress ?? (event.event_type === 'token_scan_completed' ? 100 : previous?.lifecycle_progress ?? 0))
       : previous?.lifecycle_progress,
