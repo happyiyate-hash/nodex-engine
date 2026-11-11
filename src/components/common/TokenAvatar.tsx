@@ -56,6 +56,9 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
     if (!imageUrl || loaded || !retryPending) return;
     const delays = [1000, 2000, 4000, 8000, 15000, 30000, 60000];
     const timer = window.setTimeout(() => {
+      if (imageUrls.length > 1) {
+        setGatewayIndex((index) => (index + 1) % imageUrls.length);
+      }
       setRetryAttempt((attempt) => attempt + 1);
       setRetryPending(false);
     }, delays[Math.min(retryAttempt, delays.length - 1)]);
