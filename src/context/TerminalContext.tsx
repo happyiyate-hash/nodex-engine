@@ -160,7 +160,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const previousStateVersion = Number(previous?.state_version || 0);
   const incomingSecurityScannedAt = Date.parse(String(data.scanned_at || data.security?.scanned_at || ''));
   const previousSecurityScannedAt = Date.parse(String(previous?.security_scanned_at || ''));
-  const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || (Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
+  const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || (previous?.qualification_status !== 'bought_paper' && Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
   const isUnverifiedTerminal = mayReplaceTerminalVerdict && (event.event_type === 'token_scan_failed'
     || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase()));
   // Progress events can arrive late or be replayed after a final verdict. They
@@ -322,7 +322,7 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   const previousTerminal = ['qualified', 'rejected', 'unverified', 'bought_paper'].includes(String(previous?.qualification_status || ''));
   const incomingSecurityScannedAt = Date.parse(String(snapshot.security?.scanned_at || ''));
   const previousSecurityScannedAt = Date.parse(String(previous?.security_scanned_at || ''));
-  const snapshotMayReplaceTerminal = !previousTerminal || (Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
+  const snapshotMayReplaceTerminal = !previousTerminal || (previous?.qualification_status !== 'bought_paper' && Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
   const rawSecurityStatus = String(snapshot.security?.status || '').toLowerCase();
   // The security decision is authoritative. Older snapshots may retain a
   // transient "scanning" status even though the final APPROVED verdict was saved.
