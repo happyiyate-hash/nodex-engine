@@ -249,6 +249,18 @@ export class NodeXRestClient {
   public getProfile(): Promise<NodeXProfileSnapshot> {
     return this.request<NodeXProfileSnapshot>('/api/v1/profile');
   }
+  public updatePositionRisk(positionId: string, stopLossPct: number, takeProfitPct: number): Promise<{
+    status: string; position: Record<string, any>; risk_policy: Record<string, any>;
+  }> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings before editing position protection.');
+    return this.request(`/api/v1/portfolio/positions/${encodeURIComponent(positionId)}/risk`, {
+      method: 'PUT',
+      headers: { 'X-NodeX-Admin-Key': key },
+      body: JSON.stringify({ stop_loss_pct: stopLossPct, take_profit_pct: takeProfitPct }),
+    });
+  }
+
   public getPortfolioBalance(): Promise<PortfolioBalanceSnapshot> {
     return this.request<PortfolioBalanceSnapshot>('/api/v1/portfolio/balance');
   }
