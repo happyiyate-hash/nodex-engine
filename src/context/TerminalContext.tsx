@@ -69,10 +69,10 @@ const emptyStatus: EngineStatus = {
   database_status: 'unknown', tokens_detected_today: 0,
   simulated_buys_count: 0, simulated_sells_count: 0, strategy_paused: true,
 };
-// These are form defaults only; the backend does not currently persist strategy settings.
+// Fallback form values used until the persisted backend configuration loads.
 const emptyStrategy: StrategyConfig = {
   min_liquidity_usd: 5000, max_entry_price_usd: 0,
-  max_investment_per_token_sol: 0.1, max_investment_per_token_usd: 0,
+  max_investment_per_token_usd: 15,
   max_simultaneous_positions: 3, min_safety_score: 80, max_slippage_pct: 10,
   stop_loss_pct: 20, take_profit_pct: 50, min_5m_buy_volume_usd: 1000,
   max_top10_holder_concentration_pct: 35, auto_buy_enabled: false,
