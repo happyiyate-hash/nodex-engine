@@ -162,6 +162,12 @@ export interface DiscoveredToken {
   scan_status?: string;
   scan_progress?: number;
   scan_stage?: string;
+  lifecycle_status?: string;
+  lifecycle_label?: string;
+  lifecycle_stage?: string;
+  lifecycle_progress?: number;
+  lifecycle_updated_at?: string;
+  lifecycle_version?: number;
   monitoring_status?: string;
   authority_status?: string;
   authority_rechecks?: number;
