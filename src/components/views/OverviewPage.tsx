@@ -645,7 +645,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-[#83b982]'
                             : ['rejected', 'failed', 'buy_failed'].includes(lifecycleStatus) || ['REJECTED', 'BUY FAILED', 'FAILED'].includes(status)
                               ? 'border-red-400/20 bg-red-400/[0.06] text-[#c77b7b]'
-                              : ['scanning', 'unverified', 'evaluating'].includes(lifecycleStatus) || status === 'ANALYZING' || status === 'UNVERIFIED'
+                              : ['scanning', 'unverified', 'evaluating', 'executing_buy'].includes(lifecycleStatus) || status === 'ANALYZING' || status === 'UNVERIFIED'
                                 ? 'border-amber-400/20 bg-amber-400/[0.06] text-[#d2b47c]'
                                 : 'border-white/[0.08] bg-white/[0.03] text-white/50'
                         }`}>
@@ -655,7 +655,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       </div>
                       <div className="ml-[46px] mt-2 space-y-1.5">
                         <div className="flex items-center justify-between gap-2 text-[8px]">
-                          <span className="truncate text-white/50">{lifecycleStatus === 'monitoring' ? 'Monitoring this token for entry conditions' : lifecycleStatus === 'evaluating' ? 'Checking paper-entry criteria' : lifecycleStatus === 'bought_paper' ? 'Paper position opened' : lifecycleStatus === 'buy_failed' ? 'Paper entry could not complete' : lifecycleStatus === 'verified' ? 'Security checks passed' : lifecycleStatus === 'rejected' ? 'Security checks rejected this token' : lifecycleStatus === 'unverified' ? 'Unable to verify this token' : scanStage ? scanStage : 'Security scan in progress'}</span>
+                          <span className="truncate text-white/50">{lifecycleStatus === 'monitoring' ? 'Monitoring this token for entry conditions' : lifecycleStatus === 'evaluating' ? 'Checking paper-entry criteria' : lifecycleStatus === 'executing_buy' ? 'Submitting simulated paper order' : lifecycleStatus === 'bought_paper' ? 'Paper position opened' : lifecycleStatus === 'buy_failed' ? 'Paper entry could not complete' : lifecycleStatus === 'verified' ? 'Security checks passed' : lifecycleStatus === 'rejected' ? 'Security checks rejected this token' : lifecycleStatus === 'unverified' ? 'Unable to verify this token' : scanStage ? scanStage : 'Security scan in progress'}</span>
                           {isLifecycleProgress && <span className="shrink-0 tabular-nums text-white/45">{Math.round(lifecycleProgress)}%</span>}
                         </div>
                         {isLifecycleProgress && (
