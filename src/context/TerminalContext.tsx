@@ -129,7 +129,10 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const statisticsPatch = data.statistics_patch && typeof data.statistics_patch === 'object' ? data.statistics_patch : {};
   const identity = data.identity && typeof data.identity === 'object' ? data.identity : {};
   const metadata = data.metadata && typeof data.metadata === 'object' ? data.metadata : {};
-  const payload = { ...data, ...marketPatch, ...statisticsPatch, ...identity };
+  const metrics = data.metrics && typeof data.metrics === 'object' ? data.metrics : {};
+  // paper_entry_evaluation carries confirmed buyer/volume/slippage metrics under
+  // data.metrics; flatten them so the shared token model receives real backend values.
+  const payload = { ...data, ...metrics, ...marketPatch, ...statisticsPatch, ...identity };
   const mint = String(payload.mint_address || payload.token_mint || payload.base_mint || event.token_mint || '');
   if (!mint) return null;
   const rawUsdPrice = Number(payload.current_price_usd ?? payload.price_usd ?? payload.price ?? payload.current_price);
@@ -393,6 +396,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     sell_count_5m: Number(payload.sell_count_5m ?? previous?.sell_count_5m ?? 0),
     estimated_slippage_pct: Number(payload.estimated_slippage_pct ?? previous?.estimated_slippage_pct ?? 0),
     confirmed_trade_events: Number(payload.confirmed_trade_events ?? previous?.confirmed_trade_events ?? 0),
+    buy_pressure_pct: Number(payload.buy_pressure_pct ?? previous?.buy_pressure_pct ?? 0),
     bonding_curve_status: event.event_type === 'market_curve_completed'
       ? String(payload.status || 'complete') : previous?.bonding_curve_status,
     bonding_curve_account: event.event_type === 'market_curve_completed'
