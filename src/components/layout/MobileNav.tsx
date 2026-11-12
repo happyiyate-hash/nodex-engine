@@ -92,14 +92,14 @@ export const MobileNav: React.FC = () => {
   return <>
     <style>{'@keyframes settings-heartbeat { 0%,100% { box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 0 0 rgba(255,255,255,0); } 35% { box-shadow: 0 0 0 2px rgba(255,255,255,.58), 0 0 24px 8px rgba(255,255,255,.30); } 65% { box-shadow: 0 0 0 1px rgba(255,255,255,.24), 0 0 10px 2px rgba(255,255,255,.12); } }'}</style>
     <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.5rem)] z-40 flex items-center gap-2 select-none pointer-events-none">
-      <nav aria-label="Main navigation" className="glass-nav-float flex h-[60px] min-w-0 flex-1 items-center overflow-hidden rounded-full border border-white/[0.20] p-1.5 backdrop-blur-2xl shadow-[0_12px_34px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.16),0_0_0_1px_rgba(255,255,255,0.035)] pointer-events-auto"
-        style={{ transform: collapsing ? 'translateX(34px) scaleX(.02)' : 'translateX(0) scaleX(1)', transformOrigin: 'right center', opacity: collapsing ? 0 : 1, flexBasis: collapsing ? '0%' : 'auto', transition: 'transform 420ms cubic-bezier(.7,0,.2,1), opacity 360ms ease, flex-basis 420ms cubic-bezier(.7,0,.2,1)' }}>
+      <nav aria-label="Main navigation" className="glass-nav-float flex h-[60px] min-w-0 flex-1 items-center overflow-hidden rounded-full border border-amber-300/[0.16] p-1.5 backdrop-blur-2xl shadow-[0_12px_34px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.12),0_0_0_1px_rgba(255,255,255,0.025)] pointer-events-auto"
+        style={{ background: 'linear-gradient(112deg, rgba(231,137,55,.13) 0%, rgba(229,177,74,.085) 52%, rgba(15,15,15,.92) 100%), rgba(15,15,15,.88)', transform: collapsing ? 'translateX(34px) scaleX(.02)' : 'translateX(0) scaleX(1)', transformOrigin: 'right center', opacity: collapsing ? 0 : 1, flexBasis: collapsing ? '0%' : 'auto', transition: 'transform 420ms cubic-bezier(.7,0,.2,1), opacity 360ms ease, flex-basis 420ms cubic-bezier(.7,0,.2,1)' }}>
         <div className="grid h-full w-full min-w-[220px] grid-cols-3 items-center gap-1">
           {MAIN_ITEMS.map(({ tab, label, icon: Icon }) => {
             const active = activeTab === tab && !selectedToken;
             return <button key={tab} type="button" onClick={() => select(tab)} aria-label={label} title={label} aria-current={active ? 'page' : undefined}
-              className={'group flex h-full min-w-0 items-center justify-center rounded-full transition-all duration-200 active:scale-95 ' + (active ? 'bg-background/75 text-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_3px_12px_rgba(0,0,0,0.32)] ring-1 ring-white/[0.10]' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground')}>
-              <Icon className={'size-[23px] shrink-0 transition-all duration-200 ' + (active ? '-translate-y-1 scale-[1.18] drop-shadow-[0_3px_7px_rgba(255,255,255,0.20)]' : 'group-hover:scale-110')} strokeWidth={active ? 2.4 : 2} />
+              className={'group flex h-full min-w-0 items-center justify-center rounded-full transition-all duration-200 active:scale-95 ' + (active ? 'bg-amber-400/[0.10] text-amber-200 shadow-[inset_0_1px_0_rgba(255,226,170,0.14),0_3px_12px_rgba(0,0,0,0.28)] ring-1 ring-amber-300/[0.16]' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground')}>
+              <Icon className={'size-[23px] shrink-0 transition-all duration-200 ' + (active ? '-translate-y-1 scale-[1.18] drop-shadow-[0_3px_8px_rgba(231,137,55,0.30)]' : 'group-hover:scale-110')} strokeWidth={active ? 2.4 : 2} />
             </button>;
           })}
         </div>
