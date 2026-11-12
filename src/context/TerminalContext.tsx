@@ -249,9 +249,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                   stage: 'market_watch',
                   sub_event: 'Monitoring market activity',
                 }
-            : event.event_type === 'paper_entry_evaluation'
+            : event.event_type === 'paper_entry_evaluation' || event.event_type === 'strategy_rejected_token'
             ? (() => {
-                const entryDecision = String(data.decision || 'wait').toLowerCase();
+                const entryDecision = String(data.decision || (event.event_type === 'strategy_rejected_token' ? 'reject' : 'wait')).toLowerCase();
                 return {
                   status: 'monitoring',
                   label: 'Monitoring',
