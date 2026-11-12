@@ -212,7 +212,8 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
     // Use Solana purple only while the current token logo is unavailable.
     // Once onLoad extracts the logo's accent, do not overwrite it when the
     // loaded state changes and this effect runs again.
-    card.style.setProperty('--token-accent-rgb', '153 69 255');
+    card.style.setProperty('--token-accent-rgb', '231 137 55');
+    card.style.setProperty('--token-accent-secondary-rgb', '229 177 74');
   }, [showingSolanaFallback, logoUrl]);
 
   return (
@@ -275,11 +276,18 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
             if (event.currentTarget.getAttribute('src') !== imageUrl) return;
             const accent = extractDominantAccent(event.currentTarget);
             const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
-            card?.style.setProperty('--token-accent-rgb', accent || '110 110 110');
+            if (card) {
+              const resolvedAccent = accent || '231 137 55';
+              card.style.setProperty('--token-accent-rgb', resolvedAccent);
+              card.style.setProperty('--token-accent-secondary-rgb', accent || '229 177 74');
+            }
           }}
           onError={() => {
             const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
-            card?.style.setProperty('--token-accent-rgb', '110 110 110');
+            if (card) {
+              card.style.setProperty('--token-accent-rgb', '231 137 55');
+              card.style.setProperty('--token-accent-secondary-rgb', '229 177 74');
+            }
           }}
         />
       )}
