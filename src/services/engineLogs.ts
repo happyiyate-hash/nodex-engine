@@ -66,9 +66,19 @@ function scheduleEventFlush() {
 
 export function readEngineLogs(): EngineLogEntry[] { return read(); }
 
-export function recordRequest(entry: Omit<EngineLogEntry, 'id' | 'kind'>) {
+export function recordRequest(entry: Omit<EngineLogEntry, 'id' | 'kind'>): string {
   const logs = read();
-  logs.unshift({ ...entry, id: `request-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, kind: 'request' });
+  const id = `request-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  logs.unshift({ ...entry, id, kind: 'request' });
+  publish(logs);
+  return id;
+}
+
+export function updateRequest(id: string, patch: Partial<Omit<EngineLogEntry, 'id' | 'kind'>>) {
+  const logs = read();
+  const index = logs.findIndex((entry) => entry.id === id && entry.kind === 'request');
+  if (index < 0) return;
+  logs[index] = { ...logs[index], ...patch };
   publish(logs);
 }
 
