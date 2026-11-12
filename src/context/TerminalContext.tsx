@@ -810,45 +810,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // merely because a token has no logo_url; if the backend has no logo URL,
   // keep the neutral avatar and wait for backend-supplied metadata.
 
-  useEffect(() => {
-    const missingLogos = tokens.filter((token) =>
-      token.mint && !token.logo_url && !metadataRefreshInFlight.current.has(token.mint)
-    );
-    if (!missingLogos.length) return;
-
-    let cancelled = false;
-    const refreshMissingLogos = async () => {
-      for (let index = 0; index < missingLogos.length; index += 4) {
-        if (cancelled) return;
-        const batch = missingLogos.slice(index, index + 4);
-        await Promise.all(batch.map(async (token) => {
-          metadataRefreshInFlight.current.add(token.mint);
-          try {
-            for (let attempt = 0; attempt < 3 && !cancelled; attempt += 1) {
-              try {
-                const result = await apiClient.refreshTokenMetadata(token.mint);
-                if (result.logo_url) {
-                  setTokens((previous) => previous.map((item) =>
-                    item.mint === token.mint ? { ...item, logo_url: result.logo_url || '' } : item
-                  ));
-                  break;
-                }
-              } catch (error) {
-                console.warn('NodeX logo metadata refresh attempt failed for ' + token.mint + ':', error);
-              }
-              if (attempt < 2 && !cancelled) {
-                await new Promise((resolve) => window.setTimeout(resolve, (attempt + 1) * 3000));
-              }
-            }
-          } finally {
-            metadataRefreshInFlight.current.delete(token.mint);
-          }
-        }));
-      }
-    };
-    void refreshMissingLogos();
-    return () => { cancelled = true; };
-  }, [tokens]);
 
   useEffect(() => {
     let active = true;
