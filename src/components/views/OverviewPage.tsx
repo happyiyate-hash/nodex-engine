@@ -372,9 +372,13 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
   const [expandedErrors, setExpandedErrors] = useState<string[]>([]);
 
+  const tokensByMint = useMemo(
+    () => new Map(tokens.map((token) => [token.mint, token])),
+    [tokens]
+  );
   const launchViews = useMemo(
-    () => launches.map((launch) => getLaunchView(launch, tokens.find((token) => token.mint === launch.mint_address))).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
-    [launches, tokens]
+    () => launches.map((launch) => getLaunchView(launch, tokensByMint.get(launch.mint_address))).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
+    [launches, tokensByMint]
   );
   const counts = useMemo(() => ({
     detected: launchViews.length,
@@ -504,7 +508,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
       <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0 sm:px-3 sm:pb-0"}`}>
           <div
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent pb-24"
+            className="token-feed-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent pb-24"
           >
             {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
               <div className="space-y-1.5 pb-2">
@@ -586,7 +590,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="space-y-1.5 pb-2">
                 {visibleLaunches.map((item) => {
                   const { launch } = item;
-                  const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
+                  const tokenData = (tokensByMint.get(launch.mint_address) || launch) as any;
                   const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
                   const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
 
@@ -611,7 +615,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     <article
                       key={launch.id || launch.signature}
                       data-token-card
-                      className="relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
+                      className="token-card-surface relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
                     >
                       <div
                         aria-hidden="true"
