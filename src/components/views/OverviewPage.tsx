@@ -598,7 +598,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     : securityStatus === 'under_analysis' ? 'Scanning'
                     : 'Pending';
                   const marketFeedStatus = String(tokenData.monitoring_status || '').toLowerCase();
-                  const marketFeedLabel = marketFeedStatus === 'active' ? 'Active'
+                  const marketFeedLabel = marketFeedStatus === 'active' ? 'Active · data flowing'
+                    : marketFeedStatus === 'subscribed' ? 'Subscribed · awaiting first update'
                     : marketFeedStatus === 'pending' ? 'Connecting'
                     : marketFeedStatus === 'waiting_for_capacity' ? 'Waiting for capacity'
                     : marketFeedStatus === 'failed' ? 'Failed'
