@@ -717,7 +717,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               </div>
             )}
           </div>
-          {!embeddedMode && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-20 h-14 bg-gradient-to-b from-black/95 via-black/70 to-transparent" />}
+          {!embeddedMode && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-20 h-7 bg-gradient-to-b from-black/85 via-black/45 to-transparent" />}
 
       </div>
     </div>
