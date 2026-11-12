@@ -571,54 +571,53 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      {!embeddedMode && <section aria-label="Overview controls" className="relative -mx-px flex-none flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
-        <div className="shrink-0 px-3 pt-[max(env(safe-area-inset-top,0px),16px)] sm:px-4">
-          <div className="flex min-h-[82px] items-center rounded-xl bg-[#181818] px-3.5 py-3 sm:min-h-[94px] sm:px-5">
-            <div className="w-[34%] min-w-0 pr-2">
-              <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
-              <div aria-live="polite" className={`mt-1 flex h-[14px] items-center gap-1 truncate text-[14px] font-semibold leading-none tracking-tight tabular-nums sm:text-base ${isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
-                <span aria-hidden="true" className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '▲' : '▼'}</span>
-                <span className="inline-flex h-full shrink-0 items-center text-[10px] leading-none">{isProfitable ? '+' : '−'}</span><AutoFitNumber fullText={formatSol(Math.abs(profitLossPct)) + '%'} compactText={compactNumber(Math.abs(profitLossPct)) + '%'} maxFontSize={14} minFontSize={9} balanceDirection={balanceDirection} className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" />
-              </div>
+      {!embeddedMode && <section aria-label="Overview controls" className="relative flex-none w-full shrink-0 bg-transparent px-3 pt-[max(env(safe-area-inset-top,0px),16px)] sm:px-4">
+        <div className="flex min-w-0 items-end justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[9px] font-medium uppercase tracking-[0.15em] text-white/40">Portfolio</div>
+            <div aria-live="polite" className={`mt-1 flex min-w-0 items-baseline transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
+              <span aria-hidden="true" className="shrink-0 text-[27px] font-bold leading-none tracking-[-0.055em] text-white sm:text-[30px]">$</span>
+              <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={30} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
             </div>
-            <div className="min-w-0 flex-1 border-l border-white/[0.08] pl-3 text-center sm:pl-5">
-              <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-white/45 sm:text-[10px]">Portfolio</div>
-              <div aria-live="polite" className={`mt-0.5 flex min-w-0 justify-center transition-colors duration-150 ease-out ${portfolioFlash === 'up' ? 'text-[#83b982]' : portfolioFlash === 'down' ? 'text-[#c77b7b]' : 'text-white'}`}>
-                <span aria-hidden="true" className="inline-flex shrink-0 items-center text-[25px] font-bold leading-none tracking-[-0.055em] text-white">$</span>
-                <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={25} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
-              </div>
-              <div className="mt-1.5 flex items-baseline justify-center gap-2.5"><span className="inline-flex items-baseline gap-0.5"><span className="mr-0.5 text-[8px] font-medium uppercase tracking-wide text-white/35">Available</span><span className="text-[9px] font-medium leading-none tabular-nums text-white/40">$</span><span className="text-[10px] font-medium leading-none tracking-tight tabular-nums text-white/65">{formatUsd(availableBalanceUsd)}</span></span><span className="inline-flex items-baseline gap-0.5 text-[8px] text-white/35"><span className="mr-0.5">Invested</span><span className="text-[9px] font-medium leading-none tabular-nums text-white/40">$</span><span className="text-[10px] font-medium leading-none tracking-tight tabular-nums text-white/65">{formatUsd(investedBalanceUsd)}</span></span></div>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="inline-flex items-baseline gap-1"><span className="text-[8px] font-medium uppercase tracking-wide text-white/35">Available</span><span className="text-[10px] font-medium tabular-nums text-white/70">${formatUsd(availableBalanceUsd)}{' }'}</span></span>
+              <span className="inline-flex items-baseline gap-1"><span className="text-[8px] font-medium uppercase tracking-wide text-white/35">Invested</span><span className="text-[10px] font-medium tabular-nums text-white/70">${formatUsd(investedBalanceUsd)}{' }'}</span></span>
+            </div>
+          </div>
+          <div className="shrink-0 pb-0.5 text-right">
+            <div className="text-[8px] font-medium uppercase tracking-[0.13em] text-white/35">P&amp;L</div>
+            <div aria-live="polite" className={`mt-1 flex items-center justify-end gap-1 text-[13px] font-semibold leading-none tracking-tight tabular-nums sm:text-sm ${isProfitable ? 'text-[#83b982]' : 'text-[#c77b7b]'}`}>
+              <span aria-hidden="true" className="text-[9px]">{isProfitable ? '▲' : '▼'}</span>
+              <span>{isProfitable ? '+' : '−'}<AutoFitNumber fullText={formatSol(Math.abs(profitLossPct)) + '%'} compactText={compactNumber(Math.abs(profitLossPct)) + '%'} maxFontSize={14} minFontSize={9} balanceDirection={balanceDirection} className="block whitespace-nowrap font-semibold leading-none tracking-tight tabular-nums" /></span>
             </div>
           </div>
         </div>
 
-        <div className="shrink-0 px-3 pt-3 sm:px-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="text-[15px] font-semibold tracking-tight text-white sm:text-base">Live Detection</h1>
-              <p className="mt-0.5 text-[10px] text-white/40 sm:text-[11px]">Solana launch intelligence</p>
-            </div>
-            <div className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] ${connected ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-[#83b982]' : 'border-white/10 bg-white/[0.035] text-white/50'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-[#83b982]' : 'bg-white/35'}`} />
-              {engineLabel}
-            </div>
+        <div className="mt-3 flex min-h-9 items-center justify-between gap-3 border-y border-white/[0.07] py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-[13px] font-semibold tracking-tight text-white">Live Detection</h1>
+            <span className="hidden text-[9px] text-white/35 sm:inline">Solana launch intelligence</span>
           </div>
-
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
-            <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
-              <div className="text-[19px] font-semibold leading-none tabular-nums text-white">{openPositionCount}</div>
-              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Open positions</div>
-            </div>
-            <div className="min-w-0 rounded-lg bg-[#121212] px-3 py-2.5">
-              <div className="min-w-0 whitespace-nowrap text-[19px] font-semibold leading-none tabular-nums" style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}>
-                {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'$'}{formatPnlDisplay(unrealizedProfitUsd)}
-              </div>
-              <div className="mt-1.5 text-[9px] uppercase tracking-[0.09em] text-white/40">Unrealized P&amp;L</div>
-            </div>
+          <div className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[8px] font-semibold tracking-[0.07em] ${connected ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-[#83b982]' : 'border-white/10 bg-white/[0.035] text-white/50'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-[#83b982]' : 'bg-white/35'}`} />
+            {engineLabel}
           </div>
         </div>
 
-        <div className="mt-3 flex shrink-0 flex-col px-3 pb-0 sm:px-4 sm:pb-0">
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-2.5 py-2">
+            <span className="text-[8px] font-medium uppercase tracking-[0.08em] text-white/40">Open positions</span>
+            <span className="text-[14px] font-semibold leading-none tabular-nums text-white">{openPositionCount}</span>
+          </div>
+          <div className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-white/[0.025] px-2.5 py-2">
+            <span className="truncate text-[8px] font-medium uppercase tracking-[0.08em] text-white/40">Unrealized P&amp;L</span>
+            <span className="shrink-0 text-[12px] font-semibold leading-none tabular-nums" style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}>
+              {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'$'}{formatPnlDisplay(unrealizedProfitUsd)}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-3 flex shrink-0 flex-col pb-0">
           <div className="mb-2 flex shrink-0 items-center gap-1.5">
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
@@ -629,7 +628,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <button type="button" onClick={() => setFilter('positions')} aria-pressed={filter === 'positions'} className={`rounded px-2 py-1 text-[8px] font-semibold transition-colors ${filter === 'positions' ? 'bg-[#292929] text-white' : 'text-white/40 hover:text-white/70'}`}>Position</button>
             </div>
           </div>
-
         </div>
       </section>}
 
