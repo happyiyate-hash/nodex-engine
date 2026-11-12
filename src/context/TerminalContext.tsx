@@ -868,9 +868,12 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             }
             return [durable, ...previous];
           });
-          setSelectedToken((previous) => previous?.mint === mint
-            ? mapTokenDetailSnapshot(stateData, previous) || previous
-            : previous);
+          setSelectedToken((previous) => {
+            if (!previous || previous.mint !== mint) return previous;
+            const incomingVersion = Number(stateData.version ?? stateData.state_version ?? 0);
+            if (incomingVersion > 0 && Number(previous.state_version || 0) > incomingVersion) return previous;
+            return mapTokenDetailSnapshot(stateData, previous) || previous;
+          });
         }
       }
       if (event.event_type === 'chart_candle_update' || event.event_type === 'chart_candle_closed') {
