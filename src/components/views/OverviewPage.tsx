@@ -604,7 +604,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           </div>
         </div>
 
-        <div className="mt-2 grid min-h-[76px] grid-cols-[minmax(0,3fr)_minmax(76px,1fr)] items-center rounded-xl bg-[#111315] px-3.5 py-3 sm:px-4">
+        <div className="mt-2 grid min-h-[76px] grid-cols-[minmax(0,3fr)_minmax(76px,1fr)] items-center rounded-xl bg-[#080808] px-3.5 py-3 sm:px-4">
           <div className="min-w-0 pr-3">
             <div className="text-[8px] font-medium uppercase tracking-[0.13em] text-white/40">Unrealized P&amp;L</div>
             <div
@@ -616,7 +616,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             </div>
           </div>
           <div className="flex min-w-0 flex-col justify-center border-l border-white/[0.10] pl-3 sm:pl-4">
-            <div className="text-[8px] font-medium uppercase tracking-[0.10em] text-white/40">Open positions</div>
+            <div className="text-[8px] font-medium uppercase tracking-[0.10em] text-white/40">Positions</div>
             <div className="mt-1 text-[17px] font-semibold leading-none tabular-nums text-white">{openPositionCount}</div>
           </div>
         </div>
