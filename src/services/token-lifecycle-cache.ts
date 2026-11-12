@@ -21,6 +21,8 @@ const LIFECYCLE_FIELDS: (keyof DiscoveredToken)[] = [
   'monitoring_status', 'monitoring_reason', 'monitoring_updated_at',
   'authority_status', 'authority_rechecks', 'creator_wallet', 'launch_time',
   'venue', 'safety_status', 'qualification_status', 'rejection_reason',
+  'buy_volume_5m_usd', 'distinct_buyers_5m', 'buy_count_5m', 'sell_count_5m',
+  'estimated_slippage_pct', 'confirmed_trade_events', 'bonding_curve_status', 'bonding_curve_account',
   'diagnostics', 'safety_details',
 ];
 
@@ -169,6 +171,14 @@ export function lifecycleCacheSignature(token: DiscoveredToken): string {
     safety_status: token.safety_status,
     qualification_status: token.qualification_status,
     rejection_reason: token.rejection_reason,
+    buy_volume_5m_usd: token.buy_volume_5m_usd,
+    distinct_buyers_5m: token.distinct_buyers_5m,
+    buy_count_5m: token.buy_count_5m,
+    sell_count_5m: token.sell_count_5m,
+    estimated_slippage_pct: token.estimated_slippage_pct,
+    confirmed_trade_events: token.confirmed_trade_events,
+    bonding_curve_status: token.bonding_curve_status,
+    bonding_curve_account: token.bonding_curve_account,
     safety_details: token.safety_details,
     diagnostics: token.diagnostics,
     metadata_status: token.metadata_status,
