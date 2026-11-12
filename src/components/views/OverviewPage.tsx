@@ -580,8 +580,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <AutoFitNumber fullText={formattedPortfolio} compactText={compactNumber(portfolioValue)} maxFontSize={30} minFontSize={14} balanceDirection={balanceDirection} className="block whitespace-nowrap font-bold leading-none tracking-[-0.055em] tabular-nums" />
             </div>
             <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="inline-flex items-baseline gap-1"><span className="text-[8px] font-medium uppercase tracking-wide text-white/35">Available</span><span className="text-[10px] font-medium tabular-nums text-white/70">${formatUsd(availableBalanceUsd)}}</span></span>
-              <span className="inline-flex items-baseline gap-1"><span className="text-[8px] font-medium uppercase tracking-wide text-white/35">Invested</span><span className="text-[10px] font-medium tabular-nums text-white/70">${formatUsd(investedBalanceUsd)}}</span></span>
+              <span className="inline-flex items-baseline gap-1"><span className="text-[8px] font-medium uppercase tracking-wide text-white/35">Available</span><span className="text-[10px] font-medium tabular-nums text-white/70">${formatUsd(availableBalanceUsd)}</span></span>
+              <span className="inline-flex items-baseline gap-1"><span className="text-[8px] font-medium uppercase tracking-wide text-white/35">Invested</span><span className="text-[10px] font-medium tabular-nums text-white/70">${formatUsd(investedBalanceUsd)}</span></span>
             </div>
           </div>
           <div className="shrink-0 pb-0.5 text-right">
