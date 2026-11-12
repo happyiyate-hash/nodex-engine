@@ -267,6 +267,13 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                   stage: 'market_data_unavailable',
                   sub_event: 'Market data unavailable',
                 }
+            : event.event_type === 'market_curve_completed' && previous?.qualification_status === 'qualified'
+              ? {
+                  status: 'monitoring',
+                  label: 'Monitoring',
+                  stage: 'curve_completed',
+                  sub_event: 'Bonding curve complete — PumpSwap pool discovery in progress',
+                }
             : event.event_type === 'market_price_update' && previous?.qualification_status === 'qualified'
               && (Number(data.price_sol ?? data.price_usd ?? data.current_price_usd) > 0)
               ? {
@@ -380,6 +387,16 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     volume_1h_usd: Number(payload.volume_1h_usd ?? previous?.volume_1h_usd ?? 0),
     tx_buys_5m: Number(payload.tx_buys_5m ?? payload.buys_5m ?? previous?.tx_buys_5m ?? 0),
     tx_sells_5m: Number(payload.tx_sells_5m ?? payload.sells_5m ?? previous?.tx_sells_5m ?? 0),
+    buy_volume_5m_usd: Number(payload.buy_volume_5m_usd ?? previous?.buy_volume_5m_usd ?? 0),
+    distinct_buyers_5m: Number(payload.distinct_buyers_5m ?? previous?.distinct_buyers_5m ?? 0),
+    buy_count_5m: Number(payload.buy_count_5m ?? previous?.buy_count_5m ?? 0),
+    sell_count_5m: Number(payload.sell_count_5m ?? previous?.sell_count_5m ?? 0),
+    estimated_slippage_pct: Number(payload.estimated_slippage_pct ?? previous?.estimated_slippage_pct ?? 0),
+    confirmed_trade_events: Number(payload.confirmed_trade_events ?? previous?.confirmed_trade_events ?? 0),
+    bonding_curve_status: event.event_type === 'market_curve_completed'
+      ? String(payload.status || 'complete') : previous?.bonding_curve_status,
+    bonding_curve_account: event.event_type === 'market_curve_completed'
+      ? String(payload.account_address || previous?.bonding_curve_account || '') : previous?.bonding_curve_account,
     bonding_curve_progress_pct: Number(payload.bonding_curve_progress_pct ?? payload.bonding_curve_pct ?? previous?.bonding_curve_progress_pct ?? 0),
     venue, safety_status: payload.safety_status || previous?.safety_status || 'warning',
     qualification_status: qualification, rejection_reason: payload.reason || payload.decision_reason || previous?.rejection_reason,
@@ -1028,7 +1045,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
       const tokenStateEvent = [
         'launch_detected', 'token_scan_retry_scheduled', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_diagnostic', 'token_metadata_started', 'token_metadata_failed',
-        'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
+        'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update', 'market_curve_completed',
         'token_monitoring_started', 'token_monitoring_update', 'token_monitoring_completed',
         'market_subscription_requested', 'market_subscription_subscribed', 'market_subscription_active', 'market_subscription_waiting', 'market_subscription_failed', 'market_subscriptions_removed',
         'paper_buy_started', 'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed', 'paper_sell_failed', 'position_updated',
