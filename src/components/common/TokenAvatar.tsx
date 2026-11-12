@@ -162,16 +162,10 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
       <img
         src="/assets/token-fallbacks/solana-logo.png"
         alt="Solana logo"
-        loading="lazy"
+        loading="eager"
         decoding="async"
-        fetchPriority="low"
-        className={'absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ease-out ' + (loaded && !logoFailed ? 'opacity-0' : 'opacity-100')}
-        onLoad={(event) => {
-          const accent = extractDominantAccent(event.currentTarget);
-          if (accent) {
-            rootRef.current?.closest<HTMLElement>('[data-token-card]')?.style.setProperty('--token-accent-rgb', accent);
-          }
-        }}
+        fetchPriority="auto"
+        className={'absolute inset-0 h-full w-full object-cover ' + (loaded && !logoFailed ? 'opacity-0' : 'opacity-100')}
       />
       {imageUrl && (
         <img
@@ -179,10 +173,10 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
           src={imageUrl}
           crossOrigin="anonymous"
           alt={symbol + ' logo'}
-          loading="lazy"
+          loading="eager"
           decoding="async"
-          fetchPriority="low"
-          className={'absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ease-out ' + (loaded ? 'opacity-100' : 'opacity-0')}
+          fetchPriority="auto"
+          className={'absolute inset-0 h-full w-full object-cover ' + (loaded ? 'opacity-100' : 'opacity-0')}
           onLoad={(event) => {
             const accent = extractDominantAccent(event.currentTarget);
             if (accent) {
