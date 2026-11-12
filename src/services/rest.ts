@@ -386,8 +386,11 @@ export class NodeXRestClient {
   public async updateStrategy(config:StrategyConfig): Promise<{status:string;config:StrategyConfig}> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the Engine API key in Settings before updating trading configuration.');
-    return this.request('/api/config', {
-      method: 'PATCH',
+    // Use the full trading-config endpoint. The legacy PATCH /api/config
+    // intentionally rejects execution_enabled=true; this endpoint validates
+    // and persists the complete paper-only TradingSettings object.
+    return this.request('/api/v1/config/trading', {
+      method: 'PUT',
       headers: { 'X-NodeX-Admin-Key': key },
       body: JSON.stringify(config),
     });
