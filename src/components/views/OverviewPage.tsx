@@ -1,63 +1,23 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { TokenLaunchRecord, NodeXEvent, TokenDiagnostic } from '../../types';
+import { TokenLaunchRecord, NodeXEvent } from '../../types';
 import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { PortfolioBalanceSnapshot, restClient } from '../../services/rest';
 
 type ChangeDirection = 'up' | 'down' | null;
 
-interface AnimatedCardScanProgressProps {
-  status: string;
-  progress: number | null;
-  children: (presentation: { complete: boolean; displayProgress: number }) => React.ReactNode;
-}
-
-const AnimatedCardScanProgress: React.FC<AnimatedCardScanProgressProps> = ({
-  status, progress, children,
-}) => {
-  const [displayProgress, setDisplayProgress] = useState(0);
-  const progressRef = useRef(0);
-  const terminal = status !== 'scanning';
-  const terminalScanStatuses = ['verified', 'unverified', 'blocked', 'rejected', 'strategy_rejected', 'failed'];
-  const hasProgress = status === 'scanning' || progress !== null || terminalScanStatuses.includes(status);
-  const target = terminal ? 100 : Math.max(0, Math.min(99, progress ?? 0));
-
+const TokenCardSubtitle: React.FC<{ status: string; subtitle: string }> = ({ status, subtitle }) => {
+  const [visibleSubtitle, setVisibleSubtitle] = useState(subtitle);
   useEffect(() => {
-    if (!hasProgress) return;
-    let frame = 0;
-    let previous = 0;
-    const animate = (now: number) => {
-      if (!previous) previous = now;
-      const elapsed = Math.min(50, now - previous);
-      previous = now;
-      // Keep the visual scan moving until the full card has been covered,
-      // even when the backend has already delivered its final lifecycle state.
-      const next = Math.min(target, progressRef.current + elapsed * 0.075);
-      progressRef.current = next;
-      setDisplayProgress(next);
-      if (next + 0.01 < target) frame = requestAnimationFrame(animate);
-    };
-    if (progressRef.current < target) frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, [hasProgress, target]);
-
-  if (!hasProgress) return <>{children({ complete: true, displayProgress: 100 })}</>;
-  const complete = terminal && displayProgress >= 99.99;
-  return (
-    <>
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-[1] rounded-xl bg-[#B8C5D5]/[0.11]"
-        style={{
-          clipPath: `inset(0 ${100 - displayProgress}% 0 0 round 0.75rem)`,
-          opacity: complete ? 0 : 1,
-        }}
-      />
-      {children({ complete, displayProgress })}
-    </>
-  );
+    setVisibleSubtitle(subtitle);
+    if (status !== 'monitoring' || !subtitle || subtitle === 'Monitoring market activity') return;
+    const timeout = window.setTimeout(() => setVisibleSubtitle('Monitoring market activity'), 7000);
+    return () => window.clearTimeout(timeout);
+  }, [status, subtitle]);
+  return <span className="min-w-0 truncate text-[9px] leading-tight text-white/60" title={visibleSubtitle}>{visibleSubtitle}</span>;
 };
+
 type FeedFilter = 'detected' | 'qualified' | 'positions';
 
 interface RollingDigitProps {
@@ -317,7 +277,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const [filter, setFilter] = useState<FeedFilter>('detected');
   const [search, setSearch] = useState('');
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
-  const [expandedErrors, setExpandedErrors] = useState<string[]>([]);
 
   const launchViews = useMemo(
     () => launches.map((launch) => getLaunchView(launch, tokens.find((token) => token.mint === launch.mint_address))).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
@@ -555,84 +514,23 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
                   const monitoringData = monitoringEvent?.data;
 
-                  const checks = Array.isArray(report?.checks) ? report.checks : [];
-                  // TerminalContext normalizes market ticks to current_price_usd/current_price_sol.
-                  // Prefer USD for the card's dollar display; if only SOL is known, label it as SOL.
-                  const priceUsd = Number(
-                    tokenData.current_price_usd ??
-                    tokenData.price_usd ??
-                    report?.price_usd ??
-                    report?.current_price_usd
-                  );
-                  const priceSol = Number(
-                    tokenData.current_price_sol ??
-                    tokenData.price_sol ??
-                    report?.price_sol
-                  );
-                  const hasUsdPrice = Number.isFinite(priceUsd) && priceUsd > 0;
-                  const hasSolPrice = Number.isFinite(priceSol) && priceSol > 0;
-                  const price = hasUsdPrice ? priceUsd : hasSolPrice ? priceSol : Number.NaN;
-                  const priceCurrency = hasUsdPrice ? 'USD' : hasSolPrice ? 'SOL' : '';
-                  const marketCap = Number(tokenData.market_cap_usd ?? tokenData.market_cap ?? report?.market_cap_usd);
-                  const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
-                  const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
-                  const isQualified = status === 'QUALIFIED' || status === 'PAPER ENTRY';
-                  const checkRows = checks;
-                  const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
-                  const scanStage = String(progressEvent?.data?.stage || tokenData.scan_stage || report?.stage || '').replace(/[_-]+/g, ' ').trim();
-                  // This card is a pure view of the backend's canonical activity snapshot.
-                  // Never infer a lifecycle from event names, strategy fallbacks or missing fields.
-                  const lifecycleStatus = String(tokenData.lifecycle_status || '').toLowerCase();
-                  const lifecycleLabel = String(tokenData.lifecycle_label || 'Awaiting status');
-                  const rawLifecycleProgress = tokenData.lifecycle_progress;
-                  const lifecycleProgressValue = rawLifecycleProgress == null ? Number.NaN : Number(rawLifecycleProgress);
-                  const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
-                    ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
-                  const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
-                  const securityStatus = String(tokenData.qualification_status || '').toLowerCase();
-                  const securityLabel = securityStatus === 'qualified' ? 'Verified'
-                    : securityStatus === 'rejected' ? 'Rejected'
-                    : securityStatus === 'unverified' ? 'Unverified'
-                    : securityStatus === 'under_analysis' ? 'Scanning'
-                    : 'Pending';
-                  const marketFeedStatus = String(tokenData.monitoring_status || '').toLowerCase();
-                  const marketFeedLabel = marketFeedStatus === 'active' ? 'Active · data flowing'
-                    : marketFeedStatus === 'subscribed' ? 'Subscribed · awaiting first update'
-                    : marketFeedStatus === 'pending' ? 'Connecting'
-                    : marketFeedStatus === 'waiting_for_capacity' ? 'Waiting for capacity'
-                    : marketFeedStatus === 'failed' ? 'Failed'
-                    : marketFeedStatus === 'removed' || marketFeedStatus === 'completed' ? 'Stopped'
-                    : 'Not connected';
-                  const marketFeedReason = String(tokenData.monitoring_reason || '');
-                  const strategyDecision = String(tokenData.strategy_decision || '').toLowerCase();
-                  const strategyLabel = strategyDecision === 'evaluate_paper_entry' ? 'Entry conditions met'
-                    : strategyDecision === 'reject' ? 'Rejected by strategy'
-                    : strategyDecision === 'wait' ? 'Waiting for entry'
-                    : 'Not evaluated';
-                  const strategyReasons = Array.isArray(tokenData.strategy_reasons)
-                    ? tokenData.strategy_reasons.map(String).filter(Boolean).join(' · ')
-                    : '';
-                  const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
-                  const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
-                    ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
-                  );
-                  const errorExpanded = expandedErrors.includes(launch.mint_address);
+                  const lifecycleStatus = String(tokenData.lifecycle_status || 'scanning').toLowerCase();
+                  const lifecycleLabel = String(tokenData.lifecycle_label || 'Scanning');
+                  const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || (
+                    lifecycleStatus === 'verified' ? 'Getting market data'
+                    : lifecycleStatus === 'monitoring' ? 'Monitoring market activity'
+                    : lifecycleStatus === 'scanning' ? 'Scanning' : lifecycleLabel
+                  ));
                   const statusTone = ({
                     verified: 'bg-emerald-400/[0.10] text-emerald-300',
                     rejected: 'bg-red-400/[0.10] text-red-300',
-                    strategy_rejected: 'bg-red-400/[0.10] text-red-300',
                     failed: 'bg-red-400/[0.10] text-red-300',
-                    sell_failed: 'bg-red-400/[0.10] text-red-300',
                     unverified: 'bg-amber-300/[0.10] text-amber-200',
                     scanning: 'bg-sky-400/[0.10] text-sky-200',
                     monitoring: 'bg-violet-400/[0.10] text-violet-200',
                     monitoring_stopped: 'bg-white/[0.07] text-white/65',
-                    evaluating: 'bg-sky-400/[0.10] text-sky-200',
-                    executing_buy: 'bg-amber-300/[0.10] text-amber-200',
                     bought_paper: 'bg-emerald-400/[0.10] text-emerald-300',
-                    buy_failed: 'bg-red-400/[0.10] text-red-300',
                   } as Record<string, string>)[lifecycleStatus] || 'bg-white/[0.08] text-white/75';
-                  const errorMessage = String(errorDetails?.message || '');
                   return (
                     <article
                       key={launch.id || launch.signature}
@@ -644,126 +542,40 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         className="pointer-events-none absolute inset-0 z-0"
                         style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
                       />
-                      <AnimatedCardScanProgress
-                        key={launch.mint_address}
-                        status={lifecycleStatus}
-                        progress={lifecycleProgress}
-                      >
-                        {({ complete, displayProgress }) => (
                       <div className="relative z-10">
-                      <div className="flex min-w-0 items-start gap-2.5">
-                        <TokenAvatar
-                          symbol={cardSymbol || cardName}
-                          logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
-                          size="md"
-                          className="!h-9 !w-9 !rounded-2xl shrink-0"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-baseline gap-1.5">
-                            <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
-                            {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <TokenAvatar
+                            symbol={cardSymbol || cardName}
+                            logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
+                            size="md"
+                            className="!h-9 !w-9 !rounded-2xl shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-baseline gap-1.5">
+                              <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
+                              {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
+                            </div>
+                            <div className="mt-1 min-w-0">
+                              <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
+                            </div>
                           </div>
-<div className="mt-1 flex min-w-0 items-center justify-between gap-2">
-                            <span className="min-w-0 truncate text-[9px] leading-tight text-white/60" title={complete ? (lifecycleSubEvent || lifecycleLabel) : 'Security scan in progress'}>
-                              {complete ? (lifecycleSubEvent || lifecycleLabel) : 'Scanning'}
+                          <div className="flex shrink-0 flex-col items-end gap-1.5">
+                            <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${statusTone}`}>
+                              {lifecycleLabel}
                             </span>
-                            {!complete && <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>}
-                          </div>
-                          {complete && (
-                            <div className="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[8px] leading-tight text-white/55">
-                              <span>Security: <span className={securityStatus === 'qualified' ? 'text-emerald-300' : securityStatus === 'rejected' ? 'text-red-300' : 'text-amber-200'}>{securityLabel}</span></span>
-                              <span>Market feed: <span className={marketFeedStatus === 'active' ? 'text-emerald-300' : marketFeedStatus === 'failed' ? 'text-red-300' : 'text-amber-200'}>{marketFeedLabel}</span></span>
-                              {strategyDecision && <span>Paper entry: <span className={strategyDecision === 'evaluate_paper_entry' ? 'text-emerald-300' : strategyDecision === 'reject' ? 'text-red-300' : 'text-white/75'}>{strategyLabel}</span></span>}
-                            </div>
-                          )}
-                          {complete && marketFeedReason && marketFeedStatus !== 'active' && (
-                            <p className="mt-0.5 truncate text-[8px] leading-tight text-amber-200/75" title={marketFeedReason}>{marketFeedReason}</p>
-                          )}
-                          {complete && strategyReasons && (
-                            <p className="mt-0.5 truncate text-[8px] leading-tight text-white/45" title={strategyReasons}>{strategyReasons}</p>
-                          )}
-                          {errorDetails && (
-                            <div className="mt-1">
-                              <button
-                                type="button"
-                                aria-expanded={errorExpanded}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setExpandedErrors((previous) => previous.includes(launch.mint_address)
-                                    ? previous.filter((mint) => mint !== launch.mint_address)
-                                    : [...previous, launch.mint_address]);
-                                }}
-                                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-medium text-red-200/75 transition-colors duration-300 hover:bg-red-400/[0.08] hover:text-red-100"
-                              >
-                                <span className="h-1 w-1 rounded-full bg-red-300" />
-                                {errorExpanded ? 'Hide error details' : 'Error details'}
-                                <span aria-hidden="true" className="transition-transform duration-300 ease-out">{errorExpanded ? '▴' : '▾'}</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
-                          <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${complete ? statusTone : 'bg-sky-400/[0.10] text-sky-200'}`}>
-                            {complete ? lifecycleLabel : 'SCANNING'}
-                          </span>
-                          <button
-                            type="button"
-                            aria-label={`Copy ${cardName} contract address`}
-                            title="Copy contract address"
-                            onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
-                            className="inline-flex max-w-[116px] items-center gap-1 rounded px-1 py-0.5 text-white/40 transition-colors hover:text-white/80"
-                          >
-                            <Copy className="h-2.5 w-2.5 shrink-0" />
-                            <span className="truncate font-mono text-[8px]">{launch.mint_address.slice(0, 5)}…{launch.mint_address.slice(-4)}</span>
-                          </button>
-                        </div>
-                      </div>
-                      {errorDetails && (
-                        <div
-                          className="relative z-10 grid transition-[grid-template-rows,opacity] duration-[420ms] ease-out"
-                          style={{
-                            gridTemplateRows: errorExpanded ? '1fr' : '0fr',
-                            opacity: errorExpanded ? 1 : 0,
-                          }}
-                          aria-hidden={!errorExpanded}
-                        >
-                          <div className="min-h-0 overflow-hidden">
-                            <div className="pt-2 text-left text-[9px] text-white/65">
-                              <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
-                                {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
-                                {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
-                                {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
-                                {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
-                              </div>
-                              <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
-                              {errorDetails?.raw_response != null && (
-                                <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
-                                  {typeof errorDetails.raw_response === 'string'
-                                    ? errorDetails.raw_response
-                                    : JSON.stringify(errorDetails.raw_response, null, 2)}
-                                </pre>
-                              )}
-                              <div className="mt-2 flex justify-end">
-                                <button
-                                  type="button"
-                                  aria-label={`Copy ${cardName} error details`}
-                                  title="Copy full error details"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void navigator.clipboard?.writeText(JSON.stringify(errorDetails, null, 2));
-                                  }}
-                                  className="inline-flex items-center justify-center rounded-md p-1 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/85"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </div>
+                            <button
+                              type="button"
+                              aria-label={`Copy ${cardName} contract address`}
+                              title="Copy contract address"
+                              onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
+                              className="inline-flex max-w-[116px] items-center gap-1 rounded px-1 py-0.5 text-white/40 transition-colors hover:text-white/80"
+                            >
+                              <Copy className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate font-mono text-[8px]">{launch.mint_address.slice(0, 5)}…{launch.mint_address.slice(-4)}</span>
+                            </button>
                           </div>
                         </div>
-                      )}
                       </div>
-                        )}
-                      </AnimatedCardScanProgress>
                     </article>
                   );
                 })}
