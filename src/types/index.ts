@@ -149,6 +149,8 @@ export interface DiscoveredToken {
   mint: string;
   /** Monotonic backend token-registry version used to reject stale events. */
   state_version?: number;
+  /** Monotonic scan attempt number; a higher attempt may replace an earlier verdict. */
+  scan_attempt?: number;
   /** Timestamp of the last final backend security assessment. */
   security_scanned_at?: string;
   strategy_decision?: string;
