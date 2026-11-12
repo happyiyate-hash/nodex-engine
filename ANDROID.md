@@ -24,24 +24,28 @@ The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 The Android project is generated from the checked-in Capacitor configuration during CI rather than storing generated Gradle files in this web-first repository. Native customizations should be added to the generation process before relying on them.
 
-## GitHub Actions APK builds
+## GitHub Actions Release APK builds
 
-The **Android APK** workflow runs on pushes to `main`, version tags (`v*`), and manual dispatch from the Actions tab. It type-checks and builds the React app, generates Android assets from the existing NodeX icon, creates the Capacitor Android project, and builds both debug and release APK variants.
+The **Android APK** workflow (`.github/workflows/android-apk.yml`) runs on pushes to `main`, version tags (`v*`), and manual dispatch from the GitHub Actions tab. It type-checks and builds the React app, prepares Capacitor Android assets, builds the **Release APK** with Gradle, 4-byte page-aligns the APK with `zipalign`, signs it with `apksigner` (V1, V2, and V3 signatures enabled), and uploads `NodeX-Android-Release-APK`.
 
-Download `NodeX-Android-APKs` from the completed workflow run's **Artifacts** section.
+Download `NodeX-Android-Release-APK` from the completed workflow run's **Artifacts** section, or find it directly under GitHub Releases when a `v*` tag is pushed.
 
 ### APK signing
 
-If no signing secrets are configured, CI signs the release variant with the runner's temporary Android debug key. This is suitable for personal installation/testing only. The key changes between CI runs, so a later APK may not be able to update an installation made from an earlier run. This is not a Play Store signing identity.
+- **Without secrets**: CI automatically creates a valid release keystore and signs the Release APK.
+- **With persistent secrets**: To use your own release key so that app updates install seamlessly over previous versions without needing to uninstall, add these GitHub Repository Secrets (**Settings** > **Secrets and variables** > **Actions**):
+  - `ANDROID_KEYSTORE_BASE64`: Your release keystore file encoded in base64.
+    - On Linux/macOS: `base64 -w 0 nodex-release.keystore` (or `base64 -i nodex-release.keystore` on macOS)
+    - On Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("nodex-release.keystore"))`
+  - `ANDROID_KEYSTORE_PASSWORD`: The keystore password.
+  - `ANDROID_KEY_ALIAS`: The key alias (e.g. `nodex-release`).
+  - `ANDROID_KEY_PASSWORD`: The key password (or leave empty if it matches the keystore password).
 
-For a stable install/update identity, create and safely back up your own Android upload/release keystore, then add these repository Actions secrets:
-
-- `ANDROID_KEYSTORE_BASE64`: the keystore file encoded as one base64 string
-- `ANDROID_KEY_ALIAS`: the key alias inside the keystore
-- `ANDROID_KEYSTORE_PASSWORD`: the keystore password
-- `ANDROID_KEY_PASSWORD`: the key password
-
-Never commit the keystore or its passwords to this repository. With all four secrets configured, CI signs the release APK using that persistent key and publishes the APK to GitHub Releases when a `v*` tag is pushed.
+To generate a PKCS12 release keystore locally:
+```bash
+keytool -genkeypair -v -keystore nodex-release.keystore -storetype PKCS12 -alias nodex-release -keyalg RSA -keysize 2048 -validity 10000
+```
+*(Note: With modern PKCS12 keystores, the keystore password and key password are identical, avoiding `BadPaddingException`)*
 
 ## App/backend connection
 

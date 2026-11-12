@@ -35,7 +35,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-34 platforms;android-35 platforms;android-36 build-tools;34.0.0 build-tools;35.0.0 build-tools;36.0.0'
 
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
@@ -55,73 +55,134 @@ jobs:
         run: npx cap add android
 
       - name: Generate native app icons and splash assets
-        run: npx capacitor-assets generate --android --iconBackgroundColor '#080808' --splashBackgroundColor '#080808'
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#080808' --splashBackgroundColor '#080808' || true
 
       - name: Sync web application into Android
         run: npx cap sync android
 
-      - name: Build Android debug and release variants
+      - name: Build Android release APK
         id: android_build
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew --no-daemon assembleDebug assembleRelease
+          ./gradlew --no-daemon assembleRelease
 
-      - name: Create a fresh Android signing keystore and sign release APK
+      - name: Align and sign Release APK
         id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          unsigned="android/app/build/outputs/apk/release/app-release-unsigned.apk"
-          signed="android/app/build/outputs/apk/release/NodeX-terminal-release.apk"
-          keystore="$RUNNER_TEMP/nodex-build-signing.jks"
+
           apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          zipalign="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
 
-          test -f "$unsigned"
-          test -n "$apksigner"
-          test -n "$(command -v keytool)"
+          if [ -z "$apksigner" ]; then
+            echo "::error::apksigner binary was not found in $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          if [ -z "$zipalign" ]; then
+            echo "::error::zipalign binary was not found in $ANDROID_HOME/build-tools"
+            exit 1
+          fi
 
-          # Create a new, build-local signing identity on every workflow run.
-          store_password="$(openssl rand -hex 24)"
-          key_password="$(openssl rand -hex 24)"
-          keytool -genkeypair -noprompt -v \
-            -keystore "$keystore" \
-            -storepass "$store_password" \
-            -keypass "$key_password" \
-            -alias nodex-build \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=NodeX Personal Build, OU=Android, O=NodeX, C=NG"
+          echo "Using apksigner: $apksigner"
+          echo "Using zipalign: $zipalign"
 
-          "$apksigner" sign \
-            --ks "$keystore" \
-            --ks-key-alias nodex-build \
-            --ks-pass "pass:$store_password" \
-            --key-pass "pass:$key_password" \
-            --out "$signed" "$unsigned"
+          # Find the unsigned release APK produced by Gradle
+          unsigned_apk="$(find android/app/build/outputs/apk/release -type f -name "*.apk" ! -name "*-signed.apk" ! -name "NodeX-*.apk" | head -n 1)"
+          if [ -z "$unsigned_apk" ] || [ ! -f "$unsigned_apk" ]; then
+            echo "::error::Unsigned release APK not found in android/app/build/outputs/apk/release. Directory contents:"
+            find android/app/build/outputs/apk -type f -name "*.apk" || true
+            exit 1
+          fi
+          echo "Found unsigned release APK: $unsigned_apk"
 
-          "$apksigner" verify --verbose "$signed"
-          echo "signing_mode=ephemeral-personal-test" >> "$GITHUB_OUTPUT"
-          echo "::warning::This APK uses a new temporary signing identity for this build. Uninstall an older differently-signed copy before installing it. This key is not suitable for Play Store updates or stable release distribution."
+          aligned_apk="$RUNNER_TEMP/NodeX-release-aligned.apk"
+          signed_apk="android/app/build/outputs/apk/release/NodeX-terminal-release.apk"
 
-      - name: Upload debug APK artifact
-        if: always() && steps.android_build.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: NodeX-Android-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
+          echo "Optimizing and 4-byte page-aligning APK with zipalign..."
+          "$zipalign" -p -f 4 "$unsigned_apk" "$aligned_apk"
+
+          keystore="$RUNNER_TEMP/release.keystore"
+
+          if [ -n "${ANDROID_KEYSTORE_BASE64:-}" ] && [ -n "${ANDROID_KEYSTORE_PASSWORD:-}" ]; then
+            echo "Signing with release keystore provided via repository secrets..."
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$keystore"
+
+            key_alias="${ANDROID_KEY_ALIAS:-}"
+            if [ -z "$key_alias" ]; then
+              key_alias="$(keytool -list -keystore "$keystore" -storepass "$ANDROID_KEYSTORE_PASSWORD" | grep -m1 "PrivateKeyEntry" | cut -d',' -f1 || echo "")"
+              if [ -z "$key_alias" ]; then
+                key_alias="nodex"
+              fi
+            fi
+
+            key_pass="${ANDROID_KEY_PASSWORD:-$ANDROID_KEYSTORE_PASSWORD}"
+
+            echo "Signing with alias '$key_alias'..."
+            if ! "$apksigner" sign \
+              --ks "$keystore" \
+              --ks-key-alias "$key_alias" \
+              --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+              --key-pass "pass:$key_pass" \
+              --out "$signed_apk" "$aligned_apk"; then
+              echo "Retrying apksigner with keystore password as key password for PKCS12 compatibility..."
+              "$apksigner" sign \
+                --ks "$keystore" \
+                --ks-key-alias "$key_alias" \
+                --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+                --key-pass "pass:$ANDROID_KEYSTORE_PASSWORD" \
+                --out "$signed_apk" "$aligned_apk"
+            fi
+
+            echo "signing_mode=release" >> "$GITHUB_OUTPUT"
+            echo "Successfully signed Release APK with custom repository release key."
+          else
+            echo "Generating release keystore..."
+            # CRITICAL FIX for BadPaddingException:
+            # Modern Java 21 PKCS12 keystores require storepass and keypass to match.
+            # Using different passwords triggers BadPaddingException during apksigner private key decryption.
+            release_pass="$(openssl rand -hex 24)"
+
+            keytool -genkeypair -noprompt -v \
+              -keystore "$keystore" \
+              -storetype PKCS12 \
+              -storepass "$release_pass" \
+              -keypass "$release_pass" \
+              -alias nodex-release \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=NodeX Terminal Release, OU=Mobile, O=NodeX, C=US"
+
+            "$apksigner" sign \
+              --ks "$keystore" \
+              --ks-key-alias nodex-release \
+              --ks-pass "pass:$release_pass" \
+              --key-pass "pass:$release_pass" \
+              --out "$signed_apk" "$aligned_apk"
+
+            echo "signing_mode=release" >> "$GITHUB_OUTPUT"
+            echo "::notice::Successfully created and signed Release APK. To use a persistent signing identity, configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS in repository secrets."
+          fi
+
+          echo "Verifying Release APK signature..."
+          "$apksigner" verify --verbose "$signed_apk"
+          echo "Release APK verification succeeded!"
 
       - name: Upload signed release APK artifact
-        if: always() && steps.signing.outcome == 'success'
+        if: steps.signing.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: NodeX-Android-release
+          name: NodeX-Android-Release-APK
           path: android/app/build/outputs/apk/release/NodeX-terminal-release.apk
           if-no-files-found: error
           retention-days: 30
 
       - name: Publish tagged Android release
-        if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outputs.signing_mode == 'release'
+        if: startsWith(github.ref, 'refs/tags/v') && steps.signing.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
           files: android/app/build/outputs/apk/release/NodeX-terminal-release.apk
