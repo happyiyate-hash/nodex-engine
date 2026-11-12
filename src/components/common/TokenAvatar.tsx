@@ -59,7 +59,7 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
       // Treat a colour as a real subject/accent candidate only when it has
       // enough saturation and colour separation to stand apart from grey,
       // black or white backgrounds.
-      if (saturation >= 0.22 && chroma >= 28 && max >= 38 && max <= 250) {
+      if (saturation >= 0.22 && chroma >= 28 && max >= 38) {
         const hueValue = max === red
           ? ((green - blue) / chroma + (green < blue ? 6 : 0))
           : max === green
