@@ -54,12 +54,15 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
       {scanVisible && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute left-3 right-3 top-1/2 z-[5] h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-white/[0.055]"
+          className="pointer-events-none absolute inset-0 z-[15] overflow-hidden rounded-[inherit]"
         >
           <div
-            className="h-full rounded-full bg-[#B8C5D5]/[0.18]"
+            className="absolute inset-y-0 left-0"
             style={{
               width: `${displayProgress}%`,
+              background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 153 69 255) / 0.24) 0%, rgb(var(--token-accent-rgb, 153 69 255) / 0.17) 78%, rgb(var(--token-accent-rgb, 153 69 255) / 0.12) 100%)',
+              borderRight: '1px solid rgb(220 230 245 / 0.32)',
+              boxShadow: '8px 0 18px rgb(var(--token-accent-rgb, 153 69 255) / 0.16)',
               transition: status === 'scanning' ? 'width 180ms linear' : 'width 360ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           />
