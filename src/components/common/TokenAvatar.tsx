@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 interface TokenAvatarProps {
   symbol: string;
@@ -43,7 +43,7 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
 
       // Ignore near-black, near-white and neutral pixels. They should not
       // tint a dark card or overpower the logo's actual identity.
-      if (brightness < 22 || brightness > 246 || saturation < 0.12) continue;
+      if (brightness < 18 || brightness > 250 || saturation < 0.08) continue;
 
       const redBin = red >> 4;
       const greenBin = green >> 4;
@@ -85,7 +85,9 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
     const oldestKey = logoAccentCache.keys().next().value;
     if (oldestKey) logoAccentCache.delete(oldestKey);
   }
-  logoAccentCache.set(cacheKey, accent);
+  // Do not cache failed/empty reads. A transient canvas or image decode issue
+  // must not permanently prevent this logo from supplying its accent later.
+  if (accent) logoAccentCache.set(cacheKey, accent);
   return accent;
 }
 
@@ -158,10 +160,12 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
 
   const showingSolanaFallback = !imageUrl || logoFailed;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
     if (!card) return;
-    if (showingSolanaFallback) {
+    // Start each new logo with the subtle Solana purple. Its successfully
+    // extracted token color replaces this value in the image onLoad handler.
+    if (showingSolanaFallback || logoUrl) {
       card.style.setProperty('--token-accent-rgb', '153 69 255');
     }
   }, [showingSolanaFallback, logoUrl]);
