@@ -111,11 +111,12 @@
   from { opacity: 0; transform: translateY(12px); filter: blur(3px); }
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-@keyframes token-float-in {
-  from { opacity: 0; transform: translate3d(0,18px,0) scale(.98); }
-  to { opacity: 1; transform: translate3d(0,0,0) scale(1); }
+/* Reveal the complete token stack as one composited layer, not card by card. */
+@keyframes token-feed-reveal {
+  from { opacity: 0; transform: translate3d(0,8px,0); }
+  to { opacity: 1; transform: translate3d(0,0,0); }
 }
-.token-float-row { animation: token-float-in 380ms cubic-bezier(.16,1,.3,1) both; }
+.token-feed-reveal { animation: token-feed-reveal 180ms ease-out both; }
 .token-card-lazy { content-visibility: auto; contain-intrinsic-size: auto 72px; }
 .wallet-main-scroll {
   -webkit-mask-image: linear-gradient(to bottom,transparent 0,black 24px,black calc(100% - 24px),transparent 100%);
@@ -132,7 +133,7 @@
 .stagger-enter > *:nth-child(7) { animation-delay:340ms; }
 .stagger-enter > *:nth-child(8) { animation-delay:390ms; }
 @media (prefers-reduced-motion: reduce) {
-  .token-float-row, .stagger-enter > * { animation:none; }
+  .token-feed-reveal, .stagger-enter > * { animation:none; }
 }
 .tabular, .tabular-nums { font-variant-numeric: tabular-nums; }
 
