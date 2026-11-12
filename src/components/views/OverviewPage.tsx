@@ -477,7 +477,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 z-0"
-                        style={{ background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 153 69 255) / 0.12) 0%, rgb(var(--token-accent-rgb, 153 69 255) / 0.065) 48%, rgb(var(--token-accent-rgb, 153 69 255) / 0.018) 100%)' }}
+                        style={{ background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 231 137 55) / 0.12) 0%, rgb(var(--token-accent-secondary-rgb, 229 177 74) / 0.065) 48%, rgb(var(--token-accent-secondary-rgb, 229 177 74) / 0.018) 100%)' }}
                       />
                       <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} attempt={Number(tokenData.scan_attempt || 0)} />
                       <div className="relative z-10">
