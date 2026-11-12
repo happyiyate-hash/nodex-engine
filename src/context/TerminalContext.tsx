@@ -7,6 +7,7 @@ import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/rest';
 import { backendService } from '../services/backend';
 import { normalizeBackendEvent, wsService } from '../services/websocket';
 import { engineEventStore } from '../services/engine-event-store';
+import { recordRequest } from '../services/engineLogs';
 import { recoverTokenLogoGroup } from '../services/token-logo-recovery';
 import { clearTokenLifecycleCache, lifecycleCacheSignature, loadTokenLifecycleCache, pruneTokenLifecycleCache, saveTokenLifecycleCache } from '../services/token-lifecycle-cache';
 
@@ -706,6 +707,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const tokenLogoSeen = useRef<Set<string>>(new Set());
   const tokenLogoTimer = useRef<number | null>(null);
   const tokenLogoBatchRunning = useRef(false);
+  const tokenCareMissingKeyLogged = useRef(false);
 
   // Restore durable backend activity on every app start. Live WebSocket events
   // are merged afterward so a delayed history response cannot overwrite newer data.
@@ -811,8 +813,20 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (tokenLogoTimer.current !== null) window.clearTimeout(tokenLogoTimer.current);
       tokenLogoTimer.current = null;
       tokenLogoQueue.current.clear();
+      if (tokens.some((token) => token.mint && !token.logo_url) && !tokenCareMissingKeyLogged.current) {
+        tokenCareMissingKeyLogged.current = true;
+        recordRequest({
+          action: 'TokenCare logo recovery not sent - API key missing',
+          at: new Date().toISOString(),
+          ok: false,
+          error: 'No HTTP request was sent. Add and save the TokenCare API key in Settings / API & Connections.',
+          request: { queued_tokens: tokens.filter((token) => token.mint && !token.logo_url).length },
+          response: { skipped: true, reason: 'api_key_missing' },
+        });
+      }
       return;
     }
+    tokenCareMissingKeyLogged.current = false;
 
     let added = false;
     for (const token of tokens) {
