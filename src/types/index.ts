@@ -201,6 +201,16 @@ export interface DiscoveredToken {
   volume_1h_usd: number;
   tx_buys_5m: number;
   tx_sells_5m: number;
+  /** Backend-confirmed buy activity used by the entry evaluator. */
+  buy_volume_5m_usd?: number;
+  distinct_buyers_5m?: number;
+  buy_count_5m?: number;
+  sell_count_5m?: number;
+  estimated_slippage_pct?: number;
+  confirmed_trade_events?: number;
+  /** Pump.fun curve completion is separate from PumpSwap pool activation. */
+  bonding_curve_status?: string;
+  bonding_curve_account?: string;
   bonding_curve_progress_pct: number;
   venue: Venue;
   safety_status: SafetyRating;
