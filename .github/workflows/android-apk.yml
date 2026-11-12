@@ -40,16 +40,20 @@ jobs:
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Validate NodeX Android artwork
+        run: |
+          test -s assets/icon.png || { echo "::error::Missing assets/icon.png (Android launcher and web/PWA logo source)."; exit 1; }
+          test -s assets/splash.png || { echo "::error::Missing assets/splash.png (Android splash artwork source)."; exit 1; }
+          echo "Launcher/PWA icon SHA256:"
+          sha256sum assets/icon.png
+          echo "Android splash SHA256:"
+          sha256sum assets/splash.png
+
       - name: Type-check frontend
         run: npm run lint
 
       - name: Build web application
         run: npm run build
-
-      - name: Validate NodeX Android artwork
-        run: |
-          test -s assets/icon.png || { echo "::error::Missing assets/icon.png (Android launcher icon source)."; exit 1; }
-          test -s assets/splash.png || { echo "::error::Missing assets/splash.png (Android splash artwork source)."; exit 1; }
 
       - name: Generate Android platform
         run: npx cap add android
@@ -57,8 +61,10 @@ jobs:
       - name: Configure Android system bars
         run: node scripts/configure-android-system-bars.mjs
 
-      - name: Generate native app icons and splash assets
-        run: npx capacitor-assets generate --android --iconBackgroundColor '#000000' --splashBackgroundColor '#000000'
+      - name: Generate native app icons and splash assets from uploaded artwork
+        run: |
+          # capacitor-assets reads assets/icon.png and assets/splash.png from the repository root.
+          npx capacitor-assets generate --android --iconBackgroundColor '#000000' --splashBackgroundColor '#000000'
 
       - name: Sync web application into Android
         run: npx cap sync android
