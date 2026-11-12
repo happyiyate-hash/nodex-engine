@@ -20,17 +20,28 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
   let accent: string | null = null;
   try {
     const canvas = document.createElement('canvas');
-    canvas.width = 24;
-    canvas.height = 24;
+    canvas.width = 32;
+    canvas.height = 32;
     const context = canvas.getContext('2d', { willReadFrequently: true });
     if (!context) throw new Error('Canvas 2D context unavailable');
 
-    context.drawImage(image, 0, 0, 24, 24);
-    const pixels = context.getImageData(0, 0, 24, 24).data;
-    // Include the full tonal range, not just saturated colours. This is
-    // important for monochrome artwork: a mostly-black logo should produce
-    // a black accent, while white/grey artwork should retain its own tone.
-    const buckets = new Map<number, { count: number; red: number; green: number; blue: number }>();
+    context.drawImage(image, 0, 0, 32, 32);
+    const pixels = context.getImageData(0, 0, 32, 32).data;
+    const chromaticBuckets = new Map<number, {
+      count: number;
+      red: number;
+      green: number;
+      blue: number;
+      saturation: number;
+    }>();
+    const neutralBuckets = new Map<number, {
+      count: number;
+      red: number;
+      green: number;
+      blue: number;
+    }>();
+    let visiblePixelCount = 0;
+    let chromaticPixelCount = 0;
 
     for (let index = 0; index < pixels.length; index += 4) {
       const alpha = pixels[index + 3] / 255;
@@ -39,32 +50,87 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
       const red = pixels[index];
       const green = pixels[index + 1];
       const blue = pixels[index + 2];
-      // 4-bit RGB buckets suppress tiny antialiasing variations while
-      // preserving distinct blacks, charcoals, greys, whites and hues.
-      const redBin = red >> 4;
-      const greenBin = green >> 4;
-      const blueBin = blue >> 4;
-      const key = (redBin << 8) | (greenBin << 4) | blueBin;
-      const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0 };
-      bucket.count += 1;
-      bucket.red += red;
-      bucket.green += green;
-      bucket.blue += blue;
-      buckets.set(key, bucket);
+      const max = Math.max(red, green, blue);
+      const min = Math.min(red, green, blue);
+      const chroma = max - min;
+      const saturation = max === 0 ? 0 : chroma / max;
+      visiblePixelCount += 1;
+
+      // Treat a colour as a real subject/accent candidate only when it has
+      // enough saturation and colour separation to stand apart from grey,
+      // black or white backgrounds.
+      if (saturation >= 0.22 && chroma >= 28 && max >= 38 && max <= 250) {
+        const hueValue = max === red
+          ? ((green - blue) / chroma + (green < blue ? 6 : 0))
+          : max === green
+            ? (blue - red) / chroma + 2
+            : (red - green) / chroma + 4;
+        const hue = hueValue / 6;
+        const hueBin = Math.floor(hue * 24) % 24;
+        const saturationBin = Math.min(3, Math.floor(saturation * 4));
+        const valueBin = Math.min(3, Math.floor((max / 256) * 4));
+        const key = (hueBin << 4) | (saturationBin << 2) | valueBin;
+        const bucket = chromaticBuckets.get(key) || {
+          count: 0, red: 0, green: 0, blue: 0, saturation: 0,
+        };
+        bucket.count += 1;
+        bucket.red += red;
+        bucket.green += green;
+        bucket.blue += blue;
+        bucket.saturation += saturation;
+        chromaticBuckets.set(key, bucket);
+        chromaticPixelCount += 1;
+      } else {
+        // Keep a separate neutral palette for genuinely monochrome artwork.
+        const key = ((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4);
+        const bucket = neutralBuckets.get(key) || {
+          count: 0, red: 0, green: 0, blue: 0,
+        };
+        bucket.count += 1;
+        bucket.red += red;
+        bucket.green += green;
+        bucket.blue += blue;
+        neutralBuckets.set(key, bucket);
+      }
     }
 
-    let best: { count: number; red: number; green: number; blue: number } | null = null;
-    for (const bucket of buckets.values()) {
-      // Choose the most common actual tone. Do not favour saturation or
-      // discard black/white pixels: those are valid logo identity colours.
-      if (!best || bucket.count > best.count) best = bucket;
+    let bestColor: { count: number; red: number; green: number; blue: number; score: number } | null = null;
+    // If colour occupies a meaningful part of the image, ignore neutral
+    // background pixels. This lets a noticeable pink shirt or flower win
+    // over a much larger black/white/grey background.
+    const hasMeaningfulColor = visiblePixelCount > 0 &&
+      chromaticPixelCount >= Math.max(8, Math.ceil(visiblePixelCount * 0.025));
+
+    if (hasMeaningfulColor) {
+      for (const bucket of chromaticBuckets.values()) {
+        const averageSaturation = bucket.saturation / bucket.count;
+        // Saturation-weighted frequency favours a clear, distinctive hue
+        // without allowing a single colourful pixel to determine the card.
+        const score = bucket.count * (0.35 + averageSaturation * 2.4);
+        if (!bestColor || score > bestColor.score) {
+          bestColor = {
+            count: bucket.count,
+            red: bucket.red,
+            green: bucket.green,
+            blue: bucket.blue,
+            score,
+          };
+        }
+      }
     }
 
-    if (best) {
-      const red = Math.round(best.red / best.count);
-      const green = Math.round(best.green / best.count);
-      const blue = Math.round(best.blue / best.count);
-      accent = `${red} ${green} ${blue}`;
+    if (bestColor) {
+      accent = `${Math.round(bestColor.red / bestColor.count)} ${Math.round(bestColor.green / bestColor.count)} ${Math.round(bestColor.blue / bestColor.count)}`;
+    } else {
+      // No meaningful chromatic subject was found: preserve black, white,
+      // charcoal and grey tones for monochrome logos.
+      let bestNeutral: { count: number; red: number; green: number; blue: number } | null = null;
+      for (const bucket of neutralBuckets.values()) {
+        if (!bestNeutral || bucket.count > bestNeutral.count) bestNeutral = bucket;
+      }
+      if (bestNeutral) {
+        accent = `${Math.round(bestNeutral.red / bestNeutral.count)} ${Math.round(bestNeutral.green / bestNeutral.count)} ${Math.round(bestNeutral.blue / bestNeutral.count)}`;
+      }
     }
   } catch {
     // Some image hosts do not permit canvas pixel reads (CORS). The logo
@@ -76,12 +142,9 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
     const oldestKey = logoAccentCache.keys().next().value;
     if (oldestKey) logoAccentCache.delete(oldestKey);
   }
-  // Do not cache failed/empty reads. A transient canvas or image decode issue
-  // must not permanently prevent this logo from supplying its accent later.
   if (accent) logoAccentCache.set(cacheKey, accent);
   return accent;
 }
-
 function resolveImageUrls(value?: string): string[] {
   const candidate = (value || '').trim();
   if (!candidate) return [];
