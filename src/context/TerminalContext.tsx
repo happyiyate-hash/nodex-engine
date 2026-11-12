@@ -46,6 +46,7 @@ interface TerminalContextType {
   executeManualPaperBuy: (mint: string, solAmount: number) => void;
   updatePositionRisk: (positionId: string, sl: number, tp: number) => Promise<boolean>;
   saveStrategyConfig: (config: StrategyConfig) => Promise<boolean>;
+  setPaperExecutionEnabled: (enabled: boolean) => Promise<boolean>;
   updateSettings: (newSettings: Partial<ApiSettings>) => void;
   updateConnectionDraft: (newSettings: Partial<ApiSettings>) => void;
   isMobilePreview: boolean;
@@ -1037,6 +1038,17 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return false;
     }
   };
+  const setPaperExecutionEnabled = async (enabled: boolean): Promise<boolean> => {
+    try {
+      const result = await apiClient.updatePaperExecution(enabled);
+      setStrategyConfig(result.config);
+      setBackendError(null);
+      return true;
+    } catch (error) {
+      setBackendError(error instanceof Error ? error.message : 'Could not update paper execution.');
+      return false;
+    }
+  };
   const updateSettings = (newSettings: Partial<ApiSettings>) => {
     const updated = apiClient.saveSettings(newSettings);
     setSettings(updated);
@@ -1144,7 +1156,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       openTokenDetailByMint, loadTokenSnapshot, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, removeTokensByMint, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
-      saveStrategyConfig, updateSettings, updateConnectionDraft, isMobilePreview, setIsMobilePreview, backendError,
+      saveStrategyConfig, setPaperExecutionEnabled, updateSettings, updateConnectionDraft, isMobilePreview, setIsMobilePreview, backendError,
     }}>
       {children}
     </TerminalContext.Provider>
