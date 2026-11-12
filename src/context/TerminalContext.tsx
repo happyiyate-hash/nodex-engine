@@ -702,12 +702,22 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let active = true;
     apiClient.getEngineActivityLogs(500).then((records) => {
       if (!active || !Array.isArray(records)) return;
-      const restored = records.map((record) => {
+      const restored = records.flatMap((record) => {
         const activity = record.activity || {};
         const isEngineLifecycleEvent =
           activity.direction === 'event' &&
           activity.provider === 'engine' &&
           typeof activity.operation === 'string';
+        if (!isEngineLifecycleEvent) {
+          const severity = String(activity.severity || '').toLowerCase();
+          const httpStatus = Number(activity.http_status || 0);
+          const hasError = typeof activity.error === 'string' && activity.error.length > 0;
+          // Older database rows include successful provider calls from before
+          // the backend noise filter. Do not refill the Event Monitor with them.
+          if (!['error', 'warning'].includes(severity) && httpStatus < 400 && !hasError) {
+            return [];
+          }
+        }
         const raw = isEngineLifecycleEvent
           ? {
               type: activity.operation,
@@ -721,7 +731,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               timestamp: activity.timestamp || record.recorded_at,
               data: activity,
             };
-        return normalizeBackendEvent(raw, record.recorded_at);
+        return [normalizeBackendEvent(raw, record.recorded_at)];
       });
 
       setEvents((current) => {
