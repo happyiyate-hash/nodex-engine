@@ -423,6 +423,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     launchLoadLockedRef.current = false;
   }, [filter, search]);
 
+  // Launches often arrive asynchronously after the page first mounts.
+  // Expand the initial render target when that first batch reaches the feed;
+  // otherwise the counter can remain stuck at one card forever.
+  useEffect(() => {
+    if (filteredLaunches.length === 0) return;
+    setLaunchRenderTarget((current) => Math.max(current, Math.min(12, filteredLaunches.length)));
+  }, [filteredLaunches.length]);
+
   useEffect(() => {
     if (visibleLaunchCount >= launchRenderTarget) return;
     const timer = window.setTimeout(() => {
