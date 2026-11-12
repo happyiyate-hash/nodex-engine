@@ -55,7 +55,7 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
       className="pointer-events-none absolute inset-0 z-[1] rounded-[10px] bg-[#B8C5D5]/[0.11] transition-[clip-path,opacity] duration-300 ease-out"
       style={{
         clipPath: `inset(0 ${100 - displayProgress}% 0 0 round 10px)`,
-        opacity: status === 'scanning' ? 1 : 0,
+        opacity: status !== 'scanning' && displayProgress >= 99.99 ? 0 : 1,
         transition: status === 'scanning'
           ? 'clip-path 180ms linear, opacity 300ms ease-out'
           : 'clip-path 360ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease-out',
