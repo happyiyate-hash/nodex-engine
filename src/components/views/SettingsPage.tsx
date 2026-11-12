@@ -74,6 +74,9 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl);
   const [websocketUrl, setWebsocketUrl] = useState(settings.wsUrlOverride);
   const [operatorKey, setOperatorKey] = useState(settings.adminApiKey);
+  const [tokenCareApiKey, setTokenCareApiKey] = useState(settings.tokenCareApiKey || '');
+  const [showTokenCareKey, setShowTokenCareKey] = useState(false);
+  const [tokenCareKeyMessage, setTokenCareKeyMessage] = useState('');
   const [showOperatorKey, setShowOperatorKey] = useState(false);
   const [connectionNeedsAttach, setConnectionNeedsAttach] = useState(false);
   const [savingConnection, setSavingConnection] = useState(false);
@@ -225,7 +228,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setBackendUrl(settings.backendUrl);
     setWebsocketUrl(settings.wsUrlOverride);
     setOperatorKey(settings.adminApiKey);
-  }, [settings.backendUrl, settings.wsUrl, settings.adminApiKey]);
+    setTokenCareApiKey(settings.tokenCareApiKey || '');
+  }, [settings.backendUrl, settings.wsUrl, settings.adminApiKey, settings.tokenCareApiKey]);
 
 
   const attachConnection = async () => {
@@ -603,6 +607,15 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                       <button type="button" onClick={() => setShowOperatorKey((visible) => !visible)} aria-label={showOperatorKey ? 'Hide API key' : 'Show API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showOperatorKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
                     </div>
                   </Field>
+                  <Field label="TokenCare API key" hint="Used to recover missing token logos. Saved on this device and read by the app when a logo-recovery group is ready.">
+                    <div className="relative">
+                      <input type={showTokenCareKey ? 'text' : 'password'} value={tokenCareApiKey} onChange={(event) => { setTokenCareApiKey(event.target.value); setTokenCareKeyMessage(''); }} placeholder="Paste TokenCare API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className={`pr-11 ${inputClass}`} />
+                      <button type="button" onClick={() => setShowTokenCareKey((visible) => !visible)} aria-label={showTokenCareKey ? 'Hide TokenCare API key' : 'Show TokenCare API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showTokenCareKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                    </div>
+                  </Field>
+                  <button type="button" onClick={() => { const key = cleanHeaderValue(tokenCareApiKey); updateConnectionDraft({ tokenCareApiKey: key }); setTokenCareApiKey(key); setTokenCareKeyMessage(key ? 'TokenCare key saved on this device.' : 'TokenCare key cleared.'); }} className="flex w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] py-2.5 text-[11px] font-medium text-white/80">Save TokenCare key</button>
+                  {tokenCareKeyMessage && <p className="text-[10px] text-emerald-300" role="status">{tokenCareKeyMessage}</p>}
+                  <p className="text-[9px] leading-relaxed text-amber-200/50">This key is stored in this browser or app profile and is sent directly to TokenCare for logo lookups. Anyone with access to this device profile may be able to retrieve it.</p>
                   {connectionMessage && <p className={`text-[11px] ${connectionSuccess ? 'text-emerald-300' : 'text-red-300'}`} role="status">{connectionMessage}</p>}
                   <button type="button" onClick={attachConnection} disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
                     {savingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
