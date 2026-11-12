@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { TokenLaunchRecord, NodeXEvent } from '../../types';
+import { TokenLaunchRecord } from '../../types';
 import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { PortfolioBalanceSnapshot, restClient } from '../../services/rest';
@@ -485,34 +485,10 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
             ) : (
               <div className="space-y-1.5 pb-2">
                 {filteredLaunches.map((item) => {
-                  const { launch, status, reason, updatedAt } = item;
-                  const matchesLaunch = (event: NodeXEvent) => event.data?.mint_address
-                    ? event.data.mint_address === launch.mint_address
-                    : event.token_mint === launch.mint_address;
-                  const progressEvent = events.find((event) => event.event_type === 'token_scan_progress' && matchesLaunch(event));
-                  const reportEvent = events.find((event) => event.event_type === 'token_scan_update' && matchesLaunch(event))
-                    || progressEvent
-                    || events.find((event) => ['token_scan_completed', 'token_scan_failed'].includes(event.event_type) && matchesLaunch(event));
+                  const { launch } = item;
                   const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
-                  // Prefer the live event while present, then fall back to the full
-                  // persisted security report carried by token_state_updated.
-                  // Persisted token state is authoritative; transient scan events are fallback only.
-                  // This prevents an older scan payload from replacing a newer authority-monitor update.
-                  const persistedReport = tokenData.safety_details && typeof tokenData.safety_details === 'object'
-                    ? tokenData.safety_details
-                    : {};
-                  const eventReport = reportEvent?.data && typeof reportEvent.data === 'object'
-                    ? reportEvent.data
-                    : {};
-                  const report = { ...eventReport, ...persistedReport };
-                  if (!Array.isArray(report.checks) || report.checks.length === 0) {
-                    if (Array.isArray(eventReport.checks) && eventReport.checks.length > 0) report.checks = eventReport.checks;
-                  }
-                  if (!Array.isArray(report.provider_responses) || report.provider_responses.length === 0) {
-                    if (Array.isArray(eventReport.provider_responses) && eventReport.provider_responses.length > 0) report.provider_responses = eventReport.provider_responses;
-                  }
-                  const monitoringEvent = events.find((event) => event.event_type === 'token_monitoring_update' && (event.data?.mint_address === launch.mint_address || event.token_mint === launch.mint_address));
-                  const monitoringData = monitoringEvent?.data;
+                  const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
+                  const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
 
                   const lifecycleStatus = String(tokenData.lifecycle_status || 'scanning').toLowerCase();
                   const lifecycleLabel = String(tokenData.lifecycle_label || 'Scanning');
