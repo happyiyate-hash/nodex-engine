@@ -88,7 +88,7 @@ const ToggleRow = ({
 );
 
 export const StrategyPage: React.FC = () => {
-  const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig, engineStatus } = useTerminal();
+  const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig, setPaperExecutionEnabled, engineStatus } = useTerminal();
   const { showToast, updateToast } = useToast();
   const paperMode = engineStatus.operating_mode.toLowerCase() !== 'real';
   const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig });
@@ -100,6 +100,7 @@ export const StrategyPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [newEntriesEnabled, setNewEntriesEnabled] = useState(false);
   const [savingEntryPermission, setSavingEntryPermission] = useState(false);
+  const [savingPaperExecution, setSavingPaperExecution] = useState(false);
   const [ownerSheetOpen, setOwnerSheetOpen] = useState(false);
   const [editingOwnerIndex, setEditingOwnerIndex] = useState<number | null>(null);
   const [ownerAddress, setOwnerAddress] = useState('');
@@ -146,6 +147,36 @@ export const StrategyPage: React.FC = () => {
   };
 
   const hasUnappliedChanges = JSON.stringify(form) !== JSON.stringify(appliedConfig);
+
+  const updatePaperExecutionPermission = async (enabled: boolean) => {
+    if (savingPaperExecution || !paperMode) return;
+    setSavingPaperExecution(true);
+    const nextConfig = { ...appliedConfig, execution_enabled: enabled };
+    try {
+      const saved = await setPaperExecutionEnabled(enabled);
+      if (!saved) {
+        showToast({
+          title: 'Paper execution was not changed',
+          description: 'The backend did not confirm the setting. The switch remains at its last saved state.',
+          tone: 'error',
+          duration: 6500,
+        });
+        return;
+      }
+      setForm(nextConfig);
+      setAppliedConfig(nextConfig);
+      showToast({
+        title: enabled ? 'Paper execution enabled' : 'Paper execution disabled',
+        description: enabled
+          ? 'The backend confirmed paper-only execution. Real trading remains unavailable.'
+          : 'The backend confirmed that new paper execution is disabled.',
+        tone: 'success',
+        duration: 4500,
+      });
+    } finally {
+      setSavingPaperExecution(false);
+    }
+  };
 
   const update = (key: keyof StrategyConfig, value: StrategyConfig[keyof StrategyConfig]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -260,6 +291,22 @@ export const StrategyPage: React.FC = () => {
   return (
     <div className="w-full pb-24 text-white">
       <section className="pt-0">
+        <div className="mb-5 rounded-xl border border-white/[0.10] bg-white/[0.025] px-3.5 py-3">
+          <ToggleRow
+            title="Paper Execution"
+            detail="Master switch for simulated buys only. This cannot enable real signing or live transactions."
+            checked={Boolean(form.execution_enabled)}
+            onChange={updatePaperExecutionPermission}
+            disabled={!paperMode || savingPaperExecution}
+          />
+          <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
+            <span className="text-white/40">Backend-confirmed state</span>
+            <span className={form.execution_enabled ? 'text-emerald-300' : 'text-white/45'}>
+              {savingPaperExecution ? 'Saving…' : form.execution_enabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          {!paperMode && <p className="mt-2 text-[10px] text-amber-300">Paper execution can only be changed while Paper mode is active.</p>}
+        </div>
         <div className="border-b border-white/[0.08] pb-2">
           <h3 className="text-[13px] font-semibold text-white/90">Exit Settings</h3>
           <p className="mt-1 text-[10px] text-white/40">Manage how your paper positions exit automatically.</p>
