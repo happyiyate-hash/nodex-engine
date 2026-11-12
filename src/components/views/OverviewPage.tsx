@@ -3,7 +3,6 @@ import { useTerminal } from '../../context/TerminalContext';
 import { TokenLaunchRecord, TokenDiagnostic } from '../../types';
 import { Activity, Circle, Copy, ExternalLink, Search, ShieldCheck } from 'lucide-react';
 import { TokenAvatar } from '../common/TokenAvatar';
-import { PortfolioBalanceSnapshot, restClient } from '../../services/rest';
 
 type ChangeDirection = 'up' | 'down' | null;
 
@@ -295,27 +294,10 @@ const statusStyle: Record<PipelineStatus, string> = {
 
 export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }> = ({ embeddedMode }) => {
   const { launches, events, engineStatus, openTokenDetailByMint, profile, positions, tokens } = useTerminal();
-  const [livePortfolioBalance, setLivePortfolioBalance] = useState<PortfolioBalanceSnapshot | null>(null);
-  const latestSolPriceUpdate = events.find((event) => event.event_type === 'sol_price_update')?.timestamp || '';
-  const latestPortfolioUpdate = events.find((event) => event.event_type === 'portfolio_summary_updated')?.timestamp || '';
-  useEffect(() => {
-    let active = true;
-    const refreshPortfolio = () => {
-      restClient.getPortfolioBalance()
-        .then((balance) => { if (active) setLivePortfolioBalance(balance); })
-        .catch(() => { /* Keep the last known authoritative valuation if REST is temporarily unavailable. */ });
-    };
-    refreshPortfolio();
-    // SOL quotes refresh every 10 seconds on the backend. Poll as a recovery
-    // path as well, so a missed WebSocket event cannot freeze the dashboard.
-    const interval = window.setInterval(refreshPortfolio, 10000);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [latestSolPriceUpdate, latestPortfolioUpdate]);
-
-  const portfolioSource = livePortfolioBalance ?? profile?.portfolio;
+  // Portfolio values are hydrated from the initial backend snapshot and then
+  // updated by the backend's portfolio WebSocket events. Do not poll the
+  // balance REST endpoint here; that duplicates the live stream and adds load.
+  const portfolioSource = profile?.portfolio;
   const portfolioValue = Number(portfolioSource?.portfolio_balance_usd ?? 0);
   const availableBalanceUsd = Number(portfolioSource?.available_balance_usd ?? 0);
   const investedBalanceUsd = Number(portfolioSource?.invested_balance_usd ?? 0);
