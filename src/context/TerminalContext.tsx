@@ -151,7 +151,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const venueValue = String(payload.venue || payload.source || previous?.venue || 'pump.fun').toLowerCase();
   const venue: DiscoveredToken['venue'] = venueValue.includes('raydium') ? 'raydium' : venueValue.includes('swap') ? 'pumpswap' : 'pump.fun';
   const decision = String(payload.decision || payload.status || '').toLowerCase();
-  const isScanProgressEvent = event.event_type === 'token_scan_started' || event.event_type === 'token_scan_progress';
+  const isScanProgressEvent = event.event_type === 'token_scan_retry_scheduled'
+    || event.event_type === 'token_scan_started'
+    || event.event_type === 'token_scan_progress';
   const previousHasTerminalVerdict = ['qualified', 'rejected', 'unverified', 'bought_paper']
     .includes(String(previous?.qualification_status || ''));
   const previousHasTerminalScanStatus = ['completed', 'verified', 'failed', 'rejected', 'unverified']
@@ -169,7 +171,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase()));
   // Progress events can arrive late or be replayed after a final verdict. They
   // may update diagnostics, but must never move a terminal token back to scanning.
-  const scanStatus = isScanProgressEvent
+  const scanStatus = event.event_type === 'token_scan_retry_scheduled' ? 'retrying'
+    : isScanProgressEvent
     ? isNewScanAttempt ? 'scanning'
       : previousHasTerminalScanStatus ? previous?.scan_status
       : previousHasTerminalVerdict ? 'completed' : 'scanning'
@@ -188,7 +191,16 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   // Lifecycle is backend-owned. Ordinary event names never imply a UI status.
   // Only an explicit activity object (or a canonical token_state_updated snapshot)
   // can change the lifecycle displayed for this mint.
-  const scanActivity: Record<string, any> | null = event.event_type === 'token_scan_started'
+  const scanActivity: Record<string, any> | null = event.event_type === 'token_scan_retry_scheduled'
+    ? {
+        status: 'retrying',
+        label: 'Retrying',
+        scan_attempt: incomingScanAttempt || previousScanAttempt,
+        progress: 0,
+        stage: 'retry_wait',
+        sub_event: 'Retrying security scan',
+      }
+    : event.event_type === 'token_scan_started'
     ? {
         status: 'scanning',
         label: 'Scanning',
@@ -1015,7 +1027,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
       const tokenStateEvent = [
-        'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_diagnostic', 'token_metadata_started', 'token_metadata_failed',
+        'launch_detected', 'token_scan_retry_scheduled', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_diagnostic', 'token_metadata_started', 'token_metadata_failed',
         'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
         'token_monitoring_started', 'token_monitoring_update', 'token_monitoring_completed',
         'market_subscription_requested', 'market_subscription_subscribed', 'market_subscription_active', 'market_subscription_waiting', 'market_subscription_failed', 'market_subscriptions_removed',
