@@ -62,6 +62,20 @@ export const DEFAULT_SETTINGS: ApiSettings = {
   autoReconnection: true, heartbeatIntervalMs: 5000, apiKey: '', adminApiKey: '',
 };
 
+export function cleanHeaderValue(val: string): string {
+  if (!val) return '';
+  return val
+    // Strip invisible formatting characters, zero-width spaces, BOM, non-breaking space
+    .replace(/[\u200B-\u200D\uFEFF\u2060\u00A0]/g, '')
+    // Normalize smart/curly quotes and dashes
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    // Strip any remaining characters outside ISO-8859-1 (code point > 255)
+    .replace(/[^\x00-\xFF]/g, '')
+    .trim();
+}
+
 function readStoredConnectionSettings(): Partial<ApiSettings> {
   if (typeof window === 'undefined') return {};
   try {
@@ -69,9 +83,9 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
     if (!raw) return {};
     const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrlOverride?: unknown; adminApiKey?: unknown };
     return {
-      ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl } : {}),
-      ...(typeof parsed.wsUrlOverride === 'string' ? { wsUrlOverride: parsed.wsUrlOverride } : {}),
-      ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: parsed.adminApiKey } : {}),
+      ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl.trim() } : {}),
+      ...(typeof parsed.wsUrlOverride === 'string' ? { wsUrlOverride: parsed.wsUrlOverride.trim() } : {}),
+      ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: cleanHeaderValue(parsed.adminApiKey) } : {}),
     };
   } catch {
     return {};
@@ -169,6 +183,9 @@ export class NodeXRestClient {
     const nextWsUrlOverride = typeof update.wsUrlOverride === 'string'
       ? update.wsUrlOverride.trim()
       : this.settings.wsUrlOverride;
+    const nextAdminApiKey = typeof update.adminApiKey === 'string'
+      ? cleanHeaderValue(update.adminApiKey)
+      : cleanHeaderValue(this.settings.adminApiKey);
     const nextWsUrl = nextWsUrlOverride || websocketUrlFor(nextBackendUrl);
     this.settings = {
       ...this.settings,
@@ -176,6 +193,7 @@ export class NodeXRestClient {
       backendUrl: nextBackendUrl,
       wsUrl: nextWsUrl,
       wsUrlOverride: nextWsUrlOverride,
+      adminApiKey: nextAdminApiKey,
       apiKey: '',
       mode: 'RUST_BACKEND',
     };
@@ -201,10 +219,29 @@ export class NodeXRestClient {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 10000);
     try {
+      const rawHeaders: Record<string, string> = {
+        Accept: 'application/json',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      };
+      if (options.headers) {
+        if (options.headers instanceof Headers) {
+          options.headers.forEach((v, k) => { rawHeaders[k] = v; });
+        } else if (Array.isArray(options.headers)) {
+          for (const [k, v] of options.headers) { rawHeaders[k] = v; }
+        } else {
+          Object.assign(rawHeaders, options.headers);
+        }
+      }
+      const cleanHeaders: Record<string, string> = {};
+      for (const [k, v] of Object.entries(rawHeaders)) {
+        if (v !== undefined && v !== null) {
+          cleanHeaders[k] = cleanHeaderValue(String(v));
+        }
+      }
+
       const response = await fetch(this.settings.backendUrl + path, {
-        ...options, headers: { Accept: 'application/json',
-          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-          ...options.headers },
+        ...options,
+        headers: cleanHeaders,
         signal: controller.signal,
       });
       const body = await response.text();
@@ -215,7 +252,7 @@ export class NodeXRestClient {
         throw new Error(`NodeX request timed out after 10 seconds: ${path}`);
       }
       if (error instanceof TypeError) {
-        throw new Error(`Could not reach the NodeX API at ${this.settings.backendUrl}. Check the server, TLS certificate, and browser CORS permission.`);
+        throw new Error(`Could not reach the NodeX API at ${this.settings.backendUrl}. Check server, TLS certificate, and CORS: ${error.message}`);
       }
       throw error;
     } finally { window.clearTimeout(timeout); }
@@ -240,7 +277,7 @@ export class NodeXRestClient {
       backendUrl,
       wsUrlOverride,
       wsUrl: wsUrlOverride || websocketUrlFor(backendUrl),
-      adminApiKey: candidate.adminApiKey.trim(),
+      adminApiKey: cleanHeaderValue(candidate.adminApiKey),
     };
     try {
       const health = await this.getHealth();

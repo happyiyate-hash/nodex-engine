@@ -136,31 +136,39 @@
 .tabular, .tabular-nums { font-variant-numeric: tabular-nums; }
 
 /* Hide scrollbar indicators globally while preserving normal scrolling. */
-html, body, * { scrollbar-width:none !important; -ms-overflow-style:none !important; }
-html::-webkit-scrollbar, body::-webkit-scrollbar, *::-webkit-scrollbar {
-  display:none !important; width:0 !important; height:0 !important;
+*, *::before, *::after {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
-/* Full-screen PWA viewport and Android/iOS safe-area handling. */
-html {
-  min-height: 100%;
-  min-height: 100dvh;
-  background: #000000;
-  overscroll-behavior: none;
-}
-body, #root {
-  min-height: 100%;
-  min-height: 100dvh;
-  background: #000000;
-}
-body {
-  padding-top: 0;
-  padding-right: env(safe-area-inset-right, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  padding-left: env(safe-area-inset-left, 0px);
-  overscroll-behavior-y: auto;
-  overscroll-behavior-y: none;
+/* Full-screen fixed PWA & native Android WebView viewport (pure black, zero scroll bounce) */
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  height: 100dvh !important;
+  overflow: hidden !important;
+  position: fixed !important;
+  inset: 0 !important;
+  background: #000000 !important;
+  background-color: #000000 !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: touch;
   -webkit-tap-highlight-color: transparent;
+}
+#root {
+  width: 100% !important;
+  height: 100% !important;
+  height: 100dvh !important;
+  overflow: hidden !important;
+  background: #000000 !important;
+  background-color: #000000 !important;
 }
 
 

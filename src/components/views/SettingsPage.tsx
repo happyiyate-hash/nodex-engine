@@ -5,7 +5,7 @@ import {
   SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
-import { apiClient } from '../../services/rest';
+import { apiClient, cleanHeaderValue } from '../../services/rest';
 import { wsService } from '../../services/websocket';
 import { StrategyPage } from './StrategyPage';
 
@@ -44,7 +44,7 @@ const inputClass = 'w-full rounded-xl border border-white/[0.10] bg-[#101010] px
 const SectionHeader = ({ title, description, onBack, action }: {
   title: string; description: string; onBack: () => void; action?: React.ReactNode;
 }) => (
-  <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.08] bg-black/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl">
+  <header className="shrink-0 flex-none border-b border-white/[0.08] bg-black/95 px-4 pb-3 pt-[calc(max(env(safe-area-inset-top,0px),12px)+0.25rem)] backdrop-blur-xl">
     <div className="flex min-h-10 items-center gap-3">
       <button type="button" onClick={onBack} aria-label="Back to Settings" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/[0.08] active:scale-95">
         <ArrowLeft className="h-[18px] w-[18px]" />
@@ -252,7 +252,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           throw new Error('WebSocket URL must start with ws:// or wss://.');
         }
       }
-      if (!operatorKey.trim()) {
+      const cleanKey = cleanHeaderValue(operatorKey);
+      if (!cleanKey) {
         setConnectionErrorField('key');
         throw new Error('Enter the backend API key.');
       }
@@ -260,14 +261,15 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       await apiClient.verifyConnection({
         backendUrl: cleanBackendUrl,
         wsUrlOverride: cleanWsUrl,
-        adminApiKey: operatorKey.trim(),
+        adminApiKey: cleanKey,
       });
 
       updateSettings({
         backendUrl: cleanBackendUrl,
         wsUrlOverride: cleanWsUrl,
-        adminApiKey: operatorKey.trim(),
+        adminApiKey: cleanKey,
       });
+      setOperatorKey(cleanKey);
       setConnectionNeedsAttach(false);
       setConnectionSuccess(true);
       setConnectionMessage('Attached to NodeX backend.');
@@ -359,10 +361,10 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const pageDescription = sections.find((item) => item.id === section)?.description || 'Manage your NodeX engine configuration.';
 
   return (
-    <div className={`w-full bg-black text-white ${section === 'engine_logs' ? 'px-0 min-h-full pb-0' : section === 'home' ? 'px-4 min-h-[calc(100dvh-6rem)] pb-28' : 'px-4 min-h-full pb-8'}`}>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
       {section === 'home' ? (
         <>
-          <header className="sticky top-0 z-40 -mx-4 border-b border-white/[0.08] bg-black/95 px-4 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          <header className="shrink-0 flex-none border-b border-white/[0.08] bg-black/95 px-4 backdrop-blur-xl" style={{ paddingTop: 'max(env(safe-area-inset-top,0px), 12px)' }}>
             <div className="flex h-14 items-center justify-between">
               <h1 className="text-[15px] font-semibold tracking-tight text-white">Settings</h1>
               <button
@@ -377,7 +379,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </div>
           </header>
 
-          <div className="pb-4 pt-5">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">NodeX control centre</p>
@@ -403,77 +405,80 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             </div>
           </div>
         </>
-      ) : section === 'connections' ? (
-        <header className="sticky top-0 z-40 -mx-4 w-[calc(100%+2rem)] border-b border-white/[0.08] bg-black/95 px-4 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.4rem)] backdrop-blur-xl">
-          <h1 className="mb-2.5 text-[14px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
-          <div className="grid w-full grid-cols-3 divide-x divide-white/[0.08]">
-            <div className="min-w-0 px-2 first:pl-0">
-              <div className="flex items-center gap-1.5">
-                <Wifi className="h-3.5 w-3.5 shrink-0 text-white/50" strokeWidth={1.8} />
-                <span className="truncate text-[10px] text-white/55">WebSocket</span>
-              </div>
-              <p className={`mt-1 text-[11px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : engineStatus.ws_status === 'reconnecting' ? 'text-amber-300' : 'text-red-300'}`}>
-                {engineStatus.ws_status === 'connected' ? 'Connected' : engineStatus.ws_status === 'reconnecting' ? 'Connecting' : 'Disconnected'}
-              </p>
-            </div>
-            <div className="min-w-0 px-2">
-              <div className="flex items-center gap-1.5">
-                <Server className="h-3.5 w-3.5 shrink-0 text-white/50" strokeWidth={1.8} />
-                <span className="truncate text-[10px] text-white/55">REST API</span>
-              </div>
-              <p className={`mt-1 text-[11px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/50'}`}>
-                {restOnline === true ? 'Online' : restOnline === false ? 'Unavailable' : 'Checking'}
-              </p>
-            </div>
-            <div className="min-w-0 px-2 last:pr-0">
-              <div className="flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5 shrink-0 text-white/50" strokeWidth={1.8} />
-                <span className="truncate text-[10px] text-white/55">Engine</span>
-              </div>
-              <p className={`mt-1 text-[11px] font-semibold ${(runtimeSnapshot?.running ?? engineStatus.running) ? 'text-emerald-300' : 'text-amber-300'}`}>
-                {runtimeSnapshot?.running ?? engineStatus.running ? 'Running' : 'Paused'}
-              </p>
-            </div>
-          </div>
-          <p className="mt-1.5 text-right text-[9px] tabular-nums text-white/30">{statusCheckedAt ? `Updated ${statusCheckedAt.toLocaleTimeString()}` : 'Checking connection status…'}</p>
-        </header>
-      ) : section === 'engine_logs' ? (
-        <header className="sticky top-0 z-40 flex min-h-14 items-center justify-between gap-2 border-b border-white/[0.10] bg-[#050505]/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.65)]" />
-            <h1 className="truncate text-[13px] font-semibold tracking-wide text-white">Live Stream</h1>
-            <span className="hidden text-[9px] font-mono text-white/30 sm:inline">TERMINAL</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] px-2.5 text-[9px] font-medium text-white/75 disabled:opacity-50"><RefreshCw className={`h-3 w-3 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh History</button>
-            <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-white px-2.5 text-[9px] font-semibold text-black disabled:opacity-40"><Download className="h-3 w-3" />Download Stream</button>
-          </div>
-        </header>
       ) : (
-        <SectionHeader
-          title={pageTitle}
-          description={pageDescription}
-          onBack={() => navigateSection('home')}
-          action={section === 'trading' ? (
-            <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
-              <span
-                aria-current={engineMode === 'paper' ? 'true' : undefined}
-                title={availableModes.paper ? 'Paper trading is available' : 'Paper trading is unavailable'}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${engineMode === 'paper' ? 'bg-white text-black' : 'text-white/35'}`}
-              >Paper</span>
-              <button
-                type="button"
-                disabled={!availableModes.real}
-                aria-disabled={!availableModes.real}
-                title={availableModes.real ? 'Real trading is available' : 'Real trading is not available yet'}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-medium ${engineMode === 'real' ? 'bg-white text-black' : 'text-white/25'} disabled:cursor-not-allowed`}
-              >Real</button>
-            </div>
-          ) : undefined}
-        />
-      )}
+        <>
+          {section === 'connections' ? (
+            <header className="shrink-0 flex-none w-full border-b border-white/[0.08] bg-black/95 px-4 pb-2.5 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
+              <h1 className="mb-2.5 text-[14px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
+              <div className="grid w-full grid-cols-3 divide-x divide-white/[0.08]">
+                <div className="min-w-0 px-2 first:pl-0">
+                  <div className="flex items-center gap-1.5">
+                    <Wifi className="h-3.5 w-3.5 shrink-0 text-white/50" strokeWidth={1.8} />
+                    <span className="truncate text-[10px] text-white/55">WebSocket</span>
+                  </div>
+                  <p className={`mt-1 text-[11px] font-semibold ${engineStatus.ws_status === 'connected' ? 'text-emerald-300' : engineStatus.ws_status === 'reconnecting' ? 'text-amber-300' : 'text-red-300'}`}>
+                    {engineStatus.ws_status === 'connected' ? 'Connected' : engineStatus.ws_status === 'reconnecting' ? 'Connecting' : 'Disconnected'}
+                  </p>
+                </div>
+                <div className="min-w-0 px-2">
+                  <div className="flex items-center gap-1.5">
+                    <Server className="h-3.5 w-3.5 shrink-0 text-white/50" strokeWidth={1.8} />
+                    <span className="truncate text-[10px] text-white/55">REST API</span>
+                  </div>
+                  <p className={`mt-1 text-[11px] font-semibold ${restOnline === true ? 'text-emerald-300' : restOnline === false ? 'text-red-300' : 'text-white/50'}`}>
+                    {restOnline === true ? 'Online' : restOnline === false ? 'Unavailable' : 'Checking'}
+                  </p>
+                </div>
+                <div className="min-w-0 px-2 last:pr-0">
+                  <div className="flex items-center gap-1.5">
+                    <Cpu className="h-3.5 w-3.5 shrink-0 text-white/50" strokeWidth={1.8} />
+                    <span className="truncate text-[10px] text-white/55">Engine</span>
+                  </div>
+                  <p className={`mt-1 text-[11px] font-semibold ${(runtimeSnapshot?.running ?? engineStatus.running) ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {runtimeSnapshot?.running ?? engineStatus.running ? 'Running' : 'Paused'}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-1.5 text-right text-[9px] tabular-nums text-white/30">{statusCheckedAt ? `Updated ${statusCheckedAt.toLocaleTimeString()}` : 'Checking connection status…'}</p>
+            </header>
+          ) : section === 'engine_logs' ? (
+            <header className="shrink-0 flex-none flex min-h-14 items-center justify-between gap-2 border-b border-white/[0.10] bg-black/95 px-3 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.65)]" />
+                <h1 className="truncate text-[13px] font-semibold tracking-wide text-white">Live Stream</h1>
+                <span className="hidden text-[9px] font-mono text-white/30 sm:inline">TERMINAL</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button type="button" onClick={() => void loadEngineLogs()} disabled={engineLogsLoading} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] px-2.5 text-[9px] font-medium text-white/75 disabled:opacity-50"><RefreshCw className={`h-3 w-3 ${engineLogsLoading ? 'animate-spin' : ''}`} />Refresh History</button>
+                <button type="button" onClick={downloadEngineLogs} disabled={!engineLogRecords.length} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-white px-2.5 text-[9px] font-semibold text-black disabled:opacity-40"><Download className="h-3 w-3" />Download Stream</button>
+              </div>
+            </header>
+          ) : (
+            <SectionHeader
+              title={pageTitle}
+              description={pageDescription}
+              onBack={() => navigateSection('home')}
+              action={section === 'trading' ? (
+                <div className="flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.035] p-1" aria-label="Trading mode">
+                  <span
+                    aria-current={engineMode === 'paper' ? 'true' : undefined}
+                    title={availableModes.paper ? 'Paper trading is available' : 'Paper trading is unavailable'}
+                    className={`rounded-full px-3 py-1.5 text-[10px] font-semibold ${engineMode === 'paper' ? 'bg-white text-black' : 'text-white/35'}`}
+                  >Paper</span>
+                  <button
+                    type="button"
+                    disabled={!availableModes.real}
+                    aria-disabled={!availableModes.real}
+                    title={availableModes.real ? 'Real trading is available' : 'Real trading is not available yet'}
+                    className={`rounded-full px-3 py-1.5 text-[10px] font-medium ${engineMode === 'real' ? 'bg-white text-black' : 'text-white/25'} disabled:cursor-not-allowed`}
+                  >Real</button>
+                </div>
+              ) : undefined}
+            />
+          )}
 
-      {section === 'engine' && (
+          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${section === 'engine_logs' ? 'px-0' : 'px-4'} pb-28`}>
+            {section === 'engine' && (
         <div className="space-y-5 pt-5">
           <div className="border-b border-white/[0.08] pb-5">
             <div className="flex items-center justify-between">
@@ -783,6 +788,9 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           {healthMessage && <p className="break-words rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{healthMessage}</p>}
           {backendError && <div className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-[10px] text-amber-100/75"><AlertTriangle className="h-4 w-4 shrink-0" />{backendError}</div>}
         </div>
+      )}
+          </div>
+        </>
       )}
     </div>
   );

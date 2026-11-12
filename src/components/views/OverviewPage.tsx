@@ -383,10 +383,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      {!embeddedMode && <section aria-label="Overview controls" className="relative -mx-px flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
-        
-
-        <div className="shrink-0 px-3 pt-9 sm:px-4 sm:pt-10">
+      {!embeddedMode && <section aria-label="Overview controls" className="relative -mx-px flex-none flex w-[calc(100%+2px)] shrink-0 flex-col overflow-hidden rounded-t-none rounded-b-[26px] border-x border-b border-t-0 border-white/[0.13] bg-[#050505] shadow-[0_18px_55px_rgba(0,0,0,0.38)] sm:rounded-b-[30px]">
+        <div className="shrink-0 px-3 pt-[max(env(safe-area-inset-top,0px),16px)] sm:px-4">
           <div className="flex min-h-[82px] items-center rounded-xl bg-[#181818] px-3.5 py-3 sm:min-h-[94px] sm:px-5">
             <div className="w-[34%] min-w-0 pr-2">
               <div className="text-[9px] font-medium uppercase tracking-[0.13em] text-white/40 sm:text-[10px]">P&L</div>
@@ -448,7 +446,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       </section>}
 
       <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0 sm:px-3 sm:pb-0"}`}>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent pb-24">
             {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
               <div className="space-y-1.5 pb-2">
                 {filteredPositions.length === 0 && backendPaperEntries.length === 0 ? (

@@ -46,21 +46,16 @@ const MainLayout: React.FC = () => {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const renderActiveView = () => {
-    if (selectedToken) return <TokenDetailPage />;
-    switch (activeTab) {
-      case 'overview': return null;
-      case 'positions': return <PositionsPage />;
-      case 'live_feed': return null;
-      case 'event_monitor': return <LogsPage />;
-      case 'strategy': return <StrategyPage />;
-      case 'token_intelligence': return <TokenIntelligencePage />;
-      case 'settings': return storagePageOpen
-        ? <StorageManagementPage onBack={() => { setStoragePageOpen(false); setSettingsSubpage(false); }} />
-        : <SettingsPage onSubpageChange={setSettingsSubpage} onOpenStorage={() => { setStoragePageOpen(true); setSettingsSubpage(true); }} />;
-      default: return null;
-    }
-  };
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set(['overview']));
+
+  useEffect(() => {
+    setVisitedTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
 
   useEffect(() => {
     const main = mainRef.current;
@@ -81,9 +76,6 @@ const MainLayout: React.FC = () => {
       }
 
       const touch = event.touches[0];
-      // Allow pull-to-refresh from the Overview master card, or from the
-      // token feed only when that feed is already at its top boundary. Avoid
-      // the physical screen edge so Android's notification shade is not caught.
       const target = event.target instanceof Element ? event.target : null;
       const masterCard = target?.closest('[aria-label="Overview controls"]');
       const nestedScroller = getScrollableAncestor(event.target, main);
@@ -95,10 +87,6 @@ const MainLayout: React.FC = () => {
         return;
       }
       if (nestedScroller && nestedScroller.scrollTop > 1) {
-        resetPull();
-        return;
-      }
-      if (!isOverview && main.scrollTop > 1) {
         resetPull();
         return;
       }
@@ -117,10 +105,6 @@ const MainLayout: React.FC = () => {
         resetPull();
         return;
       }
-      if (!refreshScroller.current && activeTab !== 'overview' && main.scrollTop > 1) {
-        resetPull();
-        return;
-      }
 
       const delta = event.touches[0].clientY - touchStartY.current;
       if (pullingRef.current) {
@@ -131,7 +115,6 @@ const MainLayout: React.FC = () => {
         return;
       }
 
-      // Upward movement and ordinary scrolling never activate the indicator.
       if (delta <= 0) return;
 
       pullingRef.current = true;
@@ -148,7 +131,12 @@ const MainLayout: React.FC = () => {
         refreshingRef.current = true;
         setIsRefreshing(true);
         setPullDistance(REFRESH_TRIGGER_DISTANCE);
-        window.setTimeout(() => window.location.reload(), 320);
+        // Soft refresh: notify components to re-fetch without blanking the screen
+        window.dispatchEvent(new CustomEvent('nodex-soft-refresh'));
+        window.setTimeout(() => {
+          setIsRefreshing(false);
+          resetPull();
+        }, 500);
       } else {
         resetPull();
       }
@@ -173,8 +161,8 @@ const MainLayout: React.FC = () => {
   const indicatorRotation = (pullDistance / REFRESH_TRIGGER_DISTANCE) * 360;
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20">
-      <main ref={mainRef} className={`relative z-10 h-full w-full overscroll-y-none focus:outline-none ${(activeTab === "overview" || activeTab === "live_feed" || selectedToken) ? "overflow-hidden pb-0" : settingsSubpage && activeTab === "settings" ? "overflow-y-auto pb-0" : "overflow-y-auto pb-24"}`}>
+    <div className="fixed inset-0 h-full w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20 select-none">
+      <main ref={mainRef} className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-black focus:outline-none">
         <div
           aria-live="polite"
           aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
@@ -190,8 +178,49 @@ const MainLayout: React.FC = () => {
             <path d="M12 3a9 9 0 0 1 9 9" stroke="white" strokeWidth="2.4" strokeLinecap="round" transform={isRefreshing ? undefined : `rotate(${indicatorRotation} 12 12)`} />
           </svg>
         </div>
-        <LiveFeedPage activeTab={activeTab} visible={!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed')} />
-        {selectedToken ? <TokenDetailPage /> : activeTab !== 'overview' && activeTab !== 'live_feed' ? renderActiveView() : null}
+
+        {/* Cached & persistent views */}
+        <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed') ? 'flex' : 'hidden'}`}>
+          <LiveFeedPage activeTab={activeTab} visible={!selectedToken && (activeTab === 'overview' || activeTab === 'live_feed')} />
+        </div>
+
+        {visitedTabs.has('positions') && (
+          <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && activeTab === 'positions' ? 'flex' : 'hidden'}`}>
+            <PositionsPage />
+          </div>
+        )}
+
+        {visitedTabs.has('event_monitor') && (
+          <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && activeTab === 'event_monitor' ? 'flex' : 'hidden'}`}>
+            <LogsPage />
+          </div>
+        )}
+
+        {visitedTabs.has('strategy') && (
+          <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && activeTab === 'strategy' ? 'flex' : 'hidden'}`}>
+            <StrategyPage />
+          </div>
+        )}
+
+        {visitedTabs.has('token_intelligence') && (
+          <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && activeTab === 'token_intelligence' ? 'flex' : 'hidden'}`}>
+            <TokenIntelligencePage />
+          </div>
+        )}
+
+        {visitedTabs.has('settings') && (
+          <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && activeTab === 'settings' ? 'flex' : 'hidden'}`}>
+            {storagePageOpen
+              ? <StorageManagementPage onBack={() => { setStoragePageOpen(false); setSettingsSubpage(false); }} />
+              : <SettingsPage onSubpageChange={setSettingsSubpage} onOpenStorage={() => { setStoragePageOpen(true); setSettingsSubpage(true); }} />}
+          </div>
+        )}
+
+        {selectedToken && (
+          <div className="flex h-full w-full flex-col min-h-0">
+            <TokenDetailPage />
+          </div>
+        )}
       </main>
       {!selectedToken && activeTab !== 'event_monitor' && !(activeTab === 'settings' && settingsSubpage) && <MobileNav />}
     </div>

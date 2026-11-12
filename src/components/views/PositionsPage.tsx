@@ -56,9 +56,9 @@ export const PositionsPage: React.FC = () => {
   const unrealised = openValue - openInvested;
 
   return (
-    <div className="w-full text-white select-none">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white select-none">
       {/* 1. FINANCIAL KPI SUMMARY STRIP (COMPACT, FULL WIDTH, ZERO BLOAT) */}
-      <section className="w-full border-b border-white/[0.08] bg-black backdrop-blur-md">
+      <section className="shrink-0 flex-none w-full border-b border-white/[0.08] bg-black backdrop-blur-md pt-[max(env(safe-area-inset-top,0px),12px)]">
         <div className="grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
           {/* Active Holdings Value */}
           <div className="p-2.5 sm:p-3.5 min-w-0">
@@ -119,8 +119,8 @@ export const PositionsPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 2. COMPACT TOOLBAR (FILTER & SEARCH) */}
-      <div className="w-full border-b border-white/[0.08] bg-black backdrop-blur-sm px-3 sm:px-4 lg:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      {/* 2. COMPACT TOOLBAR (FILTER & SEARCH) - PINNED */}
+      <div className="shrink-0 flex-none w-full border-b border-white/[0.08] bg-black backdrop-blur-sm px-3 sm:px-4 lg:px-6 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 min-w-0">
           {/* Status Filters */}
           <div className="flex items-center p-0.5 rounded-lg glass-panel-subtle text-xs font-mono w-full sm:w-auto overflow-x-auto whitespace-nowrap">
@@ -168,8 +168,10 @@ export const PositionsPage: React.FC = () => {
       </div>
 
 
-      {/* MOBILE POSITION CARDS — desktop table remains unchanged */}
-      <div className="md:hidden divide-y divide-white/[0.07]">
+      {/* 3. SCROLLABLE POSITIONS CONTENT */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-28">
+        {/* MOBILE POSITION CARDS — desktop table remains unchanged */}
+        <div className="md:hidden divide-y divide-white/[0.07]">
         {filteredPositions.length === 0 ? (
           <div className="py-16 text-center text-xs font-mono text-[#737373]">
             No paper positions yet. This page will populate only after the backend confirms a successful paper buy. Detected or approved tokens are not positions.
@@ -360,5 +362,6 @@ export const PositionsPage: React.FC = () => {
         )}
       </div>
     </div>
+  </div>
   );
 };
