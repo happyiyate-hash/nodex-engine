@@ -10,7 +10,7 @@ type ChangeDirection = 'up' | 'down' | null;
 interface AnimatedCardScanOverlayProps {
   status: string;
   progress: number | null;
-  children: (displayProgress: number) => React.ReactNode;
+  children?: (displayProgress: number) => React.ReactNode;
 }
 
 const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, children }) => {
@@ -47,7 +47,7 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
           style={{ width: `${displayProgress}%`, opacity: finished ? 0 : 1 }}
         />
       )}
-      {children(displayProgress)}
+      {typeof children === 'function' ? children(displayProgress) : null}
     </>
   );
 };
