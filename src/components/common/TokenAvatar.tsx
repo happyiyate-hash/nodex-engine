@@ -156,7 +156,18 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
     </span>
   );
 
-  const showingSolanaFallback = !imageUrl || logoFailed;\n\n  useEffect(() => {\n    const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');\n    if (!card) return;\n    if (showingSolanaFallback) {\n      card.style.setProperty('--token-accent-rgb', '153 69 255');\n    }\n  }, [showingSolanaFallback, logoUrl]);\n\n  return (\n    <div ref={rootRef} className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 ' + (showingSolanaFallback ? 'bg-gradient-to-br from-[#241638] via-[#160f22] to-[#09070e] shadow-[inset_0_1px_1px_rgba(190,145,255,0.12),0_3px_9px_rgba(0,0,0,0.55)] ' : 'bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ') + className}>
+  const showingSolanaFallback = !imageUrl || logoFailed;
+
+  useEffect(() => {
+    const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
+    if (!card) return;
+    if (showingSolanaFallback) {
+      card.style.setProperty('--token-accent-rgb', '153 69 255');
+    }
+  }, [showingSolanaFallback, logoUrl]);
+
+  return (
+    <div ref={rootRef} className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 ' + (showingSolanaFallback ? 'bg-gradient-to-br from-[#241638] via-[#160f22] to-[#09070e] shadow-[inset_0_1px_1px_rgba(190,145,255,0.12),0_3px_9px_rgba(0,0,0,0.55)] ' : 'bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ') + className}>
       {fallback}
       <img
         src="/assets/token-fallbacks/solana-logo.png"
@@ -198,7 +209,7 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
         />
       )}
       {imageUrl && !loaded && !logoFailed && (
-        <span className="absolute inset-0 bg-white/[0.035]" aria-label="Loading token logo" />
+        <span className="absolute inset-0 bg-black/[0.08]" aria-label="Loading token logo" />
       )}
     </div>
   );
