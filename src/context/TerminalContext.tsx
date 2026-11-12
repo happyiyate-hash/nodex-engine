@@ -212,10 +212,10 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
               progress: 100,
               stage: 'security_complete',
               sub_event: approved
-                ? data.message || 'Core launch verification passed. Supplementary checks remain visible in the security report.'
+                ? 'Getting market data'
                 : rejected
-                  ? data.message || 'Security checks rejected this token'
-                  : data.message || 'The required launch verification evidence was incomplete.',
+                  ? 'Unverified'
+                  : 'Unverified',
             };
           })()
         : event.event_type === 'token_scan_failed'
@@ -224,7 +224,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
               label: 'Scan failed',
               progress: 0,
               stage: data.stage || 'security_failed',
-              sub_event: data.message || 'Security scan failed',
+              sub_event: 'Security scan failed',
               error: {
                 severity: 'error',
                 stage: data.stage || 'security_failed',
