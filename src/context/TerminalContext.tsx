@@ -680,6 +680,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [positions, setPositions] = useState<Position[]>([]);
   const [tokens, setTokens] = useState<DiscoveredToken[]>([]);
+  const latestTokensRef = useRef<DiscoveredToken[]>([]);
+  latestTokensRef.current = tokens;
   const [launches, setLaunches] = useState<TokenLaunchRecord[]>([]);
   const [paperWallet, setPaperWallet] = useState<PaperWalletSnapshot | null>(null);
   const [profile, setProfile] = useState<NodeXProfileSnapshot | null>(null);
@@ -823,8 +825,10 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         window.clearTimeout(tokenLogoTimer.current);
         tokenLogoTimer.current = null;
       }
-      const batch = Array.from(tokenLogoQueue.current.values()).slice(0, 100);
-      for (const token of batch) tokenLogoQueue.current.delete(token.mint);
+      const batch = Array.from(tokenLogoQueue.current.values()).slice(0, 100)
+        .map((queued) => latestTokensRef.current.find((current) => current.mint === queued.mint) || queued)
+        .filter((token) => !token.logo_url);
+      for (const token of Array.from(tokenLogoQueue.current.values()).slice(0, 100)) tokenLogoQueue.current.delete(token.mint);
       try {
         const results = await recoverTokenLogoGroup(batch, apiKey);
         const recovered = new Map(results.filter((item) => item.logoUrl).map((item) => [item.mint, item.logoUrl as string]));
