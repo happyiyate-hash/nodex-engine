@@ -234,7 +234,25 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                 occurred_at: data.received_at || event.timestamp,
               },
             }
-          : null;
+          : event.event_type === 'paper_entry_evaluation'
+            ? (() => {
+                const entryDecision = String(data.decision || 'wait').toLowerCase();
+                const reasons = Array.isArray(data.reasons) ? data.reasons.map(String).filter(Boolean) : [];
+                const subEvent = reasons.length
+                  ? reasons.join('; ')
+                  : String(data.message || data.reason || 'Waiting for market and strategy conditions to align.');
+                return {
+                  status: entryDecision === 'reject' ? 'strategy_rejected'
+                    : entryDecision === 'evaluate_paper_entry' ? 'entry_ready'
+                    : 'waiting_for_entry',
+                  label: entryDecision === 'reject' ? 'Strategy rejected'
+                    : entryDecision === 'evaluate_paper_entry' ? 'Entry conditions met'
+                    : 'Waiting for entry conditions',
+                  stage: 'strategy_checks',
+                  sub_event: subEvent,
+                };
+              })()
+            : null;
   const incomingActivity = payload.activity && typeof payload.activity === 'object'
     ? payload.activity as Record<string, any>
     : scanActivity;
@@ -325,6 +343,51 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     ) as DiscoveredToken['safety_details'],
     price_history_5m: history.slice(-300),
   };
+}
+
+function reconcileTokenSnapshots(
+  snapshots: unknown[],
+  previous: DiscoveredToken[],
+  authoritative: boolean,
+): DiscoveredToken[] {
+  const previousByMint = new Map(previous.map((token) => [token.mint, token]));
+  const restored: DiscoveredToken[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of snapshots) {
+    if (!raw || typeof raw !== 'object') continue;
+    const snapshot = raw as Record<string, any>;
+    const mint = String(snapshot.mint_address || snapshot.mint || '');
+    if (!mint || seen.has(mint)) continue;
+    seen.add(mint);
+
+    const existing = previousByMint.get(mint);
+    const incomingVersion = Number(snapshot.version ?? snapshot.state_version ?? 0);
+    const existingVersion = Number(existing?.state_version || 0);
+    if (existing && incomingVersion > 0 && existingVersion > incomingVersion) {
+      restored.push(existing);
+      continue;
+    }
+
+    const mapped = mapTokenDetailSnapshot(snapshot, existing);
+    if (!mapped) continue;
+    restored.push(existing ? {
+      ...mapped,
+      current_price_usd: existing.current_price_usd || mapped.current_price_usd,
+      current_price_sol: existing.current_price_sol || mapped.current_price_sol,
+      price_history_5m: existing.price_history_5m?.length
+        ? existing.price_history_5m : mapped.price_history_5m,
+    } : mapped);
+  }
+
+  // Complete backend snapshots are authoritative: tokens omitted by SQLite
+  // retention/removal must not survive as stale browser-only rows.
+  if (!authoritative) {
+    for (const token of previous) {
+      if (!seen.has(token.mint)) restored.push(token);
+    }
+  }
+  return restored;
 }
 
 function mapBackendPosition(raw: Record<string, any>): Position | null {
@@ -662,16 +725,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (snapshot.profile) {
         if (Array.isArray(snapshot.profile.tokens)) {
           const restoredSnapshots = snapshot.profile.tokens;
-          setTokens((previous) => {
-            const byMint = new Map(previous.map((token) => [token.mint, token]));
-            for (const item of restoredSnapshots) {
-              const mint = String(item?.mint_address || item?.mint || '');
-              if (!mint) continue;
-              const mapped = mapTokenDetailSnapshot(item, byMint.get(mint));
-              if (mapped) byMint.set(mapped.mint, mapped);
-            }
-            return Array.from(byMint.values());
-          });
+          setTokens((previous) => reconcileTokenSnapshots(
+            restoredSnapshots,
+            previous,
+            snapshot.profile?.token_snapshot_complete === true,
+          ));
         }
         const runtime = engineEventStore.hydrate(snapshot.profile);
         setProfile(runtime.profile);
@@ -704,18 +762,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (recovered.profile) {
           const recoveredTokens = (recovered.profile as { tokens?: unknown[] }).tokens;
           if (Array.isArray(recoveredTokens)) {
-            setTokens((previous) => {
-              const byMint = new Map(previous.map((token) => [token.mint, token]));
-              for (const item of recoveredTokens) {
-                if (!item || typeof item !== 'object') continue;
-                const tokenData = item as Record<string, any>;
-                const mint = String(tokenData.mint_address || tokenData.mint || '');
-                if (!mint) continue;
-                const mapped = mapTokenDetailSnapshot(tokenData, byMint.get(mint));
-                if (mapped) byMint.set(mapped.mint, mapped);
-              }
-              return Array.from(byMint.values());
-            });
+            setTokens((previous) => reconcileTokenSnapshots(
+              recoveredTokens,
+              previous,
+              (recovered.profile as { token_snapshot_complete?: boolean }).token_snapshot_complete === true,
+            ));
           }
           const runtime = engineEventStore.hydrate(recovered.profile);
           setProfile(runtime.profile);
@@ -857,6 +908,32 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setSelectedToken((previous) => previous?.mint === mint ? { ...previous, price_history_5m: history.slice(-500) } : previous);
         }
       }
+      if (event.event_type === 'token_state_updated' && event.data && typeof event.data === 'object') {
+        const snapshot = event.data as Record<string, any>;
+        const mint = String(snapshot.mint_address || snapshot.mint || '');
+        if (mint) {
+          setTokens((previous) => {
+            const index = previous.findIndex((token) => token.mint === mint);
+            const existing = index >= 0 ? previous[index] : undefined;
+            const incomingVersion = Number(snapshot.version ?? snapshot.state_version ?? 0);
+            if (existing && incomingVersion > 0 && Number(existing.state_version || 0) > incomingVersion) {
+              return previous;
+            }
+            const mapped = mapTokenDetailSnapshot(snapshot, existing);
+            if (!mapped) return previous;
+            if (index >= 0) {
+              const updated = previous.slice();
+              updated[index] = mapped;
+              return updated;
+            }
+            return [mapped, ...previous];
+          });
+          setSelectedToken((previous) => previous?.mint === mint
+            ? mapTokenDetailSnapshot(snapshot, previous) || previous
+            : previous);
+        }
+      }
+
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
       const tokenStateEvent = [
         'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_diagnostic', 'token_metadata_started', 'token_metadata_failed',
@@ -867,7 +944,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'paper_entry_evaluation',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
       ].includes(event.event_type);
-      if (tokenMint && tokenStateEvent) {
+      if (event.event_type !== 'token_state_updated' && tokenMint && tokenStateEvent) {
         setTokens((previous) => {
           const mint = String(tokenMint || '');
           const index = previous.findIndex((item) => item.mint === mint);
