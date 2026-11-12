@@ -411,35 +411,25 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       String(item.launch.source || '').toLowerCase().includes(query);
   });
 
-  // Mount the detection feed progressively: one card at a time, then load
-  // another small batch as the user approaches the end of the scroll area.
-  const [visibleLaunchCount, setVisibleLaunchCount] = useState(1);
+  // Render the first group together. Additional groups are loaded only as
+  // the user scrolls; the group itself gets one compositor-friendly reveal.
   const [launchRenderTarget, setLaunchRenderTarget] = useState(12);
   const launchLoadLockedRef = useRef(false);
 
   useEffect(() => {
-    setVisibleLaunchCount(1);
     setLaunchRenderTarget(Math.min(12, filteredLaunches.length));
     launchLoadLockedRef.current = false;
   }, [filter, search]);
 
-  // Launches often arrive asynchronously after the page first mounts.
-  // Expand the initial render target when that first batch reaches the feed;
-  // otherwise the counter can remain stuck at one card forever.
+  // Launches arrive asynchronously after the page can already be mounted.
+  // Once they arrive, reveal the initial group together instead of scheduling
+  // a React state update for every individual card.
   useEffect(() => {
     if (filteredLaunches.length === 0) return;
     setLaunchRenderTarget((current) => Math.max(current, Math.min(12, filteredLaunches.length)));
   }, [filteredLaunches.length]);
 
-  useEffect(() => {
-    if (visibleLaunchCount >= launchRenderTarget) return;
-    const timer = window.setTimeout(() => {
-      setVisibleLaunchCount((current) => Math.min(launchRenderTarget, current + 1));
-    }, 28);
-    return () => window.clearTimeout(timer);
-  }, [visibleLaunchCount, launchRenderTarget]);
-
-  const visibleLaunches = filteredLaunches.slice(0, visibleLaunchCount);
+  const visibleLaunches = filteredLaunches.slice(0, launchRenderTarget);
 
   const filteredPositions = positions.filter((position) => {
     if (!search.trim()) return true;
@@ -554,9 +544,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               const element = event.currentTarget;
               const remaining = element.scrollHeight - element.scrollTop - element.clientHeight;
               const threshold = Math.max(420, element.clientHeight * 1.1);
-              if (remaining <= threshold && !launchLoadLockedRef.current && visibleLaunchCount < filteredLaunches.length) {
+              if (remaining <= threshold && !launchLoadLockedRef.current && launchRenderTarget < filteredLaunches.length) {
                 launchLoadLockedRef.current = true;
-                setLaunchRenderTarget((current) => Math.min(filteredLaunches.length, Math.max(current, visibleLaunchCount) + 8));
+                setLaunchRenderTarget((current) => Math.min(filteredLaunches.length, Math.max(current, launchRenderTarget) + 8));
               } else if (remaining > threshold * 1.6) {
                 launchLoadLockedRef.current = false;
               }
@@ -639,7 +629,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                 <p className="mt-1.5 max-w-[230px] text-[10px] leading-relaxed text-white/35">{filter === 'qualified' ? 'Tokens will appear here after passing the security and strategy checks.' : 'New Solana launches will appear here as soon as the backend confirms them.'}</p>
               </div>
             ) : (
-              <div className="space-y-1.5 pb-2">
+              <div className="token-feed-reveal space-y-1.5 pb-2">
                 {visibleLaunches.map((item) => {
                   const { launch } = item;
                   const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
@@ -667,7 +657,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     <article
                       key={launch.id || launch.signature}
                       data-token-card
-                      className="token-float-row token-card-lazy relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
+                      className="token-card-lazy relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
                     >
                       <div
                         aria-hidden="true"
