@@ -87,7 +87,7 @@ const ToggleRow = ({
   </label>
 );
 
-export const StrategyPage: React.FC = () => {
+export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig, engineStatus } = useTerminal();
   const { showToast, updateToast } = useToast();
   const paperMode = engineStatus.operating_mode.toLowerCase() !== 'real';
@@ -258,12 +258,12 @@ export const StrategyPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
-      <header className="shrink-0 flex-none border-b border-white/[0.08] bg-black/95 px-4 pb-3 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
+    <div className={embedded ? "w-full min-w-0 bg-black text-white" : "flex h-full w-full flex-col overflow-hidden bg-black text-white"}>
+      {!embedded && <header className="shrink-0 flex-none border-b border-white/[0.08] bg-black/95 px-4 pb-3 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
         <h1 className="text-[15px] font-semibold tracking-tight text-white">Strategy &amp; Risk Configuration</h1>
         <p className="mt-0.5 text-[10px] text-white/40">Risk rules, take profit, stop loss, and paper execution parameters.</p>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4">
+      </header>}
+      <div className={embedded ? "w-full min-w-0 pt-4" : "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4"}>
         <section className="pt-0">
         <div className="mb-5 rounded-xl border border-white/[0.10] bg-white/[0.025] px-3.5 py-3">
           <ToggleRow
