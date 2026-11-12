@@ -481,7 +481,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             />
           )}
 
-          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${section === 'engine_logs' ? 'px-0' : 'px-4'} pb-28`}>
+          <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${section === 'engine_logs' || section === 'trading' ? 'px-0' : 'px-4'} pb-28`}>
             {section === 'engine' && (
         <div className="space-y-5 pt-5">
           <div className="border-b border-white/[0.08] pb-5">
