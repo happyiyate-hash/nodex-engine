@@ -131,12 +131,9 @@ const MainLayout: React.FC = () => {
         refreshingRef.current = true;
         setIsRefreshing(true);
         setPullDistance(REFRESH_TRIGGER_DISTANCE);
-        // Soft refresh: notify components to re-fetch without blanking the screen
-        window.dispatchEvent(new CustomEvent('nodex-soft-refresh'));
-        window.setTimeout(() => {
-          setIsRefreshing(false);
-          resetPull();
-        }, 500);
+        // Perform a real browser/WebView reload. The previous soft-refresh event
+        // had no subscribers, so it only animated the indicator without refreshing data.
+        window.setTimeout(() => window.location.reload(), 180);
       } else {
         resetPull();
       }
