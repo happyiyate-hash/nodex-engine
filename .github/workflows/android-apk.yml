@@ -61,56 +61,62 @@ jobs:
         run: npx cap sync android
 
       - name: Build Android debug and release variants
+        id: android_build
         working-directory: android
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon assembleDebug assembleRelease
 
-      - name: Sign release APK
+      - name: Create a fresh Android signing keystore and sign release APK
         id: signing
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           unsigned="android/app/build/outputs/apk/release/app-release-unsigned.apk"
           signed="android/app/build/outputs/apk/release/NodeX-terminal-release.apk"
+          keystore="$RUNNER_TEMP/nodex-build-signing.jks"
           apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+
           test -f "$unsigned"
           test -n "$apksigner"
+          test -n "$(command -v keytool)"
 
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/nodex-release.jks"
-            "$apksigner" sign \
-              --ks "$RUNNER_TEMP/nodex-release.jks" \
-              --ks-key-alias "$ANDROID_KEY_ALIAS" \
-              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
-              --key-pass env:ANDROID_KEY_PASSWORD \
-              --out "$signed" "$unsigned"
-            echo "signing_mode=release" >> "$GITHUB_OUTPUT"
-          else
-            test -f "$HOME/.android/debug.keystore"
-            "$apksigner" sign \
-              --ks "$HOME/.android/debug.keystore" \
-              --ks-key-alias androiddebugkey \
-              --ks-pass pass:android \
-              --key-pass pass:android \
-              --out "$signed" "$unsigned"
-            echo "signing_mode=personal-test" >> "$GITHUB_OUTPUT"
-            echo "::warning::No release keystore secrets configured. The release APK is signed with this runner's temporary debug key for personal testing only. Configure the four ANDROID_* secrets for a stable, production-grade signing identity."
-          fi
+          # Create a new, build-local signing identity on every workflow run.
+          store_password="$(openssl rand -hex 24)"
+          key_password="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt -v \
+            -keystore "$keystore" \
+            -storepass "$store_password" \
+            -keypass "$key_password" \
+            -alias nodex-build \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=NodeX Personal Build, OU=Android, O=NodeX, C=NG"
+
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias nodex-build \
+            --ks-pass "pass:$store_password" \
+            --key-pass "pass:$key_password" \
+            --out "$signed" "$unsigned"
 
           "$apksigner" verify --verbose "$signed"
+          echo "signing_mode=ephemeral-personal-test" >> "$GITHUB_OUTPUT"
+          echo "::warning::This APK uses a new temporary signing identity for this build. Uninstall an older differently-signed copy before installing it. This key is not suitable for Play Store updates or stable release distribution."
 
-      - name: Upload APK artifacts
+      - name: Upload debug APK artifact
+        if: always() && steps.android_build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: NodeX-Android-APKs
-          path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/NodeX-terminal-release.apk
+          name: NodeX-Android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload signed release APK artifact
+        if: always() && steps.signing.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: NodeX-Android-release
+          path: android/app/build/outputs/apk/release/NodeX-terminal-release.apk
           if-no-files-found: error
           retention-days: 30
 
