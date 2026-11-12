@@ -190,7 +190,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
         label: 'Scanning',
         progress: 0,
         stage: 'initializing',
-        sub_event: data.message || 'Preparing security scan',
+        sub_event: 'Scanning',
       }
     : event.event_type === 'token_scan_progress'
       ? {
@@ -198,7 +198,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
           label: 'Scanning',
           progress: Number(data.progress ?? 0),
           stage: data.stage || 'security_checks',
-          sub_event: data.message || data.stage || 'Security checks in progress',
+          sub_event: 'Scanning',
         }
       : event.event_type === 'token_scan_completed'
         ? (() => {
