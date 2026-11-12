@@ -611,7 +611,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           </div>
           <div className="flex min-h-[48px] min-w-0 items-center justify-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3">
             <span className="shrink-0 text-[8px] font-medium uppercase tracking-[0.08em] text-white/40">P&amp;L</span>
-            <span className="min-w-0 truncate text-[12px] font-semibold leading-none tabular-nums" style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}>
+            <span className="min-w-0 truncate text-[13px] font-semibold leading-none tabular-nums" style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}>
               {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'$'}{formatPnlDisplay(unrealizedProfitUsd)}
             </span>
           </div>
