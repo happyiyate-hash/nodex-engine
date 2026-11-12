@@ -234,13 +234,21 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                 occurred_at: data.received_at || event.timestamp,
               },
             }
-          : event.event_type === 'market_subscription_subscribed' || event.event_type === 'market_subscription_active'
+          : ['market_subscription_subscribed', 'market_subscription_active', 'market_subscription_waiting'].includes(event.event_type)
+            && previous?.qualification_status === 'qualified'
             ? {
                 status: 'verified',
                 label: 'Verified',
                 stage: 'waiting_for_market_data',
                 sub_event: 'Getting market data',
               }
+            : event.event_type === 'market_subscription_failed' && previous?.qualification_status === 'qualified'
+              ? {
+                  status: 'verified',
+                  label: 'Verified',
+                  stage: 'market_data_unavailable',
+                  sub_event: 'Market data unavailable',
+                }
             : event.event_type === 'market_price_update' && previous?.qualification_status === 'qualified'
               && (Number(data.price_sol ?? data.price_usd ?? data.current_price_usd) > 0)
               ? {
@@ -249,7 +257,8 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                   stage: 'market_watch',
                   sub_event: 'Monitoring market activity',
                 }
-            : event.event_type === 'paper_entry_evaluation' || event.event_type === 'strategy_rejected_token'
+            : (event.event_type === 'paper_entry_evaluation' || event.event_type === 'strategy_rejected_token')
+              && previous?.qualification_status === 'qualified' && previous?.lifecycle_status === 'monitoring'
             ? (() => {
                 const entryDecision = String(data.decision || (event.event_type === 'strategy_rejected_token' ? 'reject' : 'wait')).toLowerCase();
                 return {
