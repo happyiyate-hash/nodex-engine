@@ -52,6 +52,7 @@ interface TerminalContextType {
   isMobilePreview: boolean;
   setIsMobilePreview: (value: boolean | ((prev: boolean) => boolean)) => void;
   backendError: string | null;
+  refreshBackendState: () => Promise<void>;
 }
 
 const emptySummary: DashboardSummary = {
@@ -1349,6 +1350,72 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!message.includes('404')) setBackendError(message);
     }
   }, [positions]);
+  const refreshBackendState = useCallback(async () => {
+    if (!settings.backendUrl) {
+      throw new Error('Connect to the NodeX backend before refreshing.');
+    }
+
+    const results = await Promise.allSettled([
+      backendService.loadInitialData(),
+      apiClient.getRecentTokens(500),
+      apiClient.getEngineStatus(),
+      apiClient.getStrategy(),
+    ]);
+
+    const [snapshotResult, launchesResult, statusResult, strategyResult] = results;
+    if (snapshotResult.status === 'rejected') throw snapshotResult.reason;
+
+    const snapshot = snapshotResult.value;
+    if (snapshot.profile) {
+      const profileTokens = snapshot.profile.tokens;
+      if (Array.isArray(profileTokens)) {
+        backendTokenSnapshotReceived.current = true;
+        const complete = snapshot.profile.token_snapshot_complete === true;
+        if (complete) {
+          const keepMints = profileTokens
+            .map((item) => String(item?.mint_address || item?.mint || ''))
+            .filter(Boolean);
+          authoritativeTokenMints.current = new Set(keepMints);
+          void pruneTokenLifecycleCache(keepMints).catch((error) =>
+            console.warn('NodeX stale token cache pruning failed during manual refresh:', error)
+          );
+          setSelectedToken((current) => current && !authoritativeTokenMints.current?.has(current.mint) ? null : current);
+        }
+        setTokens((previous) => reconcileTokenSnapshots(profileTokens, previous, complete));
+      }
+      const runtime = engineEventStore.hydrate(snapshot.profile);
+      setProfile(runtime.profile);
+      setPaperWallet(runtime.profile?.paper_wallet ?? snapshot.paperWallet ?? null);
+      const mappedPositions = runtime.positions
+        .map((item) => mapBackendPosition(item))
+        .filter((item): item is Position => item !== null);
+      setPositions(mappedPositions);
+      setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
+    }
+    if (snapshot.paperWallet) setPaperWallet(snapshot.paperWallet);
+
+    if (launchesResult.status === 'fulfilled' && Array.isArray(launchesResult.value)) {
+      setLaunches(launchesResult.value);
+    }
+    if (statusResult.status === 'fulfilled') {
+      setEngineStatus((previous) => ({
+        ...previous,
+        ...statusResult.value,
+        ws_status: wsService.getStatus().status,
+      }));
+      setIsStreamPaused(Boolean(statusResult.value.strategy_paused));
+    }
+    if (strategyResult.status === 'fulfilled') {
+      setStrategyConfig({ ...emptyStrategy, ...strategyResult.value.config });
+      setStrategyDecisions(strategyResult.value.decisions || []);
+    }
+
+    const optionalErrors = results.slice(1)
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason));
+    setBackendError(optionalErrors.length ? optionalErrors.join(' · ') : snapshot.errors[0] || null);
+  }, [settings.backendUrl]);
+
   const closeTokenDetail = () => setSelectedToken(null);
   const navigateToTab = (tab: NavigationTab) => { setSelectedToken(null); setActiveTab(tab); };
 
@@ -1359,7 +1426,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       openTokenDetailByMint, loadTokenSnapshot, closeTokenDetail, strategyConfig, strategyDecisions,
       settings, isStreamPaused, toggleStreamPause, clearEvents, clearBrowserHistory, removeTokensByMint, toggleEngine,
       toggleStrategy, closePosition, executeManualPaperBuy, updatePositionRisk,
-      saveStrategyConfig, setPaperExecutionEnabled, updateSettings, updateConnectionDraft, isMobilePreview, setIsMobilePreview, backendError,
+      saveStrategyConfig, setPaperExecutionEnabled, updateSettings, updateConnectionDraft, isMobilePreview, setIsMobilePreview, backendError, refreshBackendState,
     }}>
       {children}
     </TerminalContext.Provider>
