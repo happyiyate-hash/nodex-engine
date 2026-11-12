@@ -20,121 +20,106 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
   let accent: string | null = null;
   try {
     const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
+    canvas.width = 64;
+    canvas.height = 64;
     const context = canvas.getContext('2d', { willReadFrequently: true });
     if (!context) throw new Error('Canvas 2D context unavailable');
 
-    context.drawImage(image, 0, 0, 32, 32);
-    const pixels = context.getImageData(0, 0, 32, 32).data;
-    const chromaticBuckets = new Map<number, {
+    context.drawImage(image, 0, 0, 64, 64);
+    const pixels = context.getImageData(0, 0, 64, 64).data;
+    const buckets = new Map<number, {
       count: number;
       red: number;
       green: number;
       blue: number;
-      saturation: number;
+      weight: number;
     }>();
-    const neutralBuckets = new Map<number, {
-      count: number;
-      red: number;
-      green: number;
-      blue: number;
-    }>();
-    let visiblePixelCount = 0;
-    let chromaticPixelCount = 0;
+    let visiblePixels = 0;
 
-    for (let index = 0; index < pixels.length; index += 4) {
-      const alpha = pixels[index + 3] / 255;
-      if (alpha < 0.55) continue;
+    for (let y = 0; y < 64; y += 1) {
+      for (let x = 0; x < 64; x += 1) {
+        const index = (y * 64 + x) * 4;
+        const alpha = pixels[index + 3] / 255;
+        if (alpha < 0.25) continue;
 
-      const red = pixels[index];
-      const green = pixels[index + 1];
-      const blue = pixels[index + 2];
-      const max = Math.max(red, green, blue);
-      const min = Math.min(red, green, blue);
-      const chroma = max - min;
-      const saturation = max === 0 ? 0 : chroma / max;
-      visiblePixelCount += 1;
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        const max = Math.max(red, green, blue);
+        const min = Math.min(red, green, blue);
+        const chroma = max - min;
+        const saturation = max === 0 ? 0 : chroma / max;
+        const brightness = (red * 0.299 + green * 0.587 + blue * 0.114);
 
-      // Treat a colour as a real subject/accent candidate only when it has
-      // enough saturation and colour separation to stand apart from grey,
-      // black or white backgrounds.
-      if (saturation >= 0.22 && chroma >= 28 && max >= 38) {
-        const hueValue = max === red
-          ? ((green - blue) / chroma + (green < blue ? 6 : 0))
-          : max === green
-            ? (blue - red) / chroma + 2
-            : (red - green) / chroma + 4;
-        const hue = hueValue / 6;
-        const hueBin = Math.floor(hue * 24) % 24;
-        const saturationBin = Math.min(3, Math.floor(saturation * 4));
-        const valueBin = Math.min(3, Math.floor((max / 256) * 4));
-        const key = (hueBin << 4) | (saturationBin << 2) | valueBin;
-        const bucket = chromaticBuckets.get(key) || {
-          count: 0, red: 0, green: 0, blue: 0, saturation: 0,
-        };
-        bucket.count += 1;
-        bucket.red += red;
-        bucket.green += green;
-        bucket.blue += blue;
-        bucket.saturation += saturation;
-        chromaticBuckets.set(key, bucket);
-        chromaticPixelCount += 1;
-      } else {
-        // Keep a separate neutral palette for genuinely monochrome artwork.
-        const key = ((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4);
-        const bucket = neutralBuckets.get(key) || {
-          count: 0, red: 0, green: 0, blue: 0,
-        };
-        bucket.count += 1;
-        bucket.red += red;
-        bucket.green += green;
-        bucket.blue += blue;
-        neutralBuckets.set(key, bucket);
-      }
-    }
+        // Discard only near-black and clipped-white pixels. Low-saturation
+        // warm colours are retained because they often represent skin or beige fabric.
+        if (brightness < 22 || brightness > 250) continue;
+        visiblePixels += 1;
 
-    let bestColor: { count: number; red: number; green: number; blue: number; score: number } | null = null;
-    // If colour occupies a meaningful part of the image, ignore neutral
-    // background pixels. This lets a noticeable pink shirt or flower win
-    // over a much larger black/white/grey background.
-    const hasMeaningfulColor = visiblePixelCount > 0 &&
-      chromaticPixelCount >= Math.max(8, Math.ceil(visiblePixelCount * 0.025));
-
-    if (hasMeaningfulColor) {
-      for (const bucket of chromaticBuckets.values()) {
-        const averageSaturation = bucket.saturation / bucket.count;
-        // Saturation-weighted frequency favours a clear, distinctive hue
-        // without allowing a single colourful pixel to determine the card.
-        const score = bucket.count * (0.35 + averageSaturation * 2.4);
-        if (!bestColor || score > bestColor.score) {
-          bestColor = {
-            count: bucket.count,
-            red: bucket.red,
-            green: bucket.green,
-            blue: bucket.blue,
-            score,
-          };
+        let hue = 0;
+        if (chroma > 0) {
+          const hueValue = max === red
+            ? ((green - blue) / chroma + (green < blue ? 6 : 0))
+            : max === green
+              ? (blue - red) / chroma + 2
+              : (red - green) / chroma + 4;
+          hue = (hueValue / 6) * 360;
         }
+
+        // Keep hue resolution fine enough to distinguish red, orange, pink,
+        // green and blue, while grouping lighting variations of the same colour.
+        const hueBin = chroma < 12 ? 36 : Math.floor(hue / 10) % 36;
+        const saturationBin = Math.min(4, Math.floor(saturation * 5));
+        const valueBin = Math.min(4, Math.floor((brightness / 256) * 5));
+        const key = (hueBin << 6) | (saturationBin << 3) | valueBin;
+        const bucket = buckets.get(key) || {
+          count: 0, red: 0, green: 0, blue: 0, weight: 0,
+        };
+
+        // Warm, moderately saturated pixels are common skin tones. Give them
+        // a fair chance instead of classifying them as unimportant neutrals.
+        const isWarmSkinRange = hue <= 55 || hue >= 345;
+        const skinToneBoost = isWarmSkinRange && saturation >= 0.12 && saturation <= 0.58
+          ? 1.35
+          : 1;
+        // Mild centre weighting reduces the influence of borders and frames.
+        const dx = (x - 31.5) / 31.5;
+        const dy = (y - 31.5) / 31.5;
+        const centreWeight = 1 + Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy)) * 0.25;
+        const saturationWeight = 0.9 + saturation * 1.15;
+        const pixelWeight = alpha * skinToneBoost * centreWeight * saturationWeight;
+
+        bucket.count += 1;
+        bucket.red += red * pixelWeight;
+        bucket.green += green * pixelWeight;
+        bucket.blue += blue * pixelWeight;
+        bucket.weight += pixelWeight;
+        buckets.set(key, bucket);
       }
     }
 
-    if (bestColor) {
-      accent = `${Math.round(bestColor.red / bestColor.count)} ${Math.round(bestColor.green / bestColor.count)} ${Math.round(bestColor.blue / bestColor.count)}`;
-    } else {
-      // No meaningful chromatic subject was found: preserve black, white,
-      // charcoal and grey tones for monochrome logos.
-      let bestNeutral: { count: number; red: number; green: number; blue: number } | null = null;
-      for (const bucket of neutralBuckets.values()) {
-        if (!bestNeutral || bucket.count > bestNeutral.count) bestNeutral = bucket;
+    let best: { count: number; red: number; green: number; blue: number; score: number; weight: number } | null = null;
+    for (const bucket of buckets.values()) {
+      // Frequency remains the main signal; weighting gently favours colours
+      // that are visible and recognisable without letting a few pixels win.
+      const score = bucket.count * (bucket.weight / bucket.count);
+      if (!best || score > best.score) {
+        best = {
+          count: bucket.count,
+          red: bucket.red,
+          green: bucket.green,
+          blue: bucket.blue,
+          score,
+          weight: bucket.weight,
+        };
       }
-      if (bestNeutral) {
-        accent = `${Math.round(bestNeutral.red / bestNeutral.count)} ${Math.round(bestNeutral.green / bestNeutral.count)} ${Math.round(bestNeutral.blue / bestNeutral.count)}`;
-      }
+    }
+
+    if (best && visiblePixels > 0) {
+      accent = `${Math.round(best.red / best.weight)} ${Math.round(best.green / best.weight)} ${Math.round(best.blue / best.weight)}`;
     }
   } catch {
-    // Some image hosts do not permit canvas pixel reads (CORS). The logo
-    // itself can still display normally; the card simply keeps its neutral look.
+    // Cross-origin images without CORS permission cannot be sampled by canvas.
     accent = null;
   }
 
@@ -256,13 +241,9 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
             // Ignore a late load from an image belonging to the previous token.
             if (event.currentTarget.getAttribute('src') !== imageUrl) return;
 
-            const accent = extractDominantAccent(event.currentTarget);
-            const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
-            // A logo can display successfully even when its host blocks canvas
-            // pixel reads. Never leave the Solana purple accent behind in that
-            // case; use a restrained neutral accent until extraction succeeds.
-            card?.style.setProperty('--token-accent-rgb', accent || '110 110 110');
-
+            // This display image intentionally has no crossOrigin attribute:
+            // some token metadata hosts omit CORS headers, and their logos must
+            // still render. A separate CORS-enabled probe below samples colour.
             // This state change removes the Solana replacement image immediately.
             setLoadedImageUrl(imageUrl);
             setFailedImageUrl('');
@@ -277,6 +258,28 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
               setFailedImageUrl(imageUrl);
               setRetryPending(true);
             }
+          }}
+        />
+      )}
+      {imageUrl && (
+        <img
+          key={imageUrl + '-accent-probe'}
+          src={imageUrl}
+          alt=""
+          aria-hidden="true"
+          crossOrigin="anonymous"
+          loading="eager"
+          decoding="async"
+          className="pointer-events-none absolute h-px w-px opacity-0"
+          onLoad={(event) => {
+            if (event.currentTarget.getAttribute('src') !== imageUrl) return;
+            const accent = extractDominantAccent(event.currentTarget);
+            const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
+            card?.style.setProperty('--token-accent-rgb', accent || '110 110 110');
+          }}
+          onError={() => {
+            const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
+            card?.style.setProperty('--token-accent-rgb', '110 110 110');
           }}
         />
       )}
