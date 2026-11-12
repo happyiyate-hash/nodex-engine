@@ -7,6 +7,7 @@ import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/rest';
 import { backendService } from '../services/backend';
 import { normalizeBackendEvent, wsService } from '../services/websocket';
 import { engineEventStore } from '../services/engine-event-store';
+import { recoverTokenLogoGroup } from '../services/token-logo-recovery';
 import { clearTokenLifecycleCache, lifecycleCacheSignature, loadTokenLifecycleCache, pruneTokenLifecycleCache, saveTokenLifecycleCache } from '../services/token-lifecycle-cache';
 
 export type NavigationTab =
@@ -696,6 +697,13 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // cache restoration. This also protects against an IndexedDB read finishing late.
   const authoritativeTokenMints = useRef<Set<string> | null>(null);
   const backendTokenSnapshotReceived = useRef(false);
+  // TokenCare logo recovery is deliberately decoupled from individual WebSocket
+  // events. New missing-logo tokens are grouped and only flushed after stream
+  // silence, or immediately when the hard 100-token group limit is reached.
+  const tokenLogoQueue = useRef<Map<string, DiscoveredToken>>(new Map());
+  const tokenLogoSeen = useRef<Set<string>>(new Set());
+  const tokenLogoTimer = useRef<number | null>(null);
+  const tokenLogoBatchRunning = useRef(false);
 
   // Restore durable backend activity on every app start. Live WebSocket events
   // are merged afterward so a delayed history response cannot overwrite newer data.
@@ -789,6 +797,79 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
     }).catch((error) => console.warn('NodeX lifecycle cache restore failed:', error));
     return () => { active = false; };
+  }, []);
+
+
+  // Recover missing logos in grouped requests rather than reacting to every
+  // token event. The published TokenCare API documents one address per POST,
+  // so each group is processed with bounded concurrency using that exact schema.
+  useEffect(() => {
+    const apiKey = String(settings.tokenCareApiKey || '').trim();
+    if (!apiKey) return;
+
+    let added = false;
+    for (const token of tokens) {
+      if (!token.mint || token.logo_url || tokenLogoSeen.current.has(token.mint)) continue;
+      tokenLogoSeen.current.add(token.mint);
+      tokenLogoQueue.current.set(token.mint, token);
+      added = true;
+    }
+    if (!added) return;
+
+    const flushLogoGroup = async (): Promise<void> => {
+      if (tokenLogoBatchRunning.current) return;
+      tokenLogoBatchRunning.current = true;
+      if (tokenLogoTimer.current !== null) {
+        window.clearTimeout(tokenLogoTimer.current);
+        tokenLogoTimer.current = null;
+      }
+      const batch = Array.from(tokenLogoQueue.current.values()).slice(0, 100);
+      for (const token of batch) tokenLogoQueue.current.delete(token.mint);
+      try {
+        const results = await recoverTokenLogoGroup(batch, apiKey);
+        const recovered = new Map(results.filter((item) => item.logoUrl).map((item) => [item.mint, item.logoUrl as string]));
+        if (recovered.size) {
+          setTokens((current) => current.map((token) => {
+            const logoUrl = recovered.get(token.mint);
+            return logoUrl ? { ...token, logo_url: logoUrl, metadata_status: 'logo_recovered' } : token;
+          }));
+          setSelectedToken((current) => {
+            if (!current) return current;
+            const logoUrl = recovered.get(current.mint);
+            return logoUrl ? { ...current, logo_url: logoUrl, metadata_status: 'logo_recovered' } : current;
+          });
+        }
+      } catch (error) {
+        console.warn('TokenCare logo recovery group failed:', error);
+      } finally {
+        tokenLogoBatchRunning.current = false;
+        if (tokenLogoQueue.current.size >= 100) {
+          void flushLogoGroup();
+        } else if (tokenLogoQueue.current.size > 0 && tokenLogoTimer.current === null) {
+          tokenLogoTimer.current = window.setTimeout(() => {
+            tokenLogoTimer.current = null;
+            void flushLogoGroup();
+          }, 3000);
+        }
+      }
+    };
+
+    // 100 is a hard cap and flushes even during continuous discovery.
+    if (tokenLogoQueue.current.size >= 100) {
+      void flushLogoGroup();
+      return;
+    }
+    // Smaller groups (including 50+) wait for 3 seconds without new tokens.
+    // The timer is reset only by new missing-logo tokens, not market-price ticks.
+    if (tokenLogoTimer.current !== null) window.clearTimeout(tokenLogoTimer.current);
+    tokenLogoTimer.current = window.setTimeout(() => {
+      tokenLogoTimer.current = null;
+      void flushLogoGroup();
+    }, 3000);
+  }, [tokens, settings.tokenCareApiKey]);
+
+  useEffect(() => () => {
+    if (tokenLogoTimer.current !== null) window.clearTimeout(tokenLogoTimer.current);
   }, []);
 
   // Only persist when identity, scan, security, or monitoring state changes.
