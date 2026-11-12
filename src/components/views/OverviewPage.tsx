@@ -472,12 +472,12 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     <article
                       key={launch.id || launch.signature}
                       data-token-card
-                      className="token-card-surface relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
+                      className="token-card-surface relative isolate mb-1 overflow-hidden rounded-[10px] border border-white/[0.075] bg-black/65 px-2.5 py-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.30)] backdrop-blur-xl before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/35 before:to-transparent after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-20 after:h-px after:bg-white/[0.035] last:mb-0"
                     >
                       <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 z-0"
-                        style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
+                        style={{ background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 184 197 213) / 0.17) 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.09) 48%, rgb(var(--token-accent-rgb, 184 197 213) / 0.025) 100%)' }}
                       />
                       <div className="relative z-10">
                         <div className="flex min-w-0 items-center gap-2">
