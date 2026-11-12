@@ -220,12 +220,11 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
 
   useLayoutEffect(() => {
     const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
-    if (!card) return;
-    // Start each new logo with the subtle Solana purple. Its successfully
-    // extracted token color replaces this value in the image onLoad handler.
-    if (showingSolanaFallback || logoUrl) {
-      card.style.setProperty('--token-accent-rgb', '153 69 255');
-    }
+    if (!card || !showingSolanaFallback) return;
+    // Use Solana purple only while the current token logo is unavailable.
+    // Once onLoad extracts the logo's accent, do not overwrite it when the
+    // loaded state changes and this effect runs again.
+    card.style.setProperty('--token-accent-rgb', '153 69 255');
   }, [showingSolanaFallback, logoUrl]);
 
   return (
