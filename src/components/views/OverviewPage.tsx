@@ -16,9 +16,8 @@ interface AnimatedCardScanOverlayProps {
 const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, children }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
   const progressRef = useRef(0);
-  const terminal = status !== 'scanning';
-  const hasProgress = status === 'scanning' || progress !== null;
-  const target = terminal ? 100 : Math.max(0, Math.min(99, progress ?? 0));
+  const hasProgress = status === 'scanning' && progress !== null;
+  const target = hasProgress ? Math.max(0, Math.min(100, progress as number)) : 0;
 
   useEffect(() => {
     if (!hasProgress) return;
@@ -37,7 +36,7 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
     return () => cancelAnimationFrame(frame);
   }, [hasProgress, target]);
 
-  const finished = terminal && displayProgress >= 99.99;
+  const finished = status !== 'scanning' && displayProgress >= 99.99;
   return (
     <>
       {hasProgress && (
@@ -536,7 +535,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
                   const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
 
-                  const lifecycleStatus = String(tokenData.lifecycle_status || 'scanning').toLowerCase();
+                  const lifecycleStatus = String(tokenData.lifecycle_status || 'unknown').toLowerCase();
                   const lifecycleLabel = String(tokenData.lifecycle_label || 'Scanning');
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || (
                     lifecycleStatus === 'verified' ? 'Getting market data'
@@ -567,16 +566,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     <article
                       key={launch.id || launch.signature}
                       data-token-card
-                      className="relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
+                      className="relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
                     >
-                      <div
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 z-0"
-                        style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
-                      />
                       <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} />
                       <div className="relative z-10">
-                        <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="flex min-w-0 items-center gap-2">
                           <TokenAvatar
                             symbol={cardSymbol || cardName}
                             logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
@@ -592,8 +586,26 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                               {(displayProgress) => (
                                 <div className="mt-1 flex min-w-0 items-center gap-2">
                                   <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
-                                  {lifecycleStatus === 'scanning' && (
+                                  {lifecycleStatus === 'scanning' && lifecycleProgress !== null && (
                                     <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
+                                  )}
+                                  {errorDetails && (
+                                    <button
+                                      type="button"
+                                      aria-label={errorExpanded ? 'Hide error details' : 'Show error details'}
+                                      title={errorExpanded ? 'Hide error details' : 'Show error details'}
+                                      aria-expanded={errorExpanded}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setExpandedErrors((previous) => previous.includes(launch.mint_address)
+                                          ? previous.filter((mint) => mint !== launch.mint_address)
+                                          : [...previous, launch.mint_address]);
+                                      }}
+                                      className="inline-flex shrink-0 items-center gap-0.5 rounded px-0.5 text-[8px] leading-none text-red-200/70 hover:text-red-100"
+                                    >
+                                      <span>{errorExpanded ? 'Hide' : 'Error'}</span>
+                                      <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
+                                    </button>
                                   )}
                                 </div>
                               )}
@@ -615,24 +627,8 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             </button>
                           </div>
                         </div>
-                        {errorDetails && (
-                          <div className="mt-1.5">
-                            <button
-                              type="button"
-                              aria-expanded={errorExpanded}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setExpandedErrors((previous) => previous.includes(launch.mint_address)
-                                  ? previous.filter((mint) => mint !== launch.mint_address)
-                                  : [...previous, launch.mint_address]);
-                              }}
-                              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[8px] font-medium text-red-200/75 transition-colors hover:bg-red-400/[0.08] hover:text-red-100"
-                            >
-                              <span className="h-1 w-1 rounded-full bg-red-300" />
-                              {errorExpanded ? 'Hide error details' : 'Error details'}
-                              <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
-                            </button>
-                            {errorExpanded && (
+                        {errorDetails && errorExpanded && (
+                          <div className="mt-1 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
                               <div className="mt-1.5 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
                                 <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
                                   {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
@@ -662,8 +658,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                                     <Copy className="h-3 w-3" />
                                   </button>
                                 </div>
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>
