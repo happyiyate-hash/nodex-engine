@@ -7,7 +7,7 @@ import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/rest';
 import { backendService } from '../services/backend';
 import { normalizeBackendEvent, wsService } from '../services/websocket';
 import { engineEventStore } from '../services/engine-event-store';
-import { clearTokenLifecycleCache, lifecycleCacheSignature, loadTokenLifecycleCache, saveTokenLifecycleCache } from '../services/token-lifecycle-cache';
+import { clearTokenLifecycleCache, lifecycleCacheSignature, loadTokenLifecycleCache, pruneTokenLifecycleCache, saveTokenLifecycleCache } from '../services/token-lifecycle-cache';
 
 export type NavigationTab =
   | 'overview' | 'positions' | 'live_feed' | 'event_monitor'
@@ -234,7 +234,14 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                 occurred_at: data.received_at || event.timestamp,
               },
             }
-          : event.event_type === 'paper_entry_evaluation'
+          : event.event_type === 'market_subscription_active'
+            ? {
+                status: 'monitoring',
+                label: 'Monitoring',
+                stage: 'market_watch',
+                sub_event: data.message || 'The provider confirmed the live market feed subscription.',
+              }
+            : event.event_type === 'paper_entry_evaluation'
             ? (() => {
                 const entryDecision = String(data.decision || 'wait').toLowerCase();
                 const reasons = Array.isArray(data.reasons) ? data.reasons.map(String).filter(Boolean) : [];
@@ -626,6 +633,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [backendError, setBackendError] = useState<string | null>(null);
   const metadataRefreshInFlight = useRef<Set<string>>(new Set());
   const lifecycleCacheSignatures = useRef<Map<string, string>>(new Map());
+  // Once a complete backend snapshot is received, it becomes the allowlist for
+  // cache restoration. This also protects against an IndexedDB read finishing late.
+  const authoritativeTokenMints = useRef<Set<string> | null>(null);
 
   // Restore stable lifecycle/security records from IndexedDB. Market ticks are
   // deliberately excluded from this cache and are always refreshed by the backend.
@@ -637,6 +647,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const byMint = new Map(current.map((token) => [token.mint, token]));
         for (const record of records) {
           if (!record.token?.mint) continue;
+          if (authoritativeTokenMints.current && !authoritativeTokenMints.current.has(record.mint)) continue;
           const cached = record.token;
           lifecycleCacheSignatures.current.set(record.mint, lifecycleCacheSignature(cached));
           const existing = byMint.get(record.mint);
@@ -743,10 +754,21 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (snapshot.profile) {
         if (Array.isArray(snapshot.profile.tokens)) {
           const restoredSnapshots = snapshot.profile.tokens;
+          const isComplete = snapshot.profile.token_snapshot_complete === true;
+          if (isComplete) {
+            const keepMints = restoredSnapshots
+              .map((item) => String(item?.mint_address || item?.mint || ''))
+              .filter(Boolean);
+            authoritativeTokenMints.current = new Set(keepMints);
+            void pruneTokenLifecycleCache(keepMints).catch((error) =>
+              console.warn('NodeX stale token cache pruning failed:', error)
+            );
+            setSelectedToken((current) => current && !authoritativeTokenMints.current?.has(current.mint) ? null : current);
+          }
           setTokens((previous) => reconcileTokenSnapshots(
             restoredSnapshots,
             previous,
-            snapshot.profile?.token_snapshot_complete === true,
+            isComplete,
           ));
         }
         const runtime = engineEventStore.hydrate(snapshot.profile);
@@ -780,10 +802,21 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (recovered.profile) {
           const recoveredTokens = (recovered.profile as { tokens?: unknown[] }).tokens;
           if (Array.isArray(recoveredTokens)) {
+            const isComplete = (recovered.profile as { token_snapshot_complete?: boolean }).token_snapshot_complete === true;
+            if (isComplete) {
+              const keepMints = recoveredTokens
+                .map((item: any) => String(item?.mint_address || item?.mint || ''))
+                .filter(Boolean);
+              authoritativeTokenMints.current = new Set(keepMints);
+              void pruneTokenLifecycleCache(keepMints).catch((error) =>
+                console.warn('NodeX stale token cache pruning failed after reconnect:', error)
+              );
+              setSelectedToken((current) => current && !authoritativeTokenMints.current?.has(current.mint) ? null : current);
+            }
             setTokens((previous) => reconcileTokenSnapshots(
               recoveredTokens,
               previous,
-              (recovered.profile as { token_snapshot_complete?: boolean }).token_snapshot_complete === true,
+              isComplete,
             ));
           }
           const runtime = engineEventStore.hydrate(recovered.profile);
