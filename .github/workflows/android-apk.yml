@@ -46,16 +46,16 @@ jobs:
       - name: Build web application
         run: npm run build
 
-      - name: Prepare NodeX app icon
+      - name: Validate NodeX Android artwork
         run: |
-          mkdir -p assets
-          cp public/icons/icon.svg assets/icon.svg
+          test -s assets/icon.png || { echo "::error::Missing assets/icon.png (Android launcher icon source)."; exit 1; }
+          test -s assets/splash.png || { echo "::error::Missing assets/splash.png (Android splash artwork source)."; exit 1; }
 
       - name: Generate Android platform
         run: npx cap add android
 
       - name: Generate native app icons and splash assets
-        run: npx capacitor-assets generate --android --iconBackgroundColor '#000000' --splashBackgroundColor '#000000' || true
+        run: npx capacitor-assets generate --android --iconBackgroundColor '#000000' --splashBackgroundColor '#000000'
 
       - name: Sync web application into Android
         run: npx cap sync android
