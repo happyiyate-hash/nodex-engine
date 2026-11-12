@@ -27,7 +27,10 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
 
     context.drawImage(image, 0, 0, 24, 24);
     const pixels = context.getImageData(0, 0, 24, 24).data;
-    const buckets = new Map<number, { count: number; red: number; green: number; blue: number; saturation: number }>();
+    // Include the full tonal range, not just saturated colours. This is
+    // important for monochrome artwork: a mostly-black logo should produce
+    // a black accent, while white/grey artwork should retain its own tone.
+    const buckets = new Map<number, { count: number; red: number; green: number; blue: number }>();
 
     for (let index = 0; index < pixels.length; index += 4) {
       const alpha = pixels[index + 3] / 255;
@@ -36,37 +39,25 @@ function extractDominantAccent(image: HTMLImageElement): string | null {
       const red = pixels[index];
       const green = pixels[index + 1];
       const blue = pixels[index + 2];
-      const maximum = Math.max(red, green, blue);
-      const minimum = Math.min(red, green, blue);
-      const brightness = (red + green + blue) / 3;
-      const saturation = maximum === 0 ? 0 : (maximum - minimum) / maximum;
-
-      // Ignore near-black, near-white and neutral pixels. They should not
-      // tint a dark card or overpower the logo's actual identity.
-      if (brightness < 18 || brightness > 250 || saturation < 0.08) continue;
-
+      // 4-bit RGB buckets suppress tiny antialiasing variations while
+      // preserving distinct blacks, charcoals, greys, whites and hues.
       const redBin = red >> 4;
       const greenBin = green >> 4;
       const blueBin = blue >> 4;
       const key = (redBin << 8) | (greenBin << 4) | blueBin;
-      const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0, saturation: 0 };
+      const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0 };
       bucket.count += 1;
       bucket.red += red;
       bucket.green += green;
       bucket.blue += blue;
-      bucket.saturation += saturation;
       buckets.set(key, bucket);
     }
 
-    let best: { count: number; red: number; green: number; blue: number; saturation: number } | null = null;
-    let bestScore = 0;
+    let best: { count: number; red: number; green: number; blue: number } | null = null;
     for (const bucket of buckets.values()) {
-      const averageSaturation = bucket.saturation / bucket.count;
-      const score = bucket.count * (0.65 + averageSaturation);
-      if (score > bestScore) {
-        best = bucket;
-        bestScore = score;
-      }
+      // Choose the most common actual tone. Do not favour saturation or
+      // discard black/white pixels: those are valid logo identity colours.
+      if (!best || bucket.count > best.count) best = bucket;
     }
 
     if (best) {
