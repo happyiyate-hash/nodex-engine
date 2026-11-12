@@ -234,7 +234,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                 occurred_at: data.received_at || event.timestamp,
               },
             }
-          : ['market_subscription_subscribed', 'market_subscription_active', 'market_subscription_waiting'].includes(event.event_type)
+          : ['market_subscription_requested', 'market_subscription_subscribed', 'market_subscription_active', 'market_subscription_waiting'].includes(event.event_type)
             && previous?.qualification_status === 'qualified'
             ? {
                 status: 'verified',
