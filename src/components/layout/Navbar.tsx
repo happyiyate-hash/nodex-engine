@@ -30,9 +30,12 @@ export const Navbar: React.FC = () => {
             setActiveTab('overview');
           }}
         >
-          <div className="w-7 h-7 rounded-lg glass-icon flex items-center justify-center font-bold text-xs text-white font-mono shadow-inner">
-            NX
-          </div>
+          <img
+            src="/icons/icon-192.png"
+            alt="NodeX"
+            className="w-7 h-7 rounded-lg object-contain shrink-0"
+            draggable={false}
+          />
           <span className="text-sm font-bold tracking-wider text-white font-mono uppercase">
             NodeX
           </span>
