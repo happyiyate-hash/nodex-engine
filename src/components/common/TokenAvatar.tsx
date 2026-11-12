@@ -244,7 +244,6 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
         <img
           key={imageUrl + '-' + retryAttempt}
           src={imageUrl}
-          crossOrigin="anonymous"
           alt={symbol + ' logo'}
           loading="eager"
           decoding="async"
