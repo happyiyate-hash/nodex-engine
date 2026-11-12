@@ -1,67 +1,58 @@
 import sharp from 'sharp';
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const publicIconsDir = path.resolve('public/icons');
-const svgPath = path.join(publicIconsDir, 'icon.svg');
+const projectRoot = process.cwd();
+const sourceIcon = path.join(projectRoot, 'assets', 'icon.png');
+const sourceSplash = path.join(projectRoot, 'assets', 'splash.png');
+const publicIconsDir = path.join(projectRoot, 'public', 'icons');
 
-if (!fs.existsSync(publicIconsDir)) {
-  fs.mkdirSync(publicIconsDir, { recursive: true });
+for (const [label, filePath] of [['launcher icon', sourceIcon], ['splash artwork', sourceSplash]]) {
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
+    throw new Error(`Missing required NodeX ${label}: ${path.relative(projectRoot, filePath)}`);
+  }
 }
 
+fs.mkdirSync(publicIconsDir, { recursive: true });
+
 async function generateIcons() {
-  console.log('Rendering PWA icons from SVG...');
-  const svgBuffer = fs.readFileSync(svgPath);
+  console.log('Generating every web/PWA icon from assets/icon.png...');
 
-  // 192x192 standard icon
-  await sharp(svgBuffer)
-    .resize(192, 192)
-    .png()
-    .toFile(path.join(publicIconsDir, 'icon-192.png'));
-  console.log('✓ icon-192.png created');
+  await sharp(sourceIcon).resize(192, 192, { fit: 'contain', background: '#000000' })
+    .png().toFile(path.join(publicIconsDir, 'icon-192.png'));
+  await sharp(sourceIcon).resize(512, 512, { fit: 'contain', background: '#000000' })
+    .png().toFile(path.join(publicIconsDir, 'icon-512.png'));
+  await sharp(sourceIcon).resize(180, 180, { fit: 'contain', background: '#000000' })
+    .png().toFile(path.join(publicIconsDir, 'apple-touch-icon.png'));
 
-  // 512x512 standard icon
-  await sharp(svgBuffer)
-    .resize(512, 512)
-    .png()
-    .toFile(path.join(publicIconsDir, 'icon-512.png'));
-  console.log('✓ icon-512.png created');
-
-  // 180x180 Apple touch icon
-  await sharp(svgBuffer)
-    .resize(180, 180)
-    .png()
-    .toFile(path.join(publicIconsDir, 'apple-touch-icon.png'));
-  console.log('✓ apple-touch-icon.png created');
-
-  // 512x512 Maskable icon (with 10% inner padding so critical content stays within circular safe zone)
-  const innerIcon = await sharp(svgBuffer)
-    .resize(410, 410)
-    .toBuffer();
+  const maskableIcon = await sharp(sourceIcon)
+    .resize(410, 410, { fit: 'contain', background: '#080808' })
+    .png().toBuffer();
 
   await sharp({
     create: {
       width: 512,
       height: 512,
       channels: 4,
-      background: { r: 8, g: 8, b: 8, alpha: 1 }
-    }
+      background: { r: 8, g: 8, b: 8, alpha: 1 },
+    },
   })
-    .composite([{ input: innerIcon, gravity: 'center' }])
+    .composite([{ input: maskableIcon, gravity: 'center' }])
     .png()
     .toFile(path.join(publicIconsDir, 'icon-maskable-512.png'));
-  console.log('✓ icon-maskable-512.png created');
 
-  // Also copy to root public for convenience
-  fs.copyFileSync(path.join(publicIconsDir, 'apple-touch-icon.png'), path.resolve('public/apple-touch-icon.png'));
-  fs.copyFileSync(path.join(publicIconsDir, 'icon-192.png'), path.resolve('public/pwa-192x192.png'));
-  fs.copyFileSync(path.join(publicIconsDir, 'icon-512.png'), path.resolve('public/pwa-512x512.png'));
-  fs.copyFileSync(path.join(publicIconsDir, 'icon.svg'), path.resolve('public/favicon.svg'));
+  await sharp(sourceIcon)
+    .resize(64, 64, { fit: 'contain', background: '#000000' })
+    .png()
+    .toFile(path.join(projectRoot, 'public', 'favicon.png'));
 
-  console.log('All PWA icon assets generated successfully!');
+  fs.copyFileSync(path.join(publicIconsDir, 'icon-192.png'), path.join(projectRoot, 'public', 'pwa-192x192.png'));
+  fs.copyFileSync(path.join(publicIconsDir, 'icon-512.png'), path.join(projectRoot, 'public', 'pwa-512x512.png'));
+
+  console.log('Web/PWA icons generated from assets/icon.png. Android splash artwork source: assets/splash.png.');
 }
 
-generateIcons().catch((err) => {
-  console.error('Error generating icons:', err);
+generateIcons().catch((error) => {
+  console.error('NodeX artwork generation failed:', error);
   process.exit(1);
 });
