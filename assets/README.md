@@ -1,12 +1,12 @@
-# Android app artwork
+# NodeX artwork source files
 
-Place the two Android artwork source images in this folder:
+These two files are the **single source of truth** for NodeX branding:
 
-- `icon.png` — NodeX launcher icon shown on the Android phone home screen.
-- `splash.png` — NodeX artwork shown while the Android app opens.
+- `assets/icon.png` — Android launcher icon, website favicon, PWA icons, and the in-app header/sidebar logo.
+- `assets/splash.png` — native Android launch/splash artwork.
 
-Use PNG files and keep these exact filenames. The Android GitHub Actions workflow reads these files directly and generates the required Android icon and splash sizes automatically.
+The build regenerates the website/PWA icon files from `assets/icon.png` automatically whenever `npm run build` runs. The Android APK workflow also generates native Android launcher and splash resources from these same two source files.
 
-The existing `public/icons/` files remain the website/PWA icons; they are not used as the source for the Android launcher icon or splash artwork.
+Do not update `public/icons/icon-192.png`, `public/icons/icon-512.png`, or other generated icon files by hand. They are build outputs and will be overwritten from `assets/icon.png`.
 
-The Android build now checks that both files exist and stops with a clear error if either is missing. Upload the actual image files here before running the Android build.
+The old SVG branding files are no longer used as a source for the app icon or PWA branding.
