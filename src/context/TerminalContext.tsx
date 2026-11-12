@@ -515,6 +515,11 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
       : previous?.lifecycle_error,
     lifecycle_updated_at: String(snapshot.activity?.updated_at ?? previous?.lifecycle_updated_at ?? ''),
     lifecycle_version: Math.max(Number(previous?.lifecycle_version || 0), Number(snapshot.version || 0)),
+    strategy_decision: String(snapshot.activity?.decision ?? previous?.strategy_decision ?? ''),
+    strategy_reasons: Array.isArray(snapshot.activity?.reasons)
+      ? snapshot.activity.reasons.map(String)
+      : previous?.strategy_reasons,
+    strategy_evaluated_at: String(snapshot.activity?.evaluated_at ?? previous?.strategy_evaluated_at ?? ''),
     decimals: identity.decimals == null ? previous?.decimals : Number(identity.decimals),
     total_supply_raw: String(identity.total_supply_raw ?? identity.total_supply ?? previous?.total_supply_raw ?? ''),
     creator_wallet: String(identity.creator_address ?? identity.creator_wallet ?? previous?.creator_wallet ?? ''),
