@@ -593,7 +593,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           </div>
         </div>
 
-        <div className="mt-3 flex min-h-9 items-center justify-between gap-3 border-y border-white/[0.07] py-2">
+        <div className="mt-1 flex min-h-8 items-center justify-between gap-3 border-y border-white/[0.07] py-1">
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="truncate text-[13px] font-semibold tracking-tight text-white">Live Detection</h1>
             <span className="hidden text-[9px] text-white/35 sm:inline">Solana launch intelligence</span>
@@ -604,7 +604,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           </div>
         </div>
 
-        <div className="mt-2 grid min-h-[76px] grid-cols-[minmax(0,3fr)_minmax(76px,1fr)] items-center px-3.5 py-3 sm:px-4">
+        <div className="mt-1 grid min-h-[56px] grid-cols-[minmax(0,3fr)_minmax(76px,1fr)] items-center px-3.5 py-2 sm:px-4">
           <div className="min-w-0 pr-3">
             <div className="text-[8px] font-medium uppercase tracking-[0.13em] text-white/40">Unrealized P&amp;L</div>
             <div
@@ -621,7 +621,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           </div>
         </div>
 
-        <div className="mt-5 flex shrink-0 flex-col pb-0">
+        <div className="mt-2 flex shrink-0 flex-col pb-0">
           <div className="mb-2 flex shrink-0 items-center gap-1.5">
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
