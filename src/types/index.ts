@@ -208,6 +208,7 @@ export interface DiscoveredToken {
   sell_count_5m?: number;
   estimated_slippage_pct?: number;
   confirmed_trade_events?: number;
+  buy_pressure_pct?: number;
   /** Pump.fun curve completion is separate from PumpSwap pool activation. */
   bonding_curve_status?: string;
   bonding_curve_account?: string;
