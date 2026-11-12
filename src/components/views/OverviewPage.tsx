@@ -411,6 +411,28 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       String(item.launch.source || '').toLowerCase().includes(query);
   });
 
+  // Mount the detection feed progressively: one card at a time, then load
+  // another small batch as the user approaches the end of the scroll area.
+  const [visibleLaunchCount, setVisibleLaunchCount] = useState(1);
+  const [launchRenderTarget, setLaunchRenderTarget] = useState(12);
+  const launchLoadLockedRef = useRef(false);
+
+  useEffect(() => {
+    setVisibleLaunchCount(1);
+    setLaunchRenderTarget(Math.min(12, filteredLaunches.length));
+    launchLoadLockedRef.current = false;
+  }, [filter, search]);
+
+  useEffect(() => {
+    if (visibleLaunchCount >= launchRenderTarget) return;
+    const timer = window.setTimeout(() => {
+      setVisibleLaunchCount((current) => Math.min(launchRenderTarget, current + 1));
+    }, 28);
+    return () => window.clearTimeout(timer);
+  }, [visibleLaunchCount, launchRenderTarget]);
+
+  const visibleLaunches = filteredLaunches.slice(0, visibleLaunchCount);
+
   const filteredPositions = positions.filter((position) => {
     if (!search.trim()) return true;
     const query = search.trim().toLowerCase();
@@ -518,7 +540,20 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       </section>}
 
       <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0 sm:px-3 sm:pb-0"}`}>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent pb-24">
+          <div
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent pb-24"
+            onScroll={(event) => {
+              const element = event.currentTarget;
+              const remaining = element.scrollHeight - element.scrollTop - element.clientHeight;
+              const threshold = Math.max(420, element.clientHeight * 1.1);
+              if (remaining <= threshold && !launchLoadLockedRef.current && visibleLaunchCount < filteredLaunches.length) {
+                launchLoadLockedRef.current = true;
+                setLaunchRenderTarget((current) => Math.min(filteredLaunches.length, Math.max(current, visibleLaunchCount) + 8));
+              } else if (remaining > threshold * 1.6) {
+                launchLoadLockedRef.current = false;
+              }
+            }}
+          >
             {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
               <div className="space-y-1.5 pb-2">
                 {filteredPositions.length === 0 && backendPaperEntries.length === 0 ? (
@@ -597,7 +632,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               </div>
             ) : (
               <div className="space-y-1.5 pb-2">
-                {filteredLaunches.map((item) => {
+                {visibleLaunches.map((item) => {
                   const { launch } = item;
                   const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
                   const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
@@ -624,7 +659,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     <article
                       key={launch.id || launch.signature}
                       data-token-card
-                      className="relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
+                      className="token-float-row token-card-lazy relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
                     >
                       <div
                         aria-hidden="true"
