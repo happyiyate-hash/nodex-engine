@@ -173,8 +173,11 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   const [gatewayIndex, setGatewayIndex] = useState(0);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [retryPending, setRetryPending] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [logoFailed, setLogoFailed] = useState(false);
+  // Track the exact URL that loaded/failed; a boolean can refer to the previous token image.
+  const [loadedImageUrl, setLoadedImageUrl] = useState('');
+  const [failedImageUrl, setFailedImageUrl] = useState('');
+  const loaded = Boolean(imageUrl) && loadedImageUrl === imageUrl;
+  const logoFailed = Boolean(imageUrl) && failedImageUrl === imageUrl;
   const sizeClasses = {
     sm: 'w-5 h-5 text-[9px]',
     md: 'w-7 h-7 text-xs',
@@ -187,8 +190,8 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
     setGatewayIndex(0);
     setRetryAttempt(0);
     setRetryPending(false);
-    setLoaded(false);
-    setLogoFailed(false);
+    setLoadedImageUrl('');
+    setFailedImageUrl('');
   }, [logoUrl]);
 
   // Retry transient CDN/network failures indefinitely with a capped backoff.
@@ -212,7 +215,8 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
     </span>
   );
 
-  const showingSolanaFallback = !imageUrl || logoFailed;
+  // Keep the Solana mark only until this token's exact logo URL has loaded.
+  const showingSolanaFallback = !imageUrl || !loaded || logoFailed;
 
   useLayoutEffect(() => {
     const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
@@ -227,14 +231,16 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   return (
     <div ref={rootRef} className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 ' + (showingSolanaFallback ? 'bg-gradient-to-br from-[#241638] via-[#160f22] to-[#09070e] shadow-[inset_0_1px_1px_rgba(190,145,255,0.12),0_3px_9px_rgba(0,0,0,0.55)] ' : 'bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ') + className}>
       {fallback}
-      <img
-        src="/assets/token-fallbacks/solana-logo.png"
-        alt="Solana logo"
-        loading="eager"
-        decoding="async"
-        fetchPriority="auto"
-        className={'absolute inset-0 h-full w-full object-cover ' + (loaded && !logoFailed ? 'opacity-0' : 'opacity-100')}
-      />
+      {showingSolanaFallback && (
+        <img
+          src="/assets/token-fallbacks/solana-logo.png"
+          alt="Solana logo"
+          loading="eager"
+          decoding="async"
+          fetchPriority="auto"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
       {imageUrl && (
         <img
           key={imageUrl + '-' + retryAttempt}
@@ -244,23 +250,23 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
           loading="eager"
           decoding="async"
           fetchPriority="auto"
-          className={'absolute inset-0 h-full w-full object-cover ' + (loaded ? 'opacity-100' : 'opacity-0')}
+          className={'absolute inset-0 h-full w-full object-cover ' + (loaded && !logoFailed ? 'opacity-100' : 'opacity-0')}
           onLoad={(event) => {
             const accent = extractDominantAccent(event.currentTarget);
             if (accent) {
               rootRef.current?.closest<HTMLElement>('[data-token-card]')?.style.setProperty('--token-accent-rgb', accent);
             }
-            setLoaded(true);
-            setLogoFailed(false);
+            setLoadedImageUrl(imageUrl);
+            setFailedImageUrl('');
             setRetryPending(false);
           }}
           onError={() => {
-            setLoaded(false);
+            setLoadedImageUrl('');
             if (gatewayIndex < imageUrls.length - 1) {
               setGatewayIndex((index) => index + 1);
               setRetryAttempt(0);
             } else {
-              setLogoFailed(true);
+              setFailedImageUrl(imageUrl);
               setRetryPending(true);
             }
           }}
