@@ -571,7 +571,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
-      {!embeddedMode && <section aria-label="Overview controls" className="relative flex-none w-full shrink-0 bg-transparent px-3 pt-[max(env(safe-area-inset-top,0px),16px)] sm:px-4">
+      {!embeddedMode && <section aria-label="Overview controls" className="relative flex-none w-full shrink-0 bg-transparent px-3 pt-[max(env(safe-area-inset-top,0px),16px)] sm:px-4" style={{ backgroundImage: "radial-gradient(ellipse 120% 72% at 50% 0%, rgba(229, 177, 74, 0.22) 0%, rgba(231, 137, 55, 0.13) 34%, rgba(231, 137, 55, 0.055) 62%, rgba(0, 0, 0, 0) 100%), linear-gradient(180deg, rgba(201, 143, 49, 0.075) 0%, rgba(0, 0, 0, 0) 100%)" }}>
         <div className="flex min-w-0 items-end justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="text-[9px] font-medium uppercase tracking-[0.15em] text-white/40">Portfolio</div>
@@ -631,7 +631,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
         </div>
       </section>}
 
-      <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0 sm:px-3 sm:pb-0"}`}>
+      <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0" : "relative mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0 sm:px-3 sm:pb-0"}`}>
           <div
             className="token-feed-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent pb-24"
           >
@@ -717,7 +717,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               </div>
             )}
           </div>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-4 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
+          {!embeddedMode && <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-20 h-14 bg-gradient-to-b from-black/95 via-black/70 to-transparent" />}
 
       </div>
     </div>
