@@ -612,7 +612,14 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}
               aria-live="polite"
             >
-              {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'
+              {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'$'}{formatPnlDisplay(unrealizedProfitUsd)}
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-col justify-center border-l border-white/[0.10] pl-3 sm:pl-4">
+            <div className="text-[8px] font-medium uppercase tracking-[0.10em] text-white/40">Open positions</div>
+            <div className="mt-1 text-[17px] font-semibold leading-none tabular-nums text-white">{openPositionCount}</div>
+          </div>
+        </div>
 
         <div className="mt-5 flex shrink-0 flex-col pb-0">
           <div className="mb-2 flex shrink-0 items-center gap-1.5">
