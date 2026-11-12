@@ -690,7 +690,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isStreamPaused, setIsStreamPaused] = useState(false);
   const [isMobilePreview, setIsMobilePreview] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
-  const metadataRefreshInFlight = useRef<Set<string>>(new Set());
   const lifecycleCacheSignatures = useRef<Map<string, string>>(new Map());
   // Once a complete backend snapshot is received, it becomes the allowlist for
   // cache restoration. This also protects against an IndexedDB read finishing late.
@@ -807,9 +806,10 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => { active = false; };
   }, [settings.backendUrl]);
 
-  // On every app load, re-resolve metadata for every restored token that
-  // has no logo URL. Retry transient backend/provider failures instead of
-  // permanently suppressing that mint for the rest of the session.
+  // Token metadata is backend-owned. The frontend must never request a refresh
+  // merely because a token has no logo_url; if the backend has no logo URL,
+  // keep the neutral avatar and wait for backend-supplied metadata.
+
   useEffect(() => {
     const missingLogos = tokens.filter((token) =>
       token.mint && !token.logo_url && !metadataRefreshInFlight.current.has(token.mint)
