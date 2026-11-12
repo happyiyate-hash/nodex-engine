@@ -89,6 +89,11 @@ export interface NodeXProfileSnapshot {
   };
   wallet?: { sol_balance?: number; last_updated?: string | null; [key: string]: unknown };
   existing_wallet?: { sol_balance?: number; last_synced?: string | null; [key: string]: unknown };
+  /** Canonical SQLite-backed token snapshot returned by GET /api/v1/profile. */
+  tokens?: Array<Record<string, any>>;
+  /** True only when tokens contains the complete retained backend token registry. */
+  token_snapshot_complete?: boolean;
+  token_snapshot_count?: number;
   /** Paper-trading wallet returned by GET /api/v1/profile (lamports). */
   paper_wallet?: PaperWalletSnapshot;
   portfolio?: {
