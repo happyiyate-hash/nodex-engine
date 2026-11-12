@@ -386,7 +386,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     positions: openPositionCount,
   }), [launchViews, openPositionCount]);
 
-  const filteredLaunches = launchViews.filter((item) => {
+  const filteredLaunches = useMemo(() => launchViews.filter((item) => {
     if (filter === 'qualified' && item.status !== 'verified') return false;
     if (filter === 'positions') return false;
     if (!search.trim()) return true;
@@ -394,7 +394,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     return item.launch.mint_address.toLowerCase().includes(query) ||
       (item.launch.creator_address || '').toLowerCase().includes(query) ||
       String(item.launch.source || '').toLowerCase().includes(query);
-  });
+  }), [launchViews, filter, search]);
 
   // Render every token currently supplied by the backend. Scrolling only
   // moves through the list; it never controls whether tokens are mounted.
@@ -441,6 +441,136 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
     event.stopPropagation();
     try { await navigator.clipboard.writeText(mint); } catch { /* Clipboard access may be unavailable in embedded browsers. */ }
   };
+
+  // Keep the already-built card element tree stable across unrelated context updates
+  // (connection status, portfolio snapshots, event counters). Only rebuild the feed
+  // when its actual launch/token data or expanded error state changes.
+  const renderedLaunchCards = useMemo(() => visibleLaunches.map((item) => {
+                  const { launch } = item;
+                  const tokenData = (tokensByMint.get(launch.mint_address) || launch) as any;
+                  const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
+                  const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
+
+                  const lifecycleStatus = String(tokenData.lifecycle_status || 'unknown').toLowerCase();
+                  const lifecycleLabel = String(tokenData.lifecycle_label || (lifecycleStatus === 'scanning' ? 'Scanning' : 'Awaiting status'));
+                  const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || (
+                    lifecycleStatus === 'verified' ? 'Getting market data'
+                    : lifecycleStatus === 'monitoring' ? 'Monitoring market activity'
+                    : lifecycleStatus === 'scanning' ? 'Scanning' : lifecycleLabel
+                  ));
+                  const rawLifecycleProgress = tokenData.lifecycle_progress;
+                  const lifecycleProgressValue = rawLifecycleProgress == null ? Number.NaN : Number(rawLifecycleProgress);
+                  const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
+                    ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
+                  const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
+                  const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
+                    ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
+                  );
+                  const errorExpanded = expandedErrors.includes(launch.mint_address);
+                  const errorMessage = String(errorDetails?.message || '');
+                  return (
+                    <article
+                      key={launch.id || launch.signature}
+                      data-token-card
+                      className="token-card-surface relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
+                    >
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 z-0"
+                        style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
+                      />
+                      <div className="relative z-10">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <TokenAvatar
+                            symbol={cardSymbol || cardName}
+                            logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
+                            size="md"
+                            className="!h-9 !w-9 !rounded-2xl shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 items-baseline gap-1.5">
+                              <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
+                              {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
+                            </div>
+                            <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} attempt={Number(tokenData.scan_attempt || 0)}>
+                              {(displayProgress, scanVisible) => (
+                                <div className="mt-1 flex min-w-0 items-center gap-2">
+                                  <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
+                                  {scanVisible && (
+                                    <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
+                                  )}
+                                  {errorDetails && (
+                                    <button
+                                      type="button"
+                                      aria-label={errorExpanded ? 'Hide error details' : 'Show error details'}
+                                      title={errorExpanded ? 'Hide error details' : 'Show error details'}
+                                      aria-expanded={errorExpanded}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setExpandedErrors((previous) => previous.includes(launch.mint_address)
+                                          ? previous.filter((mint) => mint !== launch.mint_address)
+                                          : [...previous, launch.mint_address]);
+                                      }}
+                                      className="inline-flex shrink-0 items-center gap-0.5 rounded px-0.5 text-[8px] leading-none text-red-200/70 hover:text-red-100"
+                                    >
+                                      <span>{errorExpanded ? 'Hide' : 'Error'}</span>
+                                      <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </AnimatedCardScanOverlay>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end gap-1.5">
+                            <TokenLifecycleBadge status={lifecycleStatus} label={lifecycleLabel} />
+                            <button
+                              type="button"
+                              aria-label={`Copy ${cardName} contract address`}
+                              title="Copy contract address"
+                              onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
+                              className="inline-flex max-w-[116px] items-center gap-1 rounded px-1 py-0.5 text-white/40 transition-colors hover:text-white/80"
+                            >
+                              <Copy className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate font-mono text-[8px]">{launch.mint_address.slice(0, 5)}…{launch.mint_address.slice(-4)}</span>
+                            </button>
+                          </div>
+                        </div>
+                        {errorDetails && errorExpanded && (
+                          <div className="mt-1 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
+                            <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
+                              {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
+                              {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
+                              {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
+                              {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
+                            </div>
+                            <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
+                            {errorDetails?.raw_response != null && (
+                              <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
+                                {typeof errorDetails.raw_response === 'string'
+                                  ? errorDetails.raw_response
+                                  : JSON.stringify(errorDetails.raw_response, null, 2)}
+                              </pre>
+                            )}
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                aria-label={`Copy ${cardName} error details`}
+                                title="Copy full error details"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void navigator.clipboard?.writeText(JSON.stringify(errorDetails, null, 2));
+                                }}
+                                className="inline-flex items-center justify-center rounded-md p-1 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/85"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </article>
+                  );
+                }), [visibleLaunches, tokensByMint, expandedErrors]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
@@ -588,132 +718,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               </div>
             ) : (
               <div className="space-y-1.5 pb-2">
-                {visibleLaunches.map((item) => {
-                  const { launch } = item;
-                  const tokenData = (tokensByMint.get(launch.mint_address) || launch) as any;
-                  const cardName = tokenData.name || tokenData.token_name || `${launch.mint_address.slice(0, 7)}…${launch.mint_address.slice(-5)}`;
-                  const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
-
-                  const lifecycleStatus = String(tokenData.lifecycle_status || 'unknown').toLowerCase();
-                  const lifecycleLabel = String(tokenData.lifecycle_label || (lifecycleStatus === 'scanning' ? 'Scanning' : 'Awaiting status'));
-                  const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || (
-                    lifecycleStatus === 'verified' ? 'Getting market data'
-                    : lifecycleStatus === 'monitoring' ? 'Monitoring market activity'
-                    : lifecycleStatus === 'scanning' ? 'Scanning' : lifecycleLabel
-                  ));
-                  const rawLifecycleProgress = tokenData.lifecycle_progress;
-                  const lifecycleProgressValue = rawLifecycleProgress == null ? Number.NaN : Number(rawLifecycleProgress);
-                  const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
-                    ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
-                  const diagnostics: TokenDiagnostic[] = Array.isArray(tokenData.diagnostics) ? tokenData.diagnostics : [];
-                  const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
-                    ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
-                  );
-                  const errorExpanded = expandedErrors.includes(launch.mint_address);
-                  const errorMessage = String(errorDetails?.message || '');
-                  return (
-                    <article
-                      key={launch.id || launch.signature}
-                      data-token-card
-                      className="token-card-surface relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
-                    >
-                      <div
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 z-0"
-                        style={{ background: 'radial-gradient(ellipse at 0% 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.24), transparent 62%)' }}
-                      />
-                      <div className="relative z-10">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <TokenAvatar
-                            symbol={cardSymbol || cardName}
-                            logoUrl={tokenData.logo_url || tokenData.image_url || tokenData.image_uri || tokenData.logo_uri || tokenData.image}
-                            size="md"
-                            className="!h-9 !w-9 !rounded-2xl shrink-0"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex min-w-0 items-baseline gap-1.5">
-                              <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
-                              {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
-                            </div>
-                            <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} attempt={Number(tokenData.scan_attempt || 0)}>
-                              {(displayProgress, scanVisible) => (
-                                <div className="mt-1 flex min-w-0 items-center gap-2">
-                                  <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
-                                  {scanVisible && (
-                                    <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
-                                  )}
-                                  {errorDetails && (
-                                    <button
-                                      type="button"
-                                      aria-label={errorExpanded ? 'Hide error details' : 'Show error details'}
-                                      title={errorExpanded ? 'Hide error details' : 'Show error details'}
-                                      aria-expanded={errorExpanded}
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        setExpandedErrors((previous) => previous.includes(launch.mint_address)
-                                          ? previous.filter((mint) => mint !== launch.mint_address)
-                                          : [...previous, launch.mint_address]);
-                                      }}
-                                      className="inline-flex shrink-0 items-center gap-0.5 rounded px-0.5 text-[8px] leading-none text-red-200/70 hover:text-red-100"
-                                    >
-                                      <span>{errorExpanded ? 'Hide' : 'Error'}</span>
-                                      <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
-                                    </button>
-                                  )}
-                                </div>
-                              )}
-                            </AnimatedCardScanOverlay>
-                          </div>
-                          <div className="flex shrink-0 flex-col items-end gap-1.5">
-                            <TokenLifecycleBadge status={lifecycleStatus} label={lifecycleLabel} />
-                            <button
-                              type="button"
-                              aria-label={`Copy ${cardName} contract address`}
-                              title="Copy contract address"
-                              onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(launch.mint_address); }}
-                              className="inline-flex max-w-[116px] items-center gap-1 rounded px-1 py-0.5 text-white/40 transition-colors hover:text-white/80"
-                            >
-                              <Copy className="h-2.5 w-2.5 shrink-0" />
-                              <span className="truncate font-mono text-[8px]">{launch.mint_address.slice(0, 5)}…{launch.mint_address.slice(-4)}</span>
-                            </button>
-                          </div>
-                        </div>
-                        {errorDetails && errorExpanded && (
-                          <div className="mt-1 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
-                            <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
-                              {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
-                              {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
-                              {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
-                              {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
-                            </div>
-                            <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
-                            {errorDetails?.raw_response != null && (
-                              <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
-                                {typeof errorDetails.raw_response === 'string'
-                                  ? errorDetails.raw_response
-                                  : JSON.stringify(errorDetails.raw_response, null, 2)}
-                              </pre>
-                            )}
-                            <div className="mt-2 flex justify-end">
-                              <button
-                                type="button"
-                                aria-label={`Copy ${cardName} error details`}
-                                title="Copy full error details"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void navigator.clipboard?.writeText(JSON.stringify(errorDetails, null, 2));
-                                }}
-                                className="inline-flex items-center justify-center rounded-md p-1 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/85"
-                              >
-                                <Copy className="h-3 w-3" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
+                {renderedLaunchCards}
               </div>
             )}
           </div>
