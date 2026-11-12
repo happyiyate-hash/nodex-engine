@@ -807,7 +807,12 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // so each group is processed with bounded concurrency using that exact schema.
   useEffect(() => {
     const apiKey = String(settings.tokenCareApiKey || '').trim();
-    if (!apiKey) return;
+    if (!apiKey) {
+      if (tokenLogoTimer.current !== null) window.clearTimeout(tokenLogoTimer.current);
+      tokenLogoTimer.current = null;
+      tokenLogoQueue.current.clear();
+      return;
+    }
 
     let added = false;
     for (const token of tokens) {
@@ -816,7 +821,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       tokenLogoQueue.current.set(token.mint, token);
       added = true;
     }
-    if (!added) return;
+    if (!added && tokenLogoQueue.current.size === 0) return;
 
     const flushLogoGroup = async (): Promise<void> => {
       if (tokenLogoBatchRunning.current) return;
