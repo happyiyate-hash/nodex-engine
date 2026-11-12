@@ -536,7 +536,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const cardSymbol = tokenData.symbol || tokenData.token_symbol || '';
 
                   const lifecycleStatus = String(tokenData.lifecycle_status || 'unknown').toLowerCase();
-                  const lifecycleLabel = String(tokenData.lifecycle_label || 'Scanning');
+                  const lifecycleLabel = String(tokenData.lifecycle_label || (lifecycleStatus === 'scanning' ? 'Scanning' : 'Awaiting status'));
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || (
                     lifecycleStatus === 'verified' ? 'Getting market data'
                     : lifecycleStatus === 'monitoring' ? 'Monitoring market activity'
@@ -629,35 +629,34 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         </div>
                         {errorDetails && errorExpanded && (
                           <div className="mt-1 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
-                              <div className="mt-1.5 rounded-md bg-black/45 p-2 text-[9px] text-white/65">
-                                <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
-                                  {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
-                                  {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
-                                  {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
-                                  {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
-                                </div>
-                                <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
-                                {errorDetails?.raw_response != null && (
-                                  <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
-                                    {typeof errorDetails.raw_response === 'string'
-                                      ? errorDetails.raw_response
-                                      : JSON.stringify(errorDetails.raw_response, null, 2)}
-                                  </pre>
-                                )}
-                                <div className="mt-2 flex justify-end">
-                                  <button
-                                    type="button"
-                                    aria-label={`Copy ${cardName} error details`}
-                                    title="Copy full error details"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      void navigator.clipboard?.writeText(JSON.stringify(errorDetails, null, 2));
-                                    }}
-                                    className="inline-flex items-center justify-center rounded-md p-1 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/85"
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </button>
-                                </div>
+                            <div className="mb-1 flex flex-wrap gap-x-3 gap-y-1 text-white/40">
+                              {errorDetails?.stage && <span>Stage: {String(errorDetails.stage)}</span>}
+                              {errorDetails?.provider && <span>Provider: {String(errorDetails.provider)}</span>}
+                              {errorDetails?.severity && <span>Severity: {String(errorDetails.severity)}</span>}
+                              {errorDetails?.occurred_at && <span>{new Date(String(errorDetails.occurred_at)).toLocaleString()}</span>}
+                            </div>
+                            <p className="whitespace-pre-wrap break-words text-red-100/85">{errorMessage || 'No error message was supplied.'}</p>
+                            {errorDetails?.raw_response != null && (
+                              <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap break-words text-[8px] text-white/45">
+                                {typeof errorDetails.raw_response === 'string'
+                                  ? errorDetails.raw_response
+                                  : JSON.stringify(errorDetails.raw_response, null, 2)}
+                              </pre>
+                            )}
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                aria-label={`Copy ${cardName} error details`}
+                                title="Copy full error details"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void navigator.clipboard?.writeText(JSON.stringify(errorDetails, null, 2));
+                                }}
+                                className="inline-flex items-center justify-center rounded-md p-1 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/85"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
