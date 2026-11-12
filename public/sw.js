@@ -3,16 +3,16 @@
  * Provides offline caching for the application shell and assets.
  */
 
-const CACHE_NAME = 'nodex-terminal-v2';
+const CACHE_NAME = 'nodex-terminal-v3-brand-assets';
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png'
+  '/icons/apple-touch-icon.png',
+  '/favicon.png'
 ];
 
 // Install: pre-cache critical app shell
