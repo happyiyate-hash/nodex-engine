@@ -662,6 +662,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Once a complete backend snapshot is received, it becomes the allowlist for
   // cache restoration. This also protects against an IndexedDB read finishing late.
   const authoritativeTokenMints = useRef<Set<string> | null>(null);
+  const backendTokenSnapshotReceived = useRef(false);
 
   // Restore stable lifecycle/security records from IndexedDB. Market ticks are
   // deliberately excluded from this cache and are always refreshed by the backend.
@@ -673,6 +674,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const byMint = new Map(current.map((token) => [token.mint, token]));
         for (const record of records) {
           if (!record.token?.mint) continue;
+          if (backendTokenSnapshotReceived.current) continue;
           if (authoritativeTokenMints.current && !authoritativeTokenMints.current.has(record.mint)) continue;
           // Once a complete backend snapshot is known, IndexedDB must never
           // overwrite that authoritative token state.
@@ -782,6 +784,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (!active) return;
       if (snapshot.profile) {
         if (Array.isArray(snapshot.profile.tokens)) {
+          backendTokenSnapshotReceived.current = true;
           const restoredSnapshots = snapshot.profile.tokens;
           const isComplete = snapshot.profile.token_snapshot_complete === true;
           if (isComplete) {
@@ -831,6 +834,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (recovered.profile) {
           const recoveredTokens = (recovered.profile as { tokens?: unknown[] }).tokens;
           if (Array.isArray(recoveredTokens)) {
+            backendTokenSnapshotReceived.current = true;
             const isComplete = (recovered.profile as { token_snapshot_complete?: boolean }).token_snapshot_complete === true;
             if (isComplete) {
               const keepMints = recoveredTokens
