@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { TerminalProvider, useTerminal } from './context/TerminalContext';
 import { MobileNav } from './components/layout/MobileNav';
 import { PositionsPage } from './components/views/PositionsPage';
@@ -36,7 +37,7 @@ const getScrollableAncestor = (target: EventTarget | null, boundary: HTMLElement
 const MainLayout: React.FC = () => {
   const [settingsSubpage, setSettingsSubpage] = useState(false);
   const [storagePageOpen, setStoragePageOpen] = useState(false);
-  const { activeTab, selectedToken } = useTerminal();
+  const { activeTab, selectedToken, refreshBackendState } = useTerminal();
   const mainRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
   const refreshScroller = useRef<HTMLElement | null>(null);
@@ -131,9 +132,22 @@ const MainLayout: React.FC = () => {
         refreshingRef.current = true;
         setIsRefreshing(true);
         setPullDistance(REFRESH_TRIGGER_DISTANCE);
-        // Perform a real browser/WebView reload. The previous soft-refresh event
-        // had no subscribers, so it only animated the indicator without refreshing data.
-        window.setTimeout(() => window.location.reload(), 180);
+        if (!Capacitor.isNativePlatform()) {
+          // Browser/PWA: use the browser's normal reload behaviour.
+          window.setTimeout(() => window.location.reload(), 180);
+        } else {
+          // Capacitor Android: keep the WebView and current screen alive. Refresh
+          // the canonical backend snapshot and the live token/status/config data.
+          void refreshBackendState()
+            .catch((error) => {
+              console.error('[NodeX] Manual backend refresh failed:', error);
+            })
+            .finally(() => {
+              refreshingRef.current = false;
+              setIsRefreshing(false);
+              setPullDistance(0);
+            });
+        }
       } else {
         resetPull();
       }
@@ -151,7 +165,7 @@ const MainLayout: React.FC = () => {
       main.removeEventListener('touchend', onTouchEnd);
       main.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, [activeTab, selectedToken]);
+  }, [activeTab, selectedToken, refreshBackendState]);
 
   const indicatorVisible = pullDistance > 0 || isRefreshing;
   const indicatorOpacity = isRefreshing ? 1 : Math.min(1, pullDistance / 22);
