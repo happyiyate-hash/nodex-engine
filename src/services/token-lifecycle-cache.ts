@@ -15,7 +15,10 @@ const MAX_CACHED_TOKENS = 500;
 
 const LIFECYCLE_FIELDS: (keyof DiscoveredToken)[] = [
   'mint', 'state_version', 'security_scanned_at', 'strategy_decision', 'strategy_reasons', 'strategy_evaluated_at', 'name', 'symbol', 'metadata_uri', 'logo_url', 'metadata_status',
-  'scan_status', 'monitoring_status',
+  'scan_status', 'scan_progress', 'scan_stage',
+  'lifecycle_status', 'lifecycle_label', 'lifecycle_stage', 'lifecycle_sub_event',
+  'lifecycle_progress', 'lifecycle_error', 'lifecycle_updated_at', 'lifecycle_version',
+  'monitoring_status', 'monitoring_reason', 'monitoring_updated_at',
   'authority_status', 'authority_rechecks', 'creator_wallet', 'launch_time',
   'venue', 'safety_status', 'qualification_status', 'rejection_reason',
   'diagnostics', 'safety_details',
@@ -104,6 +107,30 @@ async function trimCache(database: IDBDatabase): Promise<void> {
   });
 }
 
+/** Remove cached token records that are absent from a complete backend snapshot. */
+export async function pruneTokenLifecycleCache(keepMints: string[]): Promise<void> {
+  const keep = new Set(keepMints.filter((mint) => typeof mint === 'string' && mint.length > 0));
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.getAllKeys();
+      request.onsuccess = () => {
+        for (const key of request.result) {
+          if (typeof key === 'string' && !keep.has(key)) store.delete(key);
+        }
+      };
+      request.onerror = () => reject(request.error || new Error('Could not inspect NodeX token cache.'));
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error('Could not prune NodeX token cache.'));
+      transaction.onabort = () => reject(transaction.error || new Error('NodeX token cache prune was aborted.'));
+    });
+  } finally {
+    database.close();
+  }
+}
+
 export async function clearTokenLifecycleCache(): Promise<void> {
   const database = await openDatabase();
   try {
@@ -126,7 +153,19 @@ export function lifecycleCacheSignature(token: DiscoveredToken): string {
     strategy_reasons: token.strategy_reasons,
     strategy_evaluated_at: token.strategy_evaluated_at,
     scan_status: token.scan_status,
+    scan_progress: token.scan_progress,
+    scan_stage: token.scan_stage,
+    lifecycle_status: token.lifecycle_status,
+    lifecycle_label: token.lifecycle_label,
+    lifecycle_stage: token.lifecycle_stage,
+    lifecycle_sub_event: token.lifecycle_sub_event,
+    lifecycle_progress: token.lifecycle_progress,
+    lifecycle_error: token.lifecycle_error,
+    lifecycle_updated_at: token.lifecycle_updated_at,
+    lifecycle_version: token.lifecycle_version,
     monitoring_status: token.monitoring_status,
+    monitoring_reason: token.monitoring_reason,
+    monitoring_updated_at: token.monitoring_updated_at,
     safety_status: token.safety_status,
     qualification_status: token.qualification_status,
     rejection_reason: token.rejection_reason,
