@@ -392,6 +392,15 @@ export class NodeXRestClient {
       body: JSON.stringify(config),
     });
   }
+  public updatePaperExecution(enabled: boolean): Promise<{status:string;config:StrategyConfig;mode:'paper';real_trading_available:false}> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the Engine API key in Settings before changing paper execution.');
+    return this.request('/api/v1/config/trading/execution', {
+      method: 'PATCH',
+      headers: { 'X-NodeX-Admin-Key': key },
+      body: JSON.stringify({ enabled }),
+    });
+  }
   public getEngineControl(): Promise<EngineControlSnapshot> {
     return this.request<EngineControlSnapshot>('/api/v1/engine/control');
   }
