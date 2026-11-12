@@ -236,27 +236,29 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
             }
           : event.event_type === 'market_subscription_subscribed' || event.event_type === 'market_subscription_active'
             ? {
-                status: 'monitoring',
-                label: 'Monitoring',
-                stage: 'market_watch',
-                sub_event: data.message || 'The provider confirmed the live market feed subscription.',
+                status: 'verified',
+                label: 'Verified',
+                stage: 'waiting_for_market_data',
+                sub_event: 'Getting market data',
               }
+            : event.event_type === 'market_price_update' && previous?.qualification_status === 'qualified'
+              && (Number(data.price_sol ?? data.price_usd ?? data.current_price_usd) > 0)
+              ? {
+                  status: 'monitoring',
+                  label: 'Monitoring',
+                  stage: 'market_watch',
+                  sub_event: 'Monitoring market activity',
+                }
             : event.event_type === 'paper_entry_evaluation'
             ? (() => {
                 const entryDecision = String(data.decision || 'wait').toLowerCase();
-                const reasons = Array.isArray(data.reasons) ? data.reasons.map(String).filter(Boolean) : [];
-                const subEvent = reasons.length
-                  ? reasons.join('; ')
-                  : String(data.message || data.reason || 'Waiting for market and strategy conditions to align.');
                 return {
-                  status: entryDecision === 'reject' ? 'strategy_rejected'
-                    : entryDecision === 'evaluate_paper_entry' ? 'entry_ready'
-                    : 'waiting_for_entry',
-                  label: entryDecision === 'reject' ? 'Strategy rejected'
-                    : entryDecision === 'evaluate_paper_entry' ? 'Entry conditions met'
-                    : 'Waiting for entry conditions',
+                  status: 'monitoring',
+                  label: 'Monitoring',
                   stage: 'strategy_checks',
-                  sub_event: subEvent,
+                  sub_event: entryDecision === 'reject' ? 'Strategy rejected'
+                    : entryDecision === 'evaluate_paper_entry' ? 'Entry conditions met'
+                    : 'Checking entry conditions',
                 };
               })()
             : null;
