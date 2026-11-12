@@ -10,17 +10,24 @@ type ChangeDirection = 'up' | 'down' | null;
 interface AnimatedCardScanOverlayProps {
   status: string;
   progress: number | null;
+  attempt?: number;
   children?: (displayProgress: number, scanVisible: boolean) => React.ReactNode;
 }
 
-const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, children }) => {
+const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, attempt = 0, children }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
   const [scanVisible, setScanVisible] = useState(false);
   const progressRef = useRef(0);
   const scanStartedRef = useRef(false);
+  const currentAttemptRef = useRef(attempt);
 
   useEffect(() => {
     let frame = 0;
+    if (attempt !== currentAttemptRef.current) {
+      currentAttemptRef.current = attempt;
+      progressRef.current = 0;
+      setDisplayProgress(0);
+    }
     if (status === 'scanning') {
       scanStartedRef.current = true;
       setScanVisible(true);
@@ -62,7 +69,7 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
     };
     frame = requestAnimationFrame(finishScanTransition);
     return () => cancelAnimationFrame(frame);
-  }, [status, progress]);
+  }, [status, progress, attempt]);
 
   return (
     <>
@@ -631,7 +638,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                               <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                               {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                             </div>
-                            <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress}>
+                            <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} attempt={Number(tokenData.scan_attempt || 0)}>
                               {(displayProgress, scanVisible) => (
                                 <div className="mt-1 flex min-w-0 items-center gap-2">
                                   <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
