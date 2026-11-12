@@ -186,7 +186,10 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   const loaded = Boolean(imageUrl) && loadedImageUrl === imageUrl;
   const logoFailed = Boolean(imageUrl) && failedImageUrl === imageUrl;
 
-  useEffect(() => {
+  // Reset synchronously after a token's logo URL changes. A passive effect
+  // can run after a cached image's onLoad event and accidentally erase the
+  // newly-loaded state, leaving the Solana fallback stuck over the artwork.
+  useLayoutEffect(() => {
     setGatewayIndex(0);
     setRetryAttempt(0);
     setRetryPending(false);
@@ -250,10 +253,17 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
           fetchPriority="auto"
           className={'absolute inset-0 h-full w-full object-cover ' + (loaded && !logoFailed ? 'opacity-100' : 'opacity-0')}
           onLoad={(event) => {
+            // Ignore a late load from an image belonging to the previous token.
+            if (event.currentTarget.getAttribute('src') !== imageUrl) return;
+
             const accent = extractDominantAccent(event.currentTarget);
-            if (accent) {
-              rootRef.current?.closest<HTMLElement>('[data-token-card]')?.style.setProperty('--token-accent-rgb', accent);
-            }
+            const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
+            // A logo can display successfully even when its host blocks canvas
+            // pixel reads. Never leave the Solana purple accent behind in that
+            // case; use a restrained neutral accent until extraction succeeds.
+            card?.style.setProperty('--token-accent-rgb', accent || '110 110 110');
+
+            // This state change removes the Solana replacement image immediately.
             setLoadedImageUrl(imageUrl);
             setFailedImageUrl('');
             setRetryPending(false);
