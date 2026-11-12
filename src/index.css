@@ -182,3 +182,7 @@ html, body {
   .nodex-toast { animation: none; }
   .nodex-toast-progress > span { animation: none; width: 100%; }
 }
+
+/* Keep token card layout/paint work isolated during long-feed scrolling. */
+.token-card-surface { contain: layout paint style; }
+.token-feed-scroll { -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
