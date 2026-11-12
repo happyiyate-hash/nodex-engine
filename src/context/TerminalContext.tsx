@@ -266,7 +266,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const incomingLifecycleVersion = data.state_version == null && data.version == null
     ? null : Number(data.state_version ?? data.version);
   const previousLifecycleVersion = Number(previous?.lifecycle_version || 0);
-  const incomingLifecycleTime = Date.parse(String(data.updated_at || event.timestamp || ''));
+  const incomingLifecycleTime = Date.parse(String(data.updated_at || data.received_at || event.timestamp || ''));
   const previousLifecycleTime = Date.parse(String(previous?.lifecycle_updated_at || ''));
   const lifecycleIsNewer = Boolean(incomingActivity) && (
     incomingLifecycleVersion !== null
