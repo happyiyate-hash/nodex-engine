@@ -52,18 +52,12 @@ export const Sidebar: React.FC = () => {
             setActiveTab('overview');
           }}
         >
-          {/* Stylized White/Silver Chevron X Logo */}
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 32 32" className="w-5 h-5" fill="none">
-              <path d="M 6,6 L 14,16 L 6,26 L 10,26 L 16,18.5 L 22,26 L 26,26 L 18,16 L 26,6 L 22,6 L 16,13.5 L 10,6 Z" fill="url(#brandGrad)" />
-              <defs>
-                <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#FFFFFF" />
-                  <stop offset="100%" stopColor="#A1A1AA" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
+          <img
+            src="/icons/icon-192.png"
+            alt="NodeX"
+            className="w-8 h-8 rounded-lg object-contain shrink-0"
+            draggable={false}
+          />
           <div className="leading-tight">
             <div className="font-semibold text-sm text-white tracking-wide font-sans">NodeX</div>
             <div className="text-[10px] text-[#71717a] font-normal tracking-tight">Solana Trading Terminal</div>
