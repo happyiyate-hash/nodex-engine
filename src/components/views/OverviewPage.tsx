@@ -411,25 +411,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       String(item.launch.source || '').toLowerCase().includes(query);
   });
 
-  // Render the first group together. Additional groups are loaded only as
-  // the user scrolls; the group itself gets one compositor-friendly reveal.
-  const [launchRenderTarget, setLaunchRenderTarget] = useState(12);
-  const launchLoadLockedRef = useRef(false);
-
-  useEffect(() => {
-    setLaunchRenderTarget(Math.min(12, filteredLaunches.length));
-    launchLoadLockedRef.current = false;
-  }, [filter, search]);
-
-  // Launches arrive asynchronously after the page can already be mounted.
-  // Once they arrive, reveal the initial group together instead of scheduling
-  // a React state update for every individual card.
-  useEffect(() => {
-    if (filteredLaunches.length === 0) return;
-    setLaunchRenderTarget((current) => Math.max(current, Math.min(12, filteredLaunches.length)));
-  }, [filteredLaunches.length]);
-
-  const visibleLaunches = filteredLaunches.slice(0, launchRenderTarget);
+  // Render every token currently supplied by the backend. Scrolling only
+  // moves through the list; it never controls whether tokens are mounted.
+  const visibleLaunches = filteredLaunches;
 
   const filteredPositions = positions.filter((position) => {
     if (!search.trim()) return true;
@@ -540,17 +524,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
       <div className={`${embeddedMode ? "relative flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0" : "mt-2 flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-0 sm:px-3 sm:pb-0"}`}>
           <div
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent pb-24"
-            onScroll={(event) => {
-              const element = event.currentTarget;
-              const remaining = element.scrollHeight - element.scrollTop - element.clientHeight;
-              const threshold = Math.max(420, element.clientHeight * 1.1);
-              if (remaining <= threshold && !launchLoadLockedRef.current && launchRenderTarget < filteredLaunches.length) {
-                launchLoadLockedRef.current = true;
-                setLaunchRenderTarget((current) => Math.min(filteredLaunches.length, Math.max(current, launchRenderTarget) + 8));
-              } else if (remaining > threshold * 1.6) {
-                launchLoadLockedRef.current = false;
-              }
-            }}
           >
             {embeddedMode === 'positions' || (!embeddedMode && filter === 'positions') ? (
               <div className="space-y-1.5 pb-2">
@@ -629,7 +602,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                 <p className="mt-1.5 max-w-[230px] text-[10px] leading-relaxed text-white/35">{filter === 'qualified' ? 'Tokens will appear here after passing the security and strategy checks.' : 'New Solana launches will appear here as soon as the backend confirms them.'}</p>
               </div>
             ) : (
-              <div className="token-feed-reveal space-y-1.5 pb-2">
+              <div className="space-y-1.5 pb-2">
                 {visibleLaunches.map((item) => {
                   const { launch } = item;
                   const tokenData = (tokens.find((token) => token.mint === launch.mint_address) || launch) as any;
