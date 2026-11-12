@@ -11,10 +11,9 @@ interface AnimatedCardScanOverlayProps {
   status: string;
   progress: number | null;
   attempt?: number;
-  children?: (displayProgress: number, scanVisible: boolean) => React.ReactNode;
 }
 
-const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, attempt = 0, children }) => {
+const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, attempt = 0 }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
   const [scanVisible, setScanVisible] = useState(false);
   const scanStartedRef = useRef(false);
@@ -49,27 +48,19 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
     return () => window.clearTimeout(timeout);
   }, [status, progress, attempt]);
 
+  if (!scanVisible) return null;
   return (
-    <>
-      {scanVisible && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 z-[15] overflow-hidden rounded-[inherit]"
-        >
-          <div
-            className="absolute inset-y-0 left-0"
-            style={{
-              width: `${displayProgress}%`,
-              background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 153 69 255) / 0.24) 0%, rgb(var(--token-accent-rgb, 153 69 255) / 0.17) 78%, rgb(var(--token-accent-rgb, 153 69 255) / 0.12) 100%)',
-              borderRight: '1px solid rgb(220 230 245 / 0.32)',
-              boxShadow: '8px 0 18px rgb(var(--token-accent-rgb, 153 69 255) / 0.16)',
-              transition: status === 'scanning' ? 'width 180ms linear' : 'width 360ms cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
-          />
-        </div>
-      )}
-      {typeof children === 'function' ? children(displayProgress, scanVisible) : null}
-    </>
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-[1] rounded-[10px] bg-[#B8C5D5]/[0.11] transition-[clip-path,opacity] duration-300 ease-out"
+      style={{
+        clipPath: `inset(0 ${100 - displayProgress}% 0 0 round 10px)`,
+        opacity: status === 'scanning' ? 1 : 0,
+        transition: status === 'scanning'
+          ? 'clip-path 180ms linear, opacity 300ms ease-out'
+          : 'clip-path 360ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease-out',
+      }}
+    />
   );
 };
 
@@ -506,6 +497,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         className="pointer-events-none absolute inset-0 z-0"
                         style={{ background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 153 69 255) / 0.12) 0%, rgb(var(--token-accent-rgb, 153 69 255) / 0.065) 48%, rgb(var(--token-accent-rgb, 153 69 255) / 0.018) 100%)' }}
                       />
+                      <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} attempt={Number(tokenData.scan_attempt || 0)} />
                       <div className="relative z-10">
                         <div className="flex min-w-0 items-center gap-2">
                           <TokenAvatar
@@ -519,13 +511,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                               <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                               {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                             </div>
-                            <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} attempt={Number(tokenData.scan_attempt || 0)}>
-                              {(displayProgress, scanVisible) => (
-                                <div className="mt-1 flex min-w-0 items-center gap-2">
-                                  <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
-                                  {scanVisible && (
-                                    <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
-                                  )}
+                            <div className="mt-1 flex min-w-0 items-center gap-2">
+                              <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
+                              {lifecycleStatus === 'scanning' && lifecycleProgress !== null && (
+                                <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(lifecycleProgress)}%</span>
+                              )}
                                   {errorDetails && (
                                     <button
                                       type="button"
@@ -544,9 +534,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                                       <span aria-hidden="true">{errorExpanded ? '▴' : '▾'}</span>
                                     </button>
                                   )}
-                                </div>
-                              )}
-                            </AnimatedCardScanOverlay>
+                            </div>
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-1.5">
                             <TokenLifecycleBadge status={lifecycleStatus} label={lifecycleLabel} />
