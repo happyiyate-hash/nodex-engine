@@ -10,9 +10,10 @@ type ChangeDirection = 'up' | 'down' | null;
 interface AnimatedCardScanOverlayProps {
   status: string;
   progress: number | null;
+  children: (displayProgress: number) => React.ReactNode;
 }
 
-const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress }) => {
+const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, children }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
   const progressRef = useRef(0);
   const terminal = status !== 'scanning';
@@ -36,14 +37,18 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
     return () => cancelAnimationFrame(frame);
   }, [hasProgress, target]);
 
-  if (!hasProgress) return null;
   const finished = terminal && displayProgress >= 99.99;
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-y-0 left-0 z-[1] rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[opacity] duration-300 ease-out"
-      style={{ width: `${displayProgress}%`, opacity: finished ? 0 : 1 }}
-    />
+    <>
+      {hasProgress && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 z-[1] rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[opacity] duration-300 ease-out"
+          style={{ width: `${displayProgress}%`, opacity: finished ? 0 : 1 }}
+        />
+      )}
+      {children(displayProgress)}
+    </>
   );
 };
 
@@ -583,12 +588,16 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                               <span className="min-w-0 truncate text-[12px] font-semibold leading-tight text-white">{cardName}</span>
                               {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                             </div>
-                            <div className="mt-1 flex min-w-0 items-center gap-2">
-                              <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
-                              {lifecycleStatus === 'scanning' && (
-                                <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(lifecycleProgress ?? 0)}%</span>
+                            <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress}>
+                              {(displayProgress) => (
+                                <div className="mt-1 flex min-w-0 items-center gap-2">
+                                  <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
+                                  {lifecycleStatus === 'scanning' && (
+                                    <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
+                                  )}
+                                </div>
                               )}
-                            </div>
+                            </AnimatedCardScanOverlay>
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-1.5">
                             <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${statusTone}`}>
