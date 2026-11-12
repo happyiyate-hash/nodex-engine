@@ -177,7 +177,10 @@ export interface DiscoveredToken {
   };
   lifecycle_updated_at?: string;
   lifecycle_version?: number;
+  /** Confirmed Solana market-feed subscription lifecycle, separate from security verdict. */
   monitoring_status?: string;
+  monitoring_reason?: string;
+  monitoring_updated_at?: string;
   authority_status?: string;
   authority_rechecks?: number;
   decimals?: number;
