@@ -1,5 +1,5 @@
 import type { DiscoveredToken } from '../types';
-import { recordRequest } from './engineLogs';
+import { recordRequest, updateRequest } from './engineLogs';
 
 const TOKENCARE_ENDPOINT = 'https://back-end-gamma-ebon.vercel.app/api/developer';
 const RETRY_STORAGE_KEY = 'nodex.tokencare.logo-retry.v1';
@@ -30,6 +30,13 @@ async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<Token
   };
   const started = performance.now();
   const at = new Date().toISOString();
+  const action = `TokenCare POST /api/developer · ${token.mint.slice(0, 6)}…${token.mint.slice(-5)}`;
+  // Publish the outgoing request immediately so a slow/hung request is still
+  // visible in Logs before TokenCare sends its response.
+  const logId = recordRequest({
+    action, at, ok: true,
+    request: { endpoint: TOKENCARE_ENDPOINT, method: 'POST', body: requestBody },
+  });
   try {
     const response = await fetch(TOKENCARE_ENDPOINT, {
       method: 'POST',
@@ -50,10 +57,8 @@ async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<Token
 
     // Keep the request body and complete response visible in Logs. Never record
     // the API key or request headers in browser storage.
-    recordRequest({
-      action: `TokenCare POST /api/developer · ${token.mint.slice(0, 6)}…${token.mint.slice(-5)}`,
-      at, durationMs, ok, status: response.status, error,
-      request: { endpoint: TOKENCARE_ENDPOINT, method: 'POST', body: requestBody },
+    updateRequest(logId, {
+      durationMs, ok, status: response.status, error,
       response: payload,
     });
 
@@ -69,12 +74,9 @@ async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<Token
     return { mint: token.mint, logoUrl };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'TokenCare request failed.';
-    recordRequest({
-      action: `TokenCare POST /api/developer · ${token.mint.slice(0, 6)}…${token.mint.slice(-5)}`,
-      at, durationMs: Math.round(performance.now() - started), ok: false,
-      error: message,
-      request: { endpoint: TOKENCARE_ENDPOINT, method: 'POST', body: requestBody },
-      response: { network_error: message },
+    updateRequest(logId, {
+      durationMs: Math.round(performance.now() - started), ok: false,
+      error: message, response: { network_error: message },
     });
     const retries = readRetryMap();
     retries[token.mint] = Date.now();
