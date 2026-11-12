@@ -126,7 +126,7 @@
 .stagger-enter > *:nth-child(7) { animation-delay:340ms; }
 .stagger-enter > *:nth-child(8) { animation-delay:390ms; }
 @media (prefers-reduced-motion: reduce) {
-  .token-feed-reveal, .stagger-enter > * { animation:none; }
+  .stagger-enter > * { animation:none; }
 }
 .tabular, .tabular-nums { font-variant-numeric: tabular-nums; }
 
