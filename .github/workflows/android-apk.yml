@@ -54,6 +54,9 @@ jobs:
       - name: Generate Android platform
         run: npx cap add android
 
+      - name: Configure Android system bars
+        run: node scripts/configure-android-system-bars.mjs
+
       - name: Generate native app icons and splash assets
         run: npx capacitor-assets generate --android --iconBackgroundColor '#000000' --splashBackgroundColor '#000000'
 
