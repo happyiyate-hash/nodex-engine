@@ -161,6 +161,8 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   // Track the exact URL that loaded/failed; a boolean can refer to the previous token image.
   const [loadedImageUrl, setLoadedImageUrl] = useState('');
   const [failedImageUrl, setFailedImageUrl] = useState('');
+  const [sampledAccent, setSampledAccent] = useState<{ url: string; color: string | null } | null>(null);
+  const [failedAccentProbeUrl, setFailedAccentProbeUrl] = useState('');
   const sizeClasses = {
     sm: 'w-5 h-5 text-[9px]',
     md: 'w-7 h-7 text-xs',
@@ -180,6 +182,8 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
     setRetryPending(false);
     setLoadedImageUrl('');
     setFailedImageUrl('');
+    setSampledAccent(null);
+    setFailedAccentProbeUrl('');
   }, [logoUrl]);
 
   // Retry transient CDN/network failures indefinitely with a capped backoff.
@@ -209,12 +213,25 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   useLayoutEffect(() => {
     const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
     if (!card || !showingSolanaFallback) return;
-    // Use Solana purple only while the current token logo is unavailable.
-    // Once onLoad extracts the logo's accent, do not overwrite it when the
-    // loaded state changes and this effect runs again.
-    card.style.setProperty('--token-accent-rgb', '231 137 55');
-    card.style.setProperty('--token-accent-secondary-rgb', '229 177 74');
+    // The Solana placeholder keeps its established purple accent.
+    card.style.setProperty('--token-accent-rgb', '153 69 255');
+    card.style.setProperty('--token-accent-secondary-rgb', '153 69 255');
   }, [showingSolanaFallback, logoUrl]);
+
+  useEffect(() => {
+    if (!loaded || !imageUrl) return;
+    const hasSample = sampledAccent?.url === imageUrl;
+    const probeFailed = failedAccentProbeUrl === imageUrl;
+    if (!hasSample && !probeFailed) return;
+
+    const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
+    if (!card) return;
+    // A real token logo is visible, but its colour could not be sampled:
+    // use the NodeX orange-and-gold fallback in that case only.
+    const accent = hasSample ? sampledAccent.color : null;
+    card.style.setProperty('--token-accent-rgb', accent || '231 137 55');
+    card.style.setProperty('--token-accent-secondary-rgb', accent || '229 177 74');
+  }, [loaded, imageUrl, sampledAccent, failedAccentProbeUrl]);
 
   return (
     <div ref={rootRef} className={sizeClasses + ' relative rounded-full overflow-hidden shrink-0 ' + (showingSolanaFallback ? 'bg-gradient-to-br from-[#241638] via-[#160f22] to-[#09070e] shadow-[inset_0_1px_1px_rgba(190,145,255,0.12),0_3px_9px_rgba(0,0,0,0.55)] ' : 'bg-gradient-to-br from-[#30343a] via-[#17191d] to-[#090a0c] shadow-[inset_0_1px_1px_rgba(255,255,255,0.16),0_3px_9px_rgba(0,0,0,0.55)] ') + className}>
@@ -275,19 +292,10 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
           onLoad={(event) => {
             if (event.currentTarget.getAttribute('src') !== imageUrl) return;
             const accent = extractDominantAccent(event.currentTarget);
-            const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
-            if (card) {
-              const resolvedAccent = accent || '231 137 55';
-              card.style.setProperty('--token-accent-rgb', resolvedAccent);
-              card.style.setProperty('--token-accent-secondary-rgb', accent || '229 177 74');
-            }
+            setSampledAccent({ url: imageUrl, color: accent });
           }}
           onError={() => {
-            const card = rootRef.current?.closest<HTMLElement>('[data-token-card]');
-            if (card) {
-              card.style.setProperty('--token-accent-rgb', '231 137 55');
-              card.style.setProperty('--token-accent-secondary-rgb', '229 177 74');
-            }
+            setFailedAccentProbeUrl(imageUrl);
           }}
         />
       )}
