@@ -151,7 +151,7 @@ export const LogsPage: React.FC = () => {
                     )}
                     {log.durationMs != null && <span className="mt-1 block text-[10px] text-zinc-600">{log.durationMs} ms</span>}
                   </span>
-                  <span className={`shrink-0 text-[10px] font-medium ${log.ok ? 'text-emerald-400' : 'text-red-400'}`}>{filter === 'requests' ? (log.status != null ? 'Sent' : (log.response && typeof log.response === 'object' && (log.response as any).skipped ? 'Skipped' : 'Failed')) : log.ok ? 'Received' : 'Error'}</span>
+                  <span className={`shrink-0 text-[10px] font-medium ${log.ok ? 'text-emerald-400' : 'text-red-400'}`}>{filter === 'requests' ? (log.status != null ? 'Sent' : (log.response && typeof log.response === 'object' && (log.response as any).skipped ? 'Skipped' : log.error ? 'Failed' : 'Pending')) : log.ok ? 'Received' : 'Error'}</span>
                 </button>
               ))}
             </div>
