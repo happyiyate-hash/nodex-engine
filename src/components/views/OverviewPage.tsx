@@ -591,6 +591,28 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const lifecycleProgress = Number.isFinite(lifecycleProgressValue)
                     ? Math.max(0, Math.min(100, lifecycleProgressValue)) : null;
                   const lifecycleSubEvent = String(tokenData.lifecycle_sub_event || tokenData.lifecycle_stage || '');
+                  const securityStatus = String(tokenData.qualification_status || '').toLowerCase();
+                  const securityLabel = securityStatus === 'qualified' ? 'Verified'
+                    : securityStatus === 'rejected' ? 'Rejected'
+                    : securityStatus === 'unverified' ? 'Unverified'
+                    : securityStatus === 'under_analysis' ? 'Scanning'
+                    : 'Pending';
+                  const marketFeedStatus = String(tokenData.monitoring_status || '').toLowerCase();
+                  const marketFeedLabel = marketFeedStatus === 'active' ? 'Active'
+                    : marketFeedStatus === 'pending' ? 'Connecting'
+                    : marketFeedStatus === 'waiting_for_capacity' ? 'Waiting for capacity'
+                    : marketFeedStatus === 'failed' ? 'Failed'
+                    : marketFeedStatus === 'removed' || marketFeedStatus === 'completed' ? 'Stopped'
+                    : 'Not connected';
+                  const marketFeedReason = String(tokenData.monitoring_reason || '');
+                  const strategyDecision = String(tokenData.strategy_decision || '').toLowerCase();
+                  const strategyLabel = strategyDecision === 'evaluate_paper_entry' ? 'Entry conditions met'
+                    : strategyDecision === 'reject' ? 'Rejected by strategy'
+                    : strategyDecision === 'wait' ? 'Waiting for entry'
+                    : 'Not evaluated';
+                  const strategyReasons = Array.isArray(tokenData.strategy_reasons)
+                    ? tokenData.strategy_reasons.map(String).filter(Boolean).join(' · ')
+                    : '';
                   const isLifecycleProgress = lifecycleStatus === 'scanning' && lifecycleProgress !== null;
                   const errorDetails = tokenData.lifecycle_error || diagnostics.find((diagnostic) =>
                     ['error', 'critical', 'fatal'].includes(String(diagnostic.severity || '').toLowerCase())
@@ -648,6 +670,19 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             </span>
                             {!complete && <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>}
                           </div>
+                          {complete && (
+                            <div className="mt-1 flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 text-[8px] leading-tight text-white/55">
+                              <span>Security: <span className={securityStatus === 'qualified' ? 'text-emerald-300' : securityStatus === 'rejected' ? 'text-red-300' : 'text-amber-200'}>{securityLabel}</span></span>
+                              <span>Market feed: <span className={marketFeedStatus === 'active' ? 'text-emerald-300' : marketFeedStatus === 'failed' ? 'text-red-300' : 'text-amber-200'}>{marketFeedLabel}</span></span>
+                              {strategyDecision && <span>Paper entry: <span className={strategyDecision === 'evaluate_paper_entry' ? 'text-emerald-300' : strategyDecision === 'reject' ? 'text-red-300' : 'text-white/75'}>{strategyLabel}</span></span>}
+                            </div>
+                          )}
+                          {complete && marketFeedReason && marketFeedStatus !== 'active' && (
+                            <p className="mt-0.5 truncate text-[8px] leading-tight text-amber-200/75" title={marketFeedReason}>{marketFeedReason}</p>
+                          )}
+                          {complete && strategyReasons && (
+                            <p className="mt-0.5 truncate text-[8px] leading-tight text-white/45" title={strategyReasons}>{strategyReasons}</p>
+                          )}
                           {errorDetails && (
                             <div className="mt-1">
                               <button
