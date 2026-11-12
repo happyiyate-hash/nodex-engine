@@ -604,7 +604,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           </div>
         </div>
 
-        <div className="mt-2 grid min-h-[76px] grid-cols-[minmax(0,3fr)_minmax(76px,1fr)] items-center rounded-xl bg-[#080808] px-3.5 py-3 sm:px-4">
+        <div className="mt-2 grid min-h-[76px] grid-cols-[minmax(0,3fr)_minmax(76px,1fr)] items-center px-3.5 py-3 sm:px-4">
           <div className="min-w-0 pr-3">
             <div className="text-[8px] font-medium uppercase tracking-[0.13em] text-white/40">Unrealized P&amp;L</div>
             <div
