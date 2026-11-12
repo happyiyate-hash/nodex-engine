@@ -497,7 +497,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 z-0"
-                        style={{ background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 184 197 213) / 0.17) 0%, rgb(var(--token-accent-rgb, 184 197 213) / 0.09) 48%, rgb(var(--token-accent-rgb, 184 197 213) / 0.025) 100%)' }}
+                        style={{ background: 'linear-gradient(90deg, rgb(var(--token-accent-rgb, 153 69 255) / 0.12) 0%, rgb(var(--token-accent-rgb, 153 69 255) / 0.065) 48%, rgb(var(--token-accent-rgb, 153 69 255) / 0.018) 100%)' }}
                       />
                       <div className="relative z-10">
                         <div className="flex min-w-0 items-center gap-2">
