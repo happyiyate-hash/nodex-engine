@@ -91,6 +91,7 @@ const lifecycleBadgeTones: Record<string, string> = {
   failed: 'bg-red-400/[0.10] text-red-300',
   unverified: 'bg-amber-300/[0.10] text-amber-200',
   scanning: 'bg-sky-400/[0.10] text-sky-200',
+  retrying: 'bg-amber-300/[0.10] text-amber-200',
   monitoring: 'bg-violet-400/[0.10] text-violet-200',
   monitoring_stopped: 'bg-white/[0.07] text-white/65',
   bought_paper: 'bg-emerald-400/[0.10] text-emerald-300',
