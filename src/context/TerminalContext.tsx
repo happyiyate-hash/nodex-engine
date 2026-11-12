@@ -697,6 +697,49 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const authoritativeTokenMints = useRef<Set<string> | null>(null);
   const backendTokenSnapshotReceived = useRef(false);
 
+  // Restore durable backend activity on every app start. Live WebSocket events
+  // are merged afterward so a delayed history response cannot overwrite newer data.
+  useEffect(() => {
+    let active = true;
+    apiClient.getEngineActivityLogs(500).then((records) => {
+      if (!active || !Array.isArray(records)) return;
+      const restored = records.map((record) => {
+        const activity = record.activity || {};
+        const isEngineLifecycleEvent =
+          activity.direction === 'event' &&
+          activity.provider === 'engine' &&
+          typeof activity.operation === 'string';
+        const raw = isEngineLifecycleEvent
+          ? {
+              type: activity.operation,
+              event_id: `backend-history-${record.id}`,
+              timestamp: activity.timestamp || record.recorded_at,
+              data: activity.event || activity,
+            }
+          : {
+              type: 'engine_activity',
+              event_id: `backend-history-${record.id}`,
+              timestamp: activity.timestamp || record.recorded_at,
+              data: activity,
+            };
+        return normalizeBackendEvent(raw, record.recorded_at);
+      });
+
+      setEvents((current) => {
+        const merged = new Map<string, NodeXEvent>();
+        for (const event of restored) merged.set(event.event_id, event);
+        // Current-session events take precedence over their older persisted copy.
+        for (const event of current) merged.set(event.event_id, event);
+        return Array.from(merged.values())
+          .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
+          .slice(0, 500);
+      });
+    }).catch((error) => {
+      console.warn('NodeX backend event history restore failed:', error);
+    });
+    return () => { active = false; };
+  }, []);
+
   // Restore stable lifecycle/security records from IndexedDB. Market ticks are
   // deliberately excluded from this cache and are always refreshed by the backend.
   useEffect(() => {
@@ -1098,10 +1141,10 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 last_seen_at: event.timestamp,
               },
             };
-            return [updated, ...previous.filter((_, index) => index !== duplicateIndex)].slice(0, 200);
+            return [updated, ...previous.filter((_, index) => index !== duplicateIndex)].slice(0, 500);
           }
         }
-        return [event, ...previous].slice(0, 200);
+        return [event, ...previous].slice(0, 500);
       });
       if (event.event_type === 'connection_status') {
         const stream = event.data.solana_stream || {};
