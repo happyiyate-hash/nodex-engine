@@ -612,7 +612,12 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
           <div className="flex min-h-[48px] min-w-0 items-center justify-start gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.025] px-3 py-3">
             <span className="shrink-0 text-[8px] font-medium uppercase tracking-[0.08em] text-white/40">P&amp;L</span>
             <span className="min-w-0 truncate text-[12px] font-semibold leading-none tabular-nums" style={{ color: unrealizedProfitUsd > 0 ? '#83b982' : unrealizedProfitUsd < 0 ? '#c77b7b' : '#ffffff' }}>
-              {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'
+              {unrealizedProfitUsd > 0 ? '+' : unrealizedProfitUsd < 0 ? '−' : ''}{'$'}{formatPnlDisplay(unrealizedProfitUsd)}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-5 flex shrink-0 flex-col pb-0">
           <div className="mb-2 flex shrink-0 items-center gap-1.5">
             <div className="relative min-w-0 flex-1">
               <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-white/30" />
