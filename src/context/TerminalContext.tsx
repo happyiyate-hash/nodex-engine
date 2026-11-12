@@ -310,9 +310,18 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     monitoring_status: event.event_type === 'market_subscription_requested' ? 'pending'
       : event.event_type === 'market_subscription_waiting' ? String(data.status || 'waiting_for_capacity')
       : event.event_type === 'market_subscription_active' ? 'active'
+      : event.event_type === 'market_subscription_failed' ? 'failed'
+      : event.event_type === 'market_subscriptions_removed' ? 'removed'
       : event.event_type === 'token_monitoring_started' || event.event_type === 'token_monitoring_update'
         ? String(data.status || 'watching')
         : event.event_type === 'token_monitoring_completed' ? 'completed' : previous?.monitoring_status,
+    monitoring_reason: ['market_subscription_waiting', 'market_subscription_failed'].includes(event.event_type)
+      ? String(data.reason || data.message || data.status || '')
+      : event.event_type === 'market_subscription_active' ? ''
+      : previous?.monitoring_reason,
+    monitoring_updated_at: ['market_subscription_requested', 'market_subscription_waiting', 'market_subscription_active', 'market_subscription_failed', 'market_subscriptions_removed'].includes(event.event_type)
+      ? String(data.received_at || event.timestamp)
+      : previous?.monitoring_updated_at,
     authority_status: event.event_type === 'token_monitoring_update'
       ? String(data.authority_status || 'unknown') : previous?.authority_status,
     authority_rechecks: event.event_type === 'token_monitoring_update'
@@ -520,6 +529,9 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
       ? snapshot.activity.reasons.map(String)
       : previous?.strategy_reasons,
     strategy_evaluated_at: String(snapshot.activity?.evaluated_at ?? previous?.strategy_evaluated_at ?? ''),
+    monitoring_status: String(snapshot.market_subscription?.status ?? previous?.monitoring_status ?? ''),
+    monitoring_reason: String(snapshot.market_subscription?.reason ?? snapshot.market_subscription?.message ?? previous?.monitoring_reason ?? ''),
+    monitoring_updated_at: String(snapshot.market_subscription?.received_at ?? previous?.monitoring_updated_at ?? ''),
     decimals: identity.decimals == null ? previous?.decimals : Number(identity.decimals),
     total_supply_raw: String(identity.total_supply_raw ?? identity.total_supply ?? previous?.total_supply_raw ?? ''),
     creator_wallet: String(identity.creator_address ?? identity.creator_wallet ?? previous?.creator_wallet ?? ''),
@@ -939,7 +951,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_diagnostic', 'token_metadata_started', 'token_metadata_failed',
         'market_price_update', 'market_tick', 'token_market_update', 'token_statistics_update',
         'token_monitoring_started', 'token_monitoring_update', 'token_monitoring_completed',
-        'market_subscription_requested', 'market_subscription_active', 'market_subscription_waiting',
+        'market_subscription_requested', 'market_subscription_active', 'market_subscription_waiting', 'market_subscription_failed', 'market_subscriptions_removed',
         'paper_buy_started', 'paper_buy_executed', 'paper_buy_failed', 'paper_sell_executed', 'paper_sell_failed', 'position_updated',
         'paper_entry_evaluation',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
