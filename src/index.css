@@ -111,13 +111,6 @@
   from { opacity: 0; transform: translateY(12px); filter: blur(3px); }
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
-/* Reveal the complete token stack as one composited layer, not card by card. */
-@keyframes token-feed-reveal {
-  from { opacity: 0; transform: translate3d(0,8px,0); }
-  to { opacity: 1; transform: translate3d(0,0,0); }
-}
-.token-feed-reveal { animation: token-feed-reveal 180ms ease-out both; }
-.token-card-lazy { content-visibility: auto; contain-intrinsic-size: auto 72px; }
 .wallet-main-scroll {
   -webkit-mask-image: linear-gradient(to bottom,transparent 0,black 24px,black calc(100% - 24px),transparent 100%);
   mask-image: linear-gradient(to bottom,transparent 0,black 24px,black calc(100% - 24px),transparent 100%);
