@@ -649,7 +649,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
       {section === 'trading' && (
         <div className="pt-0">
-          <StrategyPage />
+          <StrategyPage embedded />
         </div>
       )}
 
