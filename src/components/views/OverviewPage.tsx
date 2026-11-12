@@ -17,58 +17,36 @@ interface AnimatedCardScanOverlayProps {
 const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, attempt = 0, children }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
   const [scanVisible, setScanVisible] = useState(false);
-  const progressRef = useRef(0);
   const scanStartedRef = useRef(false);
   const currentAttemptRef = useRef(attempt);
 
   useEffect(() => {
-    let frame = 0;
     if (attempt !== currentAttemptRef.current) {
       currentAttemptRef.current = attempt;
-      progressRef.current = 0;
+      scanStartedRef.current = false;
       setDisplayProgress(0);
+      setScanVisible(false);
     }
+
     if (status === 'scanning') {
       scanStartedRef.current = true;
       setScanVisible(true);
       const target = Math.max(1, Math.min(100, progress == null ? 1 : progress));
-      let previous = 0;
-      const animateToBackendProgress = (now: number) => {
-        if (!previous) previous = now;
-        const elapsed = Math.min(50, now - previous);
-        previous = now;
-        const next = Math.min(target, progressRef.current + elapsed * 0.12);
-        progressRef.current = next;
-        setDisplayProgress(next);
-        if (next + 0.01 < target) frame = requestAnimationFrame(animateToBackendProgress);
-      };
-      if (progressRef.current < target) frame = requestAnimationFrame(animateToBackendProgress);
-      return () => cancelAnimationFrame(frame);
+      setDisplayProgress(target);
+      return undefined;
     }
 
-    // Keep the scanning fill visible briefly after the backend's next state
-    // arrives. This prevents a one-frame flash while still showing the newest
-    // backend state immediately after the short visual handoff.
-    if (!scanStartedRef.current) return;
-    const start = progressRef.current;
-    const startedAt = performance.now();
-    const finishScanTransition = (now: number) => {
-      const amount = Math.min(1, (now - startedAt) / 360);
-      const eased = 1 - Math.pow(1 - amount, 3);
-      const next = start + (100 - start) * eased;
-      progressRef.current = next;
-      setDisplayProgress(next);
-      if (amount < 1) {
-        frame = requestAnimationFrame(finishScanTransition);
-      } else {
-        scanStartedRef.current = false;
-        progressRef.current = 0;
-        setScanVisible(false);
-        setDisplayProgress(0);
-      }
-    };
-    frame = requestAnimationFrame(finishScanTransition);
-    return () => cancelAnimationFrame(frame);
+    if (!scanStartedRef.current) return undefined;
+
+    // Let CSS interpolate the final handoff. Avoid a requestAnimationFrame
+    // loop and React state update on every frame for every scanning token.
+    setDisplayProgress(100);
+    const timeout = window.setTimeout(() => {
+      scanStartedRef.current = false;
+      setScanVisible(false);
+      setDisplayProgress(0);
+    }, 360);
+    return () => window.clearTimeout(timeout);
   }, [status, progress, attempt]);
 
   return (
@@ -77,7 +55,10 @@ const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ statu
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 left-0 z-[1] rounded-r-sm bg-[#B8C5D5]/[0.11]"
-          style={{ width: `${displayProgress}%` }}
+          style={{
+            width: `${displayProgress}%`,
+            transition: status === 'scanning' ? 'width 180ms linear' : 'width 360ms cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
         />
       )}
       {typeof children === 'function' ? children(displayProgress, scanVisible) : null}
