@@ -159,15 +159,19 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const isSecurityVerdictEvent = ['token_scan_update', 'token_scan_completed', 'token_scan_failed'].includes(event.event_type);
   const incomingStateVersion = Number(data.state_version ?? data.version ?? 0);
   const previousStateVersion = Number(previous?.state_version || 0);
+  const incomingScanAttempt = Number(data.scan_attempt ?? data.attempt ?? 0);
+  const previousScanAttempt = Number(previous?.scan_attempt || 0);
+  const isNewScanAttempt = isScanProgressEvent && incomingScanAttempt > previousScanAttempt;
   const incomingSecurityScannedAt = Date.parse(String(data.scanned_at || data.security?.scanned_at || ''));
   const previousSecurityScannedAt = Date.parse(String(previous?.security_scanned_at || ''));
-  const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || (previous?.qualification_status !== 'bought_paper' && Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
+  const mayReplaceTerminalVerdict = !previousHasTerminalVerdict || isNewScanAttempt || (previous?.qualification_status !== 'bought_paper' && Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
   const isUnverifiedTerminal = mayReplaceTerminalVerdict && (event.event_type === 'token_scan_failed'
     || event.event_type === 'token_scan_completed' && ['unverified', 'failed', 'unknown'].includes(String(data.status || decision).toLowerCase()));
   // Progress events can arrive late or be replayed after a final verdict. They
   // may update diagnostics, but must never move a terminal token back to scanning.
   const scanStatus = isScanProgressEvent
-    ? previousHasTerminalScanStatus ? previous?.scan_status
+    ? isNewScanAttempt ? 'scanning'
+      : previousHasTerminalScanStatus ? previous?.scan_status
       : previousHasTerminalVerdict ? 'completed' : 'scanning'
     : event.event_type === 'token_scan_completed' && mayReplaceTerminalVerdict ? String(data.status || 'completed')
     : event.event_type === 'token_scan_failed' && mayReplaceTerminalVerdict ? 'failed'
@@ -188,6 +192,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     ? {
         status: 'scanning',
         label: 'Scanning',
+        scan_attempt: incomingScanAttempt || previousScanAttempt,
         progress: 0,
         stage: 'initializing',
         sub_event: 'Scanning',
@@ -196,6 +201,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
       ? {
           status: 'scanning',
           label: 'Scanning',
+          scan_attempt: incomingScanAttempt || previousScanAttempt,
           progress: Number(data.progress ?? 0),
           stage: data.stage || 'security_checks',
           sub_event: 'Scanning',
@@ -280,22 +286,25 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
   const incomingLifecycleTime = Date.parse(String(data.updated_at || data.received_at || event.timestamp || ''));
   const previousLifecycleTime = Date.parse(String(previous?.lifecycle_updated_at || ''));
   const lifecycleIsNewer = Boolean(incomingActivity) && (
+    isNewScanAttempt || (
     incomingLifecycleVersion !== null
       ? incomingLifecycleVersion > previousLifecycleVersion ||
         incomingLifecycleVersion === previousLifecycleVersion &&
           (!Number.isFinite(previousLifecycleTime) || !Number.isFinite(incomingLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
       : Number.isFinite(incomingLifecycleTime) &&
         (!Number.isFinite(previousLifecycleTime) || incomingLifecycleTime >= previousLifecycleTime)
+    )
   );
   const qualification: DiscoveredToken['qualification_status'] = event.event_type === 'paper_buy_executed' ? 'bought_paper'
     : previousHasTerminalVerdict && !mayReplaceTerminalVerdict ? previous!.qualification_status
     : isUnverifiedTerminal ? 'unverified'
     : isSecurityVerdictEvent && mayReplaceTerminalVerdict && decision.includes('reject') ? 'rejected'
-    : isScanProgressEvent ? (previousHasTerminalVerdict ? previous!.qualification_status : 'under_analysis')
+    : isScanProgressEvent ? (isNewScanAttempt ? 'under_analysis' : previousHasTerminalVerdict ? previous!.qualification_status : 'under_analysis')
     : isSecurityVerdictEvent && mayReplaceTerminalVerdict && (decision.includes('qualif') || decision.includes('approv')) ? 'qualified'
     : previous?.qualification_status || 'newly_detected';
   return {
     mint, state_version: Math.max(previousStateVersion, incomingStateVersion),
+    scan_attempt: Math.max(previousScanAttempt, incomingScanAttempt),
     security_scanned_at: Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 ? new Date(incomingSecurityScannedAt).toISOString() : previous?.security_scanned_at,
     name: String(payload.name || payload.token_name || metadata.name || previous?.name || 'Unknown token'),
     symbol: String(payload.symbol || payload.token_symbol || metadata.symbol || previous?.symbol || 'UNKNOWN'),
@@ -494,7 +503,9 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   const previousTerminal = ['qualified', 'rejected', 'unverified', 'bought_paper'].includes(String(previous?.qualification_status || ''));
   const incomingSecurityScannedAt = Date.parse(String(snapshot.security?.scanned_at || ''));
   const previousSecurityScannedAt = Date.parse(String(previous?.security_scanned_at || ''));
-  const snapshotMayReplaceTerminal = !previousTerminal || (previous?.qualification_status !== 'bought_paper' && Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
+  const snapshotMayReplaceTerminal = !previousTerminal
+    || snapshotVersion > previousVersion
+    || (previous?.qualification_status !== 'bought_paper' && Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 && incomingSecurityScannedAt > previousSecurityScannedAt);
   const rawSecurityStatus = String(snapshot.security?.status || '').toLowerCase();
   // The security decision is authoritative. Older snapshots may retain a
   // transient "scanning" status even though the final APPROVED verdict was saved.
@@ -510,6 +521,10 @@ function mapTokenDetailSnapshot(snapshot: Record<string, any>, previous?: Discov
   return {
     mint,
     state_version: Math.max(previousVersion, snapshotVersion),
+    scan_attempt: Math.max(
+      Number(previous?.scan_attempt || 0),
+      Number(snapshot.security?.scan_cache?.scan_attempt ?? snapshot.security?.scan_attempt ?? 0),
+    ),
     security_scanned_at: Number.isFinite(incomingSecurityScannedAt) && incomingSecurityScannedAt > 0 ? new Date(incomingSecurityScannedAt).toISOString() : previous?.security_scanned_at,
     name: String(identity.name ?? previous?.name ?? ''),
     symbol: String(identity.symbol ?? previous?.symbol ?? ''),
@@ -659,6 +674,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         for (const record of records) {
           if (!record.token?.mint) continue;
           if (authoritativeTokenMints.current && !authoritativeTokenMints.current.has(record.mint)) continue;
+          // Once a complete backend snapshot is known, IndexedDB must never
+          // overwrite that authoritative token state.
+          if (authoritativeTokenMints.current) continue;
           const cached = record.token;
           lifecycleCacheSignatures.current.set(record.mint, lifecycleCacheSignature(cached));
           const existing = byMint.get(record.mint);
