@@ -56,6 +56,15 @@ export function normalizeBackendEvent(raw:any, receivedAt?:string):NodeXEvent {
       case 'token_market_update': message=`Token market price updated: ${data.mint_address||'unknown mint'}`; break;
       case 'token_statistics_update': message=`Token market statistics updated: ${data.mint_address||'unknown mint'}`; break;
       case 'diagnostic': message=`Backend diagnostic ${data.severity||'info'} [${data.component||'unknown component'}]: ${data.message||'No diagnostic message'}`; break;
+      case 'engine_activity': {
+        const provider = String(data.provider || 'provider');
+        const operation = String(data.operation || 'activity');
+        const endpoint = data.endpoint ? ` via ${data.endpoint}` : '';
+        if (data.error) message = `${provider} ${operation} failed: ${String(data.error)}`;
+        else if (Number(data.http_status || 0) >= 400) message = `${provider} ${operation} returned HTTP ${data.http_status}${endpoint}`;
+        else message = `${provider} ${String(data.direction || 'activity')} ${operation}${endpoint}`;
+        break;
+      }
       case 'connection_status': message='Connected to NodeX backend event stream'; break;
       case 'engine_state': message=`Engine ${data.paused?'paused':'running'} in ${data.mode||'paper'} mode`; break;
       default: message=rawType.replace(/_/g,' ');
