@@ -176,8 +176,6 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   // Track the exact URL that loaded/failed; a boolean can refer to the previous token image.
   const [loadedImageUrl, setLoadedImageUrl] = useState('');
   const [failedImageUrl, setFailedImageUrl] = useState('');
-  const loaded = Boolean(imageUrl) && loadedImageUrl === imageUrl;
-  const logoFailed = Boolean(imageUrl) && failedImageUrl === imageUrl;
   const sizeClasses = {
     sm: 'w-5 h-5 text-[9px]',
     md: 'w-7 h-7 text-xs',
@@ -185,6 +183,8 @@ export const TokenAvatar: React.FC<TokenAvatarProps> = ({ symbol, logoUrl, size 
   }[size];
 
   const imageUrl = imageUrls[gatewayIndex] || '';
+  const loaded = Boolean(imageUrl) && loadedImageUrl === imageUrl;
+  const logoFailed = Boolean(imageUrl) && failedImageUrl === imageUrl;
 
   useEffect(() => {
     setGatewayIndex(0);
