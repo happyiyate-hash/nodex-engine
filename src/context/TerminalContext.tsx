@@ -234,7 +234,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                 occurred_at: data.received_at || event.timestamp,
               },
             }
-          : event.event_type === 'market_subscription_active'
+          : event.event_type === 'market_subscription_subscribed' || event.event_type === 'market_subscription_active'
             ? {
                 status: 'monitoring',
                 label: 'Monitoring',
