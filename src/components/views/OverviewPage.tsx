@@ -372,13 +372,33 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
   const [expandedScans, setExpandedScans] = useState<string[]>([]);
   const [expandedErrors, setExpandedErrors] = useState<string[]>([]);
 
-  const tokensByMint = useMemo(
-    () => new Map(tokens.map((token) => [token.mint, token])),
+  // Backend snapshots are external data. Ignore malformed entries before they
+  // reach render code (one missing mint must never blank the entire app).
+  const safeTokens = useMemo(
+    () => (Array.isArray(tokens) ? tokens.filter((token) =>
+      Boolean(token && typeof token.mint === 'string' && token.mint.trim().length > 0)
+    ) : []),
     [tokens]
   );
+  const safeLaunches = useMemo(
+    () => (Array.isArray(launches) ? launches.filter((launch) =>
+      Boolean(launch && typeof launch.mint_address === 'string' && launch.mint_address.trim().length > 0)
+    ) : []),
+    [launches]
+  );
+  const tokensByMint = useMemo(
+    () => new Map(safeTokens.map((token) => [token.mint, token])),
+    [safeTokens]
+  );
   const launchViews = useMemo(
-    () => launches.map((launch) => getLaunchView(launch, tokensByMint.get(launch.mint_address))).sort((a, b) => new Date(b.launch.detected_at).getTime() - new Date(a.launch.detected_at).getTime()),
-    [launches, tokensByMint]
+    () => safeLaunches
+      .map((launch) => getLaunchView(launch, tokensByMint.get(launch.mint_address)))
+      .sort((a, b) => {
+        const left = Date.parse(String(a.launch.detected_at || ''));
+        const right = Date.parse(String(b.launch.detected_at || ''));
+        return (Number.isFinite(right) ? right : 0) - (Number.isFinite(left) ? left : 0);
+      }),
+    [safeLaunches, tokensByMint]
   );
   const counts = useMemo(() => ({
     detected: launchViews.length,
@@ -470,9 +490,9 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   const errorMessage = String(errorDetails?.message || '');
                   return (
                     <article
-                      key={launch.id || launch.signature}
+                      key={launch.id || launch.signature || launch.mint_address}
                       data-token-card
-                      className="token-card-surface relative isolate mb-1 overflow-hidden rounded-[10px] border border-white/[0.075] bg-black/65 px-2.5 py-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.30)] backdrop-blur-xl before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/35 before:to-transparent after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-20 after:h-px after:bg-white/[0.035] last:mb-0"
+                      className="token-card-surface relative isolate mb-1 overflow-hidden rounded-[10px] border border-white/[0.075] bg-[#080808] px-2.5 py-1.5 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/35 before:to-transparent after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-20 after:h-px after:bg-white/[0.035] last:mb-0"
                     >
                       <div
                         aria-hidden="true"
