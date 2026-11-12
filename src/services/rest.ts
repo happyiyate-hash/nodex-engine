@@ -55,11 +55,11 @@ export interface EngineControlSnapshot {
 
 export interface ApiSettings {
   backendUrl: string; wsUrl: string; wsUrlOverride: string; mode: 'RUST_BACKEND'; rpcUrl: string;
-  autoReconnection: boolean; heartbeatIntervalMs: number; apiKey: string; adminApiKey: string;
+  autoReconnection: boolean; heartbeatIntervalMs: number; apiKey: string; adminApiKey: string; tokenCareApiKey: string;
 }
 export const DEFAULT_SETTINGS: ApiSettings = {
   backendUrl: '', wsUrl: '', wsUrlOverride: '', mode: 'RUST_BACKEND', rpcUrl: '',
-  autoReconnection: true, heartbeatIntervalMs: 5000, apiKey: '', adminApiKey: '',
+  autoReconnection: true, heartbeatIntervalMs: 5000, apiKey: '', adminApiKey: '', tokenCareApiKey: '',
 };
 
 export function cleanHeaderValue(val: string): string {
@@ -81,11 +81,12 @@ function readStoredConnectionSettings(): Partial<ApiSettings> {
   try {
     const raw = window.localStorage.getItem(CONNECTION_STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrlOverride?: unknown; adminApiKey?: unknown };
+    const parsed = JSON.parse(raw) as { backendUrl?: unknown; wsUrlOverride?: unknown; adminApiKey?: unknown; tokenCareApiKey?: unknown };
     return {
       ...(typeof parsed.backendUrl === 'string' ? { backendUrl: parsed.backendUrl.trim() } : {}),
       ...(typeof parsed.wsUrlOverride === 'string' ? { wsUrlOverride: parsed.wsUrlOverride.trim() } : {}),
       ...(typeof parsed.adminApiKey === 'string' ? { adminApiKey: cleanHeaderValue(parsed.adminApiKey) } : {}),
+      ...(typeof parsed.tokenCareApiKey === 'string' ? { tokenCareApiKey: cleanHeaderValue(parsed.tokenCareApiKey) } : {}),
     };
   } catch {
     return {};
@@ -203,6 +204,7 @@ export class NodeXRestClient {
         window.localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({
           backendUrl: this.settings.backendUrl,
           adminApiKey: this.settings.adminApiKey,
+          tokenCareApiKey: this.settings.tokenCareApiKey,
           wsUrlOverride: this.settings.wsUrlOverride,
         }));
       } catch (error) {
