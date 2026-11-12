@@ -10,50 +10,110 @@ type ChangeDirection = 'up' | 'down' | null;
 interface AnimatedCardScanOverlayProps {
   status: string;
   progress: number | null;
-  children?: (displayProgress: number) => React.ReactNode;
+  children?: (displayProgress: number, scanVisible: boolean) => React.ReactNode;
 }
 
 const AnimatedCardScanOverlay: React.FC<AnimatedCardScanOverlayProps> = ({ status, progress, children }) => {
   const [displayProgress, setDisplayProgress] = useState(0);
+  const [scanVisible, setScanVisible] = useState(false);
   const progressRef = useRef(0);
-  const hasProgress = status === 'scanning' && progress !== null;
-  const target = hasProgress ? Math.max(0, Math.min(100, progress as number)) : 0;
+  const scanStartedRef = useRef(false);
 
   useEffect(() => {
-    if (!hasProgress) return;
     let frame = 0;
-    let previous = 0;
-    const animate = (now: number) => {
-      if (!previous) previous = now;
-      const elapsed = Math.min(50, now - previous);
-      previous = now;
-      const next = Math.min(target, progressRef.current + elapsed * 0.075);
+    if (status === 'scanning') {
+      scanStartedRef.current = true;
+      setScanVisible(true);
+      const target = Math.max(1, Math.min(100, progress == null ? 1 : progress));
+      let previous = 0;
+      const animateToBackendProgress = (now: number) => {
+        if (!previous) previous = now;
+        const elapsed = Math.min(50, now - previous);
+        previous = now;
+        const next = Math.min(target, progressRef.current + elapsed * 0.12);
+        progressRef.current = next;
+        setDisplayProgress(next);
+        if (next + 0.01 < target) frame = requestAnimationFrame(animateToBackendProgress);
+      };
+      if (progressRef.current < target) frame = requestAnimationFrame(animateToBackendProgress);
+      return () => cancelAnimationFrame(frame);
+    }
+
+    // Keep the scanning fill visible briefly after the backend's next state
+    // arrives. This prevents a one-frame flash while still showing the newest
+    // backend state immediately after the short visual handoff.
+    if (!scanStartedRef.current) return;
+    const start = progressRef.current;
+    const startedAt = performance.now();
+    const finishScanTransition = (now: number) => {
+      const amount = Math.min(1, (now - startedAt) / 360);
+      const eased = 1 - Math.pow(1 - amount, 3);
+      const next = start + (100 - start) * eased;
       progressRef.current = next;
       setDisplayProgress(next);
-      if (next + 0.01 < target) frame = requestAnimationFrame(animate);
+      if (amount < 1) {
+        frame = requestAnimationFrame(finishScanTransition);
+      } else {
+        scanStartedRef.current = false;
+        progressRef.current = 0;
+        setScanVisible(false);
+        setDisplayProgress(0);
+      }
     };
-    if (progressRef.current < target) frame = requestAnimationFrame(animate);
+    frame = requestAnimationFrame(finishScanTransition);
     return () => cancelAnimationFrame(frame);
-  }, [hasProgress, target]);
+  }, [status, progress]);
 
-  const finished = status !== 'scanning' && displayProgress >= 99.99;
   return (
     <>
-      {hasProgress && (
+      {scanVisible && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 z-[1] rounded-r-sm bg-[#B8C5D5]/[0.11] transition-[opacity] duration-300 ease-out"
-          style={{ width: `${displayProgress}%`, opacity: finished ? 0 : 1 }}
+          className="pointer-events-none absolute inset-y-0 left-0 z-[1] rounded-r-sm bg-[#B8C5D5]/[0.11]"
+          style={{ width: `${displayProgress}%` }}
         />
       )}
-      {typeof children === 'function' ? children(displayProgress) : null}
+      {typeof children === 'function' ? children(displayProgress, scanVisible) : null}
     </>
+  );
+};
+
+const lifecycleBadgeTones: Record<string, string> = {
+  verified: 'bg-emerald-400/[0.10] text-emerald-300',
+  rejected: 'bg-red-400/[0.10] text-red-300',
+  failed: 'bg-red-400/[0.10] text-red-300',
+  unverified: 'bg-amber-300/[0.10] text-amber-200',
+  scanning: 'bg-sky-400/[0.10] text-sky-200',
+  monitoring: 'bg-violet-400/[0.10] text-violet-200',
+  monitoring_stopped: 'bg-white/[0.07] text-white/65',
+  bought_paper: 'bg-emerald-400/[0.10] text-emerald-300',
+};
+
+const TokenLifecycleBadge: React.FC<{ status: string; label: string }> = ({ status, label }) => {
+  const [shown, setShown] = useState({ status, label });
+  useEffect(() => {
+    if (shown.status === 'scanning' && status !== 'scanning') {
+      const timeout = window.setTimeout(() => setShown({ status, label }), 360);
+      return () => window.clearTimeout(timeout);
+    }
+    setShown({ status, label });
+    return undefined;
+  }, [status, label]);
+  const tone = lifecycleBadgeTones[shown.status] || 'bg-white/[0.08] text-white/75';
+  return (
+    <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${tone}`}>
+      {shown.label}
+    </span>
   );
 };
 
 const TokenCardSubtitle: React.FC<{ status: string; subtitle: string }> = ({ status, subtitle }) => {
   const [visibleSubtitle, setVisibleSubtitle] = useState(subtitle);
   useEffect(() => {
+    if (status !== 'scanning' && visibleSubtitle === 'Scanning') {
+      const handoff = window.setTimeout(() => setVisibleSubtitle(subtitle), 360);
+      return () => window.clearTimeout(handoff);
+    }
     setVisibleSubtitle(subtitle);
     if (status !== 'monitoring' || !subtitle || subtitle === 'Monitoring market activity') return;
     const timeout = window.setTimeout(() => setVisibleSubtitle('Monitoring market activity'), 7000);
@@ -552,23 +612,12 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                   );
                   const errorExpanded = expandedErrors.includes(launch.mint_address);
                   const errorMessage = String(errorDetails?.message || '');
-                  const statusTone = ({
-                    verified: 'bg-emerald-400/[0.10] text-emerald-300',
-                    rejected: 'bg-red-400/[0.10] text-red-300',
-                    failed: 'bg-red-400/[0.10] text-red-300',
-                    unverified: 'bg-amber-300/[0.10] text-amber-200',
-                    scanning: 'bg-sky-400/[0.10] text-sky-200',
-                    monitoring: 'bg-violet-400/[0.10] text-violet-200',
-                    monitoring_stopped: 'bg-white/[0.07] text-white/65',
-                    bought_paper: 'bg-emerald-400/[0.10] text-emerald-300',
-                  } as Record<string, string>)[lifecycleStatus] || 'bg-white/[0.08] text-white/75';
                   return (
                     <article
                       key={launch.id || launch.signature}
                       data-token-card
                       className="relative isolate mb-1 overflow-hidden rounded-xl border border-x-white/[0.10] border-t-white/[0.16] border-b-white/[0.04] bg-gradient-to-b from-[#1c1c1c] via-[#121212] to-[#0d0d0d] px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-1px_2px_rgba(0,0,0,0.42),0_5px_14px_rgba(0,0,0,0.48)] before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/25 before:to-transparent last:mb-0"
                     >
-                      <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress} />
                       <div className="relative z-10">
                         <div className="flex min-w-0 items-center gap-2">
                           <TokenAvatar
@@ -583,10 +632,10 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                               {cardSymbol && <span className="shrink-0 text-[9px] font-medium text-white/45">${cardSymbol}</span>}
                             </div>
                             <AnimatedCardScanOverlay status={lifecycleStatus} progress={lifecycleProgress}>
-                              {(displayProgress) => (
+                              {(displayProgress, scanVisible) => (
                                 <div className="mt-1 flex min-w-0 items-center gap-2">
                                   <TokenCardSubtitle status={lifecycleStatus} subtitle={lifecycleSubEvent} />
-                                  {lifecycleStatus === 'scanning' && lifecycleProgress !== null && (
+                                  {scanVisible && (
                                     <span className="shrink-0 text-[8px] font-medium tabular-nums text-white/65">{Math.round(displayProgress)}%</span>
                                   )}
                                   {errorDetails && (
@@ -612,9 +661,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                             </AnimatedCardScanOverlay>
                           </div>
                           <div className="flex shrink-0 flex-col items-end gap-1.5">
-                            <span className={`max-w-[116px] truncate rounded-md px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.07em] ${statusTone}`}>
-                              {lifecycleLabel}
-                            </span>
+                            <TokenLifecycleBadge status={lifecycleStatus} label={lifecycleLabel} />
                             <button
                               type="button"
                               aria-label={`Copy ${cardName} contract address`}
