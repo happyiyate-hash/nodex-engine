@@ -3,7 +3,28 @@ import { recordRequest, updateRequest } from './engineLogs';
 
 const TOKENCARE_ENDPOINT = 'https://back-end-gamma-ebon.vercel.app/api/developer';
 const RETRY_STORAGE_KEY = 'nodex.tokencare.logo-retry.v1';
+const DAILY_LIMIT_STORAGE_KEY = 'nodex.tokencare.daily-limit-until.v1';
 const RETRY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+function readDailyLimitUntil(): number {
+  try {
+    const until = Number(localStorage.getItem(DAILY_LIMIT_STORAGE_KEY) || 0);
+    if (until > Date.now()) return until;
+    if (until) localStorage.removeItem(DAILY_LIMIT_STORAGE_KEY);
+  } catch { /* best effort */ }
+  return 0;
+}
+
+function blockTokenCareUntilNextUtcDay(): number {
+  const now = new Date();
+  const nextUtcDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  try { localStorage.setItem(DAILY_LIMIT_STORAGE_KEY, String(nextUtcDay)); } catch { /* best effort */ }
+  return nextUtcDay;
+}
+
+function isTokenCareDailyLimitBlocked(): boolean {
+  return readDailyLimitUntil() > Date.now();
+}
 
 type TokenCareResult = { mint: string; logoUrl: string | null; error?: string };
 
@@ -47,6 +68,8 @@ async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<Token
     let payload: any = responseText;
     try { payload = responseText ? JSON.parse(responseText) : null; } catch { /* Keep non-JSON response text for diagnostics. */ }
     const durationMs = Math.round(performance.now() - started);
+    const dailyLimitReached = response.status === 429 && payload?.code === 'DAILY_CALL_LIMIT_REACHED';
+    const dailyLimitUntil = dailyLimitReached ? blockTokenCareUntilNextUtcDay() : 0;
     const logoUrl = typeof payload?.data?.logo_url === 'string' ? payload.data.logo_url.trim() : '';
     const ok = response.ok && payload?.success === true && Boolean(logoUrl);
     const error = !response.ok
@@ -66,7 +89,13 @@ async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<Token
       const retries = readRetryMap();
       retries[token.mint] = Date.now();
       writeRetryMap(retries);
-      return { mint: token.mint, logoUrl: null, error };
+      return {
+        mint: token.mint,
+        logoUrl: null,
+        error: dailyLimitReached
+          ? `${error || 'TokenCare daily call limit reached.'} Further TokenCare requests are paused until ${new Date(dailyLimitUntil).toISOString()}.`
+          : error,
+      };
     }
     const retries = readRetryMap();
     delete retries[token.mint];
@@ -88,6 +117,16 @@ async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<Token
 /** The published TokenCare schema is single-asset. Grouping happens in NodeX;
  * each grouped item is sent using the documented single-asset request shape. */
 export async function recoverTokenLogoGroup(tokens: DiscoveredToken[], apiKey: string): Promise<TokenCareResult[]> {
+  if (isTokenCareDailyLimitBlocked()) {
+    const until = readDailyLimitUntil();
+    recordRequest({
+      action: 'TokenCare group not sent · daily limit lockout', at: new Date().toISOString(), ok: false,
+      error: `No HTTP request was sent: TokenCare previously returned DAILY_CALL_LIMIT_REACHED. Requests are paused until ${new Date(until).toISOString()}.`,
+      request: { queued_tokens: tokens.length, endpoint: TOKENCARE_ENDPOINT },
+      response: { skipped: true, reason: 'daily_call_limit_reached', retry_after: new Date(until).toISOString() },
+    });
+    return [];
+  }
   const candidates = tokens.filter((token) => token.mint && !token.logo_url && !isTokenCareRetryBlocked(token.mint));
   if (!candidates.length && tokens.length) {
     recordRequest({
@@ -101,6 +140,9 @@ export async function recoverTokenLogoGroup(tokens: DiscoveredToken[], apiKey: s
   let cursor = 0;
   const worker = async () => {
     while (cursor < candidates.length) {
+      // A concurrent request may have discovered the daily limit while this
+      // worker was waiting. Do not start another HTTP request after that point.
+      if (isTokenCareDailyLimitBlocked()) return;
       const index = cursor++;
       results.push(await recoverOne(candidates[index], apiKey));
     }
