@@ -836,18 +836,36 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       if (event.event_type === 'token_state_updated') {
+        // SQLite-backed state events carry the TokenState envelope with the
+        // canonical token fields nested under data. Flatten it before mapping.
         const stateData = event.data?.data && typeof event.data.data === 'object'
-          ? { ...event.data, ...event.data.data, mint_address: event.data.mint_address }
+          ? {
+              ...event.data,
+              ...event.data.data,
+              mint_address: event.data.mint_address || event.data.data.mint_address,
+            }
           : event.data;
-        const mint = String(stateData?.mint_address || '');
-        const mapped = mapTokenDetailSnapshot(stateData || {});
-        if (mapped) {
+        const mint = String(stateData?.mint_address || stateData?.mint || '');
+        if (mint) {
           setTokens((previous) => {
-            const existing = previous.find((token) => token.mint === mint);
-            const durable = mapTokenDetailSnapshot(stateData || {}, existing);
-            return durable ? [durable, ...previous.filter((token) => token.mint !== durable.mint)] : previous;
+            const index = previous.findIndex((token) => token.mint === mint);
+            const existing = index >= 0 ? previous[index] : undefined;
+            const incomingVersion = Number(stateData.version ?? stateData.state_version ?? 0);
+            if (existing && incomingVersion > 0 && Number(existing.state_version || 0) > incomingVersion) {
+              return previous;
+            }
+            const durable = mapTokenDetailSnapshot(stateData, existing);
+            if (!durable) return previous;
+            if (index >= 0) {
+              const updated = previous.slice();
+              updated[index] = durable;
+              return updated;
+            }
+            return [durable, ...previous];
           });
-          setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(stateData, previous) || previous : previous);
+          setSelectedToken((previous) => previous?.mint === mint
+            ? mapTokenDetailSnapshot(stateData, previous) || previous
+            : previous);
         }
       }
       if (event.event_type === 'chart_candle_update' || event.event_type === 'chart_candle_closed') {
@@ -908,32 +926,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setSelectedToken((previous) => previous?.mint === mint ? { ...previous, price_history_5m: history.slice(-500) } : previous);
         }
       }
-      if (event.event_type === 'token_state_updated' && event.data && typeof event.data === 'object') {
-        const snapshot = event.data as Record<string, any>;
-        const mint = String(snapshot.mint_address || snapshot.mint || '');
-        if (mint) {
-          setTokens((previous) => {
-            const index = previous.findIndex((token) => token.mint === mint);
-            const existing = index >= 0 ? previous[index] : undefined;
-            const incomingVersion = Number(snapshot.version ?? snapshot.state_version ?? 0);
-            if (existing && incomingVersion > 0 && Number(existing.state_version || 0) > incomingVersion) {
-              return previous;
-            }
-            const mapped = mapTokenDetailSnapshot(snapshot, existing);
-            if (!mapped) return previous;
-            if (index >= 0) {
-              const updated = previous.slice();
-              updated[index] = mapped;
-              return updated;
-            }
-            return [mapped, ...previous];
-          });
-          setSelectedToken((previous) => previous?.mint === mint
-            ? mapTokenDetailSnapshot(snapshot, previous) || previous
-            : previous);
-        }
-      }
-
       const tokenMint = event.token_mint || event.data?.mint_address || event.data?.token_mint || event.data?.base_mint;
       const tokenStateEvent = [
         'launch_detected', 'token_scan_started', 'token_scan_update', 'token_scan_progress', 'token_scan_completed', 'token_scan_failed', 'token_diagnostic', 'token_metadata_started', 'token_metadata_failed',
