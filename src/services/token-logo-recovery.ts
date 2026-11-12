@@ -1,4 +1,5 @@
 import type { DiscoveredToken } from '../types';
+import { recordRequest } from './engineLogs';
 
 const TOKENCARE_ENDPOINT = 'https://back-end-gamma-ebon.vercel.app/api/developer';
 const RETRY_STORAGE_KEY = 'nodex.tokencare.logo-retry.v1';
@@ -22,39 +23,63 @@ export function isTokenCareRetryBlocked(mint: string): boolean {
 }
 
 async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<TokenCareResult> {
+  const requestBody = {
+    service: 'token',
+    action: 'logo',
+    params: { blockchain: 'solana', address: token.mint },
+  };
+  const started = performance.now();
+  const at = new Date().toISOString();
   try {
     const response = await fetch(TOKENCARE_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-API-Key': apiKey },
-      body: JSON.stringify({
-        service: 'token',
-        action: 'logo',
-        params: { blockchain: 'solana', address: token.mint },
-      }),
+      body: JSON.stringify(requestBody),
     });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload?.success !== true) {
-      const retries = readRetryMap();
-      retries[token.mint] = Date.now();
-      writeRetryMap(retries);
-      return { mint: token.mint, logoUrl: null, error: String(payload?.message || payload?.error || `TokenCare HTTP ${response.status}`) };
-    }
+    const responseText = await response.text().catch(() => '');
+    let payload: any = responseText;
+    try { payload = responseText ? JSON.parse(responseText) : null; } catch { /* Keep non-JSON response text for diagnostics. */ }
+    const durationMs = Math.round(performance.now() - started);
     const logoUrl = typeof payload?.data?.logo_url === 'string' ? payload.data.logo_url.trim() : '';
-    if (!logoUrl) {
+    const ok = response.ok && payload?.success === true && Boolean(logoUrl);
+    const error = !response.ok
+      ? String(payload?.message || payload?.error || `TokenCare HTTP ${response.status}`)
+      : payload?.success !== true
+        ? String(payload?.message || payload?.error || 'TokenCare response did not report success.')
+        : !logoUrl ? 'TokenCare returned no logo URL.' : undefined;
+
+    // Keep the request body and complete response visible in Logs. Never record
+    // the API key or request headers in browser storage.
+    recordRequest({
+      action: `TokenCare POST /api/developer · ${token.mint.slice(0, 6)}…${token.mint.slice(-5)}`,
+      at, durationMs, ok, status: response.status, error,
+      request: { endpoint: TOKENCARE_ENDPOINT, method: 'POST', body: requestBody },
+      response: payload,
+    });
+
+    if (!ok) {
       const retries = readRetryMap();
       retries[token.mint] = Date.now();
       writeRetryMap(retries);
-      return { mint: token.mint, logoUrl: null, error: 'TokenCare returned no logo URL.' };
+      return { mint: token.mint, logoUrl: null, error };
     }
     const retries = readRetryMap();
     delete retries[token.mint];
     writeRetryMap(retries);
     return { mint: token.mint, logoUrl };
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'TokenCare request failed.';
+    recordRequest({
+      action: `TokenCare POST /api/developer · ${token.mint.slice(0, 6)}…${token.mint.slice(-5)}`,
+      at, durationMs: Math.round(performance.now() - started), ok: false,
+      error: message,
+      request: { endpoint: TOKENCARE_ENDPOINT, method: 'POST', body: requestBody },
+      response: { network_error: message },
+    });
     const retries = readRetryMap();
     retries[token.mint] = Date.now();
     writeRetryMap(retries);
-    return { mint: token.mint, logoUrl: null, error: error instanceof Error ? error.message : 'TokenCare request failed.' };
+    return { mint: token.mint, logoUrl: null, error: message };
   }
 }
 
@@ -62,6 +87,14 @@ async function recoverOne(token: DiscoveredToken, apiKey: string): Promise<Token
  * each grouped item is sent using the documented single-asset request shape. */
 export async function recoverTokenLogoGroup(tokens: DiscoveredToken[], apiKey: string): Promise<TokenCareResult[]> {
   const candidates = tokens.filter((token) => token.mint && !token.logo_url && !isTokenCareRetryBlocked(token.mint));
+  if (!candidates.length && tokens.length) {
+    recordRequest({
+      action: 'TokenCare group not sent · retry cooldown', at: new Date().toISOString(), ok: false,
+      error: 'No HTTP request was sent: every queued token is still inside the 6-hour retry cooldown.',
+      request: { queued_tokens: tokens.length, endpoint: TOKENCARE_ENDPOINT },
+      response: { skipped: true, reason: 'retry_cooldown' },
+    });
+  }
   const results: TokenCareResult[] = [];
   let cursor = 0;
   const worker = async () => {
