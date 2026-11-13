@@ -71,14 +71,18 @@ const NumberField = ({
 };
 
 const ToggleRow = ({
-  title, detail, checked, onChange, disabled = false,
+  title, detail, checked, onChange, disabled = false, Icon,
 }: {
-  title: string; detail: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean;
+  title: string; detail?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean;
+  Icon?: typeof ShieldAlert;
 }) => (
   <label className={`flex items-center justify-between gap-4 border-b border-white/[0.07] py-3 ${disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'}`}>
-    <span className="min-w-0">
-      <span className="block text-[12px] font-medium text-white/85">{title}</span>
-      <span className="mt-0.5 block text-[10px] leading-relaxed text-white/40">{detail}</span>
+    <span className="flex min-w-0 items-center gap-3">
+      {Icon && <Icon className="h-[17px] w-[17px] shrink-0 text-white/55" />}
+      <span className="min-w-0">
+        <span className="block text-[12px] font-medium text-white/85">{title}</span>
+        {detail && <span className="mt-0.5 block text-[10px] leading-relaxed text-white/40">{detail}</span>}
+      </span>
     </span>
     <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} className="peer sr-only" />
     <span className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors ${checked ? 'bg-white' : 'bg-white/15'}`}>
@@ -96,6 +100,12 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
   const [customValue, setCustomValue] = useState('');
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
+  const [trailingSheetOpen, setTrailingSheetOpen] = useState(false);
+  const [trailingDraft, setTrailingDraft] = useState({
+    enabled: Boolean(strategyConfig.trailing_stop_enabled),
+    activation: strategyConfig.trailing_activation_profit_pct,
+    callback: strategyConfig.trailing_stop_callback_pct,
+  });
   const [showPreferredOwners, setShowPreferredOwners] = useState(false);
   const [saving, setSaving] = useState(false);
   const [newEntriesEnabled, setNewEntriesEnabled] = useState(false);
@@ -221,6 +231,26 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     showToast({ title: 'Preferred owner removed from draft', description: 'Press Apply to save this change to the backend.', tone: 'info' });
   };
 
+  const openTrailingSheet = () => {
+    setTrailingDraft({
+      enabled: Boolean(form.trailing_stop_enabled),
+      activation: form.trailing_activation_profit_pct,
+      callback: form.trailing_stop_callback_pct,
+    });
+    setTrailingSheetOpen(true);
+  };
+
+  const applyTrailingDraft = () => {
+    if (trailingDraft.enabled && (
+      !Number.isFinite(trailingDraft.activation) || trailingDraft.activation <= 0 || trailingDraft.activation > 1000 ||
+      !Number.isFinite(trailingDraft.callback) || trailingDraft.callback <= 0 || trailingDraft.callback > 100
+    )) return;
+    update('trailing_stop_enabled', trailingDraft.enabled);
+    update('trailing_activation_profit_pct', trailingDraft.activation);
+    update('trailing_stop_callback_pct', trailingDraft.callback);
+    setTrailingSheetOpen(false);
+  };
+
   const openTarget = (target: RiskTarget) => {
     setActiveTarget(target);
     setCustomValue(form[target] > 0 ? String(form[target]) : '');
@@ -265,86 +295,41 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
       </header>}
       <div className={embedded ? "w-full min-w-0 px-3" : "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4"}>
         <section className="pt-0">
-        <div className="mb-5 rounded-xl border border-white/[0.10] bg-white/[0.025] px-3.5 py-3">
-          <ToggleRow
-            title="Paper Execution"
-            detail="Master switch for simulated buys only. This cannot enable real signing or live transactions."
-            checked={Boolean(form.execution_enabled)}
-            onChange={(enabled) => update('execution_enabled', enabled)}
-            disabled={!paperMode || saving}
-          />
-          <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
-            <span className="text-white/40">Saved backend state</span>
-            <span className={hasUnappliedChanges && form.execution_enabled !== appliedConfig.execution_enabled ? 'text-amber-300' : form.execution_enabled ? 'text-emerald-300' : 'text-white/45'}>
-              {hasUnappliedChanges && form.execution_enabled !== appliedConfig.execution_enabled
-                ? 'Pending Apply'
-                : appliedConfig.execution_enabled ? 'Enabled' : 'Disabled'}
-            </span>
-          </div>
-          {!paperMode && <p className="mt-2 text-[10px] text-amber-300">Paper execution can only be changed while Paper mode is active.</p>}
-        </div>
+        <ToggleRow
+          title="Paper Execution"
+          checked={Boolean(form.execution_enabled)}
+          onChange={(enabled) => update('execution_enabled', enabled)}
+          disabled={!paperMode || saving}
+          Icon={ShieldCheck}
+        />
         <div className="border-b border-white/[0.08] pb-2">
           <h3 className="text-[13px] font-semibold text-white/90">Exit Settings</h3>
           <p className="mt-1 text-[10px] text-white/40">Manage how your paper positions exit automatically.</p>
         </div>
-        {!form.trailing_stop_enabled ? (
+        {!form.trailing_stop_enabled && (
           <>
             {targetRow('stop_loss_pct', 'Stop Loss', ShieldAlert, 'loss')}
             {targetRow('take_profit_pct', 'Take Profit', TrendingUp, 'profit')}
           </>
-        ) : (
-          <div className="mt-3 rounded-xl border border-white/[0.10] bg-white/[0.025] px-3.5 py-3">
-            <p className="text-[10px] leading-relaxed text-white/55">Trailing Stop Loss is active in this draft. Fixed Stop Loss and Take Profit controls are hidden while trailing mode is selected; their saved percentages are preserved.</p>
-          </div>
         )}
-        <section className="mt-4 rounded-xl border border-white/[0.10] bg-white/[0.025] px-3.5 py-3">
-          <div className="mb-1 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-white/60" />
-            <h3 className="text-[12px] font-semibold text-white/90">Trailing Stop Loss</h3>
-          </div>
-          <ToggleRow
-            title="Enable trailing stop loss"
-            detail="When enabled, the trailing rules below are sent to the backend for new paper positions."
-            checked={Boolean(form.trailing_stop_enabled)}
-            onChange={(enabled) => update('trailing_stop_enabled', enabled)}
+        <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] py-3">
+          <button type="button" onClick={openTrailingSheet} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            <TrendingUp className="h-[17px] w-[17px] shrink-0 text-white/55" />
+            <span className="text-[13px] font-semibold text-white/85">Trailing Stop Loss</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-white/35" />
+          </button>
+          <button
+            type="button"
+            role="switch"
+            aria-label="Enable trailing stop loss"
+            aria-checked={Boolean(form.trailing_stop_enabled)}
             disabled={saving || !paperMode}
-          />
-          {form.trailing_stop_enabled && (
-            <div className="border-t border-white/[0.07] pt-1">
-              <NumberField
-                label="Activate after profit"
-                suffix="%"
-                step="0.5"
-                min={0.1}
-                max={1000}
-                value={form.trailing_activation_profit_pct}
-                onChange={(value) => update('trailing_activation_profit_pct', value)}
-                hint="The trailing exit starts only after the position reaches this profit percentage."
-                disabled={saving}
-              />
-              <NumberField
-                label="Trailing distance (callback)"
-                suffix="%"
-                step="0.5"
-                min={0.1}
-                max={100}
-                value={form.trailing_stop_callback_pct}
-                onChange={(value) => update('trailing_stop_callback_pct', value)}
-                hint="After activation, the exit threshold follows the highest price and stays this percentage below it."
-                disabled={saving}
-              />
-            </div>
-          )}
-          <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
-            <span className="text-white/40">Backend saved state</span>
-            <span className={hasUnappliedChanges && (form.trailing_stop_enabled !== appliedConfig.trailing_stop_enabled || form.trailing_activation_profit_pct !== appliedConfig.trailing_activation_profit_pct || form.trailing_stop_callback_pct !== appliedConfig.trailing_stop_callback_pct) ? 'text-amber-300' : appliedConfig.trailing_stop_enabled ? 'text-emerald-300' : 'text-white/45'}>
-              {hasUnappliedChanges && (form.trailing_stop_enabled !== appliedConfig.trailing_stop_enabled || form.trailing_activation_profit_pct !== appliedConfig.trailing_activation_profit_pct || form.trailing_stop_callback_pct !== appliedConfig.trailing_stop_callback_pct)
-                ? 'Pending Apply'
-                : appliedConfig.trailing_stop_enabled ? 'Enabled' : 'Disabled'}
-            </span>
-          </div>
-          {!paperMode && <p className="mt-2 text-[10px] text-amber-300">Trailing stop loss can only be configured in Paper mode.</p>}
-        </section>
+            onClick={() => update('trailing_stop_enabled', !form.trailing_stop_enabled)}
+            className={`relative h-[22px] w-10 shrink-0 rounded-full transition-colors disabled:opacity-40 ${form.trailing_stop_enabled ? 'bg-white' : 'bg-white/15'}`}
+          >
+            <span className={`absolute top-[3px] size-4 rounded-full transition-all ${form.trailing_stop_enabled ? 'left-[21px] bg-black' : 'left-[3px] bg-white/75'}`} />
+          </button>
+        </div>
         <button
           type="button"
           onClick={() => setShowAdvancedExit((current) => !current)}
@@ -564,6 +549,36 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
           <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
           {saving ? 'Saving…' : 'Apply'}
         </button>
+      )}
+
+      {trailingSheetOpen && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTrailingSheetOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="trailing-sheet-title" className="w-full max-w-lg rounded-t-[26px] border-t border-white/[0.12] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-2xl">
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 id="trailing-sheet-title" className="text-[15px] font-semibold text-white">Trailing Stop Loss</h3>
+                <p className="mt-1 text-[10px] text-white/40">Configure when trailing protection starts and how closely it follows price.</p>
+              </div>
+              <button type="button" onClick={() => setTrailingSheetOpen(false)} aria-label="Close trailing stop settings" className="grid size-9 place-items-center rounded-full bg-white/[0.07] text-white/70"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="flex items-center justify-between border-b border-white/[0.08] py-3">
+              <span className="text-[12px] font-medium text-white/85">Enable trailing stop loss</span>
+              <button type="button" role="switch" aria-checked={trailingDraft.enabled} onClick={() => setTrailingDraft((current) => ({ ...current, enabled: !current.enabled }))} className={`relative h-[22px] w-10 rounded-full transition-colors ${trailingDraft.enabled ? 'bg-white' : 'bg-white/15'}`}>
+                <span className={`absolute top-[3px] size-4 rounded-full transition-all ${trailingDraft.enabled ? 'left-[21px] bg-black' : 'left-[3px] bg-white/75'}`} />
+              </button>
+            </div>
+            {trailingDraft.enabled && (
+              <div className="pt-2">
+                <NumberField label="Activate after profit" suffix="%" step="0.5" min={0.1} max={1000} value={trailingDraft.activation} onChange={(value) => setTrailingDraft((current) => ({ ...current, activation: value }))} hint="Trailing protection starts once the position reaches this profit." />
+                <NumberField label="Trailing distance (callback)" suffix="%" step="0.5" min={0.1} max={100} value={trailingDraft.callback} onChange={(value) => setTrailingDraft((current) => ({ ...current, callback: value }))} hint="Distance below the highest price reached after activation." />
+              </div>
+            )}
+            <button type="button" onClick={applyTrailingDraft} disabled={trailingDraft.enabled && (trailingDraft.activation <= 0 || trailingDraft.activation > 1000 || trailingDraft.callback <= 0 || trailingDraft.callback > 100)} className="mt-5 h-12 w-full rounded-full bg-white text-[12px] font-semibold text-black disabled:opacity-35">
+              Apply
+            </button>
+          </section>
+        </div>
       )}
 
       {activeTarget && (
