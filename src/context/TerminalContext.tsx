@@ -1381,18 +1381,16 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setBackendError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      // A token that has not passed backend approval has no detail snapshot yet.
       if (!message.includes('404')) setBackendError(message);
     }
   }, []);
 
   const openTokenDetailByMint = useCallback((mint: string, fallback: Partial<DiscoveredToken> = {}) => {
+    if (!mint) return;
     const existing = tokens.find((item) => item.mint === mint);
     if (existing) {
       setSelectedToken(existing);
       setBackendError(null);
-      // Fetch the durable backend snapshot as soon as the detail view opens.
-      // This includes security evidence and diagnostics not present in the feed row.
       void loadTokenSnapshot(mint);
       return;
     }
@@ -1420,7 +1418,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       creator_reputation: 'unknown' as const,
       largest_holders: [],
       ...(fallback.safety_details || metadata.safety_details || {}),
-    }, [tokens, launches, events, loadTokenSnapshot]);
+    };
     const detailToken: DiscoveredToken = {
       mint,
       name: String(fallback.name || metadata.name || metadata.token_name || ''),
@@ -1444,10 +1442,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
     setSelectedToken(detailToken);
     setBackendError(null);
-    // Detected tokens may not yet be in the frontend cache. Fetch their
-    // canonical backend state without blocking navigation to the detail view.
     void loadTokenSnapshot(mint);
-  };
+  }, [tokens, launches, events, loadTokenSnapshot]);
+
   const refreshBackendState = useCallback(async () => {
     if (!settings.backendUrl) {
       throw new Error('Connect to the NodeX backend before refreshing.');
