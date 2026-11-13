@@ -148,6 +148,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
   useEffect(() => {
     setView((previous) => ({ ...previous, end: Number.POSITIVE_INFINITY }));
+    scaleRef.current = null;
     setIsPanned(false);
     setHoverIndex(null);
   }, [timeframe]);
@@ -216,16 +217,18 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ? { min: Math.max(0, dataMin - padding), max: dataMax + padding }
       : { min: Math.max(0, center - fittedRange / 2 - padding), max: center + fittedRange / 2 + padding };
 
-    // Scale smoothing
-    const previous = scaleRef.current;
-    const desiredScale = target;
-    if (!previous || !Number.isFinite(previous.min) || !Number.isFinite(previous.max) || (previous.max - previous.min) <= 0) {
-      scaleRef.current = target;
-    } else {
-      scaleRef.current = {
-        min: previous.min + (target.min - previous.min) * 0.22,
-        max: previous.max + (target.max - previous.max) * 0.22,
-      };
+    // Lock the price axis after its initial fit. A new tick must not rescale
+    // every historical point and make the whole line/candle set appear to move.
+    if (!scaleRef.current || !Number.isFinite(scaleRef.current.min) || !Number.isFinite(scaleRef.current.max) || scaleRef.current.max <= scaleRef.current.min) {
+      if (dataRange <= 0) {
+        const anchor = Math.max(Math.abs(dataMax), 0.00000001);
+        scaleRef.current = {
+          min: Math.max(0, dataMax - anchor * 0.002),
+          max: dataMax + anchor * 0.018,
+        };
+      } else {
+        scaleRef.current = target;
+      }
     }
     const scale = scaleRef.current;
     const rawScaleRange = scale.max - scale.min;
