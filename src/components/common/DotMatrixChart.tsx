@@ -15,6 +15,7 @@ interface DotMatrixChartProps {
   currentPrice: number;
   entryPrice?: number;
   priceHistory?: PricePoint[];
+  preserveTicks?: boolean;
   isPositive?: boolean;
   timeframe?: string;
   chartType?: 'line' | 'candle';
@@ -81,6 +82,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   currentPrice,
   entryPrice,
   priceHistory,
+  preserveTicks = false,
   isPositive = true,
   timeframe = '24H',
   chartType = 'line',
@@ -106,6 +108,21 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.time) && point.time > 1_000_000)
       .slice()
       .sort((a, b) => a.time - b.time);
+    if (preserveTicks) {
+      return validRaw.map((point) => {
+        const open = Number.isFinite(point.open) && (point.open as number) > 0 ? (point.open as number) : point.price;
+        const close = Number.isFinite(point.close) && (point.close as number) > 0 ? (point.close as number) : point.price;
+        return {
+          timestamp: point.time,
+          time: formatBucketTime(point.time, timeframe),
+          price: close,
+          open,
+          high: Number.isFinite(point.high) && (point.high as number) > 0 ? (point.high as number) : Math.max(open, close),
+          low: Number.isFinite(point.low) && (point.low as number) > 0 ? (point.low as number) : Math.min(open, close),
+          volume: Math.max(0, Number(point.volume || 0)),
+        };
+      }).slice(-500);
+    }
     const buckets = new Map<number, PriceTick>();
     validRaw.forEach((point) => {
       const bucketTime = Math.floor(point.time / interval) * interval;
@@ -132,7 +149,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       existing.volume += Math.max(0, Number(point.volume || 0));
     });
     return Array.from(buckets.values()).slice(-500);
-  }, [timeframe, priceHistory]);
+  }, [timeframe, priceHistory, preserveTicks]);
 
 
   useEffect(() => {
