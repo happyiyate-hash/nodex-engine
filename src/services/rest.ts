@@ -293,6 +293,17 @@ export class NodeXRestClient {
   public getProfile(): Promise<NodeXProfileSnapshot> {
     return this.request<NodeXProfileSnapshot>('/api/v1/profile');
   }
+  public manualSellPosition(positionId: string): Promise<{
+    status: string; position_id: string; paper_only: boolean;
+    execution_mode: string; full_exit: boolean; position: Record<string, any>;
+  }> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings before selling a paper position.');
+    return this.request(`/api/v1/portfolio/positions/${encodeURIComponent(positionId)}/sell`, {
+      method: 'POST',
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
   public getPositionRisk(positionId: string): Promise<{
     status: string; position_id: string; risk_policy: Record<string, any>;
     trailing_stop_eligible: boolean; trailing_stop_eligibility_reason: string;
