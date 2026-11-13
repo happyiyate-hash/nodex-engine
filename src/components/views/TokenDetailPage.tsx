@@ -265,7 +265,7 @@ export const TokenDetailPage: React.FC = () => {
             <div className="font-mono text-base sm:text-lg font-bold text-white tracking-tight">
               {hasMarketPrice ? formatTokenPrice(currentPrice) : 'Price unavailable'}
             </div>
-            <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
+            <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
               <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${pnlPct.toFixed(2)}%`}</span>
             </div>
           </div>
@@ -298,9 +298,9 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
-      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] pt-10 pb-3">
+      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] pt-14 pb-3">
         {/* Controls occupy their own top strip; the chart canvas starts beneath them with clear separation. */}
-        <div className="absolute inset-x-0 top-2.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
+        <div className="absolute inset-x-0 top-3.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
           <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
             {(['1m', '5m', '15m', '30m', '1H', '24H'] as const).map((tf) => (
               <button
@@ -360,7 +360,7 @@ export const TokenDetailPage: React.FC = () => {
           isPositive={isPositive}
           timeframe={timeframe}
           chartType={chartType}
-          height={272}
+          height={328}
           onPriceHover={(p, t) => {
             setScrubPrice(p);
             setScrubTime(t);

@@ -54,43 +54,45 @@ const CHART_THEME = {
   background: '#000000',
   dots: {
     enabled: true,
-    spacing: 9,
-    radius: 0.8,
-    maxOpacity: 0.21,
+    spacing: 7,
+    radius: 0.6,
+    maxOpacity: 0.22,
     sheenColor: '232, 238, 248',
   },
-  upColor: '#22C55E',
-  upTopColor: 'rgba(34, 197, 94, 0.36)',
-  upBottomColor: 'rgba(34, 197, 94, 0.0)',
-  downColor: '#EF4444',
-  downTopColor: 'rgba(239, 68, 68, 0.36)',
-  downBottomColor: 'rgba(239, 68, 68, 0.0)',
+  upColor: '#6CE094',
+  upTopColor: 'rgba(108, 224, 148, 0.10)',
+  upBottomColor: 'rgba(108, 224, 148, 0.0)',
+  upBadgeBg: '#3CC66C',
+  downColor: '#F06A6A',
+  downTopColor: 'rgba(240, 106, 106, 0.10)',
+  downBottomColor: 'rgba(240, 106, 106, 0.0)',
+  downBadgeBg: '#DC4C4C',
   lineWidth: 2 as const,
-  gridHorzColor: 'rgba(255,255,255,0.045)',
-  axisTextColor: 'rgba(255,255,255,0.45)',
-  crosshairColor: 'rgba(255,255,255,0.35)',
+  gridHorzColor: 'rgba(255,255,255,0.04)',
+  axisTextColor: 'rgba(255,255,255,0.46)',
+  crosshairColor: 'rgba(255,255,255,0.32)',
   crosshairLabelBg: '#18191c',
   entryLineColor: 'rgba(250,204,21,0.55)',
   liveDot: {
     radius: 4.5,
     haloRadius: 7,
-    haloMaxRadius: 18,
+    haloMaxRadius: 17,
     haloPeriodMs: 2600,
   },
   liveBadge: {
-    minWidth: 56,
-    height: 18,
+    minWidth: 48,
+    height: 17,
     rightInset: 2,
-    textColor: '#000000',
+    textColor: '#FFFFFF',
   },
   directionCard: {
     width: 18,
     height: 22,
     radius: 5,
-    upColor: '#4ADE80',
-    upGlow: '#86EFAC',
-    downColor: '#F87171',
-    downGlow: '#FDA4AF',
+    upColor: '#6CE094',
+    upGlow: '#A7F3C0',
+    downColor: '#F06A6A',
+    downGlow: '#FCA5A5',
     cycleMs: 950,
   },
 };
@@ -270,6 +272,26 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
       return;
     }
 
+    const first = data[0] as unknown as {
+      time: Time;
+      value?: number;
+      open?: number;
+      close?: number;
+    };
+    const firstVal =
+      typeof first.value === 'number'
+        ? first.value
+        : typeof first.open === 'number'
+          ? first.open
+          : typeof first.close === 'number'
+            ? first.close
+            : null;
+    const xFirst = params.chart.timeScale().timeToCoordinate(first.time);
+    const yFirst =
+      firstVal !== null && Number.isFinite(firstVal)
+        ? params.series.priceToCoordinate(firstVal)
+        : null;
+
     const liveState = this.getLiveState();
     const livePrice =
       Number.isFinite(liveState.displayPrice) && liveState.displayPrice > 0
@@ -323,26 +345,29 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
 
       ctx.save();
 
-      // Clip inside plot pane bounds
+      // Clip inside plot pane bounds (include full right-edge connector stroke)
       ctx.beginPath();
-      ctx.rect(0, 0, plotW, plotH);
+      ctx.rect(0, 0, plotW + 1, plotH);
       ctx.clip();
 
-      // 1. In Line mode, draw the live continuous tail from last settled point -> live tip
-      if (
-        this.mode === 'line' &&
-        xLast !== null &&
-        yBar !== null &&
-        liveX !== null &&
-        Number.isFinite(xLast) &&
-        Number.isFinite(yBar) &&
-        Number.isFinite(liveX) &&
-        liveX - xLast > 0.15
-      ) {
-        // Compute top Y for gradient alignment with TradingView's relativeGradient AreaSeries
-        let minY = Math.min(yBar, guideY);
-        const startIdx = Math.max(0, data.length - 120);
-        for (let i = startIdx; i < data.length; i++) {
+      // Precompute shared relative area gradient matching TradingView AreaSeries
+      let areaGrad: CanvasGradient | null = null;
+      if (this.mode === 'line') {
+        let minY: number = guideY;
+        if (yBar !== null && Number.isFinite(yBar)) {
+          minY = Math.min(minY, yBar);
+        }
+        if (yFirst !== null && Number.isFinite(yFirst)) {
+          minY = Math.min(minY, yFirst);
+        }
+        const visRange = params.chart.timeScale().getVisibleLogicalRange();
+        const minScanIdx = visRange
+          ? Math.max(0, Math.floor(visRange.from))
+          : Math.max(0, data.length - 120);
+        const maxScanIdx = visRange
+          ? Math.min(data.length - 1, Math.ceil(visRange.to))
+          : data.length - 1;
+        for (let i = minScanIdx; i <= maxScanIdx; i++) {
           const item = data[i] as unknown as { value?: number };
           if (typeof item.value === 'number') {
             const cy = params.series.priceToCoordinate(item.value);
@@ -352,10 +377,54 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
           }
         }
         const gradTop = Math.max(0, Math.min(minY, plotH - 1));
-        const areaGrad = ctx.createLinearGradient(0, gradTop, 0, plotH);
+        areaGrad = ctx.createLinearGradient(0, gradTop, 0, plotH);
         areaGrad.addColorStop(0, colors.top);
         areaGrad.addColorStop(1, colors.bottom);
+      }
 
+      // 0. In Line mode, extend the starting back of the line & shadow continuously
+      // all the way to the left edge (x = 0) when data starts mid-chart.
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xFirst !== null &&
+        yFirst !== null &&
+        Number.isFinite(xFirst) &&
+        Number.isFinite(yFirst) &&
+        xFirst > 0.25
+      ) {
+        const joinX = Math.min(plotW, xFirst + 0.5);
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.lineTo(joinX, plotH);
+        ctx.lineTo(0, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.stroke();
+      }
+
+      // 1. In Line mode, draw the live continuous tail from last settled point -> live tip
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xLast !== null &&
+        yBar !== null &&
+        liveX !== null &&
+        Number.isFinite(xLast) &&
+        Number.isFinite(yBar) &&
+        Number.isFinite(liveX) &&
+        liveX - xLast > 0.15
+      ) {
         ctx.fillStyle = areaGrad;
         ctx.beginPath();
         ctx.moveTo(xLast, yBar);
@@ -390,23 +459,37 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
         tipEdgeX !== null && axisEdgeX - tipEdgeX >= CHART_THEME.directionCard.width + 4;
       const chevronX = showChevrons && tipEdgeX !== null ? (tipEdgeX + axisEdgeX) / 2 : null;
 
-      // 2. Horizontal dashed price guide across the pane to the right axis
-      ctx.strokeStyle = hexToRgba(colors.line, 0.5);
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 4]);
-      ctx.beginPath();
-      if (chevronX !== null) {
-        const gapHalf = 7;
-        ctx.moveTo(0, guideY);
-        ctx.lineTo(Math.max(0, chevronX - gapHalf), guideY);
-        ctx.moveTo(Math.min(plotW, chevronX + gapHalf), guideY);
-        ctx.lineTo(plotW, guideY);
-      } else {
-        ctx.moveTo(0, guideY);
-        ctx.lineTo(plotW, guideY);
+      // 2. Straight wire connecting ONLY the live dot/candle directly to the right-axis card
+      // (stops strictly between the dot/candle and the card — never stretches backward).
+      const badgeH = CHART_THEME.liveBadge.height;
+      const cardCenterY =
+        Math.max(2, Math.min(plotH - badgeH - 1, guideY - badgeH / 2)) + badgeH / 2;
+      const wireStartX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? Math.max(0, Math.min(plotW, liveX))
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? Math.max(0, Math.min(plotW, xLast + 3))
+            : null;
+
+      if (wireStartX !== null && plotW - wireStartX > 1) {
+        ctx.strokeStyle = hexToRgba(colors.line, 0.8);
+        ctx.lineWidth = 1.25;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (chevronX !== null && chevronX > wireStartX + 4) {
+          const gapHalf = 8;
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(Math.max(wireStartX, chevronX - gapHalf), guideY);
+          ctx.moveTo(Math.min(plotW, chevronX + gapHalf), cardCenterY);
+          ctx.lineTo(plotW, cardCenterY);
+        } else {
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(plotW, cardCenterY);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
-      ctx.setLineDash([]);
 
       // 3. In Line mode, draw the single calm pulsing filled halo + bigger dot tightly locked at (liveX, guideY)
       if (
@@ -734,6 +817,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   isPositiveRef.current = isPositive;
 
   // Helper to compute continuous target Y-axis range without any threshold jumps.
+  // Allows price to travel all the way down to the bottom boundary (above the bottom brush)
+  // before shrinking/rescaling while preserving clean top headroom.
   const computeTargetYRange = useCallback(
     (rawMin: number, rawMax: number, tf: string) => {
       const liveVal = smoothedPriceRef.current;
@@ -745,12 +830,16 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const mid = (visMin + visMax) / 2;
       const tfMinSpan = Math.max(Math.abs(mid) * spanRatio, 1e-10);
       const rawSpan = Math.max(0, visMax - visMin);
-      // Smooth continuous padding (14% top + 14% bottom => inner 72% active band)
-      const effectiveSpan = Math.max(tfMinSpan, rawSpan / 0.72);
-      return {
-        minValue: Math.max(0, mid - effectiveSpan / 2),
-        maxValue: mid + effectiveSpan / 2,
-      };
+
+      const flatBlend = Math.max(0, 1 - rawSpan / (tfMinSpan * 0.4));
+      const bottomFrac = 0.012 + 0.22 * flatBlend;
+      const topFrac = 0.1 + 0.12 * flatBlend;
+      const activeBand = Math.max(0.4, 1 - topFrac - bottomFrac);
+      const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
+
+      const minValue = Math.max(0, visMin - effectiveSpan * bottomFrac);
+      const maxValue = minValue + effectiveSpan;
+      return { minValue, maxValue };
     },
     [],
   );
@@ -778,54 +867,38 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     if (!CHART_THEME.dots.enabled) return;
 
     const { spacing, radius, maxOpacity, sheenColor } = CHART_THEME.dots;
-    // Soft ambient radial depth so the center dots catch a gentle sheen while edges stay deep black
-    const bgGlow = ctx.createRadialGradient(
-      w * 0.5,
-      h * 0.48,
-      Math.min(w, h) * 0.05,
-      w * 0.5,
-      h * 0.5,
-      Math.max(w, h) * 0.65,
-    );
-    bgGlow.addColorStop(0, `rgba(${sheenColor}, 0.022)`);
-    bgGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = bgGlow;
-    ctx.fillRect(0, 0, w, h);
-
-    const startOffset = 6;
+    const smoothstep = (t: number) => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * (3 - 2 * c);
+    };
+    const startOffset = 5;
     for (let y = startOffset; y < h - startOffset; y += spacing) {
       const normY = y / h;
       const fadeY =
-        normY < 0.2
-          ? normY / 0.2
-          : normY > 0.8
-            ? (1 - normY) / 0.2
+        normY < 0.3
+          ? 0.08 + 0.92 * smoothstep(normY / 0.3)
+          : normY > 0.78
+            ? 0.06 + 0.94 * smoothstep((1 - normY) / 0.22)
             : 1;
 
       for (let x = startOffset; x < w - startOffset; x += spacing) {
         const normX = x / w;
         const fadeX =
-          normX < 0.08
-            ? 0.45 + 0.55 * (normX / 0.08)
-            : normX > 0.92
-              ? 0.45 + 0.55 * ((1 - normX) / 0.08)
+          normX < 0.24
+            ? 0.08 + 0.92 * smoothstep(normX / 0.24)
+            : normX > 0.68
+              ? 0.06 + 0.94 * smoothstep((1 - normX) / 0.32)
               : 1;
 
-        // Subtle center brightness modulation for a refined non-flat shimmer
-        const dx = (normX - 0.52) * 1.4;
-        const dy = (normY - 0.48) * 1.4;
+        const dx = (normX - 0.45) * 1.15;
+        const dy = (normY - 0.5) * 1.15;
         const dist = Math.min(1, Math.hypot(dx, dy));
-        const sheenBoost = 0.72 + 0.36 * (1 - dist);
+        const sheenBoost = 0.86 + 0.14 * (1 - dist);
 
-        const alpha = Math.max(0, Math.min(0.28, maxOpacity * fadeY * fadeX * sheenBoost));
+        const alpha = Math.max(0, Math.min(0.26, maxOpacity * fadeY * fadeX * sheenBoost));
+        if (alpha <= 0.005) continue;
 
-        // Soft micro-bloom + crisp pinpoint dot for a clean subtle shine
-        ctx.fillStyle = `rgba(${sheenColor}, ${(alpha * 0.26).toFixed(3)})`;
-        ctx.beginPath();
-        ctx.arc(x, y, radius * 1.85, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
+        ctx.fillStyle = `rgba(${sheenColor}, ${alpha.toFixed(3)})`;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
@@ -863,11 +936,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         return;
       }
 
-      const axisW = Math.max(58, chart.priceScale('right').width() || hostW - plotW || 64);
+      const axisW = Math.max(48, chart.priceScale('right').width() || hostW - plotW || 52);
       const badgeH = CHART_THEME.liveBadge.height;
-      const badgeW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - 4);
-      const badgeX = Math.max(plotW, hostW - badgeW - CHART_THEME.liveBadge.rightInset);
-      const badgeY = Math.max(2, Math.min(plotH - badgeH - 2, yCoord - badgeH / 2));
+      const badgeW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - 3);
+      const badgeX = Math.max(plotW, Math.min(plotW + 1, hostW - badgeW - CHART_THEME.liveBadge.rightInset));
+      const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
 
       badge.style.opacity = '1';
       badge.style.width = `${badgeW}px`;
@@ -887,6 +960,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const host = tvContainerRef.current;
     if (!host) return;
 
+    const axisFontFamily = "'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, sans-serif";
     const chart = createChart(host, {
       autoSize: true,
       width: Math.max(1, host.clientWidth || 320),
@@ -894,24 +968,24 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: CHART_THEME.axisTextColor,
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: 9,
+        fontFamily: axisFontFamily,
+        fontSize: 9.5,
         attributionLogo: false,
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: CHART_THEME.gridHorzColor },
+        horzLines: { visible: false },
       },
       rightPriceScale: {
-        borderVisible: true,
-        borderColor: 'rgba(255,255,255,0.07)',
+        borderVisible: false,
         entireTextOnly: true,
-        minimumWidth: 66,
-        scaleMargins: { top: 0.14, bottom: 0.14 },
+        minimumWidth: 48,
+        scaleMargins: { top: 0.11, bottom: 0.015 },
       },
       timeScale: {
         borderVisible: true,
-        borderColor: 'rgba(255,255,255,0.07)',
+        borderColor: 'rgba(255,255,255,0.08)',
+        ticksVisible: true,
         timeVisible: true,
         secondsVisible: timeframeRef.current === '1m',
         rightOffset: BASE_RIGHT_OFFSET,
@@ -1307,14 +1381,15 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             anim.minValue += (nextTarget.minValue - anim.minValue) * scaleBlend;
             anim.maxValue += (nextTarget.maxValue - anim.maxValue) * scaleBlend;
 
-            // Keep live dot cleanly inside visible band even on huge rapid spikes
+            // Keep live dot cleanly inside visible band even on huge rapid spikes,
+            // allowing downward moves to reach right down to the bottom boundary first.
             if (displayP > 0 && Number.isFinite(displayP)) {
               const curSpan = Math.max(1e-10, anim.maxValue - anim.minValue);
-              if (displayP > anim.maxValue - curSpan * 0.08) {
-                anim.maxValue = displayP + curSpan * 0.08;
+              if (displayP > anim.maxValue - curSpan * 0.06) {
+                anim.maxValue = displayP + curSpan * 0.06;
               }
-              if (displayP < anim.minValue + curSpan * 0.08) {
-                anim.minValue = Math.max(0, displayP - curSpan * 0.08);
+              if (displayP < anim.minValue + curSpan * 0.018) {
+                anim.minValue = Math.max(0, displayP - curSpan * 0.018);
               }
             }
 
@@ -1353,7 +1428,15 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     rafId = window.requestAnimationFrame(animateFrame);
 
+    let disposed = false;
+    document.fonts?.ready?.then(() => {
+      if (!disposed) {
+        chart.applyOptions({ layout: { fontFamily: axisFontFamily } });
+      }
+    });
+
     return () => {
+      disposed = true;
       if (rafId !== null) {
         window.cancelAnimationFrame(rafId);
       }
@@ -1579,7 +1662,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     onPriceHover?.(null, null);
   };
 
-  const accentColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
 
   return (
     <div
@@ -1588,50 +1671,75 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       className="relative w-full min-w-0 max-w-full select-none overflow-hidden bg-[#000000]"
       onDoubleClick={resetView}
     >
-      {/* Layer 1: Pure black + fading dot-matrix grid */}
+      {/* Layer 1: Pure black + small, tight, subtle fading dot-matrix grid */}
       <canvas
         ref={dotCanvasRef}
         style={{ width: '100%', height }}
         className="pointer-events-none absolute inset-0 block max-w-full"
       />
 
-      {/* Layer 1.5: Right-side background brush (brushes dots/background behind the right-axis numbers) */}
-      <div
-        className="pointer-events-none absolute top-0 right-0 bottom-0 w-[74px]"
-        style={{
-          background:
-            'linear-gradient(to left, #000000 0%, rgba(0,0,0,0.92) 48%, rgba(0,0,0,0.62) 78%, rgba(0,0,0,0) 100%)',
-        }}
-      />
+      {/* Layer 1.5: Wide, lighter progressive edge & corner brushes (darken smoothly only toward outer edges) */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {/* Wide soft top brush expanding gently down into the chart */}
+        <div
+          className="absolute inset-x-0 top-0 h-24"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.46) 24%, rgba(0,0,0,0.18) 54%, rgba(0,0,0,0.05) 80%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        {/* Wide soft left brush expanding smoothly across the left & top-left corner */}
+        <div
+          className="absolute inset-y-0 left-0 w-24"
+          style={{
+            background:
+              'linear-gradient(to right, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.46) 24%, rgba(0,0,0,0.18) 54%, rgba(0,0,0,0.05) 80%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        {/* Wide soft right brush fading smoothly behind the white axis numbers */}
+        <div
+          className="absolute inset-y-0 right-0 w-[136px]"
+          style={{
+            background:
+              'linear-gradient(to left, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.56) 26%, rgba(0,0,0,0.26) 54%, rgba(0,0,0,0.07) 80%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        {/* Soft wide corner-to-corner elliptical vignette tying left, top, and back edges seamlessly */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse 92% 86% at 50% 54%, rgba(0,0,0,0) 46%, rgba(0,0,0,0.14) 70%, rgba(0,0,0,0.38) 88%, rgba(0,0,0,0.68) 100%)',
+          }}
+        />
+      </div>
 
-      {/* Layer 2: TradingView Lightweight Charts engine (renders line, glow, halo dot & dashed guide) */}
+      {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
       <div
         ref={tvContainerRef}
         style={{ width: '100%', height }}
         className="relative z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
 
-      {/* Layer 2.5: Dark feathered brush masks covering axis numbers outside chart boundaries */}
+      {/* Layer 2.5: Whisper-light top & left outer edge blend so zero cutoff seam appears */}
       <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
-        {/* Top dark brush */}
         <div
-          className="absolute inset-x-0 top-0 h-5"
+          className="absolute inset-x-0 top-0 h-14"
           style={{
             background:
-              'linear-gradient(to bottom, #000000 0%, rgba(0,0,0,0.72) 55%, rgba(0,0,0,0) 100%)',
+              'linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.18) 42%, rgba(0,0,0,0.04) 76%, rgba(0,0,0,0) 100%)',
           }}
         />
-        {/* Bottom boundary dark brush covering time numbers into pure black space below */}
         <div
-          className="absolute inset-x-0 bottom-0 h-11 border-b border-white/[0.08]"
+          className="absolute inset-y-0 left-0 w-14"
           style={{
             background:
-              'linear-gradient(to top, #000000 0%, rgba(0,0,0,0.94) 52%, rgba(0,0,0,0) 100%)',
+              'linear-gradient(to right, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.18) 42%, rgba(0,0,0,0.04) 76%, rgba(0,0,0,0) 100%)',
           }}
         />
       </div>
 
-      {/* Layer 3: Editable moving live-price card pinned cleanly above the right-axis brush */}
+      {/* Layer 3: Right-axis live-price pill card with clean crisp typography */}
       <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden">
         <div
           ref={badgeRef}
@@ -1639,10 +1747,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             left: 0,
             top: 0,
             opacity: 0,
-            backgroundColor: accentColor,
+            backgroundColor: badgeBg,
             color: CHART_THEME.liveBadge.textColor,
+            fontFamily: "'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, sans-serif",
           }}
-          className="absolute flex items-center justify-center rounded-full px-1.5 font-mono text-[8.5px] font-bold leading-none shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
+          className="absolute flex items-center justify-center rounded-full px-1.5 text-[9.5px] font-medium tabular-nums leading-none shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
         />
       </div>
 
