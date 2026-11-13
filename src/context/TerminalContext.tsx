@@ -9,7 +9,7 @@ import { normalizeBackendEvent, wsService } from '../services/websocket';
 import { engineEventStore } from '../services/engine-event-store';
 import { recordRequest } from '../services/engineLogs';
 import { recoverTokenLogoGroup } from '../services/token-logo-recovery';
-import { clearTokenLifecycleCache, lifecycleCacheSignature, loadTokenLifecycleCache, pruneTokenLifecycleCache, saveTokenLifecycleCache } from '../services/token-lifecycle-cache';
+import { clearTokenLifecycleCache, lifecycleCacheSignature, loadTokenLifecycleCache, pruneTokenLifecycleCache, removeTokenLifecycleCache, saveTokenLifecycleCache } from '../services/token-lifecycle-cache';
 
 export type NavigationTab =
   | 'overview' | 'positions' | 'live_feed' | 'event_monitor'
@@ -1146,6 +1146,11 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (mint) {
           setTokens((previous) => previous.filter((token) => token.mint !== mint));
           setLaunches((previous) => previous.filter((launch) => launch.mint_address !== mint));
+          setSelectedToken((previous) => previous?.mint === mint ? null : previous);
+          lifecycleCacheSignatures.current.delete(mint);
+          void removeTokenLifecycleCache(mint).catch((error) =>
+            console.warn('NodeX terminal token cache removal failed:', error),
+          );
         }
       }
        if (event.event_type === 'token_detail_snapshot') {
