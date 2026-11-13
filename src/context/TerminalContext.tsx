@@ -280,8 +280,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
                   stage: 'curve_completed',
                   sub_event: 'Bonding curve complete — PumpSwap pool discovery in progress',
                 }
-            : event.event_type === 'market_price_update' && previous?.qualification_status === 'qualified'
-              && (Number(data.price_sol ?? data.price_usd ?? data.current_price_usd) > 0)
+            : ['market_price_update', 'token_market_update', 'market_tick'].includes(event.event_type)
+              && previous?.qualification_status === 'qualified'
+              && (Number(payload.price_sol ?? payload.price_usd ?? payload.current_price_usd ?? payload.price ?? payload.current_price) > 0)
               ? {
                   status: 'monitoring',
                   label: 'Monitoring',
@@ -362,7 +363,7 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
     monitoring_status: event.event_type === 'market_subscription_requested' ? 'pending'
       : event.event_type === 'market_subscription_subscribed' ? 'subscribed'
       : event.event_type === 'market_subscription_waiting' ? String(data.status || 'waiting_for_capacity')
-      : event.event_type === 'market_subscription_active' || event.event_type === 'market_price_update' ? 'active'
+      : event.event_type === 'market_subscription_active' || ['market_price_update', 'token_market_update', 'market_tick'].includes(event.event_type) ? 'active'
       : event.event_type === 'market_subscription_failed' ? 'failed'
       : event.event_type === 'market_subscriptions_removed' ? 'removed'
       : event.event_type === 'token_monitoring_started' || event.event_type === 'token_monitoring_update'
@@ -370,9 +371,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
         : event.event_type === 'token_monitoring_completed' ? 'completed' : previous?.monitoring_status,
     monitoring_reason: ['market_subscription_waiting', 'market_subscription_failed'].includes(event.event_type)
       ? String(data.reason || data.message || data.status || '')
-      : ['market_subscription_subscribed', 'market_subscription_active', 'market_price_update'].includes(event.event_type) ? ''
+      : ['market_subscription_subscribed', 'market_subscription_active', 'market_price_update', 'token_market_update', 'market_tick'].includes(event.event_type) ? ''
       : previous?.monitoring_reason,
-    monitoring_updated_at: ['market_subscription_requested', 'market_subscription_subscribed', 'market_subscription_waiting', 'market_subscription_active', 'market_subscription_failed', 'market_subscriptions_removed', 'market_price_update'].includes(event.event_type)
+    monitoring_updated_at: ['market_subscription_requested', 'market_subscription_subscribed', 'market_subscription_waiting', 'market_subscription_active', 'market_subscription_failed', 'market_subscriptions_removed', 'market_price_update', 'token_market_update', 'market_tick'].includes(event.event_type)
       ? String(data.received_at || event.timestamp)
       : previous?.monitoring_updated_at,
     authority_status: event.event_type === 'token_monitoring_update'
