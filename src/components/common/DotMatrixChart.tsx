@@ -226,10 +226,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // every historical point and make the whole line/candle set appear to move.
     if (!scaleRef.current || !Number.isFinite(scaleRef.current.min) || !Number.isFinite(scaleRef.current.max) || scaleRef.current.max <= scaleRef.current.min) {
       if (dataRange <= 0) {
-        const anchor = Math.max(Math.abs(dataMax), 0.00000001);
+        const anchor = Math.max(Math.abs(dataMax), 0.0000125);
         scaleRef.current = {
           min: 0,
-          max: anchor * 1.10,
+          // Keep the zero baseline visible and leave room for the demo tape's
+          // first real price movement instead of locking the axis near zero.
+          max: anchor * 10,
         };
       } else {
         scaleRef.current = target;
