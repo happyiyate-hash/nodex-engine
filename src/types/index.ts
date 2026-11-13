@@ -329,6 +329,7 @@ export interface StrategyConfig {
   auto_buy_enabled: boolean;
   auto_recover_token_account_rent: boolean;
   trailing_stop_enabled: boolean;
+  trailing_activation_profit_pct: number;
   trailing_stop_callback_pct: number;
   blacklist_creators_with_prior_rugs: boolean;
   paper_starting_balance: number;
