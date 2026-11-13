@@ -371,12 +371,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         });
       };
 
-      if (visible.length > 1) {
+      if (lineCoordinates.length > 1) {
+        // Draw the live trace even when only one timeframe candle is visible.
         // Flat, solid line: no glow, no gradient, no shaded gradient area.
         ctx.save();
         drawPath();
         ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2.4;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
@@ -393,7 +394,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const candleWidth = Math.max(0.7, slotWidth);
+      const candleWidth = Math.max(0.9, slotWidth * 1.25);
 
       visible.forEach((candle, index) => {
         const x = getSlotX(index);
