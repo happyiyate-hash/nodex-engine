@@ -167,7 +167,6 @@ export const PositionsPage: React.FC = () => {
           <div className="text-[10px] sm:text-[11px] font-mono text-[#737373] flex items-center gap-1.5">
             <span>Showing {filteredPositions.length} positions</span>
           </div>
-          <PositionRiskSettingsSheet />
         </div>
       </div>
 
@@ -212,19 +211,22 @@ export const PositionsPage: React.FC = () => {
                       <span className={`text-[8px] uppercase tracking-wider ${isOpen ? 'text-emerald-300' : 'text-white/40'}`}>{pos.status}</span>
                       <div className="flex items-center gap-3">
                         {isOpen && (
-                          <button
-                            onClick={() => {
-                              if (confirmCloseId === pos.id) {
-                                void closePosition(pos.id, 100);
-                                setConfirmCloseId(null);
-                              } else {
-                                setConfirmCloseId(pos.id);
-                              }
-                            }}
-                            className="text-[9px] font-semibold text-red-300"
-                          >
-                            {confirmCloseId === pos.id ? 'Confirm full close?' : 'Close position'}
-                          </button>
+                          <>
+                            <PositionRiskSettingsSheet position={pos} />
+                            <button
+                              onClick={() => {
+                                if (confirmCloseId === pos.id) {
+                                  void closePosition(pos.id, 100);
+                                  setConfirmCloseId(null);
+                                } else {
+                                  setConfirmCloseId(pos.id);
+                                }
+                              }}
+                              className="text-[9px] font-semibold text-red-300"
+                            >
+                              {confirmCloseId === pos.id ? 'Confirm full close?' : 'Close position'}
+                            </button>
+                          </>
                         )}
                         <button onClick={() => openTokenDetailByMint(pos.mint)} className="text-[9px] text-white/55">Token details ↗</button>
                       </div>
@@ -366,19 +368,22 @@ export const PositionsPage: React.FC = () => {
                           Open Details →
                         </button>
                         {isOpen && (
-                          <button
-                            onClick={() => {
-                              if (confirmCloseId === pos.id) {
-                                void closePosition(pos.id, 100);
-                                setConfirmCloseId(null);
-                              } else {
-                                setConfirmCloseId(pos.id);
-                              }
-                            }}
-                            className="px-2 py-0.5 rounded glass-icon text-[10px] text-red-300 border-red-500/20 transition-all hover:bg-red-950/30"
-                          >
-                            {confirmCloseId === pos.id ? 'Confirm close?' : 'Close 100%'}
-                          </button>
+                          <>
+                            <PositionRiskSettingsSheet position={pos} />
+                            <button
+                              onClick={() => {
+                                if (confirmCloseId === pos.id) {
+                                  void closePosition(pos.id, 100);
+                                  setConfirmCloseId(null);
+                                } else {
+                                  setConfirmCloseId(pos.id);
+                                }
+                              }}
+                              className="px-2 py-0.5 rounded glass-icon text-[10px] text-red-300 border-red-500/20 transition-all hover:bg-red-950/30"
+                            >
+                              {confirmCloseId === pos.id ? 'Confirm close?' : 'Close 100%'}
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
