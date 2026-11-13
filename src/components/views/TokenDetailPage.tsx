@@ -36,7 +36,7 @@ export const TokenDetailPage: React.FC = () => {
   const [riskTrailingEnabled, setRiskTrailingEnabled] = useState(false);
   const [riskTrailingActivation, setRiskTrailingActivation] = useState(50);
   const [riskTrailingCallback, setRiskTrailingCallback] = useState(10);
-  const [riskMaximumProfit, setRiskMaximumProfit] = useState(500);
+  const [riskMaximumProfit, setRiskMaximumProfit] = useState(0);
   const [riskSaving, setRiskSaving] = useState(false);
   const [riskError, setRiskError] = useState<string | null>(null);
   const [headerOffset, setHeaderOffset] = useState(0);
@@ -118,7 +118,7 @@ export const TokenDetailPage: React.FC = () => {
     setRiskTrailingEnabled(Boolean(activePosition.trailing_stop_enabled));
     setRiskTrailingActivation(activePosition.trailing_activation_profit_pct ?? 50);
     setRiskTrailingCallback(activePosition.trailing_stop_callback_pct ?? activePosition.trailing_stop_pct ?? 10);
-    setRiskMaximumProfit(activePosition.maximum_profit_pct ?? 500);
+    setRiskMaximumProfit(activePosition.maximum_profit_pct ?? 0);
     setRiskError(null);
     setRiskSheetOpen(true);
   };
@@ -365,7 +365,7 @@ export const TokenDetailPage: React.FC = () => {
               <div className="mt-1 flex items-center gap-4 font-mono text-[12px]">
                 <span className="text-red-300">SL {formatMetric(activePosition.stop_loss_target_pct, 2)}%</span>
                 <span className="text-emerald-300">TP {activePosition.take_profit_target_pct > 0 ? `+${formatMetric(activePosition.take_profit_target_pct, 2)}%` : 'OFF'}</span>
-                <span className="text-amber-200">MAX +{formatMetric(activePosition.maximum_profit_pct ?? 500, 0)}%</span>
+                <span className="text-amber-200">MAX +{(activePosition.maximum_profit_pct ?? 0) > 0 ? `+${formatMetric(activePosition.maximum_profit_pct ?? 0, 0)}%` : 'OFF'}</span>
                 <span className={activePosition.trailing_stop_enabled ? 'text-cyan-300' : 'text-white/40'}>TRAIL {activePosition.trailing_stop_enabled ? (activePosition.trailing_stop_active ? 'ACTIVE' : 'ARMED') : 'OFF'}</span>
               </div>
             </div>
@@ -615,12 +615,12 @@ export const TokenDetailPage: React.FC = () => {
                 </span>
               </label>
               <label className="col-span-2 block min-w-0">
-                <span className="mb-2 block text-[10px] font-medium text-amber-200/80">Hard maximum-profit exit · full sale</span>
+                <span className="mb-2 block text-[10px] font-medium text-amber-200/80">Trailing maximum-profit target · full sale</span>
                 <span className="flex h-10 items-center border-b border-amber-200/20">
-                  <input type="number" min="0" max="5000" step="1" value={riskMaximumProfit} onChange={(event) => setRiskMaximumProfit(Math.min(5000, Math.max(0, Number(event.target.value) || 0)))} disabled={riskSaving} className="min-w-0 flex-1 bg-transparent text-[18px] font-semibold tabular-nums text-amber-200 outline-none disabled:opacity-50" />
+                  <input type="number" min="0" step="1" value={riskMaximumProfit} onChange={(event) => setRiskMaximumProfit(Math.max(0, Number(event.target.value) || 0))} disabled={riskSaving || !riskTrailingEnabled} className="min-w-0 flex-1 bg-transparent text-[18px] font-semibold tabular-nums text-amber-200 outline-none disabled:opacity-50" />
                   <span className="text-[12px] text-white/40">%</span>
                 </span>
-                <span className="mt-1 block text-[9px] text-white/35">Default +500% closes 100% immediately, even while price is rising. Set 0 to disable this cap.</span>
+                <span className="mt-1 block text-[9px] text-white/35">Optional: set your own profit ceiling. Reaching it sells the full position; 0 means no ceiling. This applies only while trailing stop is enabled.</span>
               </label>
             </div>
 
