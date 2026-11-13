@@ -259,36 +259,71 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const getSlotX = (index: number) => padLeft + (firstVisibleSlot + index + 0.5) * slotWidth;
     const getLineX = (index: number) => getSlotX(index);
 
-    // Keep every tick from the active time bucket for the live line trace.
-    // Completed buckets still contribute only their final, frozen close.
-    const activeBucketStart = visible[visible.length - 1].timestamp;
+    // Keep the complete tick path for every visible time bucket, not just
+    // the newest one. Each bucket occupies one fixed slot; completed paths
+    // are frozen and the next bucket begins at the previous close.
     const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
-    const activeSamples = (priceHistory || [])
-      .filter((point) =>
-        Number.isFinite(point.price) &&
-        point.price >= 0 &&
-        Number.isFinite(point.time) &&
-        Math.floor(point.time / interval) * interval === activeBucketStart
-      )
-      .slice()
-      .sort((a, b) => a.time - b.time);
-    const activeSlotIndex = visible.length - 1;
-    const activeSlotLeft = padLeft + (firstVisibleSlot + activeSlotIndex) * slotWidth;
-    const activeX = (timestamp: number) => {
-      const progress = Math.max(0, Math.min(1, (timestamp - activeBucketStart) / interval));
-      return activeSlotLeft + progress * slotWidth;
-    };
-    const lineCoordinates: Array<{ x: number; y: number }> = [];
-    visible.slice(0, -1).forEach((point, index) => {
-      lineCoordinates.push({ x: getLineX(index), y: getY(point.price) });
+    const rawByBucket = new Map<number, typeof priceHistory>();
+    (priceHistory || []).forEach((point) => {
+      if (!Number.isFinite(point.price) || point.price < 0 || !Number.isFinite(point.time)) return;
+      const bucket = Math.floor(point.time / interval) * interval;
+      const list = rawByBucket.get(bucket) || [];
+      list.push(point);
+      rawByBucket.set(bucket, list);
     });
-    if (activeSamples.length > 0) {
-      activeSamples.forEach((sample) => {
-        lineCoordinates.push({ x: activeX(sample.time), y: getY(sample.price) });
+    rawByBucket.forEach((list) => list.sort((a, b) => a.time - b.time));
+
+    const lineCoordinates: Array<{ x: number; y: number }> = [];
+    visible.forEach((bucket, index) => {
+      const slotLeft = padLeft + (firstVisibleSlot + index) * slotWidth;
+      const slotRight = slotLeft + slotWidth;
+      const bucketSamples = rawByBucket.get(bucket.timestamp) || [];
+      const isActiveBucket = index === visible.length - 1;
+      const firstSample = bucketSamples[0];
+      const startPrice = firstSample && Number.isFinite(firstSample.open)
+        ? firstSample.open
+        : bucket.open;
+      const startY = getY(startPrice);
+
+      // Every interval starts exactly where the preceding interval ended.
+      // The first visible interval gets a short horizontal lead-in.
+      if (lineCoordinates.length === 0) {
+        lineCoordinates.push({ x: padLeft, y: startY });
+      } else {
+        const previous = lineCoordinates[lineCoordinates.length - 1];
+        if (Math.abs(previous.x - slotLeft) > 0.01 || Math.abs(previous.y - startY) > 0.01) {
+          lineCoordinates.push({ x: slotLeft, y: startY });
+        }
+      }
+
+      bucketSamples.forEach((sample) => {
+        const progress = Math.max(0, Math.min(1, (sample.time - bucket.timestamp) / interval));
+        const x = slotLeft + progress * slotWidth;
+        const y = getY(sample.price);
+        const previous = lineCoordinates[lineCoordinates.length - 1];
+        if (previous && Math.abs(previous.x - x) < 0.01) {
+          previous.y = y;
+        } else {
+          lineCoordinates.push({ x, y });
+        }
       });
-    } else {
-      lineCoordinates.push({ x: getLineX(activeSlotIndex), y: getY(visible[visible.length - 1].price) });
-    }
+
+      // Completed buckets finish at the right edge of their slot. The live
+      // bucket stops at its latest tick and grows only until its timer resets.
+      if (!isActiveBucket) {
+        const endY = getY(bucket.price);
+        const previous = lineCoordinates[lineCoordinates.length - 1];
+        if (!previous || Math.abs(previous.x - slotRight) > 0.01) {
+          lineCoordinates.push({ x: slotRight, y: endY });
+        } else {
+          previous.y = endY;
+        }
+      }
+    });
+
+    const activeSamples = rawByBucket.get(visible[visible.length - 1].timestamp) || [];
+    const latestSample = activeSamples[activeSamples.length - 1];
+    const latestLinePoint = lineCoordinates[lineCoordinates.length - 1];
 
     // Nice-number price grid lines & right axis ticks
     const ticks = getNiceTicks(scale.min, scale.max, 5);
@@ -340,7 +375,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         areaGrad.addColorStop(1, 'rgba(0,0,0,0)');
 
         drawPath();
-        ctx.lineTo(getLineX(visible.length - 1), padTop + plotH);
+        ctx.lineTo(latestLinePoint?.x ?? getLineX(visible.length - 1), padTop + plotH);
         ctx.lineTo(getLineX(0), padTop + plotH);
         ctx.closePath();
         ctx.fillStyle = areaGrad;
@@ -420,10 +455,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // dot and badge so both remain crisp and visible.
     const latest = visible[visible.length - 1];
     const latestSample = activeSamples[activeSamples.length - 1];
-    const latestX = chartType === 'line' && latestSample
-      ? activeX(latestSample.time)
+    const latestX = chartType === 'line' && latestLinePoint
+      ? latestLinePoint.x
       : getSlotX(visible.length - 1);
-    const latestY = getY(chartType === 'line' && latestSample ? latestSample.price : latest.price);
+    const latestY = chartType === 'line' && latestLinePoint
+      ? latestLinePoint.y
+      : getY(latest.price);
     ctx.save();
     ctx.beginPath();
     ctx.arc(latestX, latestY, 3.2, 0, Math.PI * 2);
