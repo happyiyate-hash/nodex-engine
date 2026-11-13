@@ -1184,18 +1184,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setSelectedToken((previous) => previous?.mint === mint ? append(previous) : previous);
         }
       }
-      if (event.event_type === 'token_removed') {
-        const mint = String(event.data?.mint_address || '');
-        if (mint) {
-          setTokens((previous) => previous.filter((token) => token.mint !== mint));
-          setLaunches((previous) => previous.filter((launch) => launch.mint_address !== mint));
-          setSelectedToken((previous) => previous?.mint === mint ? null : previous);
-          lifecycleCacheSignatures.current.delete(mint);
-          void removeTokenLifecycleCache(mint).catch((error) =>
-            console.warn('NodeX terminal token cache removal failed:', error),
-          );
-        }
-      }
        if (event.event_type === 'token_detail_snapshot') {
         const snapshot = event.data?.snapshot as Record<string, any> | undefined;
         if (snapshot) {
