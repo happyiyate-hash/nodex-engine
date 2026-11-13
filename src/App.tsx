@@ -37,7 +37,7 @@ const getScrollableAncestor = (target: EventTarget | null, boundary: HTMLElement
 const MainLayout: React.FC = () => {
   const [settingsSubpage, setSettingsSubpage] = useState(false);
   const [storagePageOpen, setStoragePageOpen] = useState(false);
-  const { activeTab, selectedToken, refreshBackendState, events } = useTerminal();
+  const { activeTab, selectedToken, refreshBackendState, events, tokens } = useTerminal();
   const { showToast } = useToast();
   const seenTradeNotificationIds = useRef<Set<string>>(new Set());
   const mainRef = useRef<HTMLElement | null>(null);
@@ -72,8 +72,10 @@ const MainLayout: React.FC = () => {
 
       const data = event.data || {};
       const position = data.position && typeof data.position === 'object' ? data.position : data;
-      const name = String(position.name || position.token_name || position.symbol || 'Unknown token');
-      const symbol = String(position.symbol || '');
+      const mint = String(data.mint_address || position.mint_address || position.mint || '');
+      const tokenMetadata = tokens.find((token) => token.mint === mint);
+      const name = String(position.name || position.token_name || tokenMetadata?.name || position.symbol || tokenMetadata?.symbol || 'Unknown token');
+      const symbol = String(position.symbol || tokenMetadata?.symbol || '');
       const tokenLabel = symbol && symbol !== name ? `${name} (${symbol})` : name;
       const reasonValue = String(data.exit_reason || position.exit_reason || position.exit_trigger_reason || 'risk_policy').toLowerCase();
       const reasonLabels: Record<string, string> = {
@@ -107,7 +109,7 @@ const MainLayout: React.FC = () => {
       ].filter(Boolean).join(' · ');
       showToast({ title: 'Paper sale completed', description: details, tone: 'success', duration: 8000 });
     }
-  }, [events, showToast]);
+  }, [events, showToast, tokens]);
 
   useEffect(() => {
     const main = mainRef.current;
