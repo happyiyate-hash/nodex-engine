@@ -25,7 +25,7 @@ export const TokenDetailPage: React.FC = () => {
   } = useTerminal();
 
   const [copiedMint, setCopiedMint] = useState(false);
-  const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '1H' | '24H'>('24H');
+  const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '30m' | '1H' | '24H'>('24H');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
