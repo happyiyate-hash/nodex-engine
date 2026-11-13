@@ -81,7 +81,7 @@ const emptyStrategy: StrategyConfig = {
   max_simultaneous_positions: 3, min_safety_score: 80, max_slippage_pct: 10,
   stop_loss_pct: 20, take_profit_pct: 50, min_5m_buy_volume_usd: 1000,
   max_top10_holder_concentration_pct: 35, auto_buy_enabled: false,
-  trailing_stop_enabled: false, trailing_stop_callback_pct: 10,
+  trailing_stop_enabled: false, trailing_activation_profit_pct: 20, trailing_stop_callback_pct: 10,
   auto_recover_token_account_rent: true,
   blacklist_creators_with_prior_rugs: true,
   paper_starting_balance: 10,
