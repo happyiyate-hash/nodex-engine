@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { wsService } from '../../services/websocket';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
 import {
@@ -51,28 +50,47 @@ export const TokenDetailPage: React.FC = () => {
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : tokens[0];
 
-  useEffect(() => {
-    if (!activeToken?.mint) return;
-    wsService.subscribeToken(activeToken.mint, '5m');
-    return () => wsService.unsubscribeToken(activeToken.mint);
-  }, [activeToken?.mint]);
+  // Token Details uses an isolated local demo market tape. Simulated prices never
+  // enter the backend, shared token registry, or paper-trading positions.
+  const DEMO_START_PRICE_USD = 0.0000125;
+  const [demoPrice, setDemoPrice] = useState(DEMO_START_PRICE_USD);
+  const [demoPriceHistory, setDemoPriceHistory] = useState<import('../../types').PricePoint[]>([]);
 
   useEffect(() => {
     if (!activeToken?.mint) return;
-    const backendTimeframe = timeframe === '1H' ? '1h' : timeframe === '24H' ? '24h' : timeframe;
-    wsService.setChartTimeframe(activeToken.mint, backendTimeframe as '1m' | '5m' | '15m' | '1h' | '24h');
-  }, [activeToken?.mint, timeframe]);
+    setDemoPrice(DEMO_START_PRICE_USD);
+    const now = Date.now();
+    const initial = Array.from({ length: 60 }, (_, index) => {
+      const phase = index * 0.58;
+      const price = DEMO_START_PRICE_USD * (1 + Math.sin(phase) * 0.018 + index * 0.00012);
+      const previous = index === 0 ? price : DEMO_START_PRICE_USD * (1 + Math.sin((index - 1) * 0.58) * 0.018 + (index - 1) * 0.00012);
+      return { time: now - (59 - index) * 2000, price, open: previous, high: Math.max(previous, price) * 1.001, low: Math.min(previous, price) * 0.999, close: price, volume: 120 + index * 3 };
+    });
+    setDemoPriceHistory(initial);
+    let tick = 0;
+    let previousPrice = initial[initial.length - 1].price;
+    const timer = window.setInterval(() => {
+      tick += 1;
+      const movementPct = Math.sin(tick * 0.73) * 0.0032 + Math.cos(tick * 0.19) * 0.0011 + 0.00018;
+      const nextPrice = Math.max(0.00000001, previousPrice * (1 + movementPct));
+      const point = { time: Date.now(), price: nextPrice, open: previousPrice, high: Math.max(previousPrice, nextPrice) * 1.0008, low: Math.min(previousPrice, nextPrice) * 0.9992, close: nextPrice, volume: 80 + (tick % 17) * 19 };
+      previousPrice = nextPrice;
+      setDemoPrice(nextPrice);
+      setDemoPriceHistory((history) => [...history, point].slice(-240));
+    }, 1600);
+    return () => window.clearInterval(timer);
+  }, [activeToken?.mint]);
 
   if (!activeToken) return null;
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
-  const priceCurrency = activeToken.price_currency || (activeToken.current_price_usd > 0 ? 'USD' : 'SOL');
-  const liveTokenPrice = priceCurrency === 'SOL' ? activeToken.current_price_sol : activeToken.current_price_usd;
+  const priceCurrency = 'USD';
+  const liveTokenPrice = demoPrice;
   const currentPrice = scrubPrice ?? liveTokenPrice;
   // Keep the displayed percentage tied to the actual simulated price
   // relative to its seed. Do not alternate the sign by animation phase:
   // that made the header turn red while the price tape was still rising.
-  const marketChangePct = activeToken.price_change_5m_pct ?? activeToken.price_change_1m_pct;
-  const pnlPct = marketChangePct ?? 0;
+  const marketChangePct = ((demoPrice / DEMO_START_PRICE_USD) - 1) * 100;
+  const pnlPct = marketChangePct;
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
@@ -278,7 +296,8 @@ export const TokenDetailPage: React.FC = () => {
         <DotMatrixChart
           currentPrice={liveTokenPrice}
           entryPrice={activePosition && priceCurrency === 'USD' ? entryPriceUsd : undefined}
-          priceHistory={activeToken.price_history_5m}
+          priceHistory={demoPriceHistory}
+          preserveTicks
           isPositive={isPositive}
           timeframe={timeframe}
           chartType={chartType}
@@ -289,6 +308,10 @@ export const TokenDetailPage: React.FC = () => {
           }}
         />
       </section>
+
+      <div className="mx-4 mt-2 rounded-md border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-[10px] font-mono text-amber-200/75">
+        DEMO MODE · Price and chart are simulated locally for interface testing. No real market feed or trade execution is connected.
+      </div>
 
       {/* Compact, full-width position and live market information. */}
       <section className="w-full px-4 sm:px-6 pt-3 pb-3 max-w-4xl mx-auto font-mono border-b border-white/[0.10]">
@@ -363,7 +386,7 @@ export const TokenDetailPage: React.FC = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/65">Market Statistics</h2>
-            <span className="text-[9px] uppercase tracking-wider text-amber-300/70">ON-CHAIN DATA · PROVIDER-DEPENDENT</span>
+            <span className="text-[9px] uppercase tracking-wider text-amber-300/70">DEMO MARKET DATA · SIMULATED</span>
           </div>
 
           <div className="grid grid-cols-2 gap-x-5 gap-y-3">
