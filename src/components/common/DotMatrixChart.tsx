@@ -352,7 +352,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.fillText(formatPrice(tick), w - 5, y);
     });
 
-    const lineColor = isPositive ? '#8FCBA5' : '#D58B91';
+    const lineColor = isPositive ? '#22C55E' : '#EF4444';
 
     // 1. LINE CHART MODE
     if (chartType === 'line') {
@@ -372,36 +372,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       };
 
       if (visible.length > 1) {
-        // Glowing Area Gradient
-        const areaGrad = ctx.createLinearGradient(0, padTop, 0, padTop + plotH);
-        areaGrad.addColorStop(0, isPositive ? 'rgba(143,203,165,0.13)' : 'rgba(213,139,145,0.13)');
-        areaGrad.addColorStop(0.6, isPositive ? 'rgba(143,203,165,0.02)' : 'rgba(213,139,145,0.02)');
-        areaGrad.addColorStop(1, 'rgba(0,0,0,0)');
-
-        drawPath();
-        ctx.lineTo(latestLinePoint?.x ?? getLineX(visible.length - 1), padTop + plotH);
-        ctx.lineTo(getLineX(0), padTop + plotH);
-        ctx.closePath();
-        ctx.fillStyle = areaGrad;
-        ctx.fill();
-
-        // High-clarity glowing stroke
+        // Flat, solid line: no glow, no gradient, no shaded gradient area.
         ctx.save();
-        ctx.shadowColor = lineColor;
-        ctx.shadowBlur = 4;
         drawPath();
-        const strokeGradient = ctx.createLinearGradient(padLeft, 0, padLeft + livePlotW, 0);
-        if (isPositive) {
-          strokeGradient.addColorStop(0, '#6EAA84');
-          strokeGradient.addColorStop(0.55, '#8FCBA5');
-          strokeGradient.addColorStop(1, '#B4DCC1');
-        } else {
-          strokeGradient.addColorStop(0, '#B76F78');
-          strokeGradient.addColorStop(0.55, '#D58B91');
-          strokeGradient.addColorStop(1, '#E8B2B5');
-        }
-        ctx.strokeStyle = strokeGradient;
-        ctx.lineWidth = 1.35;
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1.5;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
@@ -409,10 +384,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       } else {
         const y = getY(visible[0].price);
         ctx.beginPath();
-        ctx.moveTo(padLeft, y);
+        ctx.moveTo(getLineX(0), y);
         ctx.lineTo(getLineX(0), y);
         ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 1.1;
+        ctx.lineWidth = 1.5;
         ctx.lineCap = 'round';
         ctx.stroke();
       }
@@ -427,7 +402,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const highY = getY(candle.high);
         const lowY = getY(candle.low);
         const rising = candle.price >= candle.open;
-        const color = rising ? '#8FCBA5' : '#D58B91';
+        const color = rising ? '#22C55E' : '#EF4444';
 
         // High / Low Wick
         ctx.strokeStyle = color;
@@ -440,15 +415,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // Open / Close Body
         const bodyTop = Math.min(openY, closeY);
         const bodyHeight = Math.max(1.25, Math.abs(closeY - openY));
-        const candleGradient = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyHeight);
-        if (rising) {
-          candleGradient.addColorStop(0, '#B4DCC1');
-          candleGradient.addColorStop(1, '#6EAA84');
-        } else {
-          candleGradient.addColorStop(0, '#E8B2B5');
-          candleGradient.addColorStop(1, '#B76F78');
-        }
-        ctx.fillStyle = candleGradient;
+        ctx.fillStyle = color;
         ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
       });
     }
