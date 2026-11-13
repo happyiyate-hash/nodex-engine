@@ -33,8 +33,9 @@ const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
   '1m': 60_000,
   '5m': 5 * 60_000,
   '15m': 15 * 60_000,
+  '30m': 30 * 60_000,
   '1H': 60 * 60_000,
-  '24H': 30 * 60_000, // 30m candles across 24h = 48-50 candles
+  '24H': 24 * 60 * 60_000,
 };
 
 const formatBucketTime = (timestamp: number, timeframe: string) => {
@@ -101,7 +102,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const scaleRef = useRef<PriceScale | null>(null);
   const pointerRef = useRef<number | null>(null);
 
-  // Render only real backend candle/tick history. Never synthesize market prices.
+  // Aggregate the underlying price ticks into OHLC candles for the selected interval.
   const points = useMemo<PriceTick[]>(() => {
     const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
     const validRaw = (priceHistory || [])
