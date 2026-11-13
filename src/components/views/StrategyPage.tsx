@@ -163,6 +163,10 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
 
   const applySettings = async () => {
     if (saving) return;
+    if (form.maximum_profit_pct !== 0 && (form.maximum_profit_pct < 100 || form.maximum_profit_pct > 100000)) {
+      showToast({ title: 'Invalid maximum profit ceiling', description: 'Set it to 0 to disable, or choose a value from 100% to 100000%.', tone: 'error', duration: 5000 });
+      return;
+    }
     setSaving(true);
     const toastId = showToast({
       title: 'Saving trading configuration…',
@@ -312,6 +316,16 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
             {targetRow('take_profit_pct', 'Take Profit', TrendingUp, 'profit')}
           </>
         )}
+        <NumberField
+          label="Maximum Profit Ceiling"
+          suffix="%"
+          min={0}
+          max={100000}
+          step="10"
+          value={form.maximum_profit_pct}
+          onChange={(value) => update('maximum_profit_pct', value)}
+          hint="Optional hard exit while trailing stop is enabled. Set to 0 to disable; otherwise minimum 100%."
+        />
         <div className="flex items-center justify-between gap-4 border-b border-white/[0.08] py-3">
           <button type="button" onClick={openTrailingSheet} className="flex min-w-0 flex-1 items-center gap-3 text-left">
             <TrendingUp className="h-[17px] w-[17px] shrink-0 text-white/55" />
