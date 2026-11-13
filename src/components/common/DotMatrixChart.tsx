@@ -99,6 +99,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const dragRef = useRef<{ x: number; end: number; moved: boolean } | null>(null);
   const scaleRef = useRef<PriceScale | null>(null);
   const pointerRef = useRef<number | null>(null);
+  const touchPointsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ distance: number; count: number } | null>(null);
 
   // Each timestamp belongs to one fixed horizontal time slot. All ticks inside
   // that slot update its OHLC values; completed slots remain immutable.
@@ -360,7 +362,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           strokeGradient.addColorStop(1, '#FF8A8A');
         }
         ctx.strokeStyle = strokeGradient;
-        ctx.lineWidth = 1.55;
+        ctx.lineWidth = 1.1;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
@@ -377,7 +379,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const candleWidth = Math.max(1.5, slotWidth * 0.94);
+      const candleWidth = Math.max(1, slotWidth * 0.52);
 
       visible.forEach((candle, index) => {
         const x = getSlotX(index);
@@ -390,7 +392,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
         // High / Low Wick
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 0.8;
         ctx.beginPath();
         ctx.moveTo(x, highY);
         ctx.lineTo(x, lowY);
@@ -398,7 +400,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
         // Open / Close Body
         const bodyTop = Math.min(openY, closeY);
-        const bodyHeight = Math.max(2, Math.abs(closeY - openY));
+        const bodyHeight = Math.max(1.25, Math.abs(closeY - openY));
         const candleGradient = ctx.createLinearGradient(0, bodyTop, 0, bodyTop + bodyHeight);
         if (rising) {
           candleGradient.addColorStop(0, '#E0FF78');
@@ -556,6 +558,19 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (event.pointerType === 'touch') {
+      const touches = touchPointsRef.current;
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (touches.size === 2) {
+        const pair = Array.from(touches.values());
+        const distance = Math.hypot(pair[1].x - pair[0].x, pair[1].y - pair[0].y);
+        pinchRef.current = { distance: Math.max(1, distance), count: view.count };
+        dragRef.current = null;
+        pointerRef.current = null;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        return;
+      }
+    }
     pointerRef.current = event.pointerId;
     dragRef.current = {
       x: event.clientX,
@@ -566,6 +581,20 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (touchPointsRef.current.has(event.pointerId)) {
+      touchPointsRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      const touches = Array.from(touchPointsRef.current.values());
+      if (touches.length >= 2 && pinchRef.current) {
+        const distance = Math.max(1, Math.hypot(touches[1].x - touches[0].x, touches[1].y - touches[0].y));
+        const factor = pinchRef.current.distance / distance;
+        const nextCount = Math.max(10, Math.min(Math.max(points.length, 10), Math.round(pinchRef.current.count * factor)));
+        setView((previous) => ({ ...previous, count: nextCount }));
+        setIsPanned(true);
+        setHoverIndex(null);
+        onPriceHover?.(null, null);
+        return;
+      }
+    }
     const drag = dragRef.current;
     if (drag && pointerRef.current === event.pointerId) {
       const delta = event.clientX - drag.x;
@@ -587,6 +616,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    touchPointsRef.current.delete(event.pointerId);
+    if (touchPointsRef.current.size < 2) pinchRef.current = null;
     if (pointerRef.current === event.pointerId) {
       pointerRef.current = null;
       dragRef.current = null;
