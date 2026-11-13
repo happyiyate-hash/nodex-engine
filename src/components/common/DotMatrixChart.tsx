@@ -286,7 +286,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const bucketSamples = rawByBucket.get(bucket.timestamp) || [];
       const isActiveBucket = index === visible.length - 1;
       const firstSample = bucketSamples[0];
-      const startPrice = firstSample && Number.isFinite(firstSample.open)
+      const startPrice = firstSample && typeof firstSample.open === 'number' && Number.isFinite(firstSample.open)
         ? firstSample.open
         : bucket.open;
       const startY = getY(startPrice);
