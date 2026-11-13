@@ -94,7 +94,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     typeof window !== 'undefined' ? Math.min(window.innerWidth, 1200) : 600
   );
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [view, setView] = useState({ end: Number.POSITIVE_INFINITY, count: 96 });
+  const [view, setView] = useState({ end: Number.POSITIVE_INFINITY, count: 72 });
   const [isPanned, setIsPanned] = useState(false);
   const dragRef = useRef<{ x: number; end: number; moved: boolean } | null>(null);
   const scaleRef = useRef<PriceScale | null>(null);
@@ -394,7 +394,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const candleWidth = Math.max(1.1, slotWidth * 0.82);
+      const candleWidth = Math.max(1.1, slotWidth * 0.90);
 
       visible.forEach((candle, index) => {
         const x = getSlotX(index);
@@ -647,7 +647,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   };
 
   const resetView = () => {
-    setView((previous) => ({ ...previous, end: Number.POSITIVE_INFINITY, count: 96 }));
+    setView((previous) => ({ ...previous, end: Number.POSITIVE_INFINITY, count: 72 }));
     setIsPanned(false);
     setHoverIndex(null);
     onPriceHover?.(null, null);
