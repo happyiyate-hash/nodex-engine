@@ -96,9 +96,7 @@ export const TokenDetailPage: React.FC = () => {
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
-  const formatTokenPrice = (value: number) => priceCurrency === 'SOL'
-    ? `${value.toFixed(10).replace(/\.?0+$/, '')} SOL`
-    : `$${value.toFixed(8).replace(/\.?0+$/, '')}`;
+  const formatTokenPrice = (value: number) => `${value.toFixed(8).replace(/\.?0+$/, '')}`;
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
@@ -336,7 +334,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Average entry price</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? formatMetric(priceCurrency === 'SOL' ? activePosition.entry_price_sol : activePosition.entry_price_usd, 10) + ' ' + priceCurrency : 'Unavailable'}
+                {activePosition ? formatMetric(activePosition.entry_price_usd, 10) + ' USD' : 'Unavailable'}
               </div>
             </div>
             <div>
@@ -395,7 +393,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Market cap</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {priceCurrency === 'SOL' ? `${activeToken.market_cap_sol > 0 ? formatMetric(activeToken.market_cap_sol, 3) + ' SOL' : 'Unavailable'}` : `${activeToken.market_cap_usd > 0 ? formatMetric(activeToken.market_cap_usd, 2) : 'Unavailable'}`}
+                {activeToken.market_cap_usd > 0 ? formatMetric(activeToken.market_cap_usd, 2) : 'Unavailable'}
               </div>
             </div>
             <div>
