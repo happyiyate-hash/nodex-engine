@@ -50,70 +50,52 @@ export const TokenDetailPage: React.FC = () => {
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : tokens[0];
 
-  // Token Details demo tape. This remains local to this page and never reaches
-  // the backend, shared token registry, or paper-trading positions.
+  // Isolated Token Details demo tape. One active time bucket is updated repeatedly;
+  // a new horizontal point is created only when the selected chart interval changes.
   const DEMO_START_PRICE_USD = 0.0000125;
   const [demoPrice, setDemoPrice] = useState(DEMO_START_PRICE_USD);
   const [demoPriceHistory, setDemoPriceHistory] = useState<import('../../types').PricePoint[]>([]);
 
   useEffect(() => {
     if (!activeToken?.mint) return;
-
-    // Seed one day of one-minute ticks. Every visible timeframe is aggregated
-    // from this same underlying tape into genuine OHLC candles.
-    const now = Date.now();
-    let previousPrice = DEMO_START_PRICE_USD;
-    const initial: import('../../types').PricePoint[] = [];
-    for (let index = 0; index < 1440; index += 1) {
-      const phase = index * 0.071;
-      const movementPct = Math.sin(phase) * 0.00075 + Math.cos(phase * 0.37) * 0.00042 + 0.000015;
-      const nextPrice = Math.max(0.00000001, previousPrice * (1 + movementPct));
-      initial.push({
-        time: now - (1439 - index) * 60_000,
-        price: nextPrice,
-        open: previousPrice,
-        high: Math.max(previousPrice, nextPrice) * 1.00045,
-        low: Math.min(previousPrice, nextPrice) * 0.99955,
-        close: nextPrice,
-        volume: 40 + (index % 23) * 7,
-      });
-      previousPrice = nextPrice;
-    }
-
-    previousPrice = initial[initial.length - 1].price;
-    setDemoPrice(previousPrice);
-    setDemoPriceHistory(initial);
-
+    let price = DEMO_START_PRICE_USD;
     let tick = 0;
     let timeout: number | undefined;
     let cancelled = false;
+    const startedAt = Date.now();
+    const first: import('../../types').PricePoint = {
+      time: startedAt, price, open: price, high: price, low: price, close: price, volume: 0,
+    };
+    setDemoPrice(price);
+    setDemoPriceHistory([first]);
+
     const scheduleNextTick = () => {
-      // Irregular intervals: the tape never updates on a fixed repeating beat.
-      const delay = 180 + Math.floor(Math.random() * 4320);
+      // Fast, irregular updates: most ticks arrive in 100–450ms, with occasional pauses.
+      const delay = Math.random() < 0.12
+        ? 650 + Math.floor(Math.random() * 450)
+        : 100 + Math.floor(Math.random() * 351);
       timeout = window.setTimeout(() => {
         if (cancelled) return;
         tick += 1;
-        const impulse = (Math.random() - 0.5) * 0.006;
-        const drift = Math.sin(tick * 0.17) * 0.00035;
-        const movementPct = impulse + drift;
-        const nextPrice = Math.max(0.00000001, previousPrice * (1 + movementPct));
-        const wick = Math.random() * 0.0012;
+        const previous = price;
+        const impulse = (Math.random() - 0.5) * 0.0018;
+        const shortTrend = Math.sin(tick * 0.11) * 0.00018;
+        price = Math.max(0.00000001, previous * (1 + impulse + shortTrend));
+        const wick = Math.random() * 0.00045;
         const point: import('../../types').PricePoint = {
           time: Date.now(),
-          price: nextPrice,
-          open: previousPrice,
-          high: Math.max(previousPrice, nextPrice) * (1 + wick),
-          low: Math.min(previousPrice, nextPrice) * (1 - wick),
-          close: nextPrice,
-          volume: 15 + Math.floor(Math.random() * 180),
+          price,
+          open: previous,
+          high: Math.max(previous, price) * (1 + wick),
+          low: Math.min(previous, price) * (1 - wick),
+          close: price,
+          volume: 5 + Math.floor(Math.random() * 90),
         };
-        previousPrice = nextPrice;
-        setDemoPrice(nextPrice);
-        setDemoPriceHistory((history) => [...history, point].slice(-3000));
+        setDemoPrice(price);
+        setDemoPriceHistory((history) => [...history, point].slice(-6000));
         scheduleNextTick();
       }, delay);
     };
-
     scheduleNextTick();
     return () => {
       cancelled = true;
