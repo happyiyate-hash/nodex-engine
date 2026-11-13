@@ -302,7 +302,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         }
       }
 
-      bucketSamples.forEach((sample) => {
+      bucketSamples.forEach((sample, sampleIndex) => {
+        // Keep every tick inside its own timeframe slot. The timestamp
+        // determines its true position within the minute (or selected
+        // interval); price direction never changes the horizontal spacing.
         const progress = Math.max(0, Math.min(1, (sample.time - bucket.timestamp) / interval));
         const x = slotLeft + progress * slotWidth;
         const y = getY(sample.price);
@@ -358,16 +361,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // Fixed horizontal baseline, followed by frozen historical closes
         // and the live intra-bucket trace that bends as each tick arrives.
         const first = lineCoordinates[0] || { x: getLineX(0), y: getY(visible[0].price) };
-        ctx.moveTo(padLeft, first.y);
-        ctx.lineTo(first.x, first.y);
-        lineCoordinates.forEach((point, index) => {
-          if (index === 0) {
-            ctx.lineTo(point.x, point.y);
-          } else {
-            const previous = lineCoordinates[index - 1];
-            const mid = (previous.x + point.x) / 2;
-            ctx.bezierCurveTo(mid, previous.y, mid, point.y, point.x, point.y);
-          }
+        // Start at the first real time bucket. Do not draw an artificial
+        // horizontal lead-in from the chart edge before recorded data begins.
+        ctx.moveTo(first.x, first.y);
+        lineCoordinates.slice(1).forEach((point) => {
+          // A single continuous trace: every tick connects directly to the
+          // next tick, regardless of whether price is rising or falling.
+          ctx.lineTo(point.x, point.y);
         });
       };
 
@@ -401,7 +401,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           strokeGradient.addColorStop(1, '#E8B2B5');
         }
         ctx.strokeStyle = strokeGradient;
-        ctx.lineWidth = 1.1;
+        ctx.lineWidth = 1.35;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
@@ -418,7 +418,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const candleWidth = Math.max(0.7, slotWidth * 0.96);
+      const candleWidth = Math.max(0.7, slotWidth);
 
       visible.forEach((candle, index) => {
         const x = getSlotX(index);
