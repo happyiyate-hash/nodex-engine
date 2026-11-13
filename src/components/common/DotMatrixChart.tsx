@@ -272,7 +272,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       .sort((a, b) => a.time - b.time);
     const activeSlotIndex = visible.length - 1;
     const activeSlotLeft = padLeft + (firstVisibleSlot + activeSlotIndex) * slotWidth;
-    const activeSlotRight = activeSlotLeft + slotWidth;
     const activeX = (timestamp: number) => {
       const progress = Math.max(0, Math.min(1, (timestamp - activeBucketStart) / interval));
       return activeSlotLeft + progress * slotWidth;
