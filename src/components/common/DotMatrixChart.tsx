@@ -34,7 +34,7 @@ const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
   '15m': 15 * 60_000,
   '30m': 30 * 60_000,
   '1H': 60 * 60_000,
-  '24H': 24 * 60 * 60_000,
+  '24H': 60 * 60_000,
 };
 
 const formatBucketTime = (timestamp: number, timeframe: string) => {
@@ -105,16 +105,16 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const points = useMemo<PriceTick[]>(() => {
       const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
     const validRaw = (priceHistory || [])
-      .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.time) && point.time > 1_000_000)
+      .filter((point) => Number.isFinite(point.price) && point.price >= 0 && Number.isFinite(point.time) && point.time > 1_000_000)
       .slice()
       .sort((a, b) => a.time - b.time);
     const buckets = new Map<number, PriceTick>();
     validRaw.forEach((point) => {
       const bucketTime = Math.floor(point.time / interval) * interval;
-      const open = Number.isFinite(point.open) && (point.open as number) > 0 ? (point.open as number) : point.price;
-      const high = Number.isFinite(point.high) && (point.high as number) > 0 ? (point.high as number) : Math.max(open, point.price);
-      const low = Number.isFinite(point.low) && (point.low as number) > 0 ? (point.low as number) : Math.min(open, point.price);
-      const close = Number.isFinite(point.close) && (point.close as number) > 0 ? (point.close as number) : point.price;
+      const open = Number.isFinite(point.open) && (point.open as number) >= 0 ? (point.open as number) : point.price;
+      const high = Number.isFinite(point.high) && (point.high as number) >= 0 ? (point.high as number) : Math.max(open, point.price);
+      const low = Number.isFinite(point.low) && (point.low as number) >= 0 ? (point.low as number) : Math.min(open, point.price);
+      const close = Number.isFinite(point.close) && (point.close as number) >= 0 ? (point.close as number) : point.price;
       const existing = buckets.get(bucketTime);
       if (!existing) {
         buckets.set(bucketTime, {
@@ -130,7 +130,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         existing.volume += Math.max(0, Number(point.volume || 0));
       }
     });
-    return Array.from(buckets.values()).slice(-500);
+    const ordered = Array.from(buckets.values());
+    if (timeframe === '24H' && ordered.length > 0) {
+      const latestTime = ordered[ordered.length - 1].timestamp;
+      return ordered.filter((point) => point.timestamp >= latestTime - 24 * 60 * 60_000).slice(-24);
+    }
+    return ordered.slice(-500);
   }, [timeframe, priceHistory]);
 
 
@@ -201,7 +206,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const endIndex = Number.isFinite(view.end)
       ? Math.min(points.length - 1, Math.max(0, Math.floor(view.end)))
       : points.length - 1;
-    const count = Math.max(10, Math.min(points.length, Math.floor(view.count)));
+    const count = timeframe === '24H' ? 24 : Math.max(10, Math.min(points.length, Math.floor(view.count)));
     const startIndex = Math.max(0, endIndex - count + 1);
     const visible = points.slice(startIndex, endIndex + 1);
 
@@ -223,8 +228,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       if (dataRange <= 0) {
         const anchor = Math.max(Math.abs(dataMax), 0.00000001);
         scaleRef.current = {
-          min: Math.max(0, dataMax - anchor * 0.002),
-          max: dataMax + anchor * 0.10,
+          min: 0,
+          max: anchor * 1.10,
         };
       } else {
         scaleRef.current = target;
@@ -246,7 +251,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const livePlotW = Math.max(1, plotW - rightLiveInset);
 
     const slotWidth = livePlotW / count;
-    const getSlotX = (index: number) => padLeft + (index + 0.5) * slotWidth;
+    const firstVisibleSlot = Math.max(0, count - visible.length);
+    const getSlotX = (index: number) => padLeft + (firstVisibleSlot + index + 0.5) * slotWidth;
     const getLineX = (index: number) => getSlotX(index);
 
     // Nice-number price grid lines & right axis ticks
@@ -324,6 +330,15 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         ctx.lineJoin = 'round';
         ctx.stroke();
         ctx.restore();
+      } else {
+        const y = getY(visible[0].price);
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(getLineX(0), y);
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1.55;
+        ctx.lineCap = 'round';
+        ctx.stroke();
       }
     } else {
       // 2. CANDLESTICK CHART MODE
@@ -441,7 +456,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.fillText(point.time, Math.max(padLeft + 27, Math.min(w - padRight - 27, hx)), padTop + plotH + 13);
     }
 
-  }, [points, view, containerWidth, height, isPositive, hoverIndex, chartType]);
+  }, [points, view, containerWidth, height, isPositive, hoverIndex, chartType, timeframe]);
 
   useEffect(() => {
     draw();
@@ -466,7 +481,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const endIndex = Number.isFinite(view.end)
       ? Math.min(points.length - 1, Math.max(0, Math.floor(view.end)))
       : points.length - 1;
-    const count = Math.max(10, Math.min(points.length, Math.floor(view.count)));
+    const count = timeframe === '24H' ? 24 : Math.max(10, Math.min(points.length, Math.floor(view.count)));
     const startIndex = Math.max(0, endIndex - count + 1);
     const visibleCount = endIndex - startIndex + 1;
     const ratio = Math.max(0, Math.min(1, (x - padLeft) / livePlotW));
