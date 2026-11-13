@@ -180,7 +180,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const padTop = 22;
     const padBottom = 26;
     const padLeft = 14;
-    const padRight = 78;
+    const padRight = 58;
     const plotW = Math.max(1, w - padLeft - padRight);
     const plotH = Math.max(1, h - padTop - padBottom);
 
