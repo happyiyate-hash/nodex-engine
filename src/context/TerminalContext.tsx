@@ -1071,7 +1071,17 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     });
     const unsubscribeEvents = wsService.subscribe((event) => {
-      const removedMints = terminallyRemovedMints(event);
+      const openPositionMints = new Set(
+        engineEventStore.getSnapshot().positions
+          .filter((position) => String(position.status || '').toLowerCase() === 'open')
+          .map((position) => String(position.mint_address || position.mint || position.token_mint || ''))
+          .filter(Boolean),
+      );
+      const removedMints = terminallyRemovedMints(event).filter((mint) =>
+        event.event_type === 'token_removed' || event.event_type === 'tokens_removed_inactive'
+          ? true
+          : !openPositionMints.has(mint),
+      );
       if (removedMints.length) {
         const uniqueMints = [...new Set(removedMints)];
         for (const mint of uniqueMints) {
