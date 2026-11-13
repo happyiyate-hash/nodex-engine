@@ -81,8 +81,8 @@ export const TokenDetailPage: React.FC = () => {
         const impulse = (Math.random() - 0.5) * 0.0018;
         const shortTrend = Math.sin(tick * 0.11) * 0.00018;
         price = previous <= 0
-          ? DEMO_START_PRICE_USD * (1 + impulse + shortTrend)
-          : Math.max(0.00000001, previous * (1 + impulse + shortTrend));
+          ? 0.000000001
+          : Math.max(0.0000000001, previous * (1 + impulse + shortTrend));
         const wick = Math.random() * 0.00045;
         const point: import('../../types').PricePoint = {
           time: Date.now(),
@@ -118,7 +118,7 @@ export const TokenDetailPage: React.FC = () => {
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
-  const formatTokenPrice = (value: number) => `$${value.toFixed(8).replace(/\.?0+$/, '')}`;
+  const formatTokenPrice = (value: number) => `${Math.abs(value) < 0.0000001 && value !== 0 ? value.toExponential(2) : value.toFixed(8).replace(/\.?0+$/, '')}`;
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
