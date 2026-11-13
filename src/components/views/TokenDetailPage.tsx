@@ -81,8 +81,8 @@ export const TokenDetailPage: React.FC = () => {
         const impulse = (Math.random() - 0.5) * 0.0018;
         const shortTrend = Math.sin(tick * 0.11) * 0.00018;
         price = previous <= 0
-          ? 0.000000001
-          : Math.max(0.0000000001, previous * (1 + impulse + shortTrend));
+          ? DEMO_START_PRICE_USD
+          : Math.max(DEMO_START_PRICE_USD * 0.05, previous * (1 + impulse * 8 + shortTrend * 8));
         const wick = Math.random() * 0.00045;
         const point: import('../../types').PricePoint = {
           time: Date.now(),
