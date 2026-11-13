@@ -360,7 +360,7 @@ export const TokenDetailPage: React.FC = () => {
           isPositive={isPositive}
           timeframe={timeframe}
           chartType={chartType}
-          height={340}
+          height={400}
           onPriceHover={(p, t) => {
             setScrubPrice(p);
             setScrubTime(t);
