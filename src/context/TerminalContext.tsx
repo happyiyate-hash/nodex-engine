@@ -1330,7 +1330,24 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setLaunches((current) => current.filter((launch) => !removed.has(launch.mint_address)));
     setSelectedToken((current) => current && removed.has(current.mint) ? null : current);
   };
-  const closePosition = () => setBackendError('Paper position closing is unavailable: no backend paper-order endpoint exists yet.');
+  const closePosition = async (positionId: string, percentage: number) => {
+    if (percentage !== 100) {
+      setBackendError('Only full-position paper selling is currently supported. Partial paper sells are not enabled.');
+      return;
+    }
+    try {
+      const result = await apiClient.manualSellPosition(positionId);
+      if (!result.paper_only || result.execution_mode !== 'simulated' || !result.full_exit) {
+        throw new Error('Backend did not confirm a full simulated paper sale.');
+      }
+      const mapped = mapBackendPosition(result.position);
+      if (!mapped) throw new Error('Paper sale completed but the returned position snapshot was invalid.');
+      setPositions((current) => current.map((position) => position.id === positionId ? mapped : position));
+      setBackendError(null);
+    } catch (error) {
+      setBackendError(error instanceof Error ? error.message : 'Could not close this paper position.');
+    }
+  };
   const executeManualPaperBuy = () => setBackendError('Paper buying is disabled until a real backend paper-order endpoint is implemented.');
   const updatePositionRisk = async (positionId: string, riskSettings: PositionRiskSettings): Promise<boolean> => {
     try {
