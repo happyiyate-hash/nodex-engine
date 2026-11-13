@@ -123,7 +123,7 @@ export const TokenDetailPage: React.FC = () => {
 
   const formatMetric = (value: number | null | undefined, digits = 2) =>
     value == null || !Number.isFinite(value)
-      ? '—'
+      ? 'Unavailable'
       : value.toLocaleString(undefined, { maximumFractionDigits: digits });
   const securityReport = activeToken.safety_details as any;
   const securityChecks = Array.isArray(securityReport?.checks) ? securityReport.checks : [];
@@ -157,7 +157,7 @@ export const TokenDetailPage: React.FC = () => {
             <TokenAvatar symbol={activeToken.symbol} logoUrl={activeToken.logo_url} size="lg" className="shadow-md" />
             <div className="flex min-w-0 flex-col justify-center gap-1 leading-[1.15]">
               <span className="block truncate text-[13px] font-medium tracking-[0.01em] text-white/95">
-                {activeToken.name || activeToken.symbol}
+                {activeToken.name || activeToken.symbol || 'Unknown token'}
               </span>
               <span className="text-[9px] text-white/35">Decimals: {activeToken.decimals ?? '—'}</span>
               <button
@@ -314,7 +314,7 @@ export const TokenDetailPage: React.FC = () => {
             <div className="col-span-2">
               <div className="text-[10px] text-white/40">Unrealized P&L</div>
               <div className={`mt-0.5 text-[13px] font-semibold ${(positionPnlPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                activePosition ? `${formatMetric(positionPnlSol, 4)} SOL · ${(positionPnlPct ?? 0).toFixed(2)}%` : 'Unavailable'
+                {activePosition ? `${formatMetric(positionPnlSol, 4)} SOL · ${(positionPnlPct ?? 0).toFixed(2)}%` : 'Unavailable'}
               </div>
             </div>
           </div>
@@ -359,19 +359,19 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Liquidity</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${activeToken.liquidity_usd > 0 ? formatMetric(activeToken.liquidity_usd, 2) : 'Unavailable'}
+                {activeToken.liquidity_usd > 0 ? `${formatMetric(activeToken.liquidity_usd, 2)}` : 'Unavailable'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${activeToken.volume_5m_usd > 0 ? formatMetric(activeToken.volume_5m_usd, 2) : 'Unavailable'}
+                {activeToken.volume_5m_usd > 0 ? `${formatMetric(activeToken.volume_5m_usd, 2)}` : 'Unavailable'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">1h volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${activeToken.volume_1h_usd > 0 ? formatMetric(activeToken.volume_1h_usd, 2) : 'Unavailable'}
+                {activeToken.volume_1h_usd > 0 ? `${formatMetric(activeToken.volume_1h_usd, 2)}` : 'Unavailable'}
               </div>
             </div>
             <div>
@@ -412,11 +412,11 @@ export const TokenDetailPage: React.FC = () => {
         <div className="grid grid-cols-2 gap-x-5 gap-y-3">
           <div>
             <div className="text-[10px] text-white/40">Mint authority</div>
-            <div className="mt-0.5 text-[11px] font-semibold text-white">{securityReport?.mint_authority ? 'Active' : securityReport?.mint_authority === null ? 'Disabled' : 'Unknown'}</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{securityReport?.mint_authority === true ? 'Active' : securityReport?.mint_authority === false || securityReport?.mint_authority === null ? 'Disabled' : 'Unavailable'}</div>
           </div>
           <div>
             <div className="text-[10px] text-white/40">Freeze authority</div>
-            <div className="mt-0.5 text-[11px] font-semibold text-white">{securityReport?.freeze_authority ? 'Active' : securityReport?.freeze_authority === null ? 'Disabled' : 'Unknown'}</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{securityReport?.freeze_authority === true ? 'Active' : securityReport?.freeze_authority === false || securityReport?.freeze_authority === null ? 'Disabled' : 'Unavailable'}</div>
           </div>
           <div>
             <div className="text-[10px] text-white/40">RugCheck</div>
@@ -424,7 +424,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
           <div>
             <div className="text-[10px] text-white/40">Top 10 observed share</div>
-            <div className="mt-0.5 text-[11px] font-semibold text-white">{holderDistribution.top_10_observed_owner_share_percent == null ? '—' : `${formatMetric(Number(holderDistribution.top_10_observed_owner_share_percent), 2)}%`}</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-white">{holderDistribution.top_10_observed_owner_share_percent == null ? 'Unavailable' : `${formatMetric(Number(holderDistribution.top_10_observed_owner_share_percent), 2)}%`}</div>
             <div className="text-[9px] text-white/30">{holderDistribution.sample_is_partial === true ? 'Partial sample' : holderDistribution.sample_is_partial === false ? 'Complete sample' : 'Not supplied'}</div>
           </div>
           <div>
