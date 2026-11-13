@@ -1371,13 +1371,22 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setSettings(updated);
     setBackendError(null);
   };
-  const openTokenDetailByMint = (mint: string, fallback: Partial<DiscoveredToken> = {}) => {
-    // Detailed token views are reserved for active paper positions. Detection
-    // cards remain identity-only and cannot trigger token-detail subscriptions.
-    if (!positions.some((position) => position.mint === mint)) {
-      setSelectedToken(null);
-      return;
+  const loadTokenSnapshot = useCallback(async (mint: string) => {
+    try {
+      const snapshot = await apiClient.getTokenState(mint);
+      const mapped = mapTokenDetailSnapshot(snapshot);
+      if (!mapped) return;
+      setTokens((previous) => [mapped, ...previous.filter((token) => token.mint !== mapped.mint)]);
+      setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(snapshot, previous) || previous : previous);
+      setBackendError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // A token that has not passed backend approval has no detail snapshot yet.
+      if (!message.includes('404')) setBackendError(message);
     }
+  }, []);
+
+  const openTokenDetailByMint = useCallback((mint: string, fallback: Partial<DiscoveredToken> = {}) => {
     const existing = tokens.find((item) => item.mint === mint);
     if (existing) {
       setSelectedToken(existing);
@@ -1411,7 +1420,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       creator_reputation: 'unknown' as const,
       largest_holders: [],
       ...(fallback.safety_details || metadata.safety_details || {}),
-    };
+    }, [tokens, launches, events, loadTokenSnapshot]);
     const detailToken: DiscoveredToken = {
       mint,
       name: String(fallback.name || metadata.name || metadata.token_name || ''),
@@ -1439,21 +1448,6 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // canonical backend state without blocking navigation to the detail view.
     void loadTokenSnapshot(mint);
   };
-  const loadTokenSnapshot = useCallback(async (mint: string) => {
-    if (!positions.some((position) => position.mint === mint)) return;
-    try {
-      const snapshot = await apiClient.getTokenState(mint);
-      const mapped = mapTokenDetailSnapshot(snapshot);
-      if (!mapped) return;
-      setTokens((previous) => [mapped, ...previous.filter((token) => token.mint !== mapped.mint)]);
-      setSelectedToken((previous) => previous?.mint === mint ? mapTokenDetailSnapshot(snapshot, previous) || previous : previous);
-      setBackendError(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      // A token that has not passed backend approval has no detail snapshot yet.
-      if (!message.includes('404')) setBackendError(message);
-    }
-  }, [positions]);
   const refreshBackendState = useCallback(async () => {
     if (!settings.backendUrl) {
       throw new Error('Connect to the NodeX backend before refreshing.');
