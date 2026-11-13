@@ -50,37 +50,75 @@ export const TokenDetailPage: React.FC = () => {
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : tokens[0];
 
-  // Token Details uses an isolated local demo market tape. Simulated prices never
-  // enter the backend, shared token registry, or paper-trading positions.
+  // Token Details demo tape. This remains local to this page and never reaches
+  // the backend, shared token registry, or paper-trading positions.
   const DEMO_START_PRICE_USD = 0.0000125;
   const [demoPrice, setDemoPrice] = useState(DEMO_START_PRICE_USD);
   const [demoPriceHistory, setDemoPriceHistory] = useState<import('../../types').PricePoint[]>([]);
 
   useEffect(() => {
     if (!activeToken?.mint) return;
-    setDemoPrice(DEMO_START_PRICE_USD);
+
+    // Seed one day of one-minute ticks. Every visible timeframe is aggregated
+    // from this same underlying tape into genuine OHLC candles.
     const now = Date.now();
-    const initial = Array.from({ length: 60 }, (_, index) => {
-      const relativeIndex = index - 59;
-      const phase = relativeIndex * 0.58;
-      const price = DEMO_START_PRICE_USD * (1 + Math.sin(phase) * 0.018 + relativeIndex * 0.00012);
-      const previousIndex = relativeIndex - 1;
-      const previous = index === 0 ? price : DEMO_START_PRICE_USD * (1 + Math.sin(previousIndex * 0.58) * 0.018 + previousIndex * 0.00012);
-      return { time: now - (59 - index) * 2000, price, open: previous, high: Math.max(previous, price) * 1.001, low: Math.min(previous, price) * 0.999, close: price, volume: 120 + index * 3 };
-    });
-    setDemoPriceHistory(initial);
-    let tick = 0;
-    let previousPrice = initial[initial.length - 1].price;
-    const timer = window.setInterval(() => {
-      tick += 1;
-      const movementPct = Math.sin(tick * 0.73) * 0.0032 + Math.cos(tick * 0.19) * 0.0011 + 0.00018;
+    let previousPrice = DEMO_START_PRICE_USD;
+    const initial: import('../../types').PricePoint[] = [];
+    for (let index = 0; index < 1440; index += 1) {
+      const phase = index * 0.071;
+      const movementPct = Math.sin(phase) * 0.00075 + Math.cos(phase * 0.37) * 0.00042 + 0.000015;
       const nextPrice = Math.max(0.00000001, previousPrice * (1 + movementPct));
-      const point = { time: Date.now(), price: nextPrice, open: previousPrice, high: Math.max(previousPrice, nextPrice) * 1.0008, low: Math.min(previousPrice, nextPrice) * 0.9992, close: nextPrice, volume: 80 + (tick % 17) * 19 };
+      initial.push({
+        time: now - (1439 - index) * 60_000,
+        price: nextPrice,
+        open: previousPrice,
+        high: Math.max(previousPrice, nextPrice) * 1.00045,
+        low: Math.min(previousPrice, nextPrice) * 0.99955,
+        close: nextPrice,
+        volume: 40 + (index % 23) * 7,
+      });
       previousPrice = nextPrice;
-      setDemoPrice(nextPrice);
-      setDemoPriceHistory((history) => [...history, point].slice(-240));
-    }, 1600);
-    return () => window.clearInterval(timer);
+    }
+
+    previousPrice = initial[initial.length - 1].price;
+    setDemoPrice(previousPrice);
+    setDemoPriceHistory(initial);
+
+    let tick = 0;
+    let timeout: number | undefined;
+    let cancelled = false;
+    const scheduleNextTick = () => {
+      // Irregular intervals: the tape never updates on a fixed repeating beat.
+      const delay = 180 + Math.floor(Math.random() * 4320);
+      timeout = window.setTimeout(() => {
+        if (cancelled) return;
+        tick += 1;
+        const impulse = (Math.random() - 0.5) * 0.006;
+        const drift = Math.sin(tick * 0.17) * 0.00035;
+        const movementPct = impulse + drift;
+        const nextPrice = Math.max(0.00000001, previousPrice * (1 + movementPct));
+        const wick = Math.random() * 0.0012;
+        const point: import('../../types').PricePoint = {
+          time: Date.now(),
+          price: nextPrice,
+          open: previousPrice,
+          high: Math.max(previousPrice, nextPrice) * (1 + wick),
+          low: Math.min(previousPrice, nextPrice) * (1 - wick),
+          close: nextPrice,
+          volume: 15 + Math.floor(Math.random() * 180),
+        };
+        previousPrice = nextPrice;
+        setDemoPrice(nextPrice);
+        setDemoPriceHistory((history) => [...history, point].slice(-3000));
+        scheduleNextTick();
+      }, delay);
+    };
+
+    scheduleNextTick();
+    return () => {
+      cancelled = true;
+      if (timeout !== undefined) window.clearTimeout(timeout);
+    };
   }, [activeToken?.mint]);
 
   if (!activeToken) return null;
@@ -243,7 +281,7 @@ export const TokenDetailPage: React.FC = () => {
         {/* Controls occupy their own top strip; the chart canvas starts beneath them with clear separation. */}
         <div className="absolute inset-x-0 top-2.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
           <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
-            {(['1m', '5m', '15m', '1H', '24H'] as const).map((tf) => (
+            {(['1m', '5m', '15m', '30m', '1H', '24H'] as const).map((tf) => (
               <button
                 key={tf}
                 type="button"
@@ -294,10 +332,10 @@ export const TokenDetailPage: React.FC = () => {
 
         {/* Pure Black Canvas with Dot Matrix & Backward Tracking Line */}
         <DotMatrixChart
+          key={activeToken.mint}
           currentPrice={liveTokenPrice}
           entryPrice={activePosition && priceCurrency === 'USD' ? entryPriceUsd : undefined}
           priceHistory={demoPriceHistory}
-          preserveTicks
           isPositive={isPositive}
           timeframe={timeframe}
           chartType={chartType}
