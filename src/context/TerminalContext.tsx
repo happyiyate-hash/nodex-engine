@@ -808,7 +808,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setTokens((current) => {
         const byMint = new Map(current.map((token) => [token.mint, token]));
         for (const record of records) {
-          if (!record.token?.mint) continue;
+          if (!record.token?.mint || terminallyRemovedMintsRef.current.has(record.mint)) continue;
           if (backendTokenSnapshotReceived.current) continue;
           if (authoritativeTokenMints.current && !authoritativeTokenMints.current.has(record.mint)) continue;
           // Once a complete backend snapshot is known, IndexedDB must never
@@ -974,7 +974,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (snapshot.profile) {
         if (Array.isArray(snapshot.profile.tokens)) {
           backendTokenSnapshotReceived.current = true;
-          const restoredSnapshots = snapshot.profile.tokens;
+          const restoredSnapshots = snapshot.profile.tokens.filter((item: any) =>
+            !terminallyRemovedMintsRef.current.has(String(item?.mint_address || item?.mint || '')),
+          );
           const isComplete = snapshot.profile.token_snapshot_complete === true;
           if (isComplete) {
             const keepMints = restoredSnapshots
@@ -1000,7 +1002,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSummary(mapDashboardSummary(runtime.profile, mappedPositions));
       }
       if (snapshot.paperWallet) setPaperWallet(snapshot.paperWallet);
-      if (snapshot.launches) setLaunches(snapshot.launches);
+      if (snapshot.launches) setLaunches(snapshot.launches.filter((launch) => !terminallyRemovedMintsRef.current.has(launch.mint_address)));
       if (snapshot.engineStatus) {
         setEngineStatus((previous) => ({ ...previous, ...snapshot.engineStatus!, ws_status: wsService.getStatus().status }));
         setIsStreamPaused(snapshot.engineStatus.strategy_paused);
@@ -1021,7 +1023,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const recovered = await backendService.loadInitialData();
         if (!active) return;
         if (recovered.profile) {
-          const recoveredTokens = (recovered.profile as { tokens?: unknown[] }).tokens;
+          const recoveredTokens = ((recovered.profile as { tokens?: unknown[] }).tokens || [])
+            .filter((item: any) => !terminallyRemovedMintsRef.current.has(String(item?.mint_address || item?.mint || '')));
           if (Array.isArray(recoveredTokens)) {
             backendTokenSnapshotReceived.current = true;
             const isComplete = (recovered.profile as { token_snapshot_complete?: boolean }).token_snapshot_complete === true;
@@ -1556,7 +1559,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (snapshot.paperWallet) setPaperWallet(snapshot.paperWallet);
 
     if (launchesResult.status === 'fulfilled' && Array.isArray(launchesResult.value)) {
-      setLaunches(launchesResult.value);
+      setLaunches(launchesResult.value.filter((launch) => !terminallyRemovedMintsRef.current.has(launch.mint_address)));
     }
     if (statusResult.status === 'fulfilled') {
       setEngineStatus((previous) => ({
