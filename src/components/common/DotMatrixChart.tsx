@@ -15,8 +15,7 @@ interface DotMatrixChartProps {
   currentPrice: number;
   entryPrice?: number;
   priceHistory?: PricePoint[];
-  preserveTicks?: boolean;
-  isPositive?: boolean;
+    isPositive?: boolean;
   timeframe?: string;
   chartType?: 'line' | 'candle';
   onPriceHover?: (price: number | null, time: string | null) => void;
@@ -83,7 +82,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   currentPrice,
   entryPrice,
   priceHistory,
-  preserveTicks = false,
   isPositive = true,
   timeframe = '24H',
   chartType = 'line',
@@ -102,28 +100,14 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const scaleRef = useRef<PriceScale | null>(null);
   const pointerRef = useRef<number | null>(null);
 
-  // Aggregate the underlying price ticks into OHLC candles for the selected interval.
+  // Each timestamp belongs to one fixed horizontal time slot. All ticks inside
+  // that slot update its OHLC values; completed slots remain immutable.
   const points = useMemo<PriceTick[]>(() => {
-    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+      const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
     const validRaw = (priceHistory || [])
       .filter((point) => Number.isFinite(point.price) && point.price > 0 && Number.isFinite(point.time) && point.time > 1_000_000)
       .slice()
       .sort((a, b) => a.time - b.time);
-    if (preserveTicks) {
-      return validRaw.map((point) => {
-        const open = Number.isFinite(point.open) && (point.open as number) > 0 ? (point.open as number) : point.price;
-        const close = Number.isFinite(point.close) && (point.close as number) > 0 ? (point.close as number) : point.price;
-        return {
-          timestamp: point.time,
-          time: formatBucketTime(point.time, timeframe),
-          price: close,
-          open,
-          high: Number.isFinite(point.high) && (point.high as number) > 0 ? (point.high as number) : Math.max(open, close),
-          low: Number.isFinite(point.low) && (point.low as number) > 0 ? (point.low as number) : Math.min(open, close),
-          volume: Math.max(0, Number(point.volume || 0)),
-        };
-      }).slice(-500);
-    }
     const buckets = new Map<number, PriceTick>();
     validRaw.forEach((point) => {
       const bucketTime = Math.floor(point.time / interval) * interval;
@@ -136,21 +120,18 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         buckets.set(bucketTime, {
           timestamp: bucketTime,
           time: formatBucketTime(bucketTime, timeframe),
-          price: close,
-          open,
-          high,
-          low,
+          price: close, open, high, low,
           volume: Math.max(0, Number(point.volume || 0)),
         });
-        return;
+      } else {
+        existing.high = Math.max(existing.high, high);
+        existing.low = Math.min(existing.low, low);
+        existing.price = close;
+        existing.volume += Math.max(0, Number(point.volume || 0));
       }
-      existing.high = Math.max(existing.high, high);
-      existing.low = Math.min(existing.low, low);
-      existing.price = close;
-      existing.volume += Math.max(0, Number(point.volume || 0));
     });
     return Array.from(buckets.values()).slice(-500);
-  }, [timeframe, priceHistory, preserveTicks]);
+  }, [timeframe, priceHistory]);
 
 
   useEffect(() => {
@@ -261,10 +242,9 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const rightLiveInset = Math.min(3, plotW * 0.012);
     const livePlotW = Math.max(1, plotW - rightLiveInset);
 
-    const getLineX = (index: number) => {
-      if (visible.length <= 1) return padLeft + livePlotW;
-      return padLeft + (index / (visible.length - 1)) * livePlotW;
-    };
+    const slotWidth = livePlotW / count;
+    const getSlotX = (index: number) => padLeft + (index + 0.5) * slotWidth;
+    const getLineX = (index: number) => getSlotX(index);
 
     // Nice-number price grid lines & right axis ticks
     const ticks = getNiceTicks(scale.min, scale.max, 5);
@@ -344,11 +324,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const slotWidth = livePlotW / visible.length;
-      const candleWidth = Math.max(3, Math.min(13, slotWidth * 0.68));
+      const candleWidth = Math.max(1.5, slotWidth * 0.94);
 
       visible.forEach((candle, index) => {
-        const x = padLeft + (index + 0.5) * slotWidth;
+        const x = getSlotX(index);
         const openY = getY(candle.open);
         const closeY = getY(candle.price);
         const highY = getY(candle.high);
@@ -380,24 +359,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       });
     }
 
-    // LIVE TRACKING ELEMENTS (Pulsing tip, backward dashed tracker line, and floating target price pill)
+    // One pinpoint marks the active price. No backward tracker or moving
+    // connector is drawn across historical data.
     const latest = visible[visible.length - 1];
-    const latestX = chartType === 'line'
-      ? getLineX(visible.length - 1)
-      : padLeft + (visible.length - 0.5) * (livePlotW / visible.length);
+    const latestX = getSlotX(visible.length - 1);
     const latestY = getY(latest.price);
-
-    // Straight dashed line extending backwards to the left from the circle
-    ctx.strokeStyle = isPositive ? 'rgba(184,255,53,0.42)' : 'rgba(255,64,87,0.42)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.moveTo(padLeft, latestY);
-    ctx.lineTo(latestX, latestY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Static latest-price marker; it moves only when a real backend tick arrives.
     ctx.save();
     ctx.beginPath();
     ctx.arc(latestX, latestY, 3.2, 0, Math.PI * 2);
@@ -405,24 +371,14 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     ctx.fill();
     ctx.restore();
 
-    // Target number pill on the right margin where line chases
     const badgeW = 58;
     const badgeH = 17;
     const badgeX = w - badgeW - 4;
     const badgeY = Math.max(padTop - 2, Math.min(padTop + plotH - badgeH + 2, latestY - badgeH / 2));
-
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(latestX, latestY);
-    ctx.lineTo(badgeX, badgeY + badgeH / 2);
-    ctx.stroke();
-
     ctx.fillStyle = lineColor;
     ctx.beginPath();
     ctx.roundRect(badgeX, badgeY, badgeW, badgeH, badgeH / 2);
     ctx.fill();
-
     ctx.fillStyle = '#000000';
     ctx.font = 'bold 8px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
@@ -438,7 +394,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     for (let i = 0; i < visible.length; i += timeStep) {
       const tx = chartType === 'line'
         ? getLineX(i)
-        : padLeft + (i + 0.5) * (livePlotW / visible.length);
+        : getSlotX(i);
       ctx.fillText(visible[i].time, tx, padTop + plotH + 8);
     }
 
@@ -448,7 +404,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const point = points[hoverIndex];
       const hx = chartType === 'line'
         ? getLineX(localIndex)
-        : padLeft + (localIndex + 0.5) * (livePlotW / visible.length);
+        : getSlotX(localIndex);
       const hy = getY(point.price);
 
       ctx.strokeStyle = 'rgba(255,255,255,0.35)';
