@@ -577,7 +577,7 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                       </div>
                     </article>
                   );
-                }), [visibleLaunches, tokensByMint, expandedErrors]);
+                }), [visibleLaunches, tokensByMint, expandedErrors, openTokenDetailByMint]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-black">
