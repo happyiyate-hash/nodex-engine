@@ -321,8 +321,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     });
 
-    const activeSamples = rawByBucket.get(visible[visible.length - 1].timestamp) || [];
-    const latestSample = activeSamples[activeSamples.length - 1];
     const latestLinePoint = lineCoordinates[lineCoordinates.length - 1];
 
     // Nice-number price grid lines & right axis ticks
@@ -454,7 +452,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // connector joins the active dot to the badge. Draw them before the
     // dot and badge so both remain crisp and visible.
     const latest = visible[visible.length - 1];
-    const latestSample = activeSamples[activeSamples.length - 1];
     const latestX = chartType === 'line' && latestLinePoint
       ? latestLinePoint.x
       : getSlotX(visible.length - 1);
