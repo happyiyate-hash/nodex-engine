@@ -654,7 +654,6 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
               <div className="space-y-1.5 pb-2">
                 <div className="flex items-center justify-between gap-2 border-b border-white/[0.07] pb-2">
                   <span className="text-[9px] text-white/40">Showing {filteredPositions.length} positions</span>
-                  <PositionRiskSettingsSheet />
                 </div>
                 {filteredPositions.length === 0 && backendPaperEntries.length === 0 ? (
                   <div className="flex min-h-[190px] flex-col items-center justify-center px-6 py-8 text-center">
@@ -707,6 +706,11 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                         <span>{position.stop_loss_target_pct > 0 ? 'Stop loss ' + position.stop_loss_target_pct + '%' : 'Stop loss —'}</span>
                         <span>{position.venue}</span>
                       </div>
+                      {position.status === 'OPEN' && (
+                        <div className="mt-2 flex justify-end border-t border-white/[0.055] pt-2" onClick={(event) => event.stopPropagation()}>
+                          <PositionRiskSettingsSheet position={position} />
+                        </div>
+                      )}
                     </article>)}
                     {backendPaperEntries.map((item) => <article key={item.launch.id || item.launch.signature} role="button" tabIndex={0} onClick={() => openTokenDetailByMint(item.launch.mint_address)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTokenDetailByMint(item.launch.mint_address); } }} className="cursor-pointer rounded-xl border border-white/[0.07] bg-[#101010] px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-white/30">
                       <div className="flex items-center gap-2.5">
