@@ -377,7 +377,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         ctx.save();
         drawPath();
         ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.stroke();
@@ -394,7 +394,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const candleWidth = Math.max(1.1, slotWidth * 0.90);
+      const candleWidth = Math.max(1.3, slotWidth * 0.94);
 
       visible.forEach((candle, index) => {
         const x = getSlotX(index);
@@ -407,7 +407,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
         // High / Low Wick
         ctx.strokeStyle = color;
-        ctx.lineWidth = 0.65;
+        ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(x, highY);
         ctx.lineTo(x, lowY);
@@ -443,7 +443,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     const badgeW = 58;
     const badgeH = 17;
-    const badgeX = w - badgeW - 4;
+    // Keep the live-price badge left of the right-axis labels, with a visible gap.
+    const badgeX = w - badgeW - 48;
     const badgeY = Math.max(padTop - 2, Math.min(padTop + plotH - badgeH + 2, latestY - badgeH / 2));
     const badgeCenterY = badgeY + badgeH / 2;
 
@@ -459,15 +460,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // The line chart keeps its active-point connector; candlesticks stay clean.
-    if (chartType === 'line') {
-      ctx.globalAlpha = 0.8;
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(latestX, latestY);
-      ctx.lineTo(badgeX, badgeCenterY);
-      ctx.stroke();
-    }
+    // Connect the latest plotted value to the live-price badge in both chart modes.
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(latestX, latestY);
+    ctx.lineTo(badgeX, badgeCenterY);
+    ctx.stroke();
     ctx.restore();
 
     ctx.fillStyle = lineColor;
