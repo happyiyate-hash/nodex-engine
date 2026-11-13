@@ -257,6 +257,38 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const getSlotX = (index: number) => padLeft + (firstVisibleSlot + index + 0.5) * slotWidth;
     const getLineX = (index: number) => getSlotX(index);
 
+    // Keep every tick from the active time bucket for the live line trace.
+    // Completed buckets still contribute only their final, frozen close.
+    const activeBucketStart = visible[visible.length - 1].timestamp;
+    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+    const activeSamples = (priceHistory || [])
+      .filter((point) =>
+        Number.isFinite(point.price) &&
+        point.price >= 0 &&
+        Number.isFinite(point.time) &&
+        Math.floor(point.time / interval) * interval === activeBucketStart
+      )
+      .slice()
+      .sort((a, b) => a.time - b.time);
+    const activeSlotIndex = visible.length - 1;
+    const activeSlotLeft = padLeft + (firstVisibleSlot + activeSlotIndex) * slotWidth;
+    const activeSlotRight = activeSlotLeft + slotWidth;
+    const activeX = (timestamp: number) => {
+      const progress = Math.max(0, Math.min(1, (timestamp - activeBucketStart) / interval));
+      return activeSlotLeft + progress * slotWidth;
+    };
+    const lineCoordinates: Array<{ x: number; y: number }> = [];
+    visible.slice(0, -1).forEach((point, index) => {
+      lineCoordinates.push({ x: getLineX(index), y: getY(point.price) });
+    });
+    if (activeSamples.length > 0) {
+      activeSamples.forEach((sample) => {
+        lineCoordinates.push({ x: activeX(sample.time), y: getY(sample.price) });
+      });
+    } else {
+      lineCoordinates.push({ x: getLineX(activeSlotIndex), y: getY(visible[visible.length - 1].price) });
+    }
+
     // Nice-number price grid lines & right axis ticks
     const ticks = getNiceTicks(scale.min, scale.max, 5);
     ctx.lineWidth = 1;
@@ -283,23 +315,18 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     if (chartType === 'line') {
       const drawPath = () => {
         ctx.beginPath();
-        // Preserve the original horizontal lead-in from the left edge.
-        // The active trace grows away from this fixed baseline; completed
-        // time slots remain at their original x positions.
-        const firstX = getLineX(0);
-        const firstY = getY(visible[0].price);
-        ctx.moveTo(padLeft, firstY);
-        ctx.lineTo(firstX, firstY);
-        visible.forEach((point, index) => {
-          const x = getLineX(index);
-          const y = getY(point.price);
+        // Fixed horizontal baseline, followed by frozen historical closes
+        // and the live intra-bucket trace that bends as each tick arrives.
+        const first = lineCoordinates[0] || { x: getLineX(0), y: getY(visible[0].price) };
+        ctx.moveTo(padLeft, first.y);
+        ctx.lineTo(first.x, first.y);
+        lineCoordinates.forEach((point, index) => {
           if (index === 0) {
-            ctx.lineTo(x, y);
+            ctx.lineTo(point.x, point.y);
           } else {
-            const px = getLineX(index - 1);
-            const py = getY(visible[index - 1].price);
-            const mid = (px + x) / 2;
-            ctx.bezierCurveTo(mid, py, mid, y, x, y);
+            const previous = lineCoordinates[index - 1];
+            const mid = (previous.x + point.x) / 2;
+            ctx.bezierCurveTo(mid, previous.y, mid, point.y, point.x, point.y);
           }
         });
       };
@@ -391,8 +418,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // connector joins the active dot to the badge. Draw them before the
     // dot and badge so both remain crisp and visible.
     const latest = visible[visible.length - 1];
-    const latestX = getSlotX(visible.length - 1);
-    const latestY = getY(latest.price);
+    const latestSample = activeSamples[activeSamples.length - 1];
+    const latestX = chartType === 'line' && latestSample
+      ? activeX(latestSample.time)
+      : getSlotX(visible.length - 1);
+    const latestY = getY(chartType === 'line' && latestSample ? latestSample.price : latest.price);
     ctx.save();
     ctx.beginPath();
     ctx.arc(latestX, latestY, 3.2, 0, Math.PI * 2);
@@ -490,7 +520,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.fillText(point.time, Math.max(padLeft + 27, Math.min(w - padRight - 27, hx)), padTop + plotH + 13);
     }
 
-  }, [points, view, containerWidth, height, isPositive, hoverIndex, chartType, timeframe]);
+  }, [points, priceHistory, view, containerWidth, height, isPositive, hoverIndex, chartType, timeframe]);
 
   useEffect(() => {
     draw();
