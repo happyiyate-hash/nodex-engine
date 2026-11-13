@@ -171,10 +171,10 @@ export const TokenDetailPage: React.FC = () => {
           </div>
           <div className="shrink-0 text-right leading-none">
             <div className="font-mono text-base sm:text-lg font-bold text-white tracking-tight">
-              {hasMarketPrice ? formatTokenPrice(currentPrice) : 'Waiting for first market tick'}
+              {hasMarketPrice ? formatTokenPrice(currentPrice) : 'Price unavailable'}
             </div>
             <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${isPositive ? 'text-[#10B981]' : 'text-[#EF4444]'}`}>
-              <span>{marketChangePct == null ? 'Change warming up' : `${isPositive ? '▲ +' : '▼ '}${pnlPct.toFixed(2)}%`}</span>
+              <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${pnlPct.toFixed(2)}%`}</span>
             </div>
           </div>
         </div>
@@ -289,32 +289,32 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Token balance</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? formatMetric(activePosition.amount_tokens, 2) : '—'}
+                {activePosition ? formatMetric(activePosition.amount_tokens, 2) : 'Unavailable'}
               </div>
               <div className="text-[9px] text-white/30">{activeToken.symbol}</div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Average entry price</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? formatMetric(priceCurrency === 'SOL' ? activePosition.entry_price_sol : activePosition.entry_price_usd, 10) + ' ' + priceCurrency : '—'}
+                {activePosition ? formatMetric(priceCurrency === 'SOL' ? activePosition.entry_price_sol : activePosition.entry_price_usd, 10) + ' ' + priceCurrency : 'Unavailable'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Total budget</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? `${formatMetric(activePosition.initial_investment_sol, 4)} SOL` : '—'}
+                {activePosition ? `${formatMetric(activePosition.initial_investment_sol, 4)} SOL` : 'Unavailable'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Current position value</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {activePosition ? `${formatMetric(activePosition.current_position_value_sol, 4)} SOL` : '—'}
+                {activePosition ? `${formatMetric(activePosition.current_position_value_sol, 4)} SOL` : 'Unavailable'}
               </div>
             </div>
             <div className="col-span-2">
               <div className="text-[10px] text-white/40">Unrealized P&L</div>
               <div className={`mt-0.5 text-[13px] font-semibold ${(positionPnlPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                activePosition ? `${formatMetric(positionPnlSol, 4)} SOL · ${(positionPnlPct ?? 0).toFixed(2)}%` : '—'
+                activePosition ? `${formatMetric(positionPnlSol, 4)} SOL · ${(positionPnlPct ?? 0).toFixed(2)}%` : 'Unavailable'
               </div>
             </div>
           </div>
@@ -353,25 +353,25 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Market cap</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {priceCurrency === 'SOL' ? `${formatMetric(activeToken.market_cap_sol, 3)} SOL` : `${formatMetric(activeToken.market_cap_usd, 2)}`}
+                {priceCurrency === 'SOL' ? `${activeToken.market_cap_sol > 0 ? formatMetric(activeToken.market_cap_sol, 3) + ' SOL' : 'Unavailable'}` : `${activeToken.market_cap_usd > 0 ? formatMetric(activeToken.market_cap_usd, 2) : 'Unavailable'}`}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">Liquidity</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${formatMetric(activeToken.liquidity_usd, 2)}
+                ${activeToken.liquidity_usd > 0 ? formatMetric(activeToken.liquidity_usd, 2) : 'Unavailable'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">5m volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${formatMetric(activeToken.volume_5m_usd, 2)}
+                ${activeToken.volume_5m_usd > 0 ? formatMetric(activeToken.volume_5m_usd, 2) : 'Unavailable'}
               </div>
             </div>
             <div>
               <div className="text-[10px] text-white/40">1h volume</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                ${formatMetric(activeToken.volume_1h_usd, 2)}
+                ${activeToken.volume_1h_usd > 0 ? formatMetric(activeToken.volume_1h_usd, 2) : 'Unavailable'}
               </div>
             </div>
             <div>
@@ -389,7 +389,7 @@ export const TokenDetailPage: React.FC = () => {
             <div>
               <div className="text-[10px] text-white/40">Holders</div>
               <div className="mt-0.5 text-[13px] font-semibold text-white">
-                {formatMetric(activeToken.safety_details?.holders_count, 0)}
+                {activeToken.safety_details?.holders_count > 0 ? formatMetric(activeToken.safety_details.holders_count, 0) : 'Unavailable'}
               </div>
             </div>
             <div>
