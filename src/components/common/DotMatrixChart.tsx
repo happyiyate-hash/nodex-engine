@@ -231,13 +231,19 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const anchor = Math.max(Math.abs(dataMax), 0.0000125);
         scaleRef.current = {
           min: 0,
-          // Keep the zero baseline visible and leave room for the demo tape's
-          // first real price movement instead of locking the axis near zero.
           max: anchor * 10,
         };
       } else {
         scaleRef.current = target;
       }
+    } else if (target.min < scaleRef.current.min || target.max > scaleRef.current.max) {
+      // Expand the visible price range when a strong pump or sell-off reaches
+      // the edge. Never contract it during live updates, so older price action
+      // stays visually stable while new highs/lows create room on the chart.
+      scaleRef.current = {
+        min: Math.min(scaleRef.current.min, target.min),
+        max: Math.max(scaleRef.current.max, target.max),
+      };
     }
     const scale = scaleRef.current;
     const rawScaleRange = scale.max - scale.min;
@@ -263,7 +269,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     // the newest one. Each bucket occupies one fixed slot; completed paths
     // are frozen and the next bucket begins at the previous close.
     const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
-    const rawByBucket = new Map<number, typeof priceHistory>();
+    const rawByBucket = new Map<number, NonNullable<typeof priceHistory>>();
     (priceHistory || []).forEach((point) => {
       if (!Number.isFinite(point.price) || point.price < 0 || !Number.isFinite(point.time)) return;
       const bucket = Math.floor(point.time / interval) * interval;
