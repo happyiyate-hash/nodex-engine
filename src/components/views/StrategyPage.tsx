@@ -287,11 +287,63 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
           <h3 className="text-[13px] font-semibold text-white/90">Exit Settings</h3>
           <p className="mt-1 text-[10px] text-white/40">Manage how your paper positions exit automatically.</p>
         </div>
-        {targetRow('stop_loss_pct', 'Stop Loss', ShieldAlert, 'loss')}
-        {targetRow('take_profit_pct', 'Take Profit', TrendingUp, 'profit')}
+        {!form.trailing_stop_enabled ? (
+          <>
+            {targetRow('stop_loss_pct', 'Stop Loss', ShieldAlert, 'loss')}
+            {targetRow('take_profit_pct', 'Take Profit', TrendingUp, 'profit')}
+          </>
+        ) : (
+          <div className="mt-3 rounded-xl border border-white/[0.10] bg-white/[0.025] px-3.5 py-3">
+            <p className="text-[10px] leading-relaxed text-white/55">Trailing Stop Loss is active in this draft. Fixed Stop Loss and Take Profit controls are hidden while trailing mode is selected; their saved percentages are preserved.</p>
+          </div>
+        )}
+        <section className="mt-4 rounded-xl border border-white/[0.10] bg-white/[0.025] px-3.5 py-3">
+          <div className="mb-1 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-white/60" />
+            <h3 className="text-[12px] font-semibold text-white/90">Trailing Stop Loss</h3>
+          </div>
+          <ToggleRow
+            title="Enable trailing stop loss"
+            detail="When enabled, the trailing rules below are sent to the backend for new paper positions."
+            checked={Boolean(form.trailing_stop_enabled)}
+            onChange={(enabled) => update('trailing_stop_enabled', enabled)}
+            disabled={saving || !paperMode}
+          />
+          {form.trailing_stop_enabled && (
+            <div className="border-t border-white/[0.07] pt-1">
+              <NumberField
+                label="Activate after profit"
+                suffix="%"
+                step="0.5"
+                value={form.trailing_activation_profit_pct}
+                onChange={(value) => update('trailing_activation_profit_pct', value)}
+                hint="The trailing exit starts only after the position reaches this profit percentage."
+                disabled={saving}
+              />
+              <NumberField
+                label="Trailing distance (callback)"
+                suffix="%"
+                step="0.5"
+                value={form.trailing_stop_callback_pct}
+                onChange={(value) => update('trailing_stop_callback_pct', value)}
+                hint="After activation, the exit threshold follows the highest price and stays this percentage below it."
+                disabled={saving}
+              />
+            </div>
+          )}
+          <div className="mt-2 flex items-center justify-between gap-3 text-[10px]">
+            <span className="text-white/40">Backend saved state</span>
+            <span className={hasUnappliedChanges && (form.trailing_stop_enabled !== appliedConfig.trailing_stop_enabled || form.trailing_activation_profit_pct !== appliedConfig.trailing_activation_profit_pct || form.trailing_stop_callback_pct !== appliedConfig.trailing_stop_callback_pct) ? 'text-amber-300' : appliedConfig.trailing_stop_enabled ? 'text-emerald-300' : 'text-white/45'}>
+              {hasUnappliedChanges && (form.trailing_stop_enabled !== appliedConfig.trailing_stop_enabled || form.trailing_activation_profit_pct !== appliedConfig.trailing_activation_profit_pct || form.trailing_stop_callback_pct !== appliedConfig.trailing_stop_callback_pct)
+                ? 'Pending Apply'
+                : appliedConfig.trailing_stop_enabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+          {!paperMode && <p className="mt-2 text-[10px] text-amber-300">Trailing stop loss can only be configured in Paper mode.</p>}
+        </section>
         <button
           type="button"
-          onClick={() => setShowAdvancedExit((current) => !current)}
+          onClick={() => setShowAdvancedExit((current) => !current)
           aria-expanded={showAdvancedExit}
           className="flex w-full items-center justify-between py-3 text-left"
         >
@@ -300,10 +352,6 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         </button>
         {showAdvancedExit && (
           <div className="border-t border-white/[0.07] pl-1">
-            <ToggleRow title="Trailing stop loss" detail="Raise the exit threshold as an open position gains value." checked={form.trailing_stop_enabled} onChange={(v) => update('trailing_stop_enabled', v)} />
-            {form.trailing_stop_enabled && (
-              <NumberField label="Trailing callback" suffix="%" step="0.5" value={form.trailing_stop_callback_pct} onChange={(v) => update('trailing_stop_callback_pct', v)} />
-            )}
             <ToggleRow title="Automatically recover token-account rent" detail="After a full sale settles and the token balance is zero, close the simulated token account and return its locked rent to available paper SOL. Rent recovery is not counted as trading profit." checked={form.auto_recover_token_account_rent} onChange={(v) => update('auto_recover_token_account_rent', v)} />
             <p className="py-2 text-[10px] text-white/30">Break-even protection and partial profit taking can be added here later.</p>
           </div>
