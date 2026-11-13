@@ -96,7 +96,7 @@ export const TokenDetailPage: React.FC = () => {
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
-  const formatTokenPrice = (value: number) => `${value.toFixed(8).replace(/\.?0+$/, '')}`;
+  const formatTokenPrice = (value: number) => `$${value.toFixed(8).replace(/\.?0+$/, '')}`;
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
