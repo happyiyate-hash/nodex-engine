@@ -61,9 +61,11 @@ export const TokenDetailPage: React.FC = () => {
     setDemoPrice(DEMO_START_PRICE_USD);
     const now = Date.now();
     const initial = Array.from({ length: 60 }, (_, index) => {
-      const phase = index * 0.58;
-      const price = DEMO_START_PRICE_USD * (1 + Math.sin(phase) * 0.018 + index * 0.00012);
-      const previous = index === 0 ? price : DEMO_START_PRICE_USD * (1 + Math.sin((index - 1) * 0.58) * 0.018 + (index - 1) * 0.00012);
+      const relativeIndex = index - 59;
+      const phase = relativeIndex * 0.58;
+      const price = DEMO_START_PRICE_USD * (1 + Math.sin(phase) * 0.018 + relativeIndex * 0.00012);
+      const previousIndex = relativeIndex - 1;
+      const previous = index === 0 ? price : DEMO_START_PRICE_USD * (1 + Math.sin(previousIndex * 0.58) * 0.018 + previousIndex * 0.00012);
       return { time: now - (59 - index) * 2000, price, open: previous, high: Math.max(previous, price) * 1.001, low: Math.min(previous, price) * 0.999, close: price, volume: 120 + index * 3 };
     });
     setDemoPriceHistory(initial);
