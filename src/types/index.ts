@@ -98,9 +98,28 @@ export interface Position {
   take_profit_target_pct: number;
   stop_loss_target_pct: number;
   trailing_stop_pct?: number;
+  trailing_stop_eligible?: boolean;
+  trailing_stop_eligibility_reason?: string;
+  trailing_stop_enabled?: boolean;
+  trailing_stop_active?: boolean;
+  trailing_activation_profit_pct?: number;
+  trailing_stop_callback_pct?: number;
+  trailing_stop_price_sol?: number;
+  maximum_profit_pct?: number;
+  maximum_profit_price_sol?: number;
+  highest_price_sol?: number;
   highest_price_usd?: number;
   venue: Venue;
   tx_signature: string;
+}
+
+export interface PositionRiskSettings {
+  stop_loss_pct: number;
+  take_profit_pct: number;
+  trailing_stop_enabled: boolean;
+  trailing_activation_profit_pct: number;
+  trailing_stop_callback_pct: number;
+  maximum_profit_pct: number;
 }
 
 export interface SafetyDetails {
