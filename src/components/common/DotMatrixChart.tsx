@@ -94,7 +94,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     typeof window !== 'undefined' ? Math.min(window.innerWidth, 1200) : 600
   );
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [view, setView] = useState({ end: Number.POSITIVE_INFINITY, count: 60 });
+  const [view, setView] = useState({ end: Number.POSITIVE_INFINITY, count: 24 });
   const [isPanned, setIsPanned] = useState(false);
   const dragRef = useRef<{ x: number; end: number; moved: boolean } | null>(null);
   const scaleRef = useRef<PriceScale | null>(null);
@@ -208,7 +208,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const endIndex = Number.isFinite(view.end)
       ? Math.min(points.length - 1, Math.max(0, Math.floor(view.end)))
       : points.length - 1;
-    const count = timeframe === '24H' ? 24 : Math.max(10, Math.min(points.length, Math.floor(view.count)));
+    const count = Math.max(10, Math.min(points.length, Math.floor(view.count)));
     const startIndex = Math.max(0, endIndex - count + 1);
     const visible = points.slice(startIndex, endIndex + 1);
 
@@ -373,13 +373,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         ctx.moveTo(padLeft, y);
         ctx.lineTo(getLineX(0), y);
         ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 1.55;
+        ctx.lineWidth = 1.1;
         ctx.lineCap = 'round';
         ctx.stroke();
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const candleWidth = Math.max(1, slotWidth * 0.52);
+      const candleWidth = Math.max(0.8, slotWidth * 0.28);
 
       visible.forEach((candle, index) => {
         const x = getSlotX(index);
@@ -392,7 +392,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
         // High / Low Wick
         ctx.strokeStyle = color;
-        ctx.lineWidth = 0.8;
+        ctx.lineWidth = 0.65;
         ctx.beginPath();
         ctx.moveTo(x, highY);
         ctx.lineTo(x, lowY);
@@ -635,7 +635,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   };
 
   const resetView = () => {
-    setView((previous) => ({ ...previous, end: Number.POSITIVE_INFINITY, count: 60 }));
+    setView((previous) => ({ ...previous, end: Number.POSITIVE_INFINITY, count: 24 }));
     setIsPanned(false);
     setHoverIndex(null);
     onPriceHover?.(null, null);
