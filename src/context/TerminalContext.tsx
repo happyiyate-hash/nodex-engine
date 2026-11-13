@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   ConnectionStatus, DashboardSummary, DiscoveredToken, EngineStatus, NodeXEvent,
-  Position, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot,
+  Position, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot, PositionRiskSettings,
 } from '../types';
 import { apiClient, ApiSettings, NodeXProfileSnapshot } from '../services/rest';
 import { backendService } from '../services/backend';
@@ -46,7 +46,7 @@ interface TerminalContextType {
   toggleStrategy: () => void;
   closePosition: (positionId: string, percentage: number) => void;
   executeManualPaperBuy: (mint: string, solAmount: number) => void;
-  updatePositionRisk: (positionId: string, sl: number, tp: number) => Promise<boolean>;
+  updatePositionRisk: (positionId: string, settings: PositionRiskSettings) => Promise<boolean>;
   saveStrategyConfig: (config: StrategyConfig) => Promise<boolean>;
   setPaperExecutionEnabled: (enabled: boolean) => Promise<boolean>;
   updateSettings: (newSettings: Partial<ApiSettings>) => void;
@@ -502,9 +502,19 @@ function mapBackendPosition(raw: Record<string, any>): Position | null {
     entry_time: String(raw.opened_at || raw.entry_time || raw.created_at || ''),
     exit_time: raw.closed_at || raw.exit_time || undefined,
     exit_price_usd: raw.exit_price_usd == null ? undefined : Number(raw.exit_price_usd),
-    take_profit_target_pct: Number(raw.take_profit_pct || 0),
-    stop_loss_target_pct: Number(raw.stop_loss_pct || 0),
-    trailing_stop_pct: raw.trailing_stop_pct == null ? undefined : Number(raw.trailing_stop_pct),
+    take_profit_target_pct: Number(raw.take_profit_pct ?? raw.risk_policy?.take_profit_pct ?? 0),
+    stop_loss_target_pct: Number(raw.stop_loss_pct ?? raw.risk_policy?.stop_loss_pct ?? 0),
+    trailing_stop_pct: Number(raw.trailing_stop_callback_pct ?? raw.trailing_stop_pct ?? raw.risk_policy?.trailing_stop_callback_pct ?? 0),
+    trailing_stop_eligible: Boolean(raw.trailing_stop_eligible ?? raw.risk_policy?.trailing_stop_eligible ?? false),
+    trailing_stop_eligibility_reason: String(raw.trailing_stop_eligibility_reason ?? raw.risk_policy?.trailing_stop_eligibility_reason ?? 'Eligibility has not been assessed.'),
+    trailing_stop_enabled: Boolean(raw.trailing_stop_enabled ?? raw.risk_policy?.trailing_stop_enabled ?? false),
+    trailing_stop_active: Boolean(raw.trailing_stop_active ?? raw.risk_policy?.trailing_stop_active ?? false),
+    trailing_activation_profit_pct: Number(raw.trailing_activation_profit_pct ?? raw.risk_policy?.trailing_activation_profit_pct ?? 50),
+    trailing_stop_callback_pct: Number(raw.trailing_stop_callback_pct ?? raw.risk_policy?.trailing_stop_callback_pct ?? 10),
+    trailing_stop_price_sol: Number(raw.trailing_stop_price_sol ?? raw.risk_policy?.trailing_stop_price_sol ?? 0),
+    maximum_profit_pct: Number(raw.maximum_profit_pct ?? raw.risk_policy?.maximum_profit_pct ?? 500),
+    maximum_profit_price_sol: Number(raw.maximum_profit_price_sol ?? raw.risk_policy?.maximum_profit_price_sol ?? 0),
+    highest_price_sol: Number(raw.highest_price_sol ?? raw.risk_policy?.highest_price_sol ?? 0),
     highest_price_usd: raw.highest_price_usd == null ? undefined : Number(raw.highest_price_usd),
     venue,
     tx_signature: String(raw.tx_signature || raw.signature || ''),
@@ -1322,9 +1332,9 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
   const closePosition = () => setBackendError('Paper position closing is unavailable: no backend paper-order endpoint exists yet.');
   const executeManualPaperBuy = () => setBackendError('Paper buying is disabled until a real backend paper-order endpoint is implemented.');
-  const updatePositionRisk = async (positionId: string, sl: number, tp: number): Promise<boolean> => {
+  const updatePositionRisk = async (positionId: string, riskSettings: PositionRiskSettings): Promise<boolean> => {
     try {
-      const result = await apiClient.updatePositionRisk(positionId, sl, tp);
+      const result = await apiClient.updatePositionRisk(positionId, riskSettings);
       const mapped = mapBackendPosition(result.position);
       if (!mapped) throw new Error('Backend saved the risk policy but returned an invalid position snapshot.');
       setPositions((current) => current.map((position) => position.id === positionId ? mapped : position));
