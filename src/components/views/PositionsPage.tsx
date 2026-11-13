@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { Position } from '../../types';
 import { TokenAvatar } from '../common/TokenAvatar';
+import { PositionRiskSettingsSheet } from '../positions/PositionRiskSettingsSheet';
 import {
   Search,
   Copy,
@@ -162,10 +163,11 @@ export const PositionsPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="text-[10px] sm:text-[11px] font-mono text-[#737373] flex items-center gap-1.5">
-          <span>Horizontal Scroll Table</span>
-          <span className="text-[#404040]">·</span>
-          <span>Showing {filteredPositions.length} positions</span>
+        <div className="flex items-center justify-between sm:justify-end gap-3">
+          <div className="text-[10px] sm:text-[11px] font-mono text-[#737373] flex items-center gap-1.5">
+            <span>Showing {filteredPositions.length} positions</span>
+          </div>
+          <PositionRiskSettingsSheet />
         </div>
       </div>
 
