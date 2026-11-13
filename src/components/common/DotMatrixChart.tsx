@@ -194,7 +194,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '11px JetBrains Mono, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Waiting for backend chart data...', w / 2, h / 2);
+      ctx.fillText('Chart data unavailable', w / 2, h / 2);
       return;
     }
 
