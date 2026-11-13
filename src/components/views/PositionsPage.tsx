@@ -19,12 +19,14 @@ export const PositionsPage: React.FC = () => {
     tokens,
     summary,
     openTokenDetailByMint,
+    closePosition,
   } = useTerminal();
 
   const [filterMode, setFilterMode] = useState<'all' | 'open' | 'closed' | 'profitable' | 'losing'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedMint, setCopiedMint] = useState<string | null>(null);
   const [expandedPositions, setExpandedPositions] = useState<string[]>([]);
+  const [confirmCloseId, setConfirmCloseId] = useState<string | null>(null);
 
   const handleCopyMint = (e: React.MouseEvent, mint: string) => {
     e.stopPropagation();
@@ -206,7 +208,24 @@ export const PositionsPage: React.FC = () => {
                     </div>
                     <div className="mt-2 flex items-center justify-between border-t border-white/[0.06] pt-2">
                       <span className={`text-[8px] uppercase tracking-wider ${isOpen ? 'text-emerald-300' : 'text-white/40'}`}>{pos.status}</span>
-                      <button onClick={() => openTokenDetailByMint(pos.mint)} className="text-[9px] text-white/55">Token details ↗</button>
+                      <div className="flex items-center gap-3">
+                        {isOpen && (
+                          <button
+                            onClick={() => {
+                              if (confirmCloseId === pos.id) {
+                                void closePosition(pos.id, 100);
+                                setConfirmCloseId(null);
+                              } else {
+                                setConfirmCloseId(pos.id);
+                              }
+                            }}
+                            className="text-[9px] font-semibold text-red-300"
+                          >
+                            {confirmCloseId === pos.id ? 'Confirm full close?' : 'Close position'}
+                          </button>
+                        )}
+                        <button onClick={() => openTokenDetailByMint(pos.mint)} className="text-[9px] text-white/55">Token details ↗</button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -346,10 +365,17 @@ export const PositionsPage: React.FC = () => {
                         </button>
                         {isOpen && (
                           <button
-                            disabled title="Paper close endpoint is not implemented yet"
-                            className="px-2 py-0.5 rounded glass-icon text-[10px] text-[#737373] border-white/10 transition-all opacity-50 cursor-not-allowed"
+                            onClick={() => {
+                              if (confirmCloseId === pos.id) {
+                                void closePosition(pos.id, 100);
+                                setConfirmCloseId(null);
+                              } else {
+                                setConfirmCloseId(pos.id);
+                              }
+                            }}
+                            className="px-2 py-0.5 rounded glass-icon text-[10px] text-red-300 border-red-500/20 transition-all hover:bg-red-950/30"
                           >
-                            Close
+                            {confirmCloseId === pos.id ? 'Confirm close?' : 'Close 100%'}
                           </button>
                         )}
                       </div>
