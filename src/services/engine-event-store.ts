@@ -52,12 +52,13 @@ function mergePosition(
   incoming: Record<string, any>,
 ): Array<Record<string, any>> {
   const mint = positionMint(incoming);
-  const id = String(incoming.id || incoming.position_id || mint);
+  const id = String(incoming.position_id || incoming.id || '');
   if (!mint && !id) return positions;
-  const index = positions.findIndex((item) =>
-    String(item.id || item.position_id || positionMint(item)) === id ||
-    (mint && positionMint(item) === mint)
-  );
+  // A mint may have multiple position lots over time. Prefer the stable
+  // position ID and only fall back to mint matching for legacy snapshots.
+  const index = id
+    ? positions.findIndex((item) => String(item.position_id || item.id || '') === id)
+    : positions.findIndex((item) => positionMint(item) === mint);
   if (index < 0) return [incoming, ...positions];
   const next = positions.slice();
   next[index] = { ...next[index], ...incoming };
