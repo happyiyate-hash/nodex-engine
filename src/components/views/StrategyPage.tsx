@@ -343,7 +343,7 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
         </section>
         <button
           type="button"
-          onClick={() => setShowAdvancedExit((current) => !current)
+          onClick={() => setShowAdvancedExit((current) => !current)}
           aria-expanded={showAdvancedExit}
           className="flex w-full items-center justify-between py-3 text-left"
         >
