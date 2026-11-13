@@ -14,10 +14,10 @@ const stopLossOptions = [5, 10, 15, 20, 25, 30];
 const takeProfitOptions = [10, 20, 30, 50, 75, 100];
 
 const NumberField = ({
-  label, suffix, value, onChange, hint, step = '1', disabled = false,
+  label, suffix, value, onChange, hint, step = '1', disabled = false, min = 0, max,
 }: {
   label: string; suffix?: string; value: number; onChange: (value: number) => void;
-  hint?: string; step?: string; disabled?: boolean;
+  hint?: string; step?: string; disabled?: boolean; min?: number; max?: number;
 }) => {
   // Keep the editable text separate from the numeric setting. Converting an
   // empty input to 0 on every keystroke makes the zero impossible to delete.
@@ -32,18 +32,18 @@ const NumberField = ({
     setDraft(raw);
     if (raw.trim() === '' || raw === '-' || raw.endsWith('.')) return;
     const parsed = Number(raw);
-    if (Number.isFinite(parsed)) onChange(Math.max(0, parsed));
+    if (Number.isFinite(parsed)) onChange(Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, parsed)));
   };
 
   const handleBlur = () => {
     if (draft.trim() === '' || draft === '-') {
-      onChange(0);
-      setDraft('0');
+      onChange(min);
+      setDraft(String(min));
       return;
     }
     const parsed = Number(draft);
     if (Number.isFinite(parsed)) {
-      const normalized = Math.max(0, parsed);
+      const normalized = Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min, parsed));
       onChange(normalized);
       setDraft(String(normalized));
     } else {
@@ -57,7 +57,7 @@ const NumberField = ({
       <span className="flex h-10 items-center border-b border-white/[0.14] focus-within:border-white/50">
         <input
           ref={inputRef}
-          type="number" inputMode="decimal" min="0" step={step}
+          type="number" inputMode="decimal" min={min} max={max} step={step}
           value={draft} disabled={disabled}
           onChange={(event) => handleChange(event.target.value)}
           onBlur={handleBlur}
@@ -315,6 +315,8 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                 label="Activate after profit"
                 suffix="%"
                 step="0.5"
+                min={0.1}
+                max={1000}
                 value={form.trailing_activation_profit_pct}
                 onChange={(value) => update('trailing_activation_profit_pct', value)}
                 hint="The trailing exit starts only after the position reaches this profit percentage."
@@ -324,6 +326,8 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
                 label="Trailing distance (callback)"
                 suffix="%"
                 step="0.5"
+                min={0.1}
+                max={100}
                 value={form.trailing_stop_callback_pct}
                 onChange={(value) => update('trailing_stop_callback_pct', value)}
                 hint="After activation, the exit threshold follows the highest price and stays this percentage below it."
