@@ -324,6 +324,7 @@ export interface StrategyConfig {
   max_slippage_pct: number;
   stop_loss_pct: number;
   take_profit_pct: number;
+  maximum_profit_pct: number;
   min_5m_buy_volume_usd: number;
   max_top10_holder_concentration_pct: number;
   auto_buy_enabled: boolean;
