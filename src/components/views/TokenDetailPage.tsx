@@ -58,7 +58,7 @@ export const TokenDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (!activeToken?.mint) return;
-    let price = DEMO_START_PRICE_USD;
+    let price = 0;
     let tick = 0;
     let timeout: number | undefined;
     let cancelled = false;
@@ -80,7 +80,9 @@ export const TokenDetailPage: React.FC = () => {
         const previous = price;
         const impulse = (Math.random() - 0.5) * 0.0018;
         const shortTrend = Math.sin(tick * 0.11) * 0.00018;
-        price = Math.max(0.00000001, previous * (1 + impulse + shortTrend));
+        price = previous <= 0
+          ? DEMO_START_PRICE_USD * (1 + impulse + shortTrend)
+          : Math.max(0.00000001, previous * (1 + impulse + shortTrend));
         const wick = Math.random() * 0.00045;
         const point: import('../../types').PricePoint = {
           time: Date.now(),
