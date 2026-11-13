@@ -11,7 +11,7 @@ import { StorageManagementPage } from './components/views/StorageManagementPage'
 import { TokenDetailPage } from './components/views/TokenDetailPage';
 import { LogsPage } from './components/views/LogsPage';
 import { installFetchLogger } from './services/engineLogs';
-import { ToastProvider } from './components/ui/ToastProvider';
+import { ToastProvider, useToast } from './components/ui/ToastProvider';
 
 try {
   installFetchLogger();
@@ -37,7 +37,9 @@ const getScrollableAncestor = (target: EventTarget | null, boundary: HTMLElement
 const MainLayout: React.FC = () => {
   const [settingsSubpage, setSettingsSubpage] = useState(false);
   const [storagePageOpen, setStoragePageOpen] = useState(false);
-  const { activeTab, selectedToken, refreshBackendState } = useTerminal();
+  const { activeTab, selectedToken, refreshBackendState, events } = useTerminal();
+  const { showToast } = useToast();
+  const seenTradeNotificationIds = useRef<Set<string>>(new Set());
   const mainRef = useRef<HTMLElement | null>(null);
   const touchStartY = useRef<number | null>(null);
   const refreshScroller = useRef<HTMLElement | null>(null);
@@ -57,6 +59,55 @@ const MainLayout: React.FC = () => {
       return next;
     });
   }, [activeTab]);
+
+  // Turn committed backend paper-sale events into user-facing notifications.
+  // Scan the recent event window so a burst of follow-up profile/position events
+  // cannot hide the sale event before React renders.
+  useEffect(() => {
+    for (const event of [...events].slice(0, 100).reverse()) {
+      const eventId = event.event_id || `${event.event_type}:${event.timestamp}:${event.token_mint || ''}`;
+      if (seenTradeNotificationIds.current.has(eventId)) continue;
+      seenTradeNotificationIds.current.add(eventId);
+      if (event.event_type !== 'paper_sell_executed' && event.event_type !== 'paper_sell_failed') continue;
+
+      const data = event.data || {};
+      const position = data.position && typeof data.position === 'object' ? data.position : data;
+      const name = String(position.name || position.token_name || position.symbol || 'Unknown token');
+      const symbol = String(position.symbol || '');
+      const tokenLabel = symbol && symbol !== name ? `${name} (${symbol})` : name;
+      const reasonValue = String(data.exit_reason || position.exit_reason || position.exit_trigger_reason || 'risk_policy').toLowerCase();
+      const reasonLabels: Record<string, string> = {
+        stop_loss: 'Stop-loss triggered',
+        take_profit: 'Take-profit reached',
+        trailing_stop: 'Trailing stop-loss triggered',
+        maximum_profit: 'Maximum-profit target reached',
+      };
+      const reason = reasonLabels[reasonValue] || reasonValue.replace(/_/g, ' ');
+      if (event.event_type === 'paper_sell_failed') {
+        showToast({
+          title: 'Paper sale failed — retrying',
+          description: `${tokenLabel} · ${String(data.reason || data.message || 'Settlement failed')}. The position remains open while the engine retries.`,
+          tone: 'warning',
+          duration: 9000,
+        });
+        continue;
+      }
+
+      const exitPrice = Number(position.exit_price_sol || data.exit_price_sol || position.exit_trigger_price_sol || 0);
+      const realizedPct = Number(position.realized_pnl_pct ?? position.pnl_pct ?? data.realized_pnl_pct);
+      const pnlLabel = Number.isFinite(realizedPct)
+        ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}% realized P&L`
+        : 'Realized P&L recorded';
+      const details = [
+        tokenLabel,
+        reason,
+        exitPrice > 0 ? `Exit ${exitPrice.toFixed(8)} SOL` : '',
+        pnlLabel,
+        'Full position sold · Simulated paper trade',
+      ].filter(Boolean).join(' · ');
+      showToast({ title: 'Paper sale completed', description: details, tone: 'success', duration: 8000 });
+    }
+  }, [events, showToast]);
 
   useEffect(() => {
     const main = mainRef.current;
