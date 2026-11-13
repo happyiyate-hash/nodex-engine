@@ -472,7 +472,17 @@ export const OverviewPage: React.FC<{ embeddedMode?: 'detected' | 'positions' }>
                     <article
                       key={launch.id || launch.signature || launch.mint_address}
                       data-token-card
-                      className="token-card-surface relative isolate mb-2 overflow-hidden rounded-[10px] bg-[#080808] px-2 py-1.5 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/35 before:to-transparent after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-20 after:h-px after:bg-white/[0.035] last:mb-0"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Open details for ${cardName}`}
+                      onClick={() => openTokenDetailByMint(launch.mint_address)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openTokenDetailByMint(launch.mint_address);
+                        }
+                      }}
+                      className="token-card-surface relative isolate mb-2 cursor-pointer overflow-hidden rounded-[10px] bg-[#080808] px-2 py-1.5 before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:z-20 before:h-px before:bg-gradient-to-r before:from-transparent before:via-white/35 before:to-transparent after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-20 after:h-px after:bg-white/[0.035] last:mb-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-300/50"
                     >
                       <div
                         aria-hidden="true"
