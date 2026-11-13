@@ -1201,15 +1201,16 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const snapshot = event.data?.snapshot as Record<string, any> | undefined;
         if (snapshot) {
           const mint = String(event.data?.mint_address || snapshot.mint_address || '');
-          if (terminallyRemovedMintsRef.current.has(mint)) return;
-          setTokens((previous) => {
-            const mapped = mapTokenDetailSnapshot(snapshot, previous.find((token) => token.mint === mint));
-            return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)] : previous;
-          });
-          setSelectedToken((previous) => {
-            if (!previous || previous.mint !== mint) return previous;
-            return mapTokenDetailSnapshot(snapshot, previous) || previous;
-          });
+          if (!terminallyRemovedMintsRef.current.has(mint)) {
+            setTokens((previous) => {
+              const mapped = mapTokenDetailSnapshot(snapshot, previous.find((token) => token.mint === mint));
+              return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)] : previous;
+            });
+            setSelectedToken((previous) => {
+              if (!previous || previous.mint !== mint) return previous;
+              return mapTokenDetailSnapshot(snapshot, previous) || previous;
+            });
+          }
         }
       } else if (event.event_type === 'chart_history_snapshot') {
         const mint = String(event.data?.mint_address || '');
