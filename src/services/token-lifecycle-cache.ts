@@ -147,6 +147,23 @@ export async function clearTokenLifecycleCache(): Promise<void> {
   }
 }
 
+/** Remove one terminally rejected or fully closed token from browser persistence. */
+export async function removeTokenLifecycleCache(mint: string): Promise<void> {
+  if (!mint) return;
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(STORE_NAME, 'readwrite');
+      transaction.objectStore(STORE_NAME).delete(mint);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error('Could not remove NodeX token cache record.'));
+      transaction.onabort = () => reject(transaction.error || new Error('NodeX token cache removal was aborted.'));
+    });
+  } finally {
+    database.close();
+  }
+}
+
 export function lifecycleCacheSignature(token: DiscoveredToken): string {
   return JSON.stringify({
     state_version: token.state_version || 0,
