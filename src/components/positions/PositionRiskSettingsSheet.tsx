@@ -109,7 +109,7 @@ export const PositionRiskSettingsSheet: React.FC<{ position: Position }> = ({ po
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setOpen(false); }}>
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-5" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => { event.stopPropagation(); if (event.target === event.currentTarget && !saving) setOpen(false); }}>
           <section role="dialog" aria-modal="true" aria-labelledby={`position-risk-title-${position.id}`} className="relative flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/[0.10] bg-[#101010] shadow-2xl sm:rounded-2xl">
             <header className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3.5">
               <div className="min-w-0">
