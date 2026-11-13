@@ -686,6 +686,29 @@ function mapDashboardSummary(profile: NodeXProfileSnapshot | null, positions: Po
   };
 }
 
+function terminallyRemovedMints(event: NodeXEvent): string[] {
+  const data = event.data || {};
+  const mint = String(data.mint_address || data.token_mint || data.base_mint || event.token_mint || '');
+  switch (event.event_type) {
+    case 'token_removed':
+    case 'token_rejected_cleanup':
+    case 'strategy_rejected_token':
+      return mint ? [mint] : [];
+    case 'tokens_removed_inactive':
+      return Array.isArray(data.mint_addresses)
+        ? data.mint_addresses.filter((value: unknown): value is string => typeof value === 'string' && value.length > 0)
+        : [];
+    case 'paper_entry_evaluation':
+      return mint && String(data.decision || '').toLowerCase() === 'reject' ? [mint] : [];
+    case 'token_scan_completed': {
+      const verdict = String(data.decision || data.status || '').toLowerCase();
+      return mint && ['rejected', 'unverified'].includes(verdict) ? [mint] : [];
+    }
+    default:
+      return [];
+  }
+}
+
 export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('overview');
   const [engineStatus, setEngineStatus] = useState<EngineStatus>(emptyStatus);
@@ -710,6 +733,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Once a complete backend snapshot is received, it becomes the allowlist for
   // cache restoration. This also protects against an IndexedDB read finishing late.
   const authoritativeTokenMints = useRef<Set<string> | null>(null);
+  // Terminally removed mints stay tombstoned for this session so delayed stream events cannot resurrect them.
+  const terminallyRemovedMintsRef = useRef<Set<string>>(new Set());
   const backendTokenSnapshotReceived = useRef(false);
   // TokenCare logo recovery is deliberately decoupled from individual WebSocket
   // events. New missing-logo tokens are grouped and only flushed after stream
@@ -1043,6 +1068,23 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     });
     const unsubscribeEvents = wsService.subscribe((event) => {
+      const removedMints = terminallyRemovedMints(event);
+      if (removedMints.length) {
+        const uniqueMints = [...new Set(removedMints)];
+        for (const mint of uniqueMints) {
+          terminallyRemovedMintsRef.current.add(mint);
+          lifecycleCacheSignatures.current.delete(mint);
+          tokenLogoQueue.current.delete(mint);
+          wsService.unsubscribeToken(mint);
+          void removeTokenLifecycleCache(mint).catch((error) =>
+            console.warn('NodeX terminal token cache removal failed:', error),
+          );
+        }
+        const removed = new Set(uniqueMints);
+        setTokens((previous) => previous.filter((token) => !removed.has(token.mint)));
+        setLaunches((previous) => previous.filter((launch) => !removed.has(launch.mint_address)));
+        setSelectedToken((previous) => previous && removed.has(previous.mint) ? null : previous);
+      }
       if ([
         'profile_updated', 'position_updated', 'trade_opened', 'trade_closed',
         'paper_buy_executed', 'paper_sell_executed', 'portfolio_summary_updated',
@@ -1062,7 +1104,8 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
       if (event.event_type === 'launch_snapshot') {
-        const snapshot = Array.isArray(event.data.launches) ? event.data.launches : [];
+        const snapshot = (Array.isArray(event.data.launches) ? event.data.launches : [])
+          .filter((launch: TokenLaunchRecord) => !terminallyRemovedMintsRef.current.has(launch.mint_address));
         setLaunches(snapshot as TokenLaunchRecord[]);
         setTokens((previous) => {
           const byMint = new Map(previous.map((token) => [token.mint, token]));
@@ -1094,7 +1137,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             }
           : event.data;
         const mint = String(stateData?.mint_address || stateData?.mint || '');
-        if (mint) {
+        if (mint && !terminallyRemovedMintsRef.current.has(mint)) {
           setTokens((previous) => {
             const index = previous.findIndex((token) => token.mint === mint);
             const existing = index >= 0 ? previous[index] : undefined;
@@ -1157,6 +1200,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const snapshot = event.data?.snapshot as Record<string, any> | undefined;
         if (snapshot) {
           const mint = String(event.data?.mint_address || snapshot.mint_address || '');
+          if (terminallyRemovedMintsRef.current.has(mint)) return;
           setTokens((previous) => {
             const mapped = mapTokenDetailSnapshot(snapshot, previous.find((token) => token.mint === mint));
             return mapped ? [mapped, ...previous.filter((token) => token.mint !== mapped.mint)] : previous;
@@ -1192,7 +1236,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         'paper_entry_evaluation',
         'strategy_rejected_token', 'token_metadata_updated', 'price_updated', 'liquidity_updated',
       ].includes(event.event_type);
-      if (event.event_type !== 'token_state_updated' && tokenMint && tokenStateEvent) {
+      if (event.event_type !== 'token_state_updated' && tokenMint && tokenStateEvent && !terminallyRemovedMintsRef.current.has(String(tokenMint))) {
         setTokens((previous) => {
           const mint = String(tokenMint || '');
           const index = previous.findIndex((item) => item.mint === mint);
