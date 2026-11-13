@@ -283,11 +283,18 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     if (chartType === 'line') {
       const drawPath = () => {
         ctx.beginPath();
+        // Preserve the original horizontal lead-in from the left edge.
+        // The active trace grows away from this fixed baseline; completed
+        // time slots remain at their original x positions.
+        const firstX = getLineX(0);
+        const firstY = getY(visible[0].price);
+        ctx.moveTo(padLeft, firstY);
+        ctx.lineTo(firstX, firstY);
         visible.forEach((point, index) => {
           const x = getLineX(index);
           const y = getY(point.price);
           if (index === 0) {
-            ctx.moveTo(x, y);
+            ctx.lineTo(x, y);
           } else {
             const px = getLineX(index - 1);
             const py = getY(visible[index - 1].price);
@@ -379,8 +386,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       });
     }
 
-    // One pinpoint marks the active price. No backward tracker or moving
-    // connector is drawn across historical data.
+    // The live price guides are part of the chart design: a dashed
+    // horizontal guide runs left from the price badge, and a thin solid
+    // connector joins the active dot to the badge. Draw them before the
+    // dot and badge so both remain crisp and visible.
     const latest = visible[visible.length - 1];
     const latestX = getSlotX(visible.length - 1);
     const latestY = getY(latest.price);
@@ -395,6 +404,29 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const badgeH = 17;
     const badgeX = w - badgeW - 4;
     const badgeY = Math.max(padTop - 2, Math.min(padTop + plotH - badgeH + 2, latestY - badgeH / 2));
+    const badgeCenterY = badgeY + badgeH / 2;
+
+    // Continuous dashed price guide from the left side to the live badge.
+    ctx.save();
+    ctx.strokeStyle = lineColor;
+    ctx.globalAlpha = 0.48;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padLeft, badgeCenterY);
+    ctx.lineTo(badgeX, badgeCenterY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Short solid connector from the active yellow/price dot to its card.
+    ctx.globalAlpha = 0.95;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(latestX, latestY);
+    ctx.lineTo(badgeX, badgeCenterY);
+    ctx.stroke();
+    ctx.restore();
+
     ctx.fillStyle = lineColor;
     ctx.beginPath();
     ctx.roundRect(badgeX, badgeY, badgeW, badgeH, badgeH / 2);
