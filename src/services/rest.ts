@@ -1,4 +1,4 @@
-import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot } from '../types';
+import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot, PositionRiskSettings } from '../types';
 
 function websocketUrlFor(backendUrl: string): string {
   if (!backendUrl) return '';
@@ -293,7 +293,19 @@ export class NodeXRestClient {
   public getProfile(): Promise<NodeXProfileSnapshot> {
     return this.request<NodeXProfileSnapshot>('/api/v1/profile');
   }
-  public updatePositionRisk(positionId: string, stopLossPct: number, takeProfitPct: number): Promise<{
+  public getPositionRisk(positionId: string): Promise<{
+    status: string; position_id: string; risk_policy: Record<string, any>;
+    trailing_stop_eligible: boolean; trailing_stop_eligibility_reason: string;
+  }> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings before reading position protection.');
+    return this.request(`/api/v1/portfolio/positions/${encodeURIComponent(positionId)}/risk`, {
+      method: 'GET',
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
+
+  public updatePositionRisk(positionId: string, settings: PositionRiskSettings): Promise<{
     status: string; position: Record<string, any>; risk_policy: Record<string, any>;
   }> {
     const key = this.settings.adminApiKey.trim();
@@ -301,7 +313,7 @@ export class NodeXRestClient {
     return this.request(`/api/v1/portfolio/positions/${encodeURIComponent(positionId)}/risk`, {
       method: 'PUT',
       headers: { 'X-NodeX-Admin-Key': key },
-      body: JSON.stringify({ stop_loss_pct: stopLossPct, take_profit_pct: takeProfitPct }),
+      body: JSON.stringify(settings),
     });
   }
 
