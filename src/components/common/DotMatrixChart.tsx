@@ -394,7 +394,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
     } else {
       // 2. CANDLESTICK CHART MODE
-      const candleWidth = Math.max(0.9, slotWidth * 1.25);
+      const candleWidth = Math.max(1.1, slotWidth * 1.5);
 
       visible.forEach((candle, index) => {
         const x = getSlotX(index);
