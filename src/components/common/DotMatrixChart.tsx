@@ -224,7 +224,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const anchor = Math.max(Math.abs(dataMax), 0.00000001);
         scaleRef.current = {
           min: Math.max(0, dataMax - anchor * 0.002),
-          max: dataMax + anchor * 0.018,
+          max: dataMax + anchor * 0.10,
         };
       } else {
         scaleRef.current = target;
