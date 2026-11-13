@@ -34,6 +34,10 @@ export const TokenDetailPage: React.FC = () => {
   const [riskSheetOpen, setRiskSheetOpen] = useState(false);
   const [riskStopLoss, setRiskStopLoss] = useState(15);
   const [riskTakeProfit, setRiskTakeProfit] = useState(100);
+  const [riskTrailingEnabled, setRiskTrailingEnabled] = useState(false);
+  const [riskTrailingActivation, setRiskTrailingActivation] = useState(50);
+  const [riskTrailingCallback, setRiskTrailingCallback] = useState(10);
+  const [riskMaximumProfit, setRiskMaximumProfit] = useState(500);
   const [riskSaving, setRiskSaving] = useState(false);
   const [riskError, setRiskError] = useState<string | null>(null);
   const [headerOffset, setHeaderOffset] = useState(0);
@@ -93,6 +97,10 @@ export const TokenDetailPage: React.FC = () => {
     if (!activePosition) return;
     setRiskStopLoss(activePosition.stop_loss_target_pct);
     setRiskTakeProfit(activePosition.take_profit_target_pct);
+    setRiskTrailingEnabled(Boolean(activePosition.trailing_stop_enabled));
+    setRiskTrailingActivation(activePosition.trailing_activation_profit_pct ?? 50);
+    setRiskTrailingCallback(activePosition.trailing_stop_callback_pct ?? activePosition.trailing_stop_pct ?? 10);
+    setRiskMaximumProfit(activePosition.maximum_profit_pct ?? 500);
     setRiskError(null);
     setRiskSheetOpen(true);
   };
@@ -102,7 +110,14 @@ export const TokenDetailPage: React.FC = () => {
     setRiskSaving(true);
     setRiskError(null);
     try {
-      const saved = await updatePositionRisk(activePosition.id, riskStopLoss, riskTakeProfit);
+      const saved = await updatePositionRisk(activePosition.id, {
+        stop_loss_pct: riskStopLoss,
+        take_profit_pct: riskTakeProfit,
+        trailing_stop_enabled: riskTrailingEnabled,
+        trailing_activation_profit_pct: riskTrailingActivation,
+        trailing_stop_callback_pct: riskTrailingCallback,
+        maximum_profit_pct: riskMaximumProfit,
+      });
       if (!saved) {
         setRiskError('The backend could not save these settings. Check your operator key and position status.');
         return;
@@ -326,7 +341,9 @@ export const TokenDetailPage: React.FC = () => {
               <div className="text-[10px] uppercase tracking-[0.12em] text-white/40">Position protection</div>
               <div className="mt-1 flex items-center gap-4 font-mono text-[12px]">
                 <span className="text-red-300">SL {formatMetric(activePosition.stop_loss_target_pct, 2)}%</span>
-                <span className="text-emerald-300">TP {formatMetric(activePosition.take_profit_target_pct, 2)}%</span>
+                <span className="text-emerald-300">TP {activePosition.take_profit_target_pct > 0 ? `+${formatMetric(activePosition.take_profit_target_pct, 2)}%` : 'OFF'}</span>
+                <span className="text-amber-200">MAX +{formatMetric(activePosition.maximum_profit_pct ?? 500, 0)}%</span>
+                <span className={activePosition.trailing_stop_enabled ? 'text-cyan-300' : 'text-white/40'}>TRAIL {activePosition.trailing_stop_enabled ? (activePosition.trailing_stop_active ? 'ACTIVE' : 'ARMED') : 'OFF'}</span>
               </div>
             </div>
             <button
@@ -537,6 +554,53 @@ export const TokenDetailPage: React.FC = () => {
               </label>
             </div>
 
+            <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold text-white/80">Trailing-stop eligibility</div>
+                  <div className={activePosition.trailing_stop_eligible ? 'mt-1 text-[10px] text-emerald-300' : 'mt-1 text-[10px] text-amber-200'}>
+                    {activePosition.trailing_stop_eligible ? 'Eligible for optional trailing protection' : 'Not eligible for trailing protection'}
+                  </div>
+                </div>
+                <label className={`flex items-center gap-2 text-[10px] ${activePosition.trailing_stop_eligible ? 'text-white/75' : 'text-white/30'}`}>
+                  <input
+                    type="checkbox"
+                    checked={riskTrailingEnabled}
+                    onChange={(event) => setRiskTrailingEnabled(event.target.checked)}
+                    disabled={riskSaving || !activePosition.trailing_stop_eligible}
+                    className="h-4 w-4 accent-cyan-400"
+                  />
+                  Enable
+                </label>
+              </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-white/40">{activePosition.trailing_stop_eligibility_reason || 'The backend has not supplied an eligibility assessment.'}</p>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <label className="block min-w-0">
+                <span className="mb-2 block text-[10px] text-white/50">Trail activation profit</span>
+                <span className="flex h-10 items-center border-b border-white/[0.16]">
+                  <input type="number" min="0" max="5000" step="1" value={riskTrailingActivation} onChange={(event) => setRiskTrailingActivation(Math.min(5000, Math.max(0, Number(event.target.value) || 0)))} disabled={riskSaving || !riskTrailingEnabled} className="min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-cyan-200 outline-none disabled:opacity-35" />
+                  <span className="text-[11px] text-white/35">%</span>
+                </span>
+              </label>
+              <label className="block min-w-0">
+                <span className="mb-2 block text-[10px] text-white/50">Trail callback</span>
+                <span className="flex h-10 items-center border-b border-white/[0.16]">
+                  <input type="number" min="0" max="100" step="0.5" value={riskTrailingCallback} onChange={(event) => setRiskTrailingCallback(Math.min(100, Math.max(0, Number(event.target.value) || 0)))} disabled={riskSaving || !riskTrailingEnabled} className="min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-cyan-200 outline-none disabled:opacity-35" />
+                  <span className="text-[11px] text-white/35">%</span>
+                </span>
+              </label>
+              <label className="col-span-2 block min-w-0">
+                <span className="mb-2 block text-[10px] font-medium text-amber-200/80">Hard maximum-profit exit · full sale</span>
+                <span className="flex h-10 items-center border-b border-amber-200/20">
+                  <input type="number" min="0" max="5000" step="1" value={riskMaximumProfit} onChange={(event) => setRiskMaximumProfit(Math.min(5000, Math.max(0, Number(event.target.value) || 0)))} disabled={riskSaving} className="min-w-0 flex-1 bg-transparent text-[18px] font-semibold tabular-nums text-amber-200 outline-none disabled:opacity-50" />
+                  <span className="text-[12px] text-white/40">%</span>
+                </span>
+                <span className="mt-1 block text-[9px] text-white/35">Default +500% closes 100% immediately, even while price is rising. Set 0 to disable this cap.</span>
+              </label>
+            </div>
+
             <div className="mt-4 space-y-3">
               <div>
                 <p className="mb-2 text-[9px] uppercase tracking-wider text-white/35">Stop-loss presets</p>
@@ -555,7 +619,7 @@ export const TokenDetailPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            <p className="mt-4 text-[10px] leading-relaxed text-white/35">The engine recalculates this position's trigger prices from its original entry price. Other positions and global trading settings are unchanged.</p>
+            <p className="mt-4 text-[10px] leading-relaxed text-white/35">A take-profit value of 0 disables that fixed target. Trailing protection activates only after its profit threshold and follows the highest price by the callback amount. The hard maximum-profit cap independently sells the full position. All values apply only to this position.</p>
             {riskError && <p role="alert" className="mt-3 rounded-lg border border-red-500/20 bg-red-500/[0.06] p-2.5 text-[10px] text-red-200">{riskError}</p>}
             <button type="button" onClick={() => void savePositionRisk()} disabled={riskSaving || !Number.isFinite(riskStopLoss) || !Number.isFinite(riskTakeProfit)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-[12px] font-semibold text-black transition-transform active:scale-[0.99] disabled:opacity-50">
               {riskSaving ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-black/25 border-t-black" /> : <Check className="h-4 w-4" />}
