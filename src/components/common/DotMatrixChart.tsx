@@ -94,7 +94,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     typeof window !== 'undefined' ? Math.min(window.innerWidth, 1200) : 600
   );
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [view, setView] = useState({ end: Number.POSITIVE_INFINITY, count: 48 });
+  const [view, setView] = useState({ end: Number.POSITIVE_INFINITY, count: 120 });
   const [isPanned, setIsPanned] = useState(false);
   const dragRef = useRef<{ x: number; end: number; moved: boolean } | null>(null);
   const scaleRef = useRef<PriceScale | null>(null);
@@ -208,7 +208,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const endIndex = Number.isFinite(view.end)
       ? Math.min(points.length - 1, Math.max(0, Math.floor(view.end)))
       : points.length - 1;
-    const count = Math.max(10, Math.min(points.length, Math.floor(view.count)));
+    const count = Math.max(10, Math.floor(view.count));
     const startIndex = Math.max(0, endIndex - count + 1);
     const visible = points.slice(startIndex, endIndex + 1);
 
@@ -590,7 +590,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const endIndex = Number.isFinite(view.end)
       ? Math.min(points.length - 1, Math.max(0, Math.floor(view.end)))
       : points.length - 1;
-    const count = Math.max(10, Math.min(points.length, Math.floor(view.count)));
+    const count = Math.max(10, Math.floor(view.count));
     const startIndex = Math.max(0, endIndex - count + 1);
     const visibleCount = endIndex - startIndex + 1;
     const ratio = Math.max(0, Math.min(1, (x - padLeft) / livePlotW));
@@ -679,7 +679,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   };
 
   const resetView = () => {
-    setView((previous) => ({ ...previous, end: Number.POSITIVE_INFINITY, count: 24 }));
+    setView((previous) => ({ ...previous, end: Number.POSITIVE_INFINITY, count: 120 }));
     setIsPanned(false);
     setHoverIndex(null);
     onPriceHover?.(null, null);
