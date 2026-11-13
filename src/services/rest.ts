@@ -290,10 +290,10 @@ export class NodeXRestClient {
     }
   }
 
-  public getProfile(): Promise<NodeXProfileSnapshot> {
+  public async getProfile(): Promise<NodeXProfileSnapshot> {
     return this.request<NodeXProfileSnapshot>('/api/v1/profile');
   }
-  public manualSellPosition(positionId: string): Promise<{
+  public async manualSellPosition(positionId: string): Promise<{
     status: string; position_id: string; paper_only: boolean;
     execution_mode: string; full_exit: boolean; position: Record<string, any>;
   }> {
@@ -304,7 +304,7 @@ export class NodeXRestClient {
       headers: { 'X-NodeX-Admin-Key': key },
     });
   }
-  public getPositionRisk(positionId: string): Promise<{
+  public async getPositionRisk(positionId: string): Promise<{
     status: string; position_id: string; risk_policy: Record<string, any>;
     trailing_stop_eligible: boolean; trailing_stop_eligibility_reason: string;
   }> {
@@ -316,7 +316,7 @@ export class NodeXRestClient {
     });
   }
 
-  public updatePositionRisk(positionId: string, settings: PositionRiskSettings): Promise<{
+  public async updatePositionRisk(positionId: string, settings: PositionRiskSettings): Promise<{
     status: string; position: Record<string, any>; risk_policy: Record<string, any>;
   }> {
     const key = this.settings.adminApiKey.trim();
@@ -328,10 +328,10 @@ export class NodeXRestClient {
     });
   }
 
-  public getPortfolioBalance(): Promise<PortfolioBalanceSnapshot> {
+  public async getPortfolioBalance(): Promise<PortfolioBalanceSnapshot> {
     return this.request<PortfolioBalanceSnapshot>('/api/v1/portfolio/balance');
   }
-  public getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
+  public async getHealth() { return this.request<{status:string;mode:string;service:string}>('/health'); }
   public async getEngineStatus(): Promise<EngineStatus> {
     const raw = await this.request<any>('/api/v1/engine/status');
     const streams = raw.solana_streams || {};
@@ -356,15 +356,15 @@ export class NodeXRestClient {
       strategy_paused: Boolean(raw.paused),
     };
   }
-  public getPaperWallet(): Promise<PaperWalletSnapshot> { return this.request<PaperWalletSnapshot>('/api/v1/paper-wallet'); }
-  public getRecentTokens(limit=100): Promise<TokenLaunchRecord[]> {
+  public async getPaperWallet(): Promise<PaperWalletSnapshot> { return this.request<PaperWalletSnapshot>('/api/v1/paper-wallet'); }
+  public async getRecentTokens(limit=100): Promise<TokenLaunchRecord[]> {
     return this.request<any[]>(`/api/v1/tokens/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
-  public getTokenState(mint: string): Promise<Record<string, any>> {
+  public async getTokenState(mint: string): Promise<Record<string, any>> {
     return this.request(`/api/v1/tokens/${encodeURIComponent(mint)}/state`);
   }
 
-  public refreshTokenMetadata(mint: string): Promise<{
+  public async refreshTokenMetadata(mint: string): Promise<{
     status: string; mint_address: string; metadata_status: string; logo_url?: string | null;
   }> {
     const key = this.settings.adminApiKey.trim();
@@ -374,14 +374,14 @@ export class NodeXRestClient {
       headers: { 'X-NodeX-Admin-Key': key },
     });
   }
-  public getRecentEvents(limit=200): Promise<Array<{
+  public async getRecentEvents(limit=200): Promise<Array<{
     id: number; signature: string | null; slot: number | null;
     received_at: string; event: Record<string, any>;
   }>> {
     return this.request(`/api/v1/events/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
 
-  public getEngineActivityLogs(limit=500): Promise<Array<{
+  public async getEngineActivityLogs(limit=500): Promise<Array<{
     id: number; recorded_at: string; activity: Record<string, any>;
   }>> {
     const key = this.settings.adminApiKey.trim();
@@ -391,7 +391,7 @@ export class NodeXRestClient {
     });
   }
 
-  public clearEngineActivityLogs(): Promise<{ status: string; deleted_records: number }> {
+  public async clearEngineActivityLogs(): Promise<{ status: string; deleted_records: number }> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the operator API key in Settings to clear engine activity.');
     return this.request('/api/v1/admin/activity-logs/clear', {
@@ -400,14 +400,14 @@ export class NodeXRestClient {
     });
   }
 
-  public getStorageOverview(): Promise<StorageOverview> {
+  public async getStorageOverview(): Promise<StorageOverview> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the operator API key in Settings before loading server storage.');
     return this.request<StorageOverview>('/api/v1/admin/storage/overview', {
       headers: { 'X-NodeX-Admin-Key': key },
     });
   }
-  public cleanupSystemJournal(): Promise<{
+  public async cleanupSystemJournal(): Promise<{
     status: string; category: 'system_logs'; cleanup_output: string;
     storage_before_bytes: number | null; storage_after_bytes: number | null;
     bytes_freed: number | null; overview: StorageOverview;
@@ -420,7 +420,7 @@ export class NodeXRestClient {
     });
   }
 
-  public clearEngineHistory(adminKey: string): Promise<{
+  public async clearEngineHistory(adminKey: string): Promise<{
     status: string;
     deleted_token_records: number;
     deleted_token_state_records: number;
@@ -436,10 +436,10 @@ export class NodeXRestClient {
     });
   }
 
-  public scanToken(mint:string) {
+  public async scanToken(mint:string) {
     return this.request<any>(`/api/v1/tokens/${encodeURIComponent(mint)}/scan`);
   }
-  public getTokenAccountRent() { return this.request<any>('/api/v1/fees/token-account-rent'); }
+  public async getTokenAccountRent() { return this.request<any>('/api/v1/fees/token-account-rent'); }
 
   public async getDashboardSummary(): Promise<never> { throw new Error('Dashboard summary route is not implemented by the Rust backend.'); }
   public async getPositions(): Promise<never> { throw new Error('Paper positions route is not implemented by the Rust backend.'); }
@@ -462,7 +462,7 @@ export class NodeXRestClient {
       body: JSON.stringify(config),
     });
   }
-  public updatePaperExecution(enabled: boolean): Promise<{status:string;config:StrategyConfig;mode:'paper';real_trading_available:false}> {
+  public async updatePaperExecution(enabled: boolean): Promise<{status:string;config:StrategyConfig;mode:'paper';real_trading_available:false}> {
     const key = this.settings.adminApiKey.trim();
     if (!key) throw new Error('Save the Engine API key in Settings before changing paper execution.');
     return this.request('/api/v1/config/trading/execution', {
@@ -471,10 +471,10 @@ export class NodeXRestClient {
       body: JSON.stringify({ enabled }),
     });
   }
-  public getEngineControl(): Promise<EngineControlSnapshot> {
+  public async getEngineControl(): Promise<EngineControlSnapshot> {
     return this.request<EngineControlSnapshot>('/api/v1/engine/control');
   }
-  public updateEngineControl(
+  public async updateEngineControl(
     command: 'start' | 'resume' | 'pause' | 'stop' | 'configure' | 'set_mode',
     updates: Partial<Pick<EngineControlSnapshot, 'mode' | 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled'>> = {},
   ): Promise<{status:string;engine:EngineControlSnapshot}> {

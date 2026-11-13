@@ -273,7 +273,7 @@ export const TokenDetailPage: React.FC = () => {
       </header>
 
       <div
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(3.5rem+env(safe-area-inset-bottom))]"
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(3.5rem+env(safe-area-inset-bottom))]"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 56px)' }}
         onScroll={(event) => {
           const nextScrollTop = event.currentTarget.scrollTop;
@@ -298,7 +298,7 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
-      <section className="relative w-full bg-[#000000] pt-10">
+      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] pt-10 pb-3">
         {/* Controls occupy their own top strip; the chart canvas starts beneath them with clear separation. */}
         <div className="absolute inset-x-0 top-2.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
           <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
@@ -360,7 +360,7 @@ export const TokenDetailPage: React.FC = () => {
           isPositive={isPositive}
           timeframe={timeframe}
           chartType={chartType}
-          height={340}
+          height={272}
           onPriceHover={(p, t) => {
             setScrubPrice(p);
             setScrubTime(t);

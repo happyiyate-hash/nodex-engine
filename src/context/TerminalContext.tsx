@@ -723,6 +723,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Restore durable backend activity on every app start. Live WebSocket events
   // are merged afterward so a delayed history response cannot overwrite newer data.
   useEffect(() => {
+    if (!settings.backendUrl || !settings.adminApiKey.trim()) return;
     let active = true;
     apiClient.getEngineActivityLogs(500).then((records) => {
       if (!active || !Array.isArray(records)) return;
@@ -771,7 +772,7 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.warn('NodeX backend event history restore failed:', error);
     });
     return () => { active = false; };
-  }, []);
+  }, [settings.backendUrl, settings.adminApiKey]);
 
   // Restore stable lifecycle/security records from IndexedDB. Market ticks are
   // deliberately excluded from this cache and are always refreshed by the backend.
