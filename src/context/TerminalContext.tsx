@@ -469,8 +469,8 @@ function mapBackendPosition(raw: Record<string, any>): Position | null {
   const quantity = Number(raw.token_quantity ?? raw.quantity ?? 0);
   const costBasisSol = Number(raw.cost_basis_sol ?? raw.invested_sol ?? 0);
   const currentValueSol = Number(raw.current_value_sol ?? raw.marked_value_sol ?? 0);
-  const pnlSol = Number(raw.unrealized_pnl_sol ?? (currentValueSol - costBasisSol));
-  const pnlPct = Number(raw.pnl_pct ?? raw.unrealized_pnl_pct ?? (costBasisSol > 0 ? pnlSol / costBasisSol * 100 : 0));
+  const pnlSol = Number(raw.realized_pnl_sol ?? raw.pnl_sol ?? raw.unrealized_pnl_sol ?? (currentValueSol - costBasisSol));
+  const pnlPct = Number(raw.realized_pnl_pct ?? raw.pnl_pct ?? raw.unrealized_pnl_pct ?? (costBasisSol > 0 ? pnlSol / costBasisSol * 100 : 0));
   const entryPriceSol = Number(raw.entry_price_sol ?? raw.average_entry_price_sol ?? (quantity > 0 ? costBasisSol / quantity : 0));
   const currentPriceSol = Number(raw.current_price_sol ?? (quantity > 0 ? currentValueSol / quantity : 0));
   const rawStatus = String(raw.status || 'open').toLowerCase();
