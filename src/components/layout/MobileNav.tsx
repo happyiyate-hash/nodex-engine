@@ -108,7 +108,7 @@ export const MobileNav: React.FC = () => {
         onContextMenu={(event) => event.preventDefault()}
         onClick={() => { if (longPressTriggered.current) { longPressTriggered.current = false; return; } select('settings'); }}
         aria-label="Settings" title="Settings" aria-current={activeTab === 'settings' && !selectedToken ? 'page' : undefined}
-        className={'pointer-events-auto grid size-[60px] shrink-0 place-items-center rounded-full border border-white/[0.22] bg-secondary/70 text-muted-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.07),inset_0_1px_0_rgba(255,255,255,0.24),0_-6px_24px_rgba(0,0,0,0.3)] backdrop-blur-2xl ' + (activeTab === 'settings' && !selectedToken ? 'text-foreground' : 'hover:text-foreground')}
+        className={'pointer-events-auto grid size-[60px] shrink-0 place-items-center rounded-full border border-amber-300/[0.16] bg-secondary/70 text-muted-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.05),inset_0_1px_0_rgba(255,255,255,0.16),0_-6px_24px_rgba(0,0,0,0.3)] backdrop-blur-2xl transition-all duration-200 active:scale-95 ' + (activeTab === 'settings' && !selectedToken ? 'bg-amber-400/[0.10] text-amber-200 ring-1 ring-amber-300/[0.16] shadow-[inset_0_1px_0_rgba(255,226,170,0.14),0_3px_12px_rgba(0,0,0,0.28)]' : 'hover:bg-amber-400/[0.06] hover:text-amber-100')}
         style={{ opacity: collapsing ? 0 : 1, transform: collapsing ? 'scale(.05)' : 'scale(1)', animation: holding && phase === 'idle' ? 'settings-heartbeat .72s ease-in-out infinite' : 'none', transition: 'transform 420ms cubic-bezier(.7,0,.2,1), opacity 360ms ease' }}>
         <Settings className="size-[22px]" />
       </button>
