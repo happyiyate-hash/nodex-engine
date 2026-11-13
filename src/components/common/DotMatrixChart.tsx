@@ -294,7 +294,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       // Every interval starts exactly where the preceding interval ended.
       // The first visible interval gets a short horizontal lead-in.
       if (lineCoordinates.length === 0) {
-        lineCoordinates.push({ x: padLeft, y: startY });
+        lineCoordinates.push({ x: slotLeft, y: startY });
       } else {
         const previous = lineCoordinates[lineCoordinates.length - 1];
         if (Math.abs(previous.x - slotLeft) > 0.01 || Math.abs(previous.y - startY) > 0.01) {
@@ -302,7 +302,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         }
       }
 
-      bucketSamples.forEach((sample, sampleIndex) => {
+      bucketSamples.forEach((sample) => {
         // Keep every tick inside its own timeframe slot. The timestamp
         // determines its true position within the minute (or selected
         // interval); price direction never changes the horizontal spacing.
