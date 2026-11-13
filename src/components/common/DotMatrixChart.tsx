@@ -546,7 +546,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const endIndex = Number.isFinite(view.end)
       ? Math.min(points.length - 1, Math.max(0, Math.floor(view.end)))
       : points.length - 1;
-    const count = timeframe === '24H' ? 24 : Math.max(10, Math.min(points.length, Math.floor(view.count)));
+    const count = Math.max(10, Math.min(points.length, Math.floor(view.count)));
     const startIndex = Math.max(0, endIndex - count + 1);
     const visibleCount = endIndex - startIndex + 1;
     const ratio = Math.max(0, Math.min(1, (x - padLeft) / livePlotW));
