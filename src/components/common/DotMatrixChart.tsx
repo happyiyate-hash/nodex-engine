@@ -1985,9 +1985,9 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           // Fade the chart itself into view over the first ~12% of its width.
           // This is a real alpha mask, not a dark overlay or rectangular brush.
           maskImage:
-            'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 2%, rgba(0,0,0,0.38) 5%, rgba(0,0,0,0.78) 9%, #000000 12%, #000000 100%)',
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
           WebkitMaskImage:
-            'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 2%, rgba(0,0,0,0.38) 5%, rgba(0,0,0,0.78) 9%, #000000 12%, #000000 100%)',
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
         }}
         className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
