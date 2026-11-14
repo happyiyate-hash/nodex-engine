@@ -35,7 +35,6 @@ export interface PriceTick {
 
 interface DotMatrixChartProps {
   currentPrice: number;
-  marketCap?: number;
   entryPrice?: number;
   priceHistory?: PricePoint[];
   isPositive?: boolean;
@@ -43,7 +42,6 @@ interface DotMatrixChartProps {
   chartType?: 'line' | 'candle';
   onPriceHover?: (price: number | null, time: string | null) => void;
   height?: number;
-  marketCap?: number;
 }
 
 type CanvasTarget = Parameters<IPrimitivePaneRenderer['draw']>[0];
@@ -152,14 +150,6 @@ const formatBucketTime = (timestampMs: number, timeframe: string) => {
     minute: '2-digit',
     ...(['1S', '5S', '10S', '1M'].includes(timeframe) ? { second: '2-digit' as const } : {}),
   });
-};
-
-const formatMarketCap = (marketCap: number) => {
-  if (!Number.isFinite(marketCap) || marketCap < 0) return '—';
-  return new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(marketCap);
 };
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -632,7 +622,6 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
 
 export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   currentPrice,
-  marketCap,
   entryPrice,
   priceHistory,
   isPositive = true,
@@ -647,8 +636,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
   const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
-  const marketCapRef = useRef(marketCap);
-  marketCapRef.current = marketCap;
 
   const chartRef = useRef<IChartApi | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
@@ -1007,10 +994,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       badge.style.height = `${badgeH}px`;
       badge.style.transform = `translate3d(${badgeX}px, ${badgeY}px, 0)`;
 
-      const formatted =
-        typeof marketCapRef.current === 'number'
-          ? formatMarketCap(marketCapRef.current)
-          : '—';
+      const formatted = formatPrice(price);
       if (badge.textContent !== formatted) {
         badge.textContent = formatted;
       }
