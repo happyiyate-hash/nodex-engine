@@ -456,11 +456,14 @@ export const TokenDetailPage: React.FC = () => {
                 </span>
               </span>
             ))}
-            {/* Very light left-edge brush: visible through the chart and amount stream. */}
+            {/* Dark translucent brush sits above the amount stream to create a soft, flowing-in-dark look. */}
             <div
               className="pointer-events-none absolute inset-y-0 left-0 z-30 w-[20%]"
               style={{
-                background: 'linear-gradient(to right, rgba(0,0,0,0.24) 0%, rgba(0,0,0,0.13) 3%, rgba(0,0,0,0.055) 20%, rgba(0,0,0,0) 100%)',
+                background: 'linear-gradient(to right, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.56) 3%, rgba(0,0,0,0.34) 42%, rgba(0,0,0,0.12) 78%, rgba(0,0,0,0) 100%)',
+                backdropFilter: 'blur(2px)',
+                WebkitBackdropFilter: 'blur(2px)',
+                boxShadow: 'inset -12px 0 18px -18px rgba(0,0,0,0.85)',
               }}
             />
           </div>
