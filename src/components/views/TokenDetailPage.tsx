@@ -519,7 +519,7 @@ export const TokenDetailPage: React.FC = () => {
                   if (suppressTimeframeClickRef.current) return;
                   setTimeframe(tf);
                 }}
-                className={`inline-flex h-10 min-w-[2.75rem] shrink-0 touch-auto items-center justify-center rounded-md px-2 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
+                className={`inline-flex h-7 min-w-[2.75rem] shrink-0 touch-auto items-center justify-center rounded-[5px] px-2 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
                   timeframe === tf ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:text-white/90'
                 }`}
               >
