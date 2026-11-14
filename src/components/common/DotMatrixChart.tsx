@@ -924,6 +924,39 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     drawDotBackground();
   }, [drawDotBackground]);
 
+  // Mobile browsers can suspend canvas painting while this screen is in the
+  // background. Redraw the decorative dot layer and refresh chart dimensions
+  // whenever the page becomes visible again.
+  useEffect(() => {
+    let refreshFrame = 0;
+    const refreshAfterResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      window.cancelAnimationFrame(refreshFrame);
+      refreshFrame = window.requestAnimationFrame(() => {
+        drawDotBackground();
+        const host = tvContainerRef.current;
+        const chart = chartRef.current;
+        if (host && chart) {
+          const width = host.clientWidth;
+          const chartHeight = host.clientHeight;
+          if (width > 0 && chartHeight > 0) {
+            chart.resize(width, chartHeight);
+          }
+        }
+      });
+    };
+
+    document.addEventListener('visibilitychange', refreshAfterResume);
+    window.addEventListener('pageshow', refreshAfterResume);
+    window.addEventListener('focus', refreshAfterResume);
+    return () => {
+      window.cancelAnimationFrame(refreshFrame);
+      document.removeEventListener('visibilitychange', refreshAfterResume);
+      window.removeEventListener('pageshow', refreshAfterResume);
+      window.removeEventListener('focus', refreshAfterResume);
+    };
+  }, [drawDotBackground]);
+
   // Measure container width with ResizeObserver.
   useEffect(() => {
     const el = containerRef.current;
