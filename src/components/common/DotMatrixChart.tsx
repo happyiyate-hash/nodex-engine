@@ -635,6 +635,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const dotCanvasRef = useRef<HTMLCanvasElement>(null);
   const tvContainerRef = useRef<HTMLDivElement>(null);
   const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
 
   const chartRef = useRef<IChartApi | null>(null);
@@ -1038,7 +1039,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         borderVisible: true,
         borderColor: 'rgba(255,255,255,0.11)',
         ticksVisible: true,
+        // Timestamp text is drawn by our pre-rendered canvas layer so labels
+        // exist in the right-side lead-in before they enter the visible plot.
         timeVisible: true,
+        tickMarkFormatter: () => '',
         secondsVisible: timeframeRef.current === '1m',
         rightOffset: BASE_RIGHT_OFFSET,
         barSpacing: 5,
@@ -1192,6 +1196,58 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     animYRangeRef.current = null;
     latestVisibleBoundsRef.current = null;
 
+    // Draw timestamp labels ourselves, including logical bars just beyond the
+    // latest data point. The rightOffset leaves room for these labels to exist
+    // before they enter the plot, so they glide in instead of popping into view.
+    const drawTimeLabels = () => {
+      const canvas = timeLabelsCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const heightPx = 19;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(heightPx * dpr);
+      canvas.style.width = String(width) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, heightPx);
+
+      const range = chart.timeScale().getVisibleLogicalRange();
+      const bars = committedBarsRef.current;
+      if (!range || range.to <= range.from || bars.length === 0) return;
+
+      const plotRight = Math.max(0, width - chart.priceScale('right').width());
+      const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
+      const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
+      const labelEveryBars = Math.max(1, Math.ceil(76 / spacing));
+      const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
+      const lastLogical = Math.floor(range.to / labelEveryBars) * labelEveryBars;
+      const lastBar = bars[bars.length - 1];
+      const lastIndex = bars.length - 1;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, Math.max(0, plotRight - 2), heightPx);
+      ctx.clip();
+      ctx.font = "9.5px 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.48)';
+
+      for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x < -45 || x > plotRight + 45) continue;
+        const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
+        const label = formatBucketTime(timestampMs, timeframeRef.current);
+        ctx.fillText(label, x, 10.5);
+      }
+      ctx.restore();
+    };
+
     // Replace the chart library's heavier time-axis tick marks with fine hairlines.
     const drawTimeScaleTicks = () => {
       const canvas = timeTicksCanvasRef.current;
@@ -1235,6 +1291,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     const handleLogicalRange = () => {
       drawTimeScaleTicks();
+      drawTimeLabels();
       if (isApplyingAutoScrollRef.current || isAutoPositioningRef.current) return;
       const range = chart.timeScale().getVisibleLogicalRange();
       const total = committedBarsRef.current.length;
@@ -1306,9 +1363,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
     chart.subscribeCrosshairMove(handleCrosshairMove);
     drawTimeScaleTicks();
+    drawTimeLabels();
 
     const tickResizeObserver = new ResizeObserver(() => {
-      window.requestAnimationFrame(drawTimeScaleTicks);
+      window.requestAnimationFrame(() => {
+        drawTimeScaleTicks();
+        drawTimeLabels();
+      });
     });
     tickResizeObserver.observe(host);
 
@@ -1538,6 +1599,9 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             }
           }
         }
+
+        // Keep custom timestamps locked to the same 60fps horizontal motion.
+        drawTimeLabels();
 
         // Keep halo & live tail synced at 60fps
         if (chartTypeRef.current === 'line') {
@@ -1827,6 +1891,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         ref={tvContainerRef}
         style={{ position: 'absolute', top: 34, left: 0, right: 0, bottom: 0, width: '100%', height: 'calc(100% - 34px)' }}
         className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
+          with chart coordinates so they emerge continuously from the right. */}
+      <canvas
+        ref={timeLabelsCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[19px] w-full"
       />
       {/* Layer 2.5: Axis-edge brushes sit above chart labels so the price numbers fade beneath them. */}
       <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[4] overflow-hidden">
