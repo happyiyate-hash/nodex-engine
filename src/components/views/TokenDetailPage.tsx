@@ -240,6 +240,7 @@ export const TokenDetailPage: React.FC = () => {
                 </span>
               </div>
             </div>
+          </div>
           {/* Live Scrub Indicator (if dragging); kept inside the plot area. */}
         {scrubTime && (
           <div className="absolute top-3 right-4 z-10 rounded border border-white/10 bg-[#0a0a0c]/80 px-2 py-0.5 font-mono text-[10px] text-white/50">
