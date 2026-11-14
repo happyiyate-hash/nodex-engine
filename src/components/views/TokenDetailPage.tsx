@@ -415,7 +415,7 @@ export const TokenDetailPage: React.FC = () => {
                 { address: '1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfGhJkL567', balance: '14.2M', share: 1.42, initials: '1Z' },
                 { address: '0xYz3aBc6dEf9gHi2jKl5mNpQrStUvWxYzAbCdEfG890', balance: '12.1M', share: 1.21, initials: '0X' },
               ].map((holder, index) => (
-                <div key={holder.address} className="rounded-xl bg-white/[0.12] px-3.5 py-3">
+                <div key={holder.address} className="border-b border-white/[0.07] py-3.5 last:border-b-0">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10px] font-semibold tracking-wide text-white/75">
                       {holder.initials}
@@ -424,7 +424,12 @@ export const TokenDetailPage: React.FC = () => {
                       <span className="truncate font-mono text-[11px] text-white/80">{holder.address.slice(0, 5)}...{holder.address.slice(-5)}</span>
                       <span className="font-mono text-[11px] font-medium text-white/95">{holder.balance}</span>
                     </div>
-                    <span className="shrink-0 font-mono text-[11px] text-white/65">{holder.share.toFixed(2)}%</span>
+                    <div className="flex w-[76px] shrink-0 flex-col items-end gap-1.5">
+                      <span className="font-mono text-[11px] text-white/65">{holder.share.toFixed(2)}%</span>
+                      <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/[0.12]">
+                        <div className="h-full rounded-full bg-white" style={{ width: `${Math.min((holder.share / 10) * 100, 100)}%` }} />
+                      </div>
+                    </div>
                     <button
                       type="button"
                       aria-label={`Copy holder wallet address ${index + 1}`}
@@ -434,9 +439,6 @@ export const TokenDetailPage: React.FC = () => {
                     >
                       <Copy className="h-3 w-3" />
                     </button>
-                  </div>
-                  <div className="mt-2.5 h-1 w-1/5 overflow-hidden rounded-full bg-white/[0.12]">
-                    <div className="h-full rounded-full bg-white" style={{ width: `${Math.min((holder.share / 10) * 100, 100)}%` }} />
                   </div>
                 </div>
               ))}
