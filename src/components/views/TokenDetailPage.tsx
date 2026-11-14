@@ -236,7 +236,7 @@ export const TokenDetailPage: React.FC = () => {
 
         <div className="mt-2 flex h-12 w-full items-center px-2 font-mono">
           <div className="relative flex min-w-0 basis-[60%] items-center overflow-hidden">
-            <div className="flex h-9 min-w-0 flex-1 touch-pan-x select-none items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg bg-white/[0.045] p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+            <div className="flex h-9 min-w-0 flex-1 touch-pan-x select-none items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg bg-transparent p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
             {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
               <button
                 key={tf}
