@@ -286,6 +286,7 @@ export const TokenDetailPage: React.FC = () => {
         <DotMatrixChart
           key={activeToken.mint}
           currentPrice={liveTokenPrice}
+          marketCap={simulatedMarketCap}
           entryPrice={activePosition ? entryPriceUsd : undefined}
           priceHistory={demoPriceHistory}
           isPositive={isPositive}
