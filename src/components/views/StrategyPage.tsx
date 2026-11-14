@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
-import { StrategyConfig } from '../../types';
+import { CreatorIntelligence, StrategyConfig } from '../../types';
 import { apiClient } from '../../services/rest';
 import { useToast } from '../ui/ToastProvider';
 import {
-  Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
-  TrendingUp, X, Plus, Pencil, Trash2,
+  Activity, Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
+  TrendingUp, X, Plus, Pencil, Trash2, Users, Wallet, BarChart3, Search,
 } from 'lucide-react';
 
 type RiskTarget = 'stop_loss_pct' | 'take_profit_pct';
@@ -106,7 +106,10 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     activation: strategyConfig.trailing_activation_profit_pct,
     callback: strategyConfig.trailing_stop_callback_pct,
   });
-  const [showPreferredOwners, setShowPreferredOwners] = useState(false);
+  const [creatorIntelligence, setCreatorIntelligence] = useState<CreatorIntelligence[]>([]);
+  const [creatorLoading, setCreatorLoading] = useState(true);
+  const [creatorLoadError, setCreatorLoadError] = useState('');
+  const [selectedCreatorAddress, setSelectedCreatorAddress] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [newEntriesEnabled, setNewEntriesEnabled] = useState(false);
   const [savingEntryPermission, setSavingEntryPermission] = useState(false);
@@ -115,6 +118,15 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
   const [ownerAddress, setOwnerAddress] = useState('');
   const [ownerLabel, setOwnerLabel] = useState('');
   const [ownerError, setOwnerError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    apiClient.getCreatorIntelligence(500)
+      .then((records) => { if (active) { setCreatorIntelligence(records); setCreatorLoadError(''); } })
+      .catch((error) => { if (active) setCreatorLoadError(error instanceof Error ? error.message : 'Creator intelligence could not be loaded.'); })
+      .finally(() => { if (active) setCreatorLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setForm({ ...strategyConfig });
@@ -203,10 +215,10 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
     }
   };
 
-  const openOwnerSheet = (index: number | null = null) => {
+  const openOwnerSheet = (index: number | null = null, initialAddress = '', initialLabel = '') => {
     setEditingOwnerIndex(index);
-    setOwnerAddress(index === null ? '' : form.preferred_owners[index]?.address || '');
-    setOwnerLabel(index === null ? '' : form.preferred_owners[index]?.label || '');
+    setOwnerAddress(index === null ? initialAddress : form.preferred_owners[index]?.address || '');
+    setOwnerLabel(index === null ? initialLabel : form.preferred_owners[index]?.label || '');
     setOwnerError('');
     setOwnerSheetOpen(true);
   };
@@ -290,6 +302,23 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
       </button>
     );
   };
+
+  const developerRows = Array.from(new Set([
+    ...creatorIntelligence.map((creator) => creator.creator_address),
+    ...form.preferred_owners.map((owner) => owner.address),
+  ]))
+    .map((address) => ({
+      address,
+      preferredIndex: form.preferred_owners.findIndex((owner) => owner.address === address),
+      preferredOwner: form.preferred_owners.find((owner) => owner.address === address),
+      intelligence: creatorIntelligence.find((creator) => creator.creator_address === address),
+    }))
+    .sort((a, b) => {
+      if (a.preferredIndex >= 0 && b.preferredIndex < 0) return -1;
+      if (b.preferredIndex >= 0 && a.preferredIndex < 0) return 1;
+      return (b.intelligence?.activity_score ?? -1) - (a.intelligence?.activity_score ?? -1);
+    });
+  const selectedDeveloper = developerRows.find((developer) => developer.address === selectedCreatorAddress) ?? null;
 
   return (
     <div className={embedded ? "w-full min-w-0 bg-black text-white" : "flex h-full w-full flex-col overflow-hidden bg-black text-white"}>
@@ -429,113 +458,144 @@ export const StrategyPage: React.FC<{ embedded?: boolean }> = ({ embedded = fals
 
 
       <section className="mt-5 border-t border-white/[0.08] pt-4">
-        <div className="mb-2 flex items-center gap-2">
-          <ShieldAlert className="h-4 w-4 text-white/50" />
-          <h3 className="text-[12px] font-semibold text-white">Engine execution & diagnostics</h3>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-white/60" />
+              <h3 className="text-[13px] font-semibold text-white">Developer Intelligence</h3>
+            </div>
+            <p className="mt-1 text-[10px] leading-relaxed text-white/40">One profile per creator wallet. Manual entries and automatically learned intelligence appear together.</p>
+          </div>
+          <button type="button" onClick={() => openOwnerSheet()} disabled={form.preferred_owners.length >= 500} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[10px] font-semibold text-white/85 disabled:opacity-35">
+            <Plus className="h-3.5 w-3.5" /> Add
+          </button>
         </div>
-        <p className="py-2 text-[10px] text-white/40">These controls are persisted by the backend and applied to each new token scan.</p>
-        <ToggleRow
-          title="Diagnostic-only mode"
-          detail={form.diagnostic_mode ? "ON · Collect evidence for inspection without issuing a verification verdict." : "OFF · Allow the scanner's current verification decision path; incomplete provider checks remain UNVERIFIED."}
-          checked={form.diagnostic_mode}
-          onChange={(v) => update('diagnostic_mode', v)}
-        />
-        <ToggleRow
-          title="Block unverified trades"
-          detail="When ON, only scans whose security checks are all explicitly VERIFIED may pass the execution gate."
-          checked={form.block_unverified_trades}
-          onChange={(v) => update('block_unverified_trades', v)}
-        />
-        <ToggleRow
-          title="Paper execution master switch"
-          detail={form.execution_enabled
-            ? "ON · Simulated paper orders only. Live signing and transaction submission remain unavailable."
-            : "OFF · Automatic paper entries are blocked. Turn ON only when you are ready to allow simulated entries."}
-          checked={form.execution_enabled}
-          onChange={(v) => update('execution_enabled', v)}
-        />
-        <ToggleRow
-          title="Allow new paper entries"
-          detail={newEntriesEnabled
-            ? "ON · New simulated positions are permitted when the engine is running and all strategy/security checks pass."
-            : "OFF · New paper positions are blocked regardless of market signals."}
-          checked={newEntriesEnabled}
-          onChange={updateNewEntriesPermission}
-          disabled={!paperMode || savingEntryPermission}
-        />
-      </section>
 
-      <section className="mt-6 border-t border-white/[0.08] pt-4">
-        <div className="mb-2 flex items-center gap-2">
-          <History className="h-4 w-4 text-white/45" />
-          <h3 className="text-[12px] font-semibold text-white">Recent qualification decisions</h3>
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+            <p className="text-[9px] uppercase tracking-wider text-white/40">Tracked developers</p>
+            <p className="mt-1 text-[20px] font-semibold tabular-nums text-white">{developerRows.length}</p>
+          </div>
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+            <p className="text-[9px] uppercase tracking-wider text-white/40">Manual preferred</p>
+            <p className="mt-1 text-[20px] font-semibold tabular-nums text-white">{form.preferred_owners.length}<span className="ml-1 text-[10px] font-normal text-white/35">/ 500</span></p>
+          </div>
         </div>
-        {strategyDecisions.length === 0 ? (
-          <p className="py-4 text-[11px] text-white/35">No strategy decisions recorded yet.</p>
+
+        <div className="mb-2">
+          <ToggleRow title="Strict preferred-owner mode" detail="When ON, only creator wallets on your manual preferred list proceed through the configured scan path. Every candidate still faces the full security checks." checked={form.whitelist_only_mode} onChange={(value) => update('whitelist_only_mode', value)} />
+        </div>
+
+        {creatorLoadError && <p className="mb-2 rounded-lg border border-amber-300/15 bg-amber-300/[0.04] px-3 py-2 text-[10px] text-amber-200/80">Automatic intelligence could not be loaded: {creatorLoadError}</p>}
+        {creatorLoading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-[10px] text-white/40"><Activity className="h-4 w-4 animate-pulse" /> Loading developer records…</div>
+        ) : developerRows.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/10 px-4 py-7 text-center">
+            <Wallet className="mx-auto h-5 w-5 text-white/25" />
+            <p className="mt-2 text-[11px] font-medium text-white/65">No developers tracked yet</p>
+            <p className="mt-1 text-[10px] text-white/35">Add a creator wallet manually. Automatically learned profiles will appear here when the backend records observations.</p>
+          </div>
         ) : (
           <div className="divide-y divide-white/[0.07]">
-            {strategyDecisions.map((decision) => (
-              <button key={decision.id} type="button" onClick={() => openTokenDetailByMint(decision.token_mint)} className="flex w-full items-center justify-between gap-3 py-3 text-left">
-                <span className="min-w-0">
-                  <span className="block truncate text-[12px] font-medium text-white/85">${decision.token_symbol} · {decision.outcome}</span>
-                  <span className="mt-0.5 block truncate text-[10px] text-white/40">{decision.reasons.join(' · ')}</span>
-                </span>
-                <span className="shrink-0 text-[10px] tabular-nums text-white/35">{new Date(decision.timestamp).toLocaleTimeString()}</span>
-              </button>
-            ))}
+            {developerRows.map((developer) => {
+              const intelligence = developer.intelligence;
+              const label = developer.preferredOwner?.label || intelligence?.display_label || 'Unnamed developer';
+              return (
+                <button key={developer.address} type="button" onClick={() => setSelectedCreatorAddress(developer.address)} className="flex w-full min-w-0 items-center gap-3 py-3 text-left transition-colors hover:bg-white/[0.025] active:bg-white/[0.045]">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/[0.09] bg-white/[0.035]"><Wallet className="h-4 w-4 text-white/55" /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[11px] font-semibold text-white/85">{label}</span>
+                    <span className="mt-1 block truncate font-mono text-[9px] text-white/35">{developer.address}</span>
+                    <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {developer.preferredIndex >= 0 && <span className="rounded-full border border-sky-300/20 bg-sky-300/[0.06] px-1.5 py-0.5 text-[8px] font-semibold text-sky-200/80">MANUAL</span>}
+                      {intelligence ? <span className="rounded-full border border-emerald-300/20 bg-emerald-300/[0.05] px-1.5 py-0.5 text-[8px] font-semibold text-emerald-200/80">INTELLIGENCE</span> : <span className="text-[9px] text-white/35">Awaiting automatic observations</span>}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    {intelligence ? <>
+                      <span className="block text-[15px] font-semibold tabular-nums text-white">{intelligence.activity_score.toFixed(1)}</span>
+                      <span className="block text-[8px] uppercase tracking-wider text-white/35">Activity</span>
+                      <span className="mt-1 block text-[9px] tabular-nums text-white/45">{intelligence.observations_count} obs.</span>
+                    </> : <span className="block text-[9px] text-white/35">No data yet</span>}
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-white/30" />
+                </button>
+              );
+            })}
           </div>
         )}
+        <p className="mt-3 text-[9px] leading-relaxed text-white/30">Activity score is the backend's current metric, not a verified overall reputation rating. Launch outcomes, migrations and manual score overrides require additional backend support.</p>
       </section>
 
-      <section className="mt-5 border-t border-white/[0.08] pt-4">
-        <button
-          type="button"
-          onClick={() => setShowPreferredOwners((current) => !current)}
-          aria-expanded={showPreferredOwners}
-          aria-controls="preferred-owners-panel"
-          className="flex w-full items-center justify-between gap-3 rounded-xl py-2 text-left transition-colors hover:bg-white/[0.025] active:bg-white/[0.045]"
-        >
-          <span className="flex min-w-0 items-center gap-3">
-            <ShieldCheck className="h-4 w-4 shrink-0 text-white/50" />
-            <span className="min-w-0">
-              <span className="block text-[12px] font-semibold text-white">Preferred owners</span>
-              <span className="mt-0.5 block text-[10px] text-white/40">
-                {form.preferred_owners.length} of 500 addresses · Strict mode {form.whitelist_only_mode ? 'ON' : 'OFF'}
-              </span>
-            </span>
-          </span>
-          <span className="flex shrink-0 items-center gap-2">
-            <span className="rounded-full border border-white/[0.10] px-2 py-1 text-[9px] font-semibold tabular-nums text-white/55">
-              {form.preferred_owners.length}
-            </span>
-            <ChevronDown className={`h-4 w-4 text-white/45 transition-transform duration-200 ${showPreferredOwners ? 'rotate-180' : ''}`} />
-          </span>
-        </button>
-        {showPreferredOwners && (
-          <div id="preferred-owners-panel" className="mt-2 border-t border-white/[0.07] pt-3">
-            <p className="pb-2 text-[10px] leading-relaxed text-white/40">
-              Allowlist known Pump.fun creators/deployers. Matching only controls which launches are scanned; every accepted launch still goes through the full security checks.
-            </p>
-            <ToggleRow title="Strict preferred-owner mode" detail="ON · Only launches whose decoded creator wallet is on this list proceed to metadata and security scanning. Unknown creators are skipped." checked={form.whitelist_only_mode} onChange={(value) => update('whitelist_only_mode', value)} />
-            <div className="flex items-center justify-between gap-3 py-3">
-              <div><p className="text-[11px] font-medium text-white/85">Developer addresses</p><p className="mt-0.5 text-[10px] text-white/35">{form.preferred_owners.length} of 500 added</p></div>
-              <button type="button" onClick={() => openOwnerSheet()} disabled={form.preferred_owners.length >= 500} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[10px] font-semibold text-white/85 disabled:opacity-35"><Plus className="h-3.5 w-3.5" /> Add address</button>
+      {selectedDeveloper && (
+        <div className="fixed inset-0 z-[105] flex items-end justify-center bg-black/75 backdrop-blur-sm" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedCreatorAddress(null); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="developer-sheet-title" className="max-h-[88dvh] w-full max-w-xl overflow-y-auto overscroll-contain rounded-t-[26px] border-t border-white/[0.12] bg-[#101010] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-2xl">
+            <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/35">Developer profile</p>
+                <h3 id="developer-sheet-title" className="mt-1 truncate text-[16px] font-semibold text-white">{selectedDeveloper.preferredOwner?.label || selectedDeveloper.intelligence?.display_label || 'Unnamed developer'}</h3>
+                <p className="mt-1 break-all font-mono text-[9px] leading-relaxed text-white/45">{selectedDeveloper.address}</p>
+              </div>
+              <button type="button" onClick={() => setSelectedCreatorAddress(null)} aria-label="Close developer details" className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.07] text-white/70"><X className="h-4 w-4" /></button>
             </div>
-            {form.preferred_owners.length === 0 ? <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-[10px] text-white/35">No developer addresses added yet.</p> : (
-              <div className="max-h-[min(52vh,420px)] overflow-y-auto overscroll-contain divide-y divide-white/[0.07] pr-1">
-                {form.preferred_owners.map((owner, index) => (
-                  <div key={owner.address + index} className="flex min-w-0 items-center gap-3 py-3">
-                    <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-medium text-white/85">{owner.label || 'Unnamed developer'}</p><p className="mt-0.5 break-all font-mono text-[9px] text-white/40">{owner.address}</p></div>
-                    <button type="button" onClick={() => openOwnerSheet(index)} aria-label="Edit developer address" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/50 hover:bg-white/[0.06]"><Pencil className="h-3.5 w-3.5" /></button>
-                    <button type="button" onClick={() => removeOwner(index)} aria-label="Remove developer address" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-rose-300/70 hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" /></button>
+
+            {selectedDeveloper.intelligence ? (
+              <>
+                <div className="mb-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-white/[0.09] bg-white/[0.035] p-3">
+                    <p className="text-[9px] uppercase tracking-wider text-white/40">Activity score</p>
+                    <p className="mt-1 text-[26px] font-semibold tabular-nums text-white">{selectedDeveloper.intelligence.activity_score.toFixed(1)}<span className="ml-1 text-[11px] font-normal text-white/35">/ 100</span></p>
                   </div>
-                ))}
+                  <div className="rounded-xl border border-white/[0.09] bg-white/[0.035] p-3">
+                    <p className="text-[9px] uppercase tracking-wider text-white/40">Observations</p>
+                    <p className="mt-1 text-[26px] font-semibold tabular-nums text-white">{selectedDeveloper.intelligence.observations_count}</p>
+                    <p className="text-[9px] text-white/35">{selectedDeveloper.intelligence.qualified_observations} qualified</p>
+                  </div>
+                </div>
+                <div className="mb-4 grid grid-cols-2 gap-2">
+                  {[
+                    { label: 'Buy count', value: selectedDeveloper.intelligence.buy_count, Icon: BarChart3 },
+                    { label: 'Sell count', value: selectedDeveloper.intelligence.sell_count, Icon: Activity },
+                    { label: 'Unique buyers', value: selectedDeveloper.intelligence.unique_buyers, Icon: Users },
+                    { label: 'Independent buyers', value: selectedDeveloper.intelligence.independent_buyers, Icon: Users },
+                  ].map((metric) => (
+                    <div key={metric.label} className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-3">
+                      <metric.Icon className="h-4 w-4 shrink-0 text-white/40" />
+                      <span className="min-w-0"><span className="block text-[9px] text-white/40">{metric.label}</span><span className="mt-0.5 block text-[14px] font-semibold tabular-nums text-white/85">{metric.value.toLocaleString()}</span></span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mb-4 rounded-xl border border-white/[0.08] p-3">
+                  <div className="flex items-center justify-between gap-3"><span className="text-[10px] text-white/45">Sniper concentration</span><span className="text-[12px] font-semibold tabular-nums text-white">{selectedDeveloper.intelligence.sniper_concentration_pct.toFixed(1)}%</span></div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-white/70" style={{ width: `${Math.max(0, Math.min(100, selectedDeveloper.intelligence.sniper_concentration_pct))}%` }} /></div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-[9px] text-white/35"><span>Source: {selectedDeveloper.intelligence.source}</span><span>Updated {new Date(selectedDeveloper.intelligence.updated_at).toLocaleString()}</span></div>
+                </div>
+              </>
+            ) : (
+              <div className="mb-4 rounded-xl border border-dashed border-white/10 px-4 py-6 text-center">
+                <Activity className="mx-auto h-5 w-5 text-white/30" />
+                <p className="mt-2 text-[11px] font-medium text-white/70">No automatic intelligence recorded</p>
+                <p className="mt-1 text-[10px] leading-relaxed text-white/40">This address is saved in your manual preferred-owner configuration. Its intelligence metrics will appear here when the backend records observations for this wallet.</p>
               </div>
             )}
-            {form.whitelist_only_mode && form.preferred_owners.length === 0 && <p className="mt-2 text-[10px] text-amber-300">Strict mode is enabled but the list is empty, so no launches will pass.</p>}
-          </div>
-        )}
-      </section>
+
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3">
+              <div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-white/45" /><p className="text-[10px] font-semibold text-white/75">Reputation controls</p></div>
+              <p className="mt-2 text-[10px] leading-relaxed text-white/40">Manual score overrides, risk labels, launch counts, migration history and per-token outcomes are not exposed by the current backend API. They will be connected in the backend phase; this screen will not fabricate those values.</p>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              {selectedDeveloper.preferredIndex >= 0 ? (
+                <button type="button" onClick={() => { const index = selectedDeveloper.preferredIndex; setSelectedCreatorAddress(null); openOwnerSheet(index); }} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/[0.14] text-[11px] font-semibold text-white/85"><Pencil className="h-3.5 w-3.5" /> Edit manual entry</button>
+              ) : (
+                <button type="button" onClick={() => { const address = selectedDeveloper.address; const label = selectedDeveloper.intelligence?.display_label || ''; setSelectedCreatorAddress(null); openOwnerSheet(null, address, label); }} disabled={form.preferred_owners.length >= 500} className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/[0.14] text-[11px] font-semibold text-white/85 disabled:opacity-40"><Plus className="h-3.5 w-3.5" /> Add to preferred owners</button>
+              )}
+              <button type="button" onClick={() => setSelectedCreatorAddress(null)} className="h-11 rounded-full bg-white px-5 text-[11px] font-semibold text-black">Close</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {ownerSheetOpen && (
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setOwnerSheetOpen(false); }}>
