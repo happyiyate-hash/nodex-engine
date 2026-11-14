@@ -531,9 +531,6 @@ export const TokenDetailPage: React.FC = () => {
       <div
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
       >
-      <div
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
-      >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
           <div className="space-y-4">
