@@ -19,7 +19,7 @@ export const TokenDetailPage: React.FC = () => {
   } = useTerminal();
 
   const [copiedMint, setCopiedMint] = useState(false);
-  const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '30m' | '1H' | '24H'>('24H');
+  const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('24H');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
@@ -234,34 +234,40 @@ export const TokenDetailPage: React.FC = () => {
           }}
         />
 
-        <div className="mt-1 flex items-center justify-between px-3 font-mono text-[10px]">
-          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
-            {(['1m', '5m', '15m', '30m', '1H', '24H'] as const).map((tf) => (
+        <div className="mt-2 flex h-11 w-full items-stretch px-2 font-mono">
+          <div className="relative flex min-w-0 basis-[60%] items-center overflow-hidden">
+            <div className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
               <button
                 key={tf}
                 type="button"
                 onClick={() => setTimeframe(tf)}
-                className={`rounded px-2 py-1 transition-colors ${
-                  timeframe === tf ? 'bg-white/15 text-white font-bold' : 'text-white/40 hover:text-white'
+                className={`shrink-0 rounded-md px-2 py-1.5 text-[12px] font-semibold tracking-[0.015em] transition-colors ${
+                  timeframe === tf ? 'bg-white/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]' : 'text-white/45 hover:text-white/85'
                 }`}
               >
                 {tf}
               </button>
             ))}
+            </div>
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 z-[2] w-3" style={{ background: 'linear-gradient(to right, #000 0%, rgba(0,0,0,0.48) 38%, transparent 100%)' }} />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-4" style={{ background: 'linear-gradient(to left, #000 0%, rgba(0,0,0,0.52) 42%, transparent 100%)' }} />
           </div>
 
-          <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
+          <div aria-hidden="true" className="mx-2 my-1 w-px shrink-0 bg-white/20" />
+
+          <div className="flex min-w-0 basis-[40%] items-center justify-end gap-1 pl-1">
             <button
               type="button"
               aria-label="Line chart"
               title="Line chart"
               aria-pressed={chartType === 'line'}
               onClick={() => setChartType('line')}
-              className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${
-                chartType === 'line' ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white'
+              className={`flex h-9 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
+                chartType === 'line' ? 'bg-white/[0.12] text-white' : 'text-white/45 hover:text-white/85'
               }`}
             >
-              <ChartLine className="h-4 w-4" strokeWidth={1.8} />
+              <ChartLine className="h-[18px] w-[18px]" strokeWidth={2.2} />
             </button>
             <button
               type="button"
@@ -269,11 +275,11 @@ export const TokenDetailPage: React.FC = () => {
               title="Candlestick chart"
               aria-pressed={chartType === 'candle'}
               onClick={() => setChartType('candle')}
-              className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors ${
-                chartType === 'candle' ? 'bg-white/15 text-white' : 'text-white/40 hover:text-white'
+              className={`flex h-9 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
+                chartType === 'candle' ? 'bg-white/[0.12] text-white' : 'text-white/45 hover:text-white/85'
               }`}
             >
-              <ChartCandlestick className="h-4 w-4" strokeWidth={1.8} />
+              <ChartCandlestick className="h-[18px] w-[18px]" strokeWidth={2.2} />
             </button>
           </div>
         </div>
