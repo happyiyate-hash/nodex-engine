@@ -439,32 +439,47 @@ export const TokenDetailPage: React.FC = () => {
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
-            style={{
-              maskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 82%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 82%, transparent 100%)',
-            }}
           >
-            {floatingAmounts.map((item) => (
-              <span
-                key={item.id}
-                className={`absolute bottom-5 whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${
-                  item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'
-                }`}
-                style={{
-                  left: '10px',
-                  animation: item.side === 'buy'
-                    ? 'nodex-money-flow 3.4s linear forwards'
-                    : 'nodex-money-flow-sell 3.4s linear forwards',
-                }}
-              >
-                <span className="inline-flex items-center gap-0.5">
-                  <span aria-hidden="true" className="text-[11px] font-bold leading-none">
-                    {item.side === 'buy' ? '▲' : '▼'}
+            {/* A very soft left-edge brush settles the stream against the chart
+                without dimming the clear center or covering the moving amounts. */}
+            <div
+              className="absolute inset-y-0 left-0 w-[112px]"
+              style={{
+                background:
+                  'linear-gradient(to right, rgba(0,0,0,0.17) 0%, rgba(0,0,0,0.11) 34%, rgba(0,0,0,0.045) 68%, rgba(0,0,0,0) 100%)',
+              }}
+            />
+            {/* Keep the middle fully readable; ease each amount in from below
+                and out toward the top across roughly 30% of the chart height. */}
+            <div
+              className="absolute inset-0 overflow-hidden"
+              style={{
+                maskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+                WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
+              }}
+            >
+              {floatingAmounts.map((item) => (
+                <span
+                  key={item.id}
+                  className={`absolute bottom-5 whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${
+                    item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'
+                  }`}
+                  style={{
+                    left: '10px',
+                    animation: item.side === 'buy'
+                      ? 'nodex-money-flow 3.4s linear forwards'
+                      : 'nodex-money-flow-sell 3.4s linear forwards',
+                  }}
+                >
+                  <span className="inline-flex items-center gap-0.5">
+                    <span aria-hidden="true" className="text-[11px] font-bold leading-none">
+                      {item.side === 'buy' ? '▲' : '▼'}
+                    </span>
+                    {formatUsd(item.amount)}
                   </span>
-                  {formatUsd(item.amount)}
                 </span>
-              </span>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
