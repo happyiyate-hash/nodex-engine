@@ -27,6 +27,12 @@ export function normalizeBackendEvent(raw:any, receivedAt?:string):NodeXEvent {
   // in the client's duplicate-event guard.
   const eventDiscriminator = [
     data.event_index ?? '',
+    data.scan_attempt ?? data.attempt ?? '',
+    data.retry_after ?? '',
+    data.subscription_id ?? '',
+    data.account_address ?? '',
+    data.pending_queue ?? '',
+    data.active_subscriptions ?? '',
     data.stage ?? '',
     data.progress ?? '',
     data.status ?? '',
@@ -50,6 +56,14 @@ export function normalizeBackendEvent(raw:any, receivedAt?:string):NodeXEvent {
       case 'token_scan_update': message=`Security scan result: ${data.mint_address||'unknown mint'} — ${data.decision||data.status||'updated'}`; break;
       case 'token_scan_completed': message=`Security scan completed: ${data.mint_address||'unknown mint'} — ${data.decision||data.status||'finished'}`; break;
       case 'token_scan_failed': message=`Security scan failed: ${data.mint_address||'unknown mint'} — ${data.decision_reason||'no reason supplied'}`; break;
+      case 'token_scan_retry_scheduled': message=`Security scan retry scheduled for ${data.mint_address||'unknown mint'} (attempt ${data.scan_attempt??data.attempt??'unknown'})${data.retry_after? ` at ${data.retry_after}`:''}`; break;
+      case 'market_subscription_requested': message=`Requesting market-data subscription for ${data.mint_address||'unknown mint'}`; break;
+      case 'market_subscription_subscribed': message=`Market-data subscription acknowledged for ${data.mint_address||'unknown mint'}`; break;
+      case 'market_subscription_active': message=`Market-data stream active for ${data.mint_address||'unknown mint'}`; break;
+      case 'market_subscription_waiting': message=`Waiting for market-subscription capacity for ${data.mint_address||'unknown mint'}${data.pending_queue!=null? ` (queue ${data.pending_queue})`:''}`; break;
+      case 'market_subscription_failed': message=`Market-data subscription failed for ${data.mint_address||'unknown mint'}: ${data.reason||data.message||'reason unavailable'}`; break;
+      case 'market_monitoring_expired': message=`Early-entry monitoring expired for ${data.mint_address||'unknown mint'}`; break;
+      case 'market_tick': message=`Market tick received for ${data.mint_address||'unknown mint'}`; break;
       case 'token_metadata_started': message=`Metadata lookup started: ${data.mint_address||'unknown mint'}`; break;
       case 'token_metadata_failed': message=`Metadata lookup ${data.status||'failed'}: ${data.mint_address||'unknown mint'} — ${data.reason||'no reason supplied'}`; break;
       case 'token_metadata_updated': message=`Token metadata updated: ${data.mint_address||'unknown mint'} — ${data.name||data.symbol||'identity refreshed'}`; break;
