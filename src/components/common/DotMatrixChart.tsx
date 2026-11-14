@@ -61,12 +61,12 @@ const CHART_THEME = {
     sheenColor: '232, 238, 248',
   },
   upColor: '#6CE094',
-  upTopColor: 'rgba(108, 224, 148, 0.13)',
-  upBottomColor: 'rgba(108, 224, 148, 0.035)',
+  upTopColor: 'rgba(108, 224, 148, 0.17)',
+  upBottomColor: 'rgba(108, 224, 148, 0.05)',
   upBadgeBg: '#3CC66C',
   downColor: '#F06A6A',
-  downTopColor: 'rgba(240, 106, 106, 0.13)',
-  downBottomColor: 'rgba(240, 106, 106, 0.035)',
+  downTopColor: 'rgba(240, 106, 106, 0.17)',
+  downBottomColor: 'rgba(240, 106, 106, 0.05)',
   downBadgeBg: '#DC4C4C',
   lineWidth: 2 as const,
   gridHorzColor: 'rgba(255,255,255,0.04)',
@@ -2022,6 +2022,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
         style={{
           background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
+        }}
+      />
+
+      {/* Layer 2.58: Short left-side chart brush. It starts soft at the edge and
+          deepens inward to make the old line trail dissolve into the background.
+          The floating trade amounts are rendered by the parent above this layer. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-[34px] bottom-[26px] left-0 z-[4] w-[112px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.38) 48%, rgba(0,0,0,0.68) 100%)',
         }}
       />
 
