@@ -210,9 +210,31 @@ export const TokenDetailPage: React.FC = () => {
         }}
       >
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
-      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] pt-14 pb-3">
-        {/* Controls occupy their own top strip; the chart canvas starts beneath them with clear separation. */}
-        <div className="absolute inset-x-0 top-3.5 z-10 flex items-center justify-between px-3 font-mono text-[10px]">
+      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] pb-2">
+        {/* Live Scrub Indicator (if dragging); kept inside the plot area. */}
+        {scrubTime && (
+          <div className="absolute top-3 right-4 z-10 rounded border border-white/10 bg-[#0a0a0c]/80 px-2 py-0.5 font-mono text-[10px] text-white/50">
+            {scrubTime}
+          </div>
+        )}
+
+        {/* Chart canvas remains untouched; controls sit beneath its time axis. */}
+        <DotMatrixChart
+          key={activeToken.mint}
+          currentPrice={liveTokenPrice}
+          entryPrice={activePosition ? entryPriceUsd : undefined}
+          priceHistory={demoPriceHistory}
+          isPositive={isPositive}
+          timeframe={timeframe}
+          chartType={chartType}
+          height={328}
+          onPriceHover={(p, t) => {
+            setScrubPrice(p);
+            setScrubTime(t);
+          }}
+        />
+
+        <div className="mt-1 flex items-center justify-between px-3 font-mono text-[10px]">
           <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-[#0a0a0c]/85 p-0.5 backdrop-blur-md">
             {(['1m', '5m', '15m', '30m', '1H', '24H'] as const).map((tf) => (
               <button
@@ -255,29 +277,6 @@ export const TokenDetailPage: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Live Scrub Indicator (if dragging) */}
-        {scrubTime && (
-          <div className="absolute top-11 right-4 z-10 text-[10px] font-mono text-white/50 bg-[#0a0a0c]/80 px-2 py-0.5 rounded border border-white/10">
-            {scrubTime}
-          </div>
-        )}
-
-        {/* Pure Black Canvas with Dot Matrix & Backward Tracking Line */}
-        <DotMatrixChart
-          key={activeToken.mint}
-          currentPrice={liveTokenPrice}
-          entryPrice={activePosition ? entryPriceUsd : undefined}
-          priceHistory={demoPriceHistory}
-          isPositive={isPositive}
-          timeframe={timeframe}
-          chartType={chartType}
-          height={328}
-          onPriceHover={(p, t) => {
-            setScrubPrice(p);
-            setScrubTime(t);
-          }}
-        />
       </section>
 
 
