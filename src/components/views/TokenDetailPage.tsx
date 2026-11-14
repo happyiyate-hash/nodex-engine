@@ -254,7 +254,7 @@ export const TokenDetailPage: React.FC = () => {
             <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-3" style={{ background: 'linear-gradient(to left, #000 0%, rgba(0,0,0,0.52) 42%, transparent 100%)' }} />
           </div>
 
-          <div aria-hidden="true" className="mx-1.5 my-1 w-px shrink-0 bg-white/15" />
+          <div aria-hidden="true" className="mx-1.5 h-7 w-px shrink-0 bg-white/25" />
 
           <div className="relative flex min-w-0 basis-[40%] items-center justify-end gap-1 overflow-hidden pl-1">
             <button
