@@ -3,7 +3,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
 import {
-  ArrowLeft,
+  ChevronLeft,
   Copy,
   Check,
   ChartLine,
@@ -26,10 +26,7 @@ export const TokenDetailPage: React.FC = () => {
   const detailTabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
-  const [headerOffset, setHeaderOffset] = useState(0);
-  const headerOffsetRef = useRef(0);
-  const lastScrollTop = useRef(0);
-  const headerHeight = 56;
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
@@ -163,46 +160,50 @@ export const TokenDetailPage: React.FC = () => {
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#000000] text-white select-none font-sans">
-      {/* The safe area is a stationary cover; the token bar moves underneath it. */}
+      {/* The safe area remains covered while the token navigation stays permanently visible. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 z-50 bg-[#000000]"
         style={{ height: 'env(safe-area-inset-top)' }}
       />
-      {/* Token bar overlays the scrolling content and follows scroll distance directly. */}
       <header
         className="absolute inset-x-0 z-40 min-h-14 w-full border-b border-white/[0.06] bg-[#000000] px-3 py-1.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5"
-        style={{
-          top: 'calc(env(safe-area-inset-top) - 2px)',
-          transform: `translate3d(0, -${headerOffset}px, 0)`,
-          willChange: 'transform',
-        }}
+        style={{ top: 'calc(env(safe-area-inset-top) - 2px)' }}
       >
-        <div className="flex w-full items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <TokenAvatar symbol={activeToken.symbol} logoUrl={activeToken.logo_url} size="lg" className="shadow-md" />
-            <div className="flex min-w-0 flex-col justify-center gap-1 leading-[1.15]">
-              <span className="block truncate text-[13px] font-medium tracking-[0.01em] text-white/95">
-                {activeToken.name || activeToken.symbol || 'Unknown token'}
-              </span>
-              <span className="text-[9px] text-white/35">Decimals: {activeToken.decimals ?? '—'}</span>
+        <div className="flex min-h-11 w-full items-center justify-between gap-3">
+          {!isHeaderExpanded ? (
+            <div className="flex min-w-0 items-center gap-2.5">
               <button
-                onClick={handleCopyMint}
-                className="flex min-w-0 items-center gap-1 text-[10px] font-normal tracking-[0.015em] text-white/40 transition-colors hover:text-white font-mono"
+                type="button"
+                onClick={closeTokenDetail}
+                aria-label="Go back"
+                title="Go back"
+                className="inline-flex h-9 w-8 shrink-0 items-center justify-center text-white/55 transition-colors hover:text-white/80 active:text-white"
               >
-                <span>{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
-                {copiedMint ? <Check className="h-2.5 w-2.5 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 opacity-60" />}
+                <ChevronLeft className="h-[21px] w-[21px]" strokeWidth={1.7} />
               </button>
+              <span className="truncate text-[12px] font-medium tracking-wide text-white/65">
+                {activeToken.symbol || 'Token'}
+              </span>
             </div>
-          </div>
-          <div className="shrink-0 text-right leading-none">
-            <div className="font-mono text-base sm:text-lg font-bold text-white tracking-tight">
-              {hasMarketPrice ? formatTokenPrice(currentPrice) : 'Price unavailable'}
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <TokenAvatar symbol={activeToken.symbol} logoUrl={activeToken.logo_url} size="md" className="shrink-0" />
+              <div className="min-w-0 truncate text-[12px] font-medium tracking-[0.01em] text-white/90">
+                {activeToken.name || activeToken.symbol || 'Unknown token'}
+              </div>
             </div>
-            <div className={`font-mono text-[11px] font-semibold mt-1 flex items-center justify-end gap-0.5 ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-              <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${marketChangePct.toFixed(2)}%`}</span>
+          )}
+          {isHeaderExpanded && (
+            <div className="shrink-0 text-right leading-none">
+              <div className="font-mono text-[14px] font-semibold tracking-tight text-white">
+                {hasMarketPrice ? formatTokenPrice(currentPrice) : 'Price unavailable'}
+              </div>
+              <div className={`mt-1 flex items-center justify-end gap-0.5 font-mono text-[10px] font-semibold ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
+                <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${marketChangePct.toFixed(2)}%`}</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </header>
 
@@ -210,17 +211,9 @@ export const TokenDetailPage: React.FC = () => {
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(3.5rem+env(safe-area-inset-bottom))]"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 56px)' }}
         onScroll={(event) => {
-          const nextScrollTop = event.currentTarget.scrollTop;
-          const delta = nextScrollTop - lastScrollTop.current;
-          lastScrollTop.current = nextScrollTop;
-          if (Math.abs(delta) < 0.5) return;
-
-          // Move the bar by the exact scroll delta: no snapping or layout collapse.
-          const nextOffset = Math.max(0, Math.min(headerHeight, headerOffsetRef.current + delta));
-          if (nextOffset !== headerOffsetRef.current) {
-            headerOffsetRef.current = nextOffset;
-            setHeaderOffset(nextOffset);
-          }
+          // Keep the navigation fixed; only transform its contents after the
+          // large overview has started moving out of the initial viewport.
+          setIsHeaderExpanded(event.currentTarget.scrollTop > 64);
         }}
       >
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
@@ -501,16 +494,6 @@ export const TokenDetailPage: React.FC = () => {
 
       </div>
 
-      {/* Fixed return control: stays above the device's bottom safe area while content scrolls. */}
-      <button
-        type="button"
-        onClick={closeTokenDetail}
-        className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[60] flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-[12px] font-semibold text-black shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-transform active:scale-[0.97]"
-        aria-label="Back"
-      >
-        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.5} />
-        <span>Back</span>
-      </button>
     </div>
   );
 };
