@@ -622,6 +622,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const dotCanvasRef = useRef<HTMLCanvasElement>(null);
   const tvContainerRef = useRef<HTMLDivElement>(null);
+  const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
 
   const chartRef = useRef<IChartApi | null>(null);
@@ -985,7 +986,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       timeScale: {
         borderVisible: true,
         borderColor: 'rgba(255,255,255,0.035)',
-        ticksVisible: true,
+        ticksVisible: false,
         timeVisible: true,
         secondsVisible: timeframeRef.current === '1m',
         rightOffset: BASE_RIGHT_OFFSET,
@@ -1140,7 +1141,49 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     animYRangeRef.current = null;
     latestVisibleBoundsRef.current = null;
 
+    // Replace the chart library's heavier time-axis tick marks with fine hairlines.
+    const drawTimeScaleTicks = () => {
+      const canvas = timeTicksCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const canvasHeight = 5;
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(canvasHeight * dpr);
+      canvas.style.width = String(width) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, canvasHeight);
+
+      const visibleRange = chart.timeScale().getVisibleLogicalRange();
+      if (!visibleRange || visibleRange.to <= visibleRange.from) return;
+
+      const plotRight = width - chart.priceScale('right').width();
+      ctx.strokeStyle = 'rgba(255,255,255,0.24)';
+      ctx.lineWidth = 0.6;
+      ctx.lineCap = 'butt';
+
+      // Five fine tick marks follow the visible time range while it scrolls.
+      for (let index = 0; index <= 4; index += 1) {
+        const logical =
+          visibleRange.from + ((visibleRange.to - visibleRange.from) * index) / 4;
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x < 0 || x > plotRight) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, 0.5);
+        ctx.lineTo(Math.round(x) + 0.5, 3.2);
+        ctx.stroke();
+      }
+    };
+
     const handleLogicalRange = () => {
+      drawTimeScaleTicks();
       if (isApplyingAutoScrollRef.current) return;
       const range = chart.timeScale().getVisibleLogicalRange();
       const total = committedBarsRef.current.length;
@@ -1211,6 +1254,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
     chart.subscribeCrosshairMove(handleCrosshairMove);
+    drawTimeScaleTicks();
+
+    const tickResizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(drawTimeScaleTicks);
+    });
+    tickResizeObserver.observe(host);
 
     // Unified 60fps animation loop:
     // 1. Velocity-adaptive price smoothing (moves fast on spikes, gently on small ticks)
@@ -1440,6 +1489,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       if (rafId !== null) {
         window.cancelAnimationFrame(rafId);
       }
+      tickResizeObserver.disconnect();
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRange);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
       lineSeries.detachPrimitive(lineTipPrimitive);
@@ -1701,6 +1751,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         ref={tvContainerRef}
         style={{ width: '100%', height }}
         className="relative z-[1] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Fine custom time-axis ticks; the heavier native marks are disabled. */}
+      <canvas
+        ref={timeTicksCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[21px] left-0 z-[2] h-[5px] max-w-full"
+        style={{ width: '100%', height: 5 }}
       />
 
       {/* Layer 2.5: Soft top/bottom fade confined to the right price scale. */}
