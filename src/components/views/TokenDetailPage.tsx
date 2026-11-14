@@ -501,12 +501,13 @@ export const TokenDetailPage: React.FC = () => {
         {/* Detail navigation: horizontally scrollable tabs with a continuously sliding indicator. */}
         <nav
           aria-label="Token details"
-          className="sticky top-0 z-30 mx-1.5 mt-0.5 w-auto border-b border-white/25 bg-[#000000]"
+          className="sticky top-0 z-30 mt-0.5 w-full bg-[#000000]"
         >
-          <div
-            className="w-full overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
-          >
-            <div className="relative flex min-w-full w-max items-stretch">
+          <div className="mx-1.5 border-b border-white/25">
+            <div
+              className="w-full overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+            >
+              <div className="relative flex min-w-full w-max items-stretch">
               {(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).map((tab, index) => (
                 <button
                   key={tab}
@@ -525,6 +526,7 @@ export const TokenDetailPage: React.FC = () => {
                 className="pointer-events-none absolute bottom-[-1px] left-0 z-[2] h-[2px] w-[86px] rounded-full bg-white transition-transform duration-300 ease-out"
                 style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).indexOf(activeDetailTab) * 86}px)` }}
               />
+              </div>
             </div>
           </div>
         </nav>
