@@ -524,7 +524,6 @@ export const TokenDetailPage: React.FC = () => {
             </div>
           </div>
         </nav>
-      </section>
 
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-4 pb-6 pt-5 sm:px-5">
@@ -638,6 +637,7 @@ export const TokenDetailPage: React.FC = () => {
         </section>
       )}
 
+      </section>
       </div>
 
     </div>
