@@ -215,7 +215,7 @@ export const TokenDetailPage: React.FC = () => {
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
       <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] px-3 pt-2 pb-2">
         {/* Token market overview fills the space above the chart. */}
-        <div className="mb-2 flex h-[84px] w-full min-w-0 items-center gap-2.5 rounded-xl border border-white/[0.08] bg-[#0b0b0b] px-2.5">
+        <div className="mb-2 flex h-[84px] w-full min-w-0 items-center gap-2.5 rounded-xl bg-[#1f1f1f] px-2.5">
           <TokenAvatar
             symbol={activeToken.symbol}
             logoUrl={activeToken.logo_url}
