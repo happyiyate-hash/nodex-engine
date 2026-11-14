@@ -23,7 +23,7 @@ export const TokenDetailPage: React.FC = () => {
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
-  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; amount: number; side: 'buy' | 'sell'; offset: number }>>([]);
+  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; amount: number; side: 'buy' | 'sell' }>>([]);
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -143,30 +143,22 @@ export const TokenDetailPage: React.FC = () => {
     };
   }, [activeToken?.mint]);
 
-  // Temporary high-activity preview: simulate a busy stream of buys and sells.
+  // Temporary preview: one amount per beat, all moving in a fixed vertical lane.
   // Replace this generator with verified backend swap events after visual tuning.
   useEffect(() => {
     if (!activeToken) return;
     const interval = window.setInterval(() => {
       const now = Date.now();
-      const batchSize = Math.random() < 0.24 ? 2 : 1;
-      const incoming = Array.from({ length: batchSize }, () => {
-        const side = Math.random() < 0.54 ? 'buy' : 'sell';
-        const amount = Number((0.35 + Math.random() * 34.65).toFixed(2));
-        const id = Date.now() + Math.random();
-        // Keep the stream tight against the chart's left edge, with occasional
-        // wider gaps and a small sideways drift so entries don't form one column.
-        const offset = Math.random() < 0.78
-          ? 2 + Math.floor(Math.random() * 22)
-          : 24 + Math.floor(Math.random() * 15);
-        const drift = -15 + Math.floor(Math.random() * 31);
-        return { id, amount, side, offset, drift };
-      });
+      const incoming = {
+        id: now,
+        amount: Number((0.35 + Math.random() * 34.65).toFixed(2)),
+        side: (Math.random() < 0.54 ? 'buy' : 'sell') as 'buy' | 'sell',
+      };
       setFloatingAmounts((current) => [
         ...current.filter((item) => now - item.id < 3600),
-        ...incoming,
-      ].slice(-28));
-    }, 300);
+        incoming,
+      ].slice(-12));
+    }, 440);
     return () => window.clearInterval(interval);
   }, [activeToken?.mint]);
 
@@ -419,7 +411,7 @@ export const TokenDetailPage: React.FC = () => {
             0% { transform: translate3d(0, 0, 0); opacity: 0; }
             10% { opacity: 0.92; }
             76% { opacity: 0.78; }
-            100% { transform: translate3d(var(--flow-drift), -286px, 0); opacity: 0; }
+            100% { transform: translate3d(0, -286px, 0); opacity: 0; }
           }
         `}</style>
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
@@ -450,12 +442,11 @@ export const TokenDetailPage: React.FC = () => {
             {floatingAmounts.map((item) => (
               <span
                 key={item.id}
-                className={`absolute bottom-5 whitespace-nowrap font-mono text-[12px] font-medium tabular-nums tracking-[-0.045em] ${
-                  item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
+                className={`absolute bottom-5 whitespace-nowrap font-mono text-[12px] font-normal tabular-nums tracking-[-0.045em] ${
+                  item.side === 'buy' ? 'text-[#22C55E]' : 'text-[#EF4444]'
                 }`}
                 style={{
-                  left: `${item.offset}px`,
-                  ['--flow-drift' as string]: `${item.drift}px`,
+                  left: '2px',
                   animation: 'nodex-money-flow 3.4s linear forwards',
                   textShadow: '0 1px 8px rgba(0,0,0,0.9)',
                 }}
