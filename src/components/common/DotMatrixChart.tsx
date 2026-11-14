@@ -1038,7 +1038,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       timeScale: {
         borderVisible: true,
         borderColor: 'rgba(255,255,255,0.11)',
-        ticksVisible: true,
+        ticksVisible: false,
         // Timestamp text is drawn by our pre-rendered canvas layer so labels
         // exist in the right-side lead-in before they enter the visible plot.
         timeVisible: true,
@@ -1223,14 +1223,16 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const plotRight = Math.max(0, width - chart.priceScale('right').width());
       const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
       const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
-      const labelEveryBars = Math.max(1, Math.ceil(76 / spacing));
+      // Candidate timestamps are spaced by roughly 96px, then checked using
+      // their real rendered width so labels never collide on narrow screens.
+      const labelEveryBars = Math.max(1, Math.ceil(96 / spacing));
       const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
-      // Render a little beyond the visible logical range. Canvas clipping keeps
-      // these labels hidden until they naturally slide in from the right edge.
+      // Render beyond the viewport; clipping reveals the labels as they move in.
       const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
       const lastLogical = Math.floor(preloadLogicalTo / labelEveryBars) * labelEveryBars;
       const lastBar = bars[bars.length - 1];
       const lastIndex = bars.length - 1;
+      const labelCandidates: Array<{ x: number; label: string }> = [];
 
       ctx.save();
       ctx.beginPath();
@@ -1245,8 +1247,30 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const x = chart.timeScale().logicalToCoordinate(logical as never);
         if (x === null || !Number.isFinite(x) || x < -45 || x > plotRight + 45) continue;
         const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
-        const label = formatBucketTime(timestampMs, timeframeRef.current);
-        ctx.fillText(label, x, 10.5);
+        labelCandidates.push({ x, label: formatBucketTime(timestampMs, timeframeRef.current) });
+      }
+
+      // Keep a guaranteed visual gap between neighboring labels. The same
+      // accepted center coordinate drives both its text and its pointer tick.
+      let previousRight = Number.NEGATIVE_INFINITY;
+      const labelGap = 14;
+      for (const candidate of labelCandidates) {
+        const labelWidth = ctx.measureText(candidate.label).width;
+        const left = candidate.x - labelWidth / 2;
+        const right = candidate.x + labelWidth / 2;
+        if (left < previousRight + labelGap) continue;
+
+        // Short tick begins at the time-axis top border and points to this
+        // timestamp's exact center, never to an unrelated grid subdivision.
+        ctx.strokeStyle = 'rgba(255,255,255,0.36)';
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(candidate.x) + 0.5, 0.5);
+        ctx.lineTo(Math.round(candidate.x) + 0.5, 4.2);
+        ctx.stroke();
+
+        ctx.fillText(candidate.label, candidate.x, 11.5);
+        previousRight = right;
       }
       ctx.restore();
     };
