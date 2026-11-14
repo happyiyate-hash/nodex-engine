@@ -269,7 +269,7 @@ export const TokenDetailPage: React.FC = () => {
         }}
       >
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
-      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] px-3 pt-2 pb-2">
+      <section className="relative w-full min-w-0 max-w-full overflow-x-clip bg-[#000000] px-3 pt-2 pb-2">
         <div className="flex w-full min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="relative shrink-0">
