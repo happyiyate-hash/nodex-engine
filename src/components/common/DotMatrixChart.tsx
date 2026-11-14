@@ -969,7 +969,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: CHART_THEME.axisTextColor,
         fontFamily: axisFontFamily,
-        fontSize: 9.5,
+        fontSize: 10,
         attributionLogo: false,
       },
       grid: {
@@ -979,12 +979,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       rightPriceScale: {
         borderVisible: false,
         entireTextOnly: true,
-        minimumWidth: 48,
+        minimumWidth: 66,
         scaleMargins: { top: 0.11, bottom: 0.015 },
       },
       timeScale: {
         borderVisible: true,
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: 'rgba(255,255,255,0.055)',
         ticksVisible: true,
         timeVisible: true,
         secondsVisible: timeframeRef.current === '1m',
@@ -1678,38 +1678,20 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="pointer-events-none absolute inset-0 block max-w-full"
       />
 
-      {/* Layer 1.5: Wide, lighter progressive edge & corner brushes (darken smoothly only toward outer edges) */}
+      {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {/* Wide soft top brush expanding gently down into the chart */}
         <div
-          className="absolute inset-x-0 top-0 h-24"
+          className="absolute inset-x-0 top-0 h-20"
           style={{
             background:
-              'linear-gradient(to bottom, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.46) 24%, rgba(0,0,0,0.18) 54%, rgba(0,0,0,0.05) 80%, rgba(0,0,0,0) 100%)',
+              'linear-gradient(to bottom, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
           }}
         />
-        {/* Wide soft left brush expanding smoothly across the left & top-left corner */}
         <div
-          className="absolute inset-y-0 left-0 w-24"
+          className="absolute inset-x-0 bottom-0 h-20"
           style={{
             background:
-              'linear-gradient(to right, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.46) 24%, rgba(0,0,0,0.18) 54%, rgba(0,0,0,0.05) 80%, rgba(0,0,0,0) 100%)',
-          }}
-        />
-        {/* Wide soft right brush fading smoothly behind the white axis numbers */}
-        <div
-          className="absolute inset-y-0 right-0 w-[136px]"
-          style={{
-            background:
-              'linear-gradient(to left, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.56) 26%, rgba(0,0,0,0.26) 54%, rgba(0,0,0,0.07) 80%, rgba(0,0,0,0) 100%)',
-          }}
-        />
-        {/* Soft wide corner-to-corner elliptical vignette tying left, top, and back edges seamlessly */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 92% 86% at 50% 54%, rgba(0,0,0,0) 46%, rgba(0,0,0,0.14) 70%, rgba(0,0,0,0.38) 88%, rgba(0,0,0,0.68) 100%)',
+              'linear-gradient(to top, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
           }}
         />
       </div>
@@ -1721,20 +1703,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="relative z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
 
-      {/* Layer 2.5: Whisper-light top & left outer edge blend so zero cutoff seam appears */}
+      {/* Layer 2.5: Very light top-edge seam blend. */}
       <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
         <div
-          className="absolute inset-x-0 top-0 h-14"
+          className="absolute inset-x-0 top-0 h-10"
           style={{
             background:
-              'linear-gradient(to bottom, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.18) 42%, rgba(0,0,0,0.04) 76%, rgba(0,0,0,0) 100%)',
-          }}
-        />
-        <div
-          className="absolute inset-y-0 left-0 w-14"
-          style={{
-            background:
-              'linear-gradient(to right, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.18) 42%, rgba(0,0,0,0.04) 76%, rgba(0,0,0,0) 100%)',
+              'linear-gradient(to bottom, rgba(0,0,0,0.045) 0%, rgba(0,0,0,0.025) 55%, rgba(0,0,0,0) 100%)',
           }}
         />
       </div>
