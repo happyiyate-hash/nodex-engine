@@ -81,7 +81,7 @@ const CHART_THEME = {
     radius: 4.5,
     haloRadius: 7,
     haloMaxRadius: 17,
-    haloPeriodMs: 2600,
+    haloPeriodMs: 2000,
   },
   liveBadge: {
     minWidth: 46,
