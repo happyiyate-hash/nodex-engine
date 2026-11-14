@@ -657,6 +657,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
   const isUserPannedRef = useRef<boolean>(false);
   const isApplyingAutoScrollRef = useRef<boolean>(false);
+  const isAutoPositioningRef = useRef<boolean>(true);
   const lastAppliedScrollPosRef = useRef<number>(BASE_RIGHT_OFFSET);
 
   const latestVisibleBoundsRef = useRef<{ min: number; max: number } | null>(null);
@@ -1201,7 +1202,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     const handleLogicalRange = () => {
       drawTimeScaleTicks();
-      if (isApplyingAutoScrollRef.current) return;
+      if (isApplyingAutoScrollRef.current || isAutoPositioningRef.current) return;
       const range = chart.timeScale().getVisibleLogicalRange();
       const total = committedBarsRef.current.length;
       const currentScrollPos = chart.timeScale().scrollPosition();
@@ -1380,12 +1381,19 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
           if (!isUserPannedRef.current) {
             const targetScrollPos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
-            lastAppliedScrollPosRef.current = targetScrollPos;
+            const currentScrollPos = chart.timeScale().scrollPosition();
+            const scrollBlend = 1 - Math.exp(-8 * dt);
+            const nextScrollPos =
+              currentScrollPos + (targetScrollPos - currentScrollPos) * scrollBlend;
+            lastAppliedScrollPosRef.current = nextScrollPos;
             isApplyingAutoScrollRef.current = true;
             try {
-              chart.timeScale().scrollToPosition(targetScrollPos, false);
+              chart.timeScale().scrollToPosition(nextScrollPos, false);
             } finally {
               isApplyingAutoScrollRef.current = false;
+            }
+            if (Math.abs(targetScrollPos - nextScrollPos) < 0.08) {
+              isAutoPositioningRef.current = false;
             }
           }
         } else if (
@@ -1620,7 +1628,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           isUserPannedRef.current = false;
           const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
           lastAppliedScrollPosRef.current = pos;
-          chart.timeScale().scrollToPosition(pos, false);
+          isAutoPositioningRef.current = true;
+          chart.timeScale().scrollToPosition(pos, true);
           setIsPanned(false);
         }
       } finally {
@@ -1719,12 +1728,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
   const resetView = () => {
     isUserPannedRef.current = false;
+    isAutoPositioningRef.current = true;
     const targetPos =
       BASE_RIGHT_OFFSET +
       (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
     lastAppliedScrollPosRef.current = targetPos;
     chartRef.current?.priceScale('right').applyOptions({ autoScale: true });
-    chartRef.current?.timeScale().scrollToPosition(targetPos, false);
     setIsPanned(false);
     onPriceHover?.(null, null);
   };
@@ -1787,20 +1796,29 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         />
       </div>
 
-      {/* Layer 2.55: A short right-edge fade lets timestamps emerge from darkness
-          without covering the right-side price labels. */}
+      {/* Layer 2.55: Short fade at the plot/time-axis boundary. New timestamps
+          emerge from the right edge instead of popping into view; price labels stay clear. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0 right-[68px] z-[5] h-[22px] w-[24px]"
+        className="pointer-events-none absolute bottom-0 right-[68px] z-[5] h-[19px] w-[30px]"
         style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.58) 58%, #000000 100%)',
+          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
         }}
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-[15px] right-[68px] z-[6] h-px w-[9px]"
+        className="pointer-events-none absolute bottom-[14px] right-[68px] z-[6] h-px w-[8px]"
         style={{
-          background: 'linear-gradient(to left, rgba(255,255,255,0.28), rgba(255,255,255,0))',
+          background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
+        }}
+      />
+
+      {/* Layer 2.56: Very soft left-edge brush; older chart history fades away as it exits. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-[34px] bottom-[19px] z-[4] w-[38px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.22) 34%, rgba(0,0,0,0.07) 68%, rgba(0,0,0,0) 100%)',
         }}
       />
 
