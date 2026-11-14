@@ -1787,6 +1787,23 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         />
       </div>
 
+      {/* Layer 2.55: A short right-edge fade lets timestamps emerge from darkness
+          without covering the right-side price labels. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 right-[68px] z-[5] h-[22px] w-[24px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.58) 58%, #000000 100%)',
+        }}
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[15px] right-[68px] z-[6] h-px w-[9px]"
+        style={{
+          background: 'linear-gradient(to left, rgba(255,255,255,0.28), rgba(255,255,255,0))',
+        }}
+      />
+
       {/* Layer 2.6: Very light top-edge seam blend. */}
       <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[2] overflow-hidden">
         <div
