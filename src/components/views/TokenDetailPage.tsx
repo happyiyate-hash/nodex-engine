@@ -293,7 +293,7 @@ export const TokenDetailPage: React.FC = () => {
       >
       {/* Upper half: chart and timeframe controls scroll together, independently of the tabs. */}
       <section
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000] [touch-action:pan-y]"
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000]"
         onScroll={(event) => {
           const top = event.currentTarget.scrollTop;
           setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
