@@ -280,7 +280,9 @@ const MainLayout: React.FC = () => {
           <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && activeTab === 'settings' ? 'flex' : 'hidden'}`}>
             {storagePageOpen
               ? <StorageManagementPage onBack={() => { setStoragePageOpen(false); setSettingsSubpage(false); }} />
-              : <SettingsPage onSubpageChange={setSettingsSubpage} onOpenStorage={() => { setStoragePageOpen(true); setSettingsSubpage(true); }} />}
+              : developerIntelligenceOpen
+                ? <DeveloperIntelligencePage onBack={() => setDeveloperIntelligenceOpen(false)} />
+                : <SettingsPage onSubpageChange={setSettingsSubpage} onOpenStorage={() => { setStoragePageOpen(true); setSettingsSubpage(true); }} onOpenDeveloperIntelligence={() => setDeveloperIntelligenceOpen(true)} />}
           </div>
         )}
 
