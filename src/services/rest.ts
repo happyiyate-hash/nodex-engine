@@ -1,4 +1,4 @@
-import { EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot, PositionRiskSettings } from '../types';
+import { CreatorIntelligence, EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot, PositionRiskSettings } from '../types';
 
 function websocketUrlFor(backendUrl: string): string {
   if (!backendUrl) return '';
