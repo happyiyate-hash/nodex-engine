@@ -35,6 +35,7 @@ export interface PriceTick {
 
 interface DotMatrixChartProps {
   currentPrice: number;
+  marketCap?: number;
   entryPrice?: number;
   priceHistory?: PricePoint[];
   isPositive?: boolean;
@@ -42,6 +43,7 @@ interface DotMatrixChartProps {
   chartType?: 'line' | 'candle';
   onPriceHover?: (price: number | null, time: string | null) => void;
   height?: number;
+  marketCap?: number;
 }
 
 type CanvasTarget = Parameters<IPrimitivePaneRenderer['draw']>[0];
@@ -69,7 +71,7 @@ const CHART_THEME = {
   downBadgeBg: '#DC4C4C',
   lineWidth: 2 as const,
   gridHorzColor: 'rgba(255,255,255,0.04)',
-  axisTextColor: 'rgba(255,255,255,0.46)',
+  axisTextColor: 'rgba(218,224,232,0.72)',
   crosshairColor: 'rgba(255,255,255,0.44)',
   crosshairLabelBg: '#18191c',
   entryLineColor: 'rgba(250,204,21,0.55)',
@@ -80,10 +82,11 @@ const CHART_THEME = {
     haloPeriodMs: 2600,
   },
   liveBadge: {
-    minWidth: 48,
-    height: 17,
+    minWidth: 42,
+    height: 22,
     rightInset: 2,
-    textColor: '#FFFFFF',
+    background: '#C7CDD5',
+    textColor: '#171A1F',
   },
   directionCard: {
     width: 18,
@@ -151,15 +154,12 @@ const formatBucketTime = (timestampMs: number, timeframe: string) => {
   });
 };
 
-const formatPrice = (price: number) => {
-  if (!Number.isFinite(price)) return '—';
-  if (price === 0) return '0';
-  const abs = Math.abs(price);
-  if (abs < 0.000001) return price.toExponential(2);
-  if (abs < 0.001) return price.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
-  if (abs < 1) return price.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
-  if (abs < 1000) return price.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
-  return price.toLocaleString(undefined, { maximumFractionDigits: 2 });
+const formatMarketCap = (marketCap: number) => {
+  if (!Number.isFinite(marketCap) || marketCap < 0) return '—';
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(marketCap);
 };
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -646,6 +646,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
   const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
+  const marketCapRef = useRef(marketCap);
+  marketCapRef.current = marketCap;
 
   const chartRef = useRef<IChartApi | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
@@ -1004,7 +1006,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       badge.style.height = `${badgeH}px`;
       badge.style.transform = `translate3d(${badgeX}px, ${badgeY}px, 0)`;
 
-      const formatted = formatPrice(price);
+      const formatted =
+        typeof marketCapRef.current === 'number'
+          ? formatMarketCap(marketCapRef.current)
+          : '—';
       if (badge.textContent !== formatted) {
         badge.textContent = formatted;
       }
@@ -1993,11 +1998,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             left: 0,
             top: 0,
             opacity: 0,
-            backgroundColor: badgeBg,
+            backgroundColor: CHART_THEME.liveBadge.background,
             color: CHART_THEME.liveBadge.textColor,
             fontFamily: "'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, sans-serif",
           }}
-          className="absolute flex items-center justify-center rounded-full px-1.5 text-[9.5px] font-medium tabular-nums leading-none shadow-[0_2px_10px_rgba(0,0,0,0.55)]"
+          className="absolute flex items-center justify-center rounded-[7px] px-1 text-[10.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
         />
       </div>
 
