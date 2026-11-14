@@ -980,12 +980,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     drawDotBackground();
   }, [drawDotBackground]);
 
-  // Mobile browsers can suspend canvas painting while this screen is in the
-  // background. Redraw the decorative dot layer and refresh chart dimensions
-  // whenever the page becomes visible again.
+  // Browsers may suspend canvas painting while the app is backgrounded.
+  // Refresh rendering and dimensions on resume, but preserve the user's chart
+  // position. A real page remount creates fresh refs and starts at live again.
   useEffect(() => {
     let refreshFrame = 0;
-    const refreshAfterResume = (returnToLive: boolean) => {
+    const refreshAfterResume = () => {
       if (document.visibilityState === 'hidden') return;
       window.cancelAnimationFrame(refreshFrame);
       refreshFrame = window.requestAnimationFrame(() => {
@@ -995,40 +995,19 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         if (host && chart) {
           const width = host.clientWidth;
           const chartHeight = host.clientHeight;
-          if (width > 0 && chartHeight > 0) {
-            chart.resize(width, chartHeight);
-          }
-
-          if (returnToLive) {
-            isUserPannedRef.current = false;
-            isAutoPositioningRef.current = true;
-            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
-            setIsPanned(false);
-            isApplyingAutoScrollRef.current = true;
-            try {
-              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, true);
-            } finally {
-              isApplyingAutoScrollRef.current = false;
-            }
-          }
+          if (width > 0 && chartHeight > 0) chart.resize(width, chartHeight);
         }
       });
     };
 
-    const handleVisibilityResume = () => {
-      if (document.visibilityState === 'visible') refreshAfterResume(true);
-    };
-    const handlePageShow = () => refreshAfterResume(true);
-    const handleWindowFocus = () => refreshAfterResume(false);
-
-    document.addEventListener('visibilitychange', handleVisibilityResume);
-    window.addEventListener('pageshow', handlePageShow);
-    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', refreshAfterResume);
+    window.addEventListener('pageshow', refreshAfterResume);
+    window.addEventListener('focus', refreshAfterResume);
     return () => {
       window.cancelAnimationFrame(refreshFrame);
-      document.removeEventListener('visibilitychange', handleVisibilityResume);
-      window.removeEventListener('pageshow', handlePageShow);
-      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', refreshAfterResume);
+      window.removeEventListener('pageshow', refreshAfterResume);
+      window.removeEventListener('focus', refreshAfterResume);
     };
   }, [drawDotBackground]);
 
@@ -1403,7 +1382,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const handleLogicalRange = () => {
       drawTimeScaleTicks();
       drawTimeLabels();
-      if (isApplyingAutoScrollRef.current || isAutoPositioningRef.current) return;
+      // Ignore only range changes caused by our own programmatic scrolling.
+      // Do not wait for initial auto-positioning to finish: a user may start
+      // dragging immediately after the chart mounts.
+      if (isApplyingAutoScrollRef.current) return;
 
       const range = chart.timeScale().getVisibleLogicalRange();
       const total = committedBarsRef.current.length;
@@ -1412,12 +1394,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         BASE_RIGHT_OFFSET +
         (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
 
-      // Treat horizontal navigation identically in line and candlestick modes.
-      // Once the user moves away from the live edge, incoming ticks must never
-      // pull the viewport back. Only the explicit "Go back to live" action
-      // (or returning to the app) re-enables automatic positioning.
+      // Any deliberate movement away from the live edge pauses auto-follow.
+      // Use an absolute difference so drags in either direction are respected,
+      // for both line and candlestick charts.
       const movedAwayFromLive =
-        currentScrollPos < expectedPos - 1.5 ||
+        Math.abs(currentScrollPos - expectedPos) > 1.5 ||
         (range !== null && total > 6 && range.to < total - 1.5);
 
       if (movedAwayFromLive) {
@@ -1425,8 +1406,9 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       }
 
       if (range && total > 0) {
-        const pannedLeft = total > 6 && range.to < total - 1.5;
-        setIsPanned(isUserPannedRef.current || pannedLeft);
+        const pannedAway = Math.abs(currentScrollPos - expectedPos) > 1.5 ||
+          (total > 6 && range.to < total - 1.5);
+        setIsPanned(isUserPannedRef.current || pannedAway);
       } else {
         setIsPanned(isUserPannedRef.current);
       }
