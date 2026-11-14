@@ -370,7 +370,7 @@ export const TokenDetailPage: React.FC = () => {
           />
         </div>
 
-        <div className="mt-1 flex h-14 w-full items-center font-sans">
+        <div className="sticky z-30 mt-1 flex h-14 w-full items-center bg-[#000000] font-sans" style={{ top: "calc(env(safe-area-inset-top) + 59px)" }}>
           <div className="relative flex h-full min-w-0 flex-1 items-center overflow-hidden">
             <div
               ref={timeframeScrollRef}
@@ -475,7 +475,7 @@ export const TokenDetailPage: React.FC = () => {
         {/* Detail navigation: horizontally scrollable tabs with a continuously sliding indicator. */}
         <nav
           aria-label="Token details"
-          className="mx-2 mt-0.5 w-auto border-b border-white/25"
+          className="sticky z-30 mx-2 mt-0.5 w-auto border-b border-white/25 bg-[#000000]" style={{ top: "calc(env(safe-area-inset-top) + 115px)" }}
         >
           <div
             ref={detailTabsRef}
@@ -586,7 +586,7 @@ export const TokenDetailPage: React.FC = () => {
               <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Largest Holders</h2>
               <span className="text-[10px] text-white/35">Ranked by balance</span>
             </div>
-            <div className="space-y-0">
+            <div className="max-h-[calc(100dvh-env(safe-area-inset-top)-310px)] min-h-[180px] touch-pan-y overflow-y-auto overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]">
               {[
                 { address: '7xKX9mPq2vRt4nHs8aBcDeFgHiJkLmNpQrStUvWxYz12', balance: '82.4M', share: 8.24, initials: '7X' },
                 { address: '9pLm3qRs6tUv8wXy2zAbCdEfGhJkMnPqRtUvWxYz1234', balance: '61.8M', share: 6.18, initials: '9P' },
