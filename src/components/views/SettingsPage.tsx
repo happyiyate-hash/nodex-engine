@@ -65,7 +65,7 @@ const StatusLine = ({ label, value, good }: { label: string; value: string; good
   </div>
 );
 
-export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void; onOpenStorage?: () => void }> = ({ onSubpageChange, onOpenStorage }) => {
+export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => void; onOpenStorage?: () => void; onOpenDeveloperIntelligence?: () => void }> = ({ onSubpageChange, onOpenStorage, onOpenDeveloperIntelligence }) => {
   const {
     engineStatus, toggleEngine, settings, updateSettings, updateConnectionDraft, backendError, events, removeTokensByMint,
   } = useTerminal();
@@ -649,7 +649,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
 
       {section === 'trading' && (
         <div className="pt-0">
-          <StrategyPage embedded />
+          <StrategyPage embedded onOpenDeveloperIntelligence={onOpenDeveloperIntelligence} />
         </div>
       )}
 
