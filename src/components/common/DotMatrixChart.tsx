@@ -100,10 +100,13 @@ const CHART_THEME = {
 const BASE_RIGHT_OFFSET = 8;
 
 const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
-  '1m': 60_000,
-  '5m': 5 * 60_000,
-  '15m': 15 * 60_000,
-  '30m': 30 * 60_000,
+  '1S': 1_000,
+  '5S': 5_000,
+  '10S': 10_000,
+  '1M': 60_000,
+  '5M': 5 * 60_000,
+  '15M': 15 * 60_000,
+  '30M': 30 * 60_000,
   '1H': 60 * 60_000,
   '24H': 60 * 60_000,
 };
@@ -111,10 +114,13 @@ const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
 // Exact step interval per bar in Line mode: backward scroll advances continuously
 // at 1 bar per `stepMs` instead of stepping and pausing.
 const TIMEFRAME_LIVE_STEP_MS: Record<string, number> = {
-  '1m': 1_000,
-  '5m': 3_000,
-  '15m': 6_000,
-  '30m': 10_000,
+  '1S': 1_000,
+  '5S': 1_000,
+  '10S': 2_000,
+  '1M': 1_000,
+  '5M': 3_000,
+  '15M': 6_000,
+  '30M': 10_000,
   '1H': 15_000,
   '24H': 30_000,
 };
@@ -122,10 +128,13 @@ const TIMEFRAME_LIVE_STEP_MS: Record<string, number> = {
 // Minimum vertical price span (fraction of price) per timeframe so higher
 // timeframes stay calm while scaling smoothly without discrete step jumps.
 const TIMEFRAME_Y_SPAN_RATIO: Record<string, number> = {
-  '1m': 0.045,
-  '5m': 0.09,
-  '15m': 0.16,
-  '30m': 0.26,
+  '1S': 0.035,
+  '5S': 0.04,
+  '10S': 0.045,
+  '1M': 0.045,
+  '5M': 0.09,
+  '15M': 0.16,
+  '30M': 0.26,
   '1H': 0.40,
   '24H': 0.65,
 };
@@ -138,7 +147,7 @@ const formatBucketTime = (timestampMs: number, timeframe: string) => {
   return date.toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
-    ...(timeframe === '1m' ? { second: '2-digit' as const } : {}),
+    ...(['1S', '5S', '10S', '1M'].includes(timeframe) ? { second: '2-digit' as const } : {}),
   });
 };
 
@@ -1043,7 +1052,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // exist in the right-side lead-in before they enter the visible plot.
         timeVisible: true,
         tickMarkFormatter: () => '',
-        secondsVisible: timeframeRef.current === '1m',
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframeRef.current),
         rightOffset: BASE_RIGHT_OFFSET,
         barSpacing: 5,
         minBarSpacing: 1.5,
@@ -1683,7 +1692,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     setIsPanned(false);
     chart.applyOptions({
       timeScale: {
-        secondsVisible: timeframe === '1m',
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
       },
     });
     chart.priceScale('right').applyOptions({ autoScale: true });
