@@ -41,6 +41,17 @@ export const TokenDetailPage: React.FC = () => {
   // accumulation, pump, pullback and consolidation phases for chart testing.
   const DEMO_START_PRICE_USD = 0.0000125;
   const [demoPrice, setDemoPrice] = useState(DEMO_START_PRICE_USD);
+  const [simulatedMarketCap, setSimulatedMarketCap] = useState(42500);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setSimulatedMarketCap((current) => {
+        const movement = (Math.random() - 0.48) * 420;
+        return Math.max(25000, current + movement);
+      });
+    }, 850);
+    return () => window.clearInterval(interval);
+  }, []);
   const [demoPriceHistory, setDemoPriceHistory] = useState<import('../../types').PricePoint[]>([]);
 
   useEffect(() => {
@@ -245,7 +256,7 @@ export const TokenDetailPage: React.FC = () => {
           <div className="shrink-0 text-right">
             <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
             <p className="mt-0.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
-              {Number.isFinite(activeToken.market_cap_usd) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(activeToken.market_cap_usd) : '—'}
+              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(simulatedMarketCap)}
             </p>
             <div className="mt-1 flex justify-end">
               <span className={`inline-flex items-center justify-center rounded-md px-1.5 py-0.5 font-sans text-[11px] font-semibold tabular-nums leading-none ${isPositive ? 'bg-[#6CE094]/15 text-[#6CE094]' : 'bg-[#F06A6A]/15 text-[#F06A6A]'}`}>
