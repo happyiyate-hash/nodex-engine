@@ -35,6 +35,7 @@ export interface PriceTick {
 
 interface DotMatrixChartProps {
   currentPrice: number;
+  marketCap?: number;
   entryPrice?: number;
   priceHistory?: PricePoint[];
   isPositive?: boolean;
@@ -55,8 +56,8 @@ const CHART_THEME = {
   dots: {
     enabled: true,
     spacing: 6,
-    radius: 0.48,
-    maxOpacity: 0.14,
+    radius: 0.52,
+    maxOpacity: 0.21,
     sheenColor: '232, 238, 248',
   },
   upColor: '#6CE094',
@@ -80,11 +81,10 @@ const CHART_THEME = {
     haloPeriodMs: 2600,
   },
   liveBadge: {
-    minWidth: 42,
-    height: 22,
+    minWidth: 46,
+    height: 24,
     rightInset: 2,
-    background: '#C7CDD5',
-    textColor: '#171A1F',
+    textColor: '#FFFFFF',
   },
   directionCard: {
     width: 18,
@@ -150,6 +150,31 @@ const formatBucketTime = (timestampMs: number, timeframe: string) => {
     minute: '2-digit',
     ...(['1S', '5S', '10S', '1M'].includes(timeframe) ? { second: '2-digit' as const } : {}),
   });
+};
+
+const formatPrice = (price: number) => {
+  if (!Number.isFinite(price)) return '—';
+  if (price === 0) return '0';
+  const abs = Math.abs(price);
+  if (abs < 0.000001) return price.toExponential(2);
+  if (abs < 0.001) return price.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+  if (abs < 1) return price.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  if (abs < 1000) return price.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  return price.toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
+const formatMarketCap = (value: number): string => {
+  if (!Number.isFinite(value)) return '—';
+  if (value <= 0) return '$0';
+  const formatCompact = (scaled: number, suffix: string) => {
+    const absScaled = Math.abs(scaled);
+    const decimals = absScaled >= 100 ? 1 : 2;
+    return `$${scaled.toFixed(decimals).replace(/\.?0+$/, '')}${suffix}`;
+  };
+  if (value >= 1_000_000_000) return formatCompact(value / 1_000_000_000, 'B');
+  if (value >= 1_000_000) return formatCompact(value / 1_000_000, 'M');
+  if (value >= 1_000) return formatCompact(value / 1_000, 'K');
+  return `$${value.toFixed(value >= 100 ? 0 : 2).replace(/\.?0+$/, '')}`;
 };
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -622,6 +647,7 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
 
 export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   currentPrice,
+  marketCap,
   entryPrice,
   priceHistory,
   isPositive = true,
@@ -635,7 +661,35 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const tvContainerRef = useRef<HTMLDivElement>(null);
   const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
   const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeFadeOverlayRef = useRef<HTMLDivElement>(null);
+  const timeTickCapRef = useRef<HTMLDivElement>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
+
+  const mcapScaleRef = useRef<number>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0 && currentPrice > 0
+      ? marketCap / currentPrice
+      : 1,
+  );
+  const hasMarketCapRef = useRef<boolean>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0,
+  );
+  if (marketCap != null && Number.isFinite(marketCap) && marketCap > 0) {
+    hasMarketCapRef.current = true;
+    if (currentPrice > 0 && Number.isFinite(currentPrice)) {
+      mcapScaleRef.current = marketCap / currentPrice;
+    }
+  } else {
+    hasMarketCapRef.current = false;
+    mcapScaleRef.current = 1;
+  }
+
+  const formatDisplayValue = useCallback(
+    (value: number) =>
+      hasMarketCapRef.current
+        ? formatMarketCap(value * mcapScaleRef.current)
+        : formatPrice(value),
+    [],
+  );
 
   const chartRef = useRef<IChartApi | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
@@ -983,23 +1037,22 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         return;
       }
 
-      const axisW = Math.max(48, chart.priceScale('right').width() || hostW - plotW || 52);
+      const axisW = Math.max(44, chart.priceScale('right').width() || hostW - plotW || 52);
       const badgeH = CHART_THEME.liveBadge.height;
-      const badgeW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - 3);
-      const badgeX = Math.max(plotW, Math.min(plotW + 1, hostW - badgeW - CHART_THEME.liveBadge.rightInset));
+      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - 2);
       const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
 
       badge.style.opacity = '1';
-      badge.style.width = `${badgeW}px`;
+      badge.style.minWidth = `${badgeMinW}px`;
       badge.style.height = `${badgeH}px`;
-      badge.style.transform = `translate3d(${badgeX}px, ${badgeY}px, 0)`;
+      badge.style.transform = `translate3d(0, ${badgeY}px, 0)`;
 
-      const formatted = formatPrice(price);
+      const formatted = formatDisplayValue(price);
       if (badge.textContent !== formatted) {
         badge.textContent = formatted;
       }
     },
-    [],
+    [formatDisplayValue],
   );
 
   // Create TradingView Lightweight Chart instance once on mount.
@@ -1007,7 +1060,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const host = tvContainerRef.current;
     if (!host) return;
 
-    const axisFontFamily = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif";
+    const axisFontFamily = "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
     const chart = createChart(host, {
       autoSize: true,
       width: Math.max(1, host.clientWidth || 320),
@@ -1016,7 +1069,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: CHART_THEME.axisTextColor,
         fontFamily: axisFontFamily,
-        fontSize: 9.5,
+        fontSize: 12,
         attributionLogo: false,
       },
       grid: {
@@ -1031,7 +1084,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       rightPriceScale: {
         borderVisible: false,
         entireTextOnly: true,
-        minimumWidth: 68,
+        minimumWidth: 44,
         scaleMargins: { top: 0.11, bottom: 0.015 },
       },
       timeScale: {
@@ -1065,7 +1118,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         },
       },
       localization: {
-        priceFormatter: formatPrice,
+        priceFormatter: formatDisplayValue,
       },
       handleScroll: {
         mouseWheel: true,
@@ -1127,7 +1180,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       priceFormat: {
         type: 'custom',
         minMove: 0.000000001,
-        formatter: formatPrice,
+        formatter: formatDisplayValue,
       },
       visible: chartTypeRef.current === 'line',
     });
@@ -1144,7 +1197,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       priceFormat: {
         type: 'custom',
         minMove: 0.000000001,
-        formatter: formatPrice,
+        formatter: formatDisplayValue,
       },
       visible: chartTypeRef.current === 'candle',
     });
@@ -1219,7 +1272,14 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const bars = committedBarsRef.current;
       if (!range || range.to <= range.from || bars.length === 0) return;
 
-      const plotRight = Math.max(0, width - chart.priceScale('right').width());
+      const priceScaleW = Math.max(0, chart.priceScale('right').width());
+      if (timeFadeOverlayRef.current) {
+        timeFadeOverlayRef.current.style.right = `${priceScaleW}px`;
+      }
+      if (timeTickCapRef.current) {
+        timeTickCapRef.current.style.right = `${priceScaleW}px`;
+      }
+      const plotRight = Math.max(0, width - priceScaleW);
       const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
       const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
       // Give timestamps a little more breathing room; actual text width is
@@ -1237,7 +1297,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.beginPath();
       ctx.rect(0, 0, Math.max(0, plotRight - 2), heightPx);
       ctx.clip();
-      ctx.font = "500 10.5px 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.font = "500 12px 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = 'rgba(255,255,255,0.56)';
@@ -1878,6 +1938,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     onPriceHover?.(null, null);
   };
 
+  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
+
   return (
     <div
       ref={containerRef}
@@ -1948,15 +2010,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       {/* Layer 2.55: Short fade at the plot/time-axis boundary. New timestamps
           emerge from the right edge instead of popping into view; price labels stay clear. */}
       <div
+        ref={timeFadeOverlayRef}
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0 right-[68px] z-[5] h-[19px] w-[30px]"
+        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[19px] w-[30px]"
         style={{
           background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
         }}
       />
       <div
+        ref={timeTickCapRef}
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-[14px] right-[68px] z-[6] h-px w-[8px]"
+        className="pointer-events-none absolute bottom-[14px] right-[54px] z-[6] h-px w-[8px]"
         style={{
           background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
         }}
@@ -1978,14 +2042,14 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         <div
           ref={badgeRef}
           style={{
-            left: 0,
+            right: CHART_THEME.liveBadge.rightInset,
             top: 0,
             opacity: 0,
-            backgroundColor: CHART_THEME.liveBadge.background,
+            backgroundColor: badgeBg,
             color: CHART_THEME.liveBadge.textColor,
-            fontFamily: "'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, sans-serif",
+            fontFamily: "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif",
           }}
-          className="absolute flex items-center justify-center rounded-[7px] px-1 text-[10.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
+          className="absolute flex items-center justify-center whitespace-nowrap rounded-[7px] px-1.5 text-[12.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
         />
       </div>
 

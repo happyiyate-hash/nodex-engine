@@ -24,6 +24,14 @@ export const TokenDetailPage: React.FC = () => {
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades' | 'Transactions'>('Info');
   const detailTabsRef = useRef<HTMLDivElement>(null);
   const detailTabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const timeframeScrollRef = useRef<HTMLDivElement>(null);
+  const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
+    active: false,
+    startX: 0,
+    startScrollLeft: 0,
+    moved: false,
+  });
+  const suppressTimeframeClickRef = useRef(false);
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
@@ -37,18 +45,9 @@ export const TokenDetailPage: React.FC = () => {
   // Isolated Token Details demo tape. The simulated market has distinct
   // accumulation, pump, pullback and consolidation phases for chart testing.
   const DEMO_START_PRICE_USD = 0.0000125;
+  const DEMO_START_MARKET_CAP_USD = 42500;
   const [demoPrice, setDemoPrice] = useState(DEMO_START_PRICE_USD);
-  const [simulatedMarketCap, setSimulatedMarketCap] = useState(42500);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setSimulatedMarketCap((current) => {
-        const movement = (Math.random() - 0.48) * 420;
-        return Math.max(25000, current + movement);
-      });
-    }, 850);
-    return () => window.clearInterval(interval);
-  }, []);
+  const simulatedMarketCap = DEMO_START_MARKET_CAP_USD * (demoPrice / DEMO_START_PRICE_USD);
   const [demoPriceHistory, setDemoPriceHistory] = useState<import('../../types').PricePoint[]>([]);
 
   useEffect(() => {
@@ -148,7 +147,14 @@ export const TokenDetailPage: React.FC = () => {
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
-  const formatTokenPrice = (value: number) => `${Math.abs(value) < 0.0000001 && value !== 0 ? value.toExponential(2) : value.toFixed(8).replace(/\.?0+$/, '')}`;
+  const displayMarketCap = DEMO_START_MARKET_CAP_USD * (currentPrice / DEMO_START_PRICE_USD);
+  const formatCompactMarketCap = (value: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      notation: 'compact',
+      maximumFractionDigits: 2,
+    }).format(value);
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
@@ -167,14 +173,22 @@ export const TokenDetailPage: React.FC = () => {
         style={{ height: 'env(safe-area-inset-top)' }}
       />
       <header
-        className="absolute inset-x-0 z-40 min-h-14 w-full border-b border-white/[0.06] bg-[#000000] px-3 py-1.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5"
+        className="absolute inset-x-0 z-40 w-full border-b border-white/[0.06] bg-[#000000] px-3 py-1.5 shadow-[0_6px_18px_rgba(0,0,0,0.22)] sm:px-5"
         style={{ top: 'calc(env(safe-area-inset-top) - 2px)' }}
       >
-        <div className="flex min-h-11 w-full items-center justify-between gap-3">
-          {!isHeaderExpanded ? (
+        <div className="relative flex h-12 w-full items-center">
+          <div
+            aria-hidden={isHeaderExpanded}
+            className={`absolute inset-0 flex items-center justify-between gap-3 transition-opacity ease-out ${
+              isHeaderExpanded
+                ? 'pointer-events-none opacity-0 duration-150 delay-0'
+                : 'pointer-events-auto opacity-100 duration-200 delay-100'
+            }`}
+          >
             <div className="flex min-w-0 items-center gap-2.5">
               <button
                 type="button"
+                tabIndex={isHeaderExpanded ? -1 : 0}
                 onClick={closeTokenDetail}
                 aria-label="Go back"
                 title="Go back"
@@ -186,20 +200,42 @@ export const TokenDetailPage: React.FC = () => {
                 {activeToken.symbol || 'Token'}
               </span>
             </div>
-          ) : (
+          </div>
+
+          <div
+            aria-hidden={!isHeaderExpanded}
+            className={`absolute inset-0 flex items-center justify-between gap-3 transition-opacity ease-out ${
+              isHeaderExpanded
+                ? 'pointer-events-auto opacity-100 duration-200 delay-100'
+                : 'pointer-events-none opacity-0 duration-150 delay-0'
+            }`}
+          >
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-              <TokenAvatar
-                symbol={activeToken.symbol}
-                logoUrl={activeToken.logo_url}
-                size="lg"
-                className="!h-[46px] !w-[46px] shrink-0 !rounded-lg !text-lg"
-              />
+              <div className="relative shrink-0">
+                <TokenAvatar
+                  symbol={activeToken.symbol}
+                  logoUrl={activeToken.logo_url}
+                  size="lg"
+                  className="!h-[46px] !w-[46px] shrink-0 !rounded-lg !text-lg"
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-1 -right-1 flex h-[18px] w-[18px] items-center justify-center overflow-hidden rounded-[4px] border-[1.5px] border-[#000000] bg-[#000000] shadow-[0_2px_6px_rgba(0,0,0,0.65)]"
+                >
+                  <img
+                    src="/assets/token-fallbacks/solana-logo.png"
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </span>
+              </div>
               <div className="flex min-w-0 flex-col justify-center gap-1 leading-tight">
                 <span className="truncate text-[12px] font-semibold tracking-wide text-white/90">
                   {activeToken.symbol || 'Token'}
                 </span>
                 <button
                   type="button"
+                  tabIndex={isHeaderExpanded ? 0 : -1}
                   onClick={handleCopyMint}
                   aria-label="Copy contract address"
                   title="Copy contract address"
@@ -210,39 +246,49 @@ export const TokenDetailPage: React.FC = () => {
                 </button>
               </div>
             </div>
-          )}
-          {isHeaderExpanded && (
             <div className="shrink-0 text-right leading-none">
-              <div className="font-mono text-[14px] font-semibold tracking-tight text-white">
-                {hasMarketPrice ? formatTokenPrice(currentPrice) : 'Price unavailable'}
+              <div className="font-sans text-[14px] font-semibold tabular-nums tracking-tight text-white">
+                {hasMarketPrice ? formatCompactMarketCap(displayMarketCap) : 'MC unavailable'}
               </div>
               <div className={`mt-1 flex items-center justify-end gap-0.5 font-mono text-[10px] font-semibold ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
                 <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${marketChangePct.toFixed(2)}%`}</span>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </header>
 
       <div
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(3.5rem+env(safe-area-inset-bottom))]"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 56px)' }}
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 59px)' }}
         onScroll={(event) => {
-          // Keep the navigation fixed; only transform its contents after the
-          // large overview has started moving out of the initial viewport.
-          setIsHeaderExpanded(event.currentTarget.scrollTop > 64);
+          // Keep the navigation fixed; fade cleanly with hysteresis to prevent edge jitter.
+          const top = event.currentTarget.scrollTop;
+          setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
         }}
       >
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
       <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] px-3 pt-2 pb-2">
         <div className="flex w-full min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <TokenAvatar
-              symbol={activeToken.symbol}
-              logoUrl={activeToken.logo_url}
-              size="lg"
-              className="!h-[52px] !w-[52px] shrink-0 !rounded-lg !text-xl"
-            />
+            <div className="relative shrink-0">
+              <TokenAvatar
+                symbol={activeToken.symbol}
+                logoUrl={activeToken.logo_url}
+                size="lg"
+                className="!h-[52px] !w-[52px] shrink-0 !rounded-lg !text-xl"
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute -bottom-1 -right-1 flex h-[20px] w-[20px] items-center justify-center overflow-hidden rounded-[5px] border-[1.5px] border-[#000000] bg-[#000000] shadow-[0_2px_6px_rgba(0,0,0,0.65)]"
+              >
+                <img
+                  src="/assets/token-fallbacks/solana-logo.png"
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              </span>
+            </div>
             <div className="flex min-w-0 flex-col justify-center gap-1">
               <p className="truncate text-[13px] font-semibold tracking-tight text-white/95">
                 {activeToken.name || activeToken.symbol || 'Unknown token'}
@@ -299,15 +345,67 @@ export const TokenDetailPage: React.FC = () => {
           }}
         />
 
-        <div className="mt-1 flex h-11 w-full items-center px-2 font-mono">
-          <div className="relative flex min-w-0 basis-[60%] items-center overflow-hidden">
-            <div className="flex h-9 min-w-0 flex-1 touch-pan-x select-none items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg bg-transparent p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-1 flex h-14 w-full items-center font-sans">
+          <div className="relative flex h-full min-w-0 flex-1 items-center overflow-hidden">
+            <div
+              ref={timeframeScrollRef}
+              onPointerDown={(e) => {
+                if (e.pointerType !== 'mouse' || e.button !== 0) return;
+                const el = timeframeScrollRef.current;
+                if (!el) return;
+                tfDragStateRef.current = {
+                  active: true,
+                  startX: e.clientX,
+                  startScrollLeft: el.scrollLeft,
+                  moved: false,
+                };
+              }}
+              onPointerMove={(e) => {
+                const state = tfDragStateRef.current;
+                if (!state.active) return;
+                const el = timeframeScrollRef.current;
+                if (!el) return;
+                const dx = e.clientX - state.startX;
+                if (Math.abs(dx) > 4) state.moved = true;
+                if (state.moved) {
+                  el.scrollLeft = state.startScrollLeft - dx;
+                }
+              }}
+              onPointerUp={() => {
+                if (tfDragStateRef.current.moved) {
+                  suppressTimeframeClickRef.current = true;
+                  window.setTimeout(() => {
+                    suppressTimeframeClickRef.current = false;
+                  }, 0);
+                }
+                tfDragStateRef.current.active = false;
+                tfDragStateRef.current.moved = false;
+              }}
+              onPointerCancel={() => {
+                tfDragStateRef.current.active = false;
+                tfDragStateRef.current.moved = false;
+              }}
+              className="flex h-full w-full min-w-0 touch-pan-x select-none items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+            >
             {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
               <button
                 key={tf}
                 type="button"
-                onClick={() => setTimeframe(tf)}
-                className={`inline-flex h-7 min-w-[2.35rem] shrink-0 touch-manipulation items-center justify-center rounded-md px-2 text-[12px] font-medium leading-none tracking-normal transition-colors ${
+                onClick={(e) => {
+                  if (suppressTimeframeClickRef.current) return;
+                  setTimeframe(tf);
+                  const container = timeframeScrollRef.current;
+                  const button = e.currentTarget;
+                  if (!container) return;
+                  const left = button.offsetLeft;
+                  const right = left + button.offsetWidth;
+                  if (left < container.scrollLeft + 8) {
+                    container.scrollTo({ left: Math.max(0, left - 8), behavior: 'smooth' });
+                  } else if (right > container.scrollLeft + container.clientWidth - 8) {
+                    container.scrollTo({ left: right - container.clientWidth + 8, behavior: 'smooth' });
+                  }
+                }}
+                className={`inline-flex h-10 min-w-[2.75rem] shrink-0 touch-pan-x items-center justify-center rounded-md px-2.5 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
                   timeframe === tf ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:text-white/90'
                 }`}
               >
@@ -321,14 +419,14 @@ export const TokenDetailPage: React.FC = () => {
 
           <div aria-hidden="true" className="mx-1.5 h-7 w-px shrink-0 bg-white/25" />
 
-          <div className="relative flex min-w-0 basis-[40%] items-center justify-end gap-1 overflow-hidden pl-1">
+          <div className="relative flex shrink-0 items-center justify-end gap-1 pl-0.5 pr-1">
             <button
               type="button"
               aria-label="Line chart"
               title="Line chart"
               aria-pressed={chartType === 'line'}
               onClick={() => setChartType('line')}
-              className={`flex h-9 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
+              className={`flex h-9 w-10 items-center justify-center rounded-md transition-colors ${
                 chartType === 'line' ? 'bg-white/[0.12] text-white' : 'text-white/45 hover:text-white/85'
               }`}
             >
@@ -340,13 +438,12 @@ export const TokenDetailPage: React.FC = () => {
               title="Candlestick chart"
               aria-pressed={chartType === 'candle'}
               onClick={() => setChartType('candle')}
-              className={`flex h-9 min-w-0 flex-1 items-center justify-center rounded-md transition-colors ${
+              className={`flex h-9 w-10 items-center justify-center rounded-md transition-colors ${
                 chartType === 'candle' ? 'bg-white/[0.12] text-white' : 'text-white/45 hover:text-white/85'
               }`}
             >
               <ChartCandlestick className="h-[18px] w-[18px]" strokeWidth={2.2} />
             </button>
-            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-3" style={{ background: 'linear-gradient(to left, #000 0%, rgba(0,0,0,0.42) 45%, transparent 100%)' }} />
           </div>
         </div>
 
