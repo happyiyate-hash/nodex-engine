@@ -970,7 +970,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: CHART_THEME.axisTextColor,
         fontFamily: axisFontFamily,
-        fontSize: 10.5,
+        fontSize: 9.5,
         attributionLogo: false,
       },
       grid: {
@@ -980,7 +980,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       rightPriceScale: {
         borderVisible: false,
         entireTextOnly: true,
-        minimumWidth: 74,
+        minimumWidth: 68,
         scaleMargins: { top: 0.11, bottom: 0.015 },
       },
       timeScale: {
@@ -1760,20 +1760,20 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         style={{ width: '100%', height: 5 }}
       />
 
-      {/* Layer 2.5: Soft top/bottom fade confined to the right price scale. */}
+      {/* Layer 2.5: Gentle axis-edge brushes; numbers fade only as they approach the outer edges. */}
       <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
         <div
-          className="absolute right-0 top-0 h-12 w-[78px]"
+          className="absolute right-0 top-0 h-16 w-[72px]"
           style={{
             background:
-              'linear-gradient(to bottom, rgba(255,255,255,0.025) 0%, rgba(0,0,0,0.045) 30%, rgba(0,0,0,0.14) 100%)',
+              'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.10) 24%, rgba(0,0,0,0.045) 58%, rgba(0,0,0,0) 100%)',
           }}
         />
         <div
-          className="absolute right-0 bottom-0 h-12 w-[78px]"
+          className="absolute right-0 bottom-0 h-16 w-[72px]"
           style={{
             background:
-              'linear-gradient(to top, rgba(255,255,255,0.025) 0%, rgba(0,0,0,0.045) 30%, rgba(0,0,0,0.14) 100%)',
+              'linear-gradient(to top, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.10) 24%, rgba(0,0,0,0.045) 58%, rgba(0,0,0,0) 100%)',
           }}
         />
       </div>
