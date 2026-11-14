@@ -708,6 +708,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
 
   const isUserPannedRef = useRef<boolean>(false);
+  const isPointerInteractingRef = useRef<boolean>(false);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerDraggedRef = useRef<boolean>(false);
+  const wasPannedBeforePointerRef = useRef<boolean>(false);
   const isApplyingAutoScrollRef = useRef<boolean>(false);
   const isAutoPositioningRef = useRef<boolean>(true);
   const lastAppliedScrollPosRef = useRef<number>(BASE_RIGHT_OFFSET);
@@ -1382,36 +1386,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const handleLogicalRange = () => {
       drawTimeScaleTicks();
       drawTimeLabels();
-      // Ignore only range changes caused by our own programmatic scrolling.
-      // Do not wait for initial auto-positioning to finish: a user may start
-      // dragging immediately after the chart mounts.
+      // Scroll-range notifications can arrive after a programmatic update.
+      // User intent is tracked from the actual pointer/wheel gesture handlers
+      // below, so auto-follow never mistakes its own movement for a user drag.
       if (isApplyingAutoScrollRef.current) return;
-
-      const range = chart.timeScale().getVisibleLogicalRange();
-      const total = committedBarsRef.current.length;
-      const currentScrollPos = chart.timeScale().scrollPosition();
-      const expectedPos =
-        BASE_RIGHT_OFFSET +
-        (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
-
-      // Any deliberate movement away from the live edge pauses auto-follow.
-      // Use an absolute difference so drags in either direction are respected,
-      // for both line and candlestick charts.
-      const movedAwayFromLive =
-        Math.abs(currentScrollPos - expectedPos) > 1.5 ||
-        (range !== null && total > 6 && range.to < total - 1.5);
-
-      if (movedAwayFromLive) {
-        isUserPannedRef.current = true;
-      }
-
-      if (range && total > 0) {
-        const pannedAway = Math.abs(currentScrollPos - expectedPos) > 1.5 ||
-          (total > 6 && range.to < total - 1.5);
-        setIsPanned(isUserPannedRef.current || pannedAway);
-      } else {
-        setIsPanned(isUserPannedRef.current);
-      }
+      setIsPanned(isUserPannedRef.current);
     };
 
     const handleCrosshairMove = (
@@ -1449,6 +1428,42 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         formatBucketTime(timeMs, timeframeRef.current),
       );
     };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      isPointerInteractingRef.current = true;
+      pointerStartRef.current = { x: event.clientX, y: event.clientY };
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = isUserPannedRef.current;
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isPointerInteractingRef.current || !pointerStartRef.current) return;
+      const dx = event.clientX - pointerStartRef.current.x;
+      const dy = event.clientY - pointerStartRef.current.y;
+      if (!pointerDraggedRef.current && Math.hypot(dx, dy) > 4) {
+        pointerDraggedRef.current = true;
+        isUserPannedRef.current = true;
+        setIsPanned(true);
+      }
+    };
+    const handlePointerUp = () => {
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      if (!pointerDraggedRef.current && !wasPannedBeforePointerRef.current) {
+        isUserPannedRef.current = false;
+      }
+      pointerDraggedRef.current = false;
+    };
+    const handleWheel = () => {
+      isUserPannedRef.current = true;
+      setIsPanned(true);
+    };
+
+    host.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    host.addEventListener('pointermove', handlePointerMove, { passive: true });
+    host.addEventListener('pointerup', handlePointerUp, { passive: true });
+    host.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    host.addEventListener('wheel', handleWheel, { passive: true });
 
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
     chart.subscribeCrosshairMove(handleCrosshairMove);
@@ -1563,7 +1578,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             subBarFractionRef.current = 0;
           }
 
-          if (!isUserPannedRef.current) {
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             const targetScrollPos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
             const currentScrollPos = chart.timeScale().scrollPosition();
             const scrollBlend = 1 - Math.exp(-8 * dt);
@@ -1617,7 +1632,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             committedNewBar = true;
           }
 
-          if (!isUserPannedRef.current) {
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             const targetScrollPos = BASE_RIGHT_OFFSET;
             const currentScrollPos = chart.timeScale().scrollPosition();
             const scrollBlend = 1 - Math.exp(-8 * dt);
@@ -1719,6 +1734,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         window.cancelAnimationFrame(rafId);
       }
       tickResizeObserver.disconnect();
+      host.removeEventListener('pointerdown', handlePointerDown);
+      host.removeEventListener('pointermove', handlePointerMove);
+      host.removeEventListener('pointerup', handlePointerUp);
+      host.removeEventListener('pointercancel', handlePointerUp);
+      host.removeEventListener('wheel', handleWheel);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRange);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
       lineSeries.detachPrimitive(lineTipPrimitive);
@@ -1799,6 +1819,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     if (needsFullReseed) {
       const cloned = seedBars.map((bar) => ({ ...bar }));
       committedBarsRef.current = cloned;
+      isUserPannedRef.current = false;
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = false;
+      setIsPanned(false);
 
       const lineData: AreaData<UTCTimestamp>[] = cloned.map((bar) => ({
         time: bar.time,
@@ -1931,13 +1957,31 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   }, [entryPrice, chartType]);
 
   const resetView = () => {
-    isUserPannedRef.current = false;
-    isAutoPositioningRef.current = true;
+    const chart = chartRef.current;
     const targetPos =
       BASE_RIGHT_OFFSET +
       (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
+
+    isUserPannedRef.current = false;
+    isPointerInteractingRef.current = false;
+    pointerStartRef.current = null;
+    pointerDraggedRef.current = false;
+    wasPannedBeforePointerRef.current = false;
+    isAutoPositioningRef.current = false;
     lastAppliedScrollPosRef.current = targetPos;
-    chartRef.current?.priceScale('right').applyOptions({ autoScale: true });
+
+    if (chart) {
+      chart.priceScale('right').applyOptions({ autoScale: true });
+      // Snap to the exact live position in one action; the animation loop
+      // then maintains that position without requiring repeated button taps.
+      isApplyingAutoScrollRef.current = true;
+      try {
+        chart.timeScale().scrollToPosition(targetPos, false);
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+    }
+
     setIsPanned(false);
     onPriceHover?.(null, null);
   };
