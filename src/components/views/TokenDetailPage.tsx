@@ -559,10 +559,40 @@ export const TokenDetailPage: React.FC = () => {
                 <span className="text-[12px] text-white/40">Created At</span>
                 <span className="text-[12px] font-medium text-white/85">Nov 14, 2026</span>
               </div>
-              <div className="space-y-2">
-                <span className="block text-[12px] text-white/40">Creator Address</span>
-                <div className="flex min-w-0 items-center rounded-lg border border-white/[0.08] bg-white/[0.025] px-3 py-2.5">
-                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-white/75">7xKX...9mPq...AbCd</span>
+              <div className="space-y-4 border-t border-white/[0.10] pt-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="w-[104px] shrink-0 text-[12px] text-white/40">Creator</span>
+                  <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
+                    {activeToken.creator_wallet || 'Unavailable'}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!activeToken.creator_wallet}
+                    onClick={() => {
+                      if (!activeToken.creator_wallet) return;
+                      navigator.clipboard.writeText(activeToken.creator_wallet);
+                    }}
+                    aria-label="Copy creator address"
+                    title="Copy creator address"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white/90 disabled:opacity-25"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="w-[104px] shrink-0 text-[12px] text-white/40">Mint Address</span>
+                  <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
+                    {activeToken.mint}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyMint}
+                    aria-label="Copy mint address"
+                    title="Copy mint address"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white/90"
+                  >
+                    {copiedMint ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
               </div>
             </div>
