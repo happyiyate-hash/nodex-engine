@@ -60,17 +60,17 @@ const CHART_THEME = {
     sheenColor: '232, 238, 248',
   },
   upColor: '#6CE094',
-  upTopColor: 'rgba(108, 224, 148, 0.10)',
-  upBottomColor: 'rgba(108, 224, 148, 0.0)',
+  upTopColor: 'rgba(108, 224, 148, 0.13)',
+  upBottomColor: 'rgba(108, 224, 148, 0.035)',
   upBadgeBg: '#3CC66C',
   downColor: '#F06A6A',
-  downTopColor: 'rgba(240, 106, 106, 0.10)',
-  downBottomColor: 'rgba(240, 106, 106, 0.0)',
+  downTopColor: 'rgba(240, 106, 106, 0.13)',
+  downBottomColor: 'rgba(240, 106, 106, 0.035)',
   downBadgeBg: '#DC4C4C',
   lineWidth: 2 as const,
   gridHorzColor: 'rgba(255,255,255,0.04)',
   axisTextColor: 'rgba(255,255,255,0.46)',
-  crosshairColor: 'rgba(255,255,255,0.32)',
+  crosshairColor: 'rgba(255,255,255,0.44)',
   crosshairLabelBg: '#18191c',
   entryLineColor: 'rgba(250,204,21,0.55)',
   liveDot: {
@@ -1002,7 +1002,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       },
       timeScale: {
         borderVisible: true,
-        borderColor: 'rgba(255,255,255,0.035)',
+        borderColor: 'rgba(255,255,255,0.11)',
         ticksVisible: false,
         timeVisible: true,
         secondsVisible: timeframeRef.current === '1m',
@@ -1181,8 +1181,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       if (!visibleRange || visibleRange.to <= visibleRange.from) return;
 
       const plotRight = width - chart.priceScale('right').width();
-      ctx.strokeStyle = 'rgba(255,255,255,0.24)';
-      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = 'rgba(255,255,255,0.36)';
+      ctx.lineWidth = 0.85;
       ctx.lineCap = 'butt';
 
       // Five fine tick marks follow the visible time range while it scrolls.
