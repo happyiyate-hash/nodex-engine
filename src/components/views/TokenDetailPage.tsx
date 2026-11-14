@@ -416,7 +416,7 @@ export const TokenDetailPage: React.FC = () => {
                 tfDragStateRef.current.active = false;
                 tfDragStateRef.current.moved = false;
               }}
-              className="flex h-full w-full min-w-0 touch-pan-x select-none items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+              className="flex h-full w-full min-w-0 touch-pan-x select-none items-center gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
             >
             {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
               <button
@@ -436,7 +436,7 @@ export const TokenDetailPage: React.FC = () => {
                     container.scrollTo({ left: right - container.clientWidth + 8, behavior: 'smooth' });
                   }
                 }}
-                className={`inline-flex h-10 min-w-[2.75rem] shrink-0 touch-pan-x items-center justify-center rounded-md px-2.5 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
+                className={`inline-flex h-10 min-w-[2.75rem] shrink-0 touch-pan-x items-center justify-center rounded-md px-2 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
                   timeframe === tf ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:text-white/90'
                 }`}
               >
@@ -481,7 +481,7 @@ export const TokenDetailPage: React.FC = () => {
         {/* Detail navigation: horizontally scrollable tabs with a continuously sliding indicator. */}
         <nav
           aria-label="Token details"
-          className="mx-2 mt-0.5 w-auto border-b border-white/25 bg-[#000000]"
+          className="mx-1.5 mt-0.5 w-auto border-b border-white/25 bg-[#000000]"
         >
           <div
             ref={detailTabsRef}
@@ -509,7 +509,7 @@ export const TokenDetailPage: React.FC = () => {
                       container.scrollTo({ left: tabRight - container.clientWidth, behavior: 'smooth' });
                     }
                   }}
-                  className={`relative z-[1] inline-flex h-9 w-[92px] shrink-0 items-center justify-center px-2 text-[14px] font-light leading-none tracking-normal transition-colors ${
+                  className={`relative z-[1] inline-flex h-9 w-[86px] shrink-0 items-center justify-center px-1 text-[14px] font-light leading-none tracking-normal transition-colors ${
                     activeDetailTab === tab ? 'text-white' : 'text-white/50 hover:text-white/80'
                   }`}
                 >
@@ -518,8 +518,8 @@ export const TokenDetailPage: React.FC = () => {
               ))}
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute bottom-[-1px] left-0 z-[2] h-[2px] w-[92px] rounded-full bg-white transition-transform duration-300 ease-out"
-                style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).indexOf(activeDetailTab) * 92}px)` }}
+                className="pointer-events-none absolute bottom-[-1px] left-0 z-[2] h-[2px] w-[86px] rounded-full bg-white transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).indexOf(activeDetailTab) * 86}px)` }}
               />
             </div>
           </div>
