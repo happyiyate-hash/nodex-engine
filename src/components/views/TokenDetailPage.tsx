@@ -35,10 +35,10 @@ export const TokenDetailPage: React.FC = () => {
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
   const tabContentScrollRef = useRef<HTMLDivElement>(null);
-  const tabTouchYRef = useRef<number | null>(null);
 
-  // Native non-passive handling prevents Android Chrome pull-to-refresh at the
-  // top of tab content and transfers the downward drag to the outer page.
+  // Keep downward drags inside the tab from reaching Android Chrome's
+  // pull-to-refresh gesture. At the tab's top edge, hand the drag to the
+  // overview scroller so the chart can be revealed naturally.
   useEffect(() => {
     const tabScroller = tabContentScrollRef.current;
     if (!tabScroller) return;
@@ -52,22 +52,31 @@ export const TokenDetailPage: React.FC = () => {
       if (previousY == null || currentY == null) return;
       const deltaY = currentY - previousY;
       previousY = currentY;
+      if (deltaY <= 0) return;
+
+      // Let the tab's own content scroll until it reaches its top boundary.
+      if (tabScroller.scrollTop > 1) return;
+
+      // Cancel the browser gesture before it can become pull-to-refresh.
+      if (event.cancelable) event.preventDefault();
+
       const pageScroller = pageScrollRef.current;
-      if (!pageScroller || deltaY <= 0 || tabScroller.scrollTop > 1) return;
-      event.preventDefault();
-      pageScroller.scrollTop = Math.max(0, pageScroller.scrollTop - deltaY);
+      if (pageScroller) {
+        pageScroller.scrollTop = Math.max(0, pageScroller.scrollTop - deltaY);
+      }
     };
     const resetTouch = () => { previousY = null; };
+    const options: AddEventListenerOptions = { passive: false, capture: true };
 
-    tabScroller.addEventListener('touchstart', handleTouchStart, { passive: true });
-    tabScroller.addEventListener('touchmove', handleTouchMove, { passive: false });
-    tabScroller.addEventListener('touchend', resetTouch, { passive: true });
-    tabScroller.addEventListener('touchcancel', resetTouch, { passive: true });
+    tabScroller.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
+    tabScroller.addEventListener('touchmove', handleTouchMove, options);
+    tabScroller.addEventListener('touchend', resetTouch, { passive: true, capture: true });
+    tabScroller.addEventListener('touchcancel', resetTouch, { passive: true, capture: true });
     return () => {
-      tabScroller.removeEventListener('touchstart', handleTouchStart);
-      tabScroller.removeEventListener('touchmove', handleTouchMove);
-      tabScroller.removeEventListener('touchend', resetTouch);
-      tabScroller.removeEventListener('touchcancel', resetTouch);
+      tabScroller.removeEventListener('touchstart', handleTouchStart, true);
+      tabScroller.removeEventListener('touchmove', handleTouchMove, true);
+      tabScroller.removeEventListener('touchend', resetTouch, true);
+      tabScroller.removeEventListener('touchcancel', resetTouch, true);
     };
   }, []);
 
@@ -331,7 +340,7 @@ export const TokenDetailPage: React.FC = () => {
       {/* One continuous page scroller: overview, chart, sticky tabs, and tab content share the same scroll. */}
       <section
         ref={pageScrollRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000]"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-none bg-[#000000]"
         onScroll={(event) => {
           const top = event.currentTarget.scrollTop;
           setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
@@ -566,7 +575,7 @@ export const TokenDetailPage: React.FC = () => {
         </nav>
       <div
         ref={tabContentScrollRef}
-        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-y-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-y-none pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         style={{ height: 'calc(100% - 36px)', touchAction: 'pan-y' }}
       >
       {activeDetailTab === 'Info' && (
