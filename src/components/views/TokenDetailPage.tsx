@@ -19,7 +19,7 @@ export const TokenDetailPage: React.FC = () => {
   } = useTerminal();
 
   const [copiedMint, setCopiedMint] = useState(false);
-  const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('24H');
+  const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('1S');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades' | 'Transactions'>('Info');
   const detailTabsRef = useRef<HTMLDivElement>(null);
@@ -41,6 +41,12 @@ export const TokenDetailPage: React.FC = () => {
   const activeToken = selectedToken
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : tokens[0];
+
+  // Always start each newly opened token on the 1-second chart, regardless of
+  // the timeframe selected on a previously viewed token.
+  useEffect(() => {
+    setTimeframe('1S');
+  }, [activeToken?.mint]);
 
   // Isolated Token Details demo tape. The simulated market has distinct
   // accumulation, pump, pullback and consolidation phases for chart testing.
