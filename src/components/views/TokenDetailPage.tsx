@@ -376,7 +376,7 @@ export const TokenDetailPage: React.FC = () => {
           />
         </div>
 
-        <div className="relative mt-1 flex h-14 w-full items-center bg-[#000000] font-sans">
+        <div className="sticky z-30 mt-1 flex h-14 w-full items-center bg-[#000000] font-sans" style={{ top: "calc(env(safe-area-inset-top) + 59px)" }}>
           <div className="relative flex h-full min-w-0 flex-1 items-center overflow-hidden">
             <div
               ref={timeframeScrollRef}
@@ -481,7 +481,7 @@ export const TokenDetailPage: React.FC = () => {
         {/* Detail navigation: horizontally scrollable tabs with a continuously sliding indicator. */}
         <nav
           aria-label="Token details"
-          className="relative z-30 mx-2 mt-0.5 w-auto border-b border-white/25 bg-[#000000]"
+          className="sticky z-30 mx-2 mt-0.5 w-auto border-b border-white/25 bg-[#000000]" style={{ top: "calc(env(safe-area-inset-top) + 115px)" }}
         >
           <div
             ref={detailTabsRef}
