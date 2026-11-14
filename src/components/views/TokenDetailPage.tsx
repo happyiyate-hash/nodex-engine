@@ -413,6 +413,11 @@ export const TokenDetailPage: React.FC = () => {
             76% { opacity: 0.78; }
             100% { transform: translate3d(0, -286px, 0); opacity: 0; }
           }
+          @keyframes nodex-money-flow-sell {
+            0% { transform: translate3d(0, 0, 0); opacity: 0; }
+            10%, 76% { opacity: 1; }
+            100% { transform: translate3d(0, -286px, 0); opacity: 0; }
+          }
         `}</style>
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
         <div className="relative z-0 -mx-3 -mt-3 w-[calc(100%+1.5rem)]">
@@ -442,13 +447,15 @@ export const TokenDetailPage: React.FC = () => {
             {floatingAmounts.map((item) => (
               <span
                 key={item.id}
-                className={`absolute bottom-5 whitespace-nowrap font-sans text-[10px] font-light tabular-nums tracking-[-0.02em] ${
-                  item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
+                className={`absolute bottom-5 whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${
+                  item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'
                 }`}
                 style={{
                   left: '10px',
-                  animation: 'nodex-money-flow 3.4s linear forwards',
-                        }}
+                  animation: item.side === 'buy'
+                    ? 'nodex-money-flow 3.4s linear forwards'
+                    : 'nodex-money-flow-sell 3.4s linear forwards',
+                }}
               >
                 {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
               </span>
