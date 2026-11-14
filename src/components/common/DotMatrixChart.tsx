@@ -1232,9 +1232,9 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const plotRight = Math.max(0, width - chart.priceScale('right').width());
       const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
       const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
-      // Candidate timestamps are spaced by roughly 96px, then checked using
-      // their real rendered width so labels never collide on narrow screens.
-      const labelEveryBars = Math.max(1, Math.ceil(96 / spacing));
+      // Give timestamps a little more breathing room; actual text width is
+      // checked below as a second guard against collisions on narrow screens.
+      const labelEveryBars = Math.max(1, Math.ceil(112 / spacing));
       const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
       // Render beyond the viewport; clipping reveals the labels as they move in.
       const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
@@ -1247,10 +1247,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ctx.beginPath();
       ctx.rect(0, 0, Math.max(0, plotRight - 2), heightPx);
       ctx.clip();
-      ctx.font = "9.5px 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.font = "500 10.5px 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif";
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255,255,255,0.48)';
+      ctx.fillStyle = 'rgba(255,255,255,0.56)';
 
       for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
         const x = chart.timeScale().logicalToCoordinate(logical as never);
@@ -1262,7 +1262,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       // Keep a guaranteed visual gap between neighboring labels. The same
       // accepted center coordinate drives both its text and its pointer tick.
       let previousRight = Number.NEGATIVE_INFINITY;
-      const labelGap = 14;
+      const labelGap = 18;
       for (const candidate of labelCandidates) {
         const labelWidth = ctx.measureText(candidate.label).width;
         const left = candidate.x - labelWidth / 2;
@@ -1271,11 +1271,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
         // Short tick begins at the time-axis top border and points to this
         // timestamp's exact center, never to an unrelated grid subdivision.
-        ctx.strokeStyle = 'rgba(255,255,255,0.36)';
-        ctx.lineWidth = 0.85;
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 0.6;
         ctx.beginPath();
         ctx.moveTo(Math.round(candidate.x) + 0.5, 0.5);
-        ctx.lineTo(Math.round(candidate.x) + 0.5, 4.2);
+        ctx.lineTo(Math.round(candidate.x) + 0.5, 3.4);
         ctx.stroke();
 
         ctx.fillText(candidate.label, candidate.x, 11.5);
