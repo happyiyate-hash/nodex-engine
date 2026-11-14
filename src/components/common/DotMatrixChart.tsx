@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronsRight } from 'lucide-react';
 import {
   AreaData,
   AreaSeries,
@@ -984,7 +985,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   // whenever the page becomes visible again.
   useEffect(() => {
     let refreshFrame = 0;
-    const refreshAfterResume = () => {
+    const refreshAfterResume = (returnToLive: boolean) => {
       if (document.visibilityState === 'hidden') return;
       window.cancelAnimationFrame(refreshFrame);
       refreshFrame = window.requestAnimationFrame(() => {
@@ -997,18 +998,37 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           if (width > 0 && chartHeight > 0) {
             chart.resize(width, chartHeight);
           }
+
+          if (returnToLive) {
+            isUserPannedRef.current = false;
+            isAutoPositioningRef.current = true;
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            setIsPanned(false);
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, true);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+          }
         }
       });
     };
 
-    document.addEventListener('visibilitychange', refreshAfterResume);
-    window.addEventListener('pageshow', refreshAfterResume);
-    window.addEventListener('focus', refreshAfterResume);
+    const handleVisibilityResume = () => {
+      if (document.visibilityState === 'visible') refreshAfterResume(true);
+    };
+    const handlePageShow = () => refreshAfterResume(true);
+    const handleWindowFocus = () => refreshAfterResume(false);
+
+    document.addEventListener('visibilitychange', handleVisibilityResume);
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('focus', handleWindowFocus);
     return () => {
       window.cancelAnimationFrame(refreshFrame);
-      document.removeEventListener('visibilitychange', refreshAfterResume);
-      window.removeEventListener('pageshow', refreshAfterResume);
-      window.removeEventListener('focus', refreshAfterResume);
+      document.removeEventListener('visibilitychange', handleVisibilityResume);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, [drawDotBackground]);
 
@@ -1384,6 +1404,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       drawTimeScaleTicks();
       drawTimeLabels();
       if (isApplyingAutoScrollRef.current || isAutoPositioningRef.current) return;
+
       const range = chart.timeScale().getVisibleLogicalRange();
       const total = committedBarsRef.current.length;
       const currentScrollPos = chart.timeScale().scrollPosition();
@@ -1391,27 +1412,23 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         BASE_RIGHT_OFFSET +
         (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
 
-      // Only pause continuous backward scrolling on an intentional horizontal pan
-      if (
-        chartTypeRef.current === 'line' &&
-        (currentScrollPos < expectedPos - 3.0 ||
-          currentScrollPos > expectedPos + 6.0 ||
-          (range !== null && total > 6 && range.to < total - 2.0))
-      ) {
+      // Treat horizontal navigation identically in line and candlestick modes.
+      // Once the user moves away from the live edge, incoming ticks must never
+      // pull the viewport back. Only the explicit "Go back to live" action
+      // (or returning to the app) re-enables automatic positioning.
+      const movedAwayFromLive =
+        currentScrollPos < expectedPos - 1.5 ||
+        (range !== null && total > 6 && range.to < total - 1.5);
+
+      if (movedAwayFromLive) {
         isUserPannedRef.current = true;
-      } else if (
-        isUserPannedRef.current &&
-        Math.abs(currentScrollPos - expectedPos) <= 1.5 &&
-        (!range || range.to >= total - 1.5)
-      ) {
-        isUserPannedRef.current = false;
       }
 
       if (range && total > 0) {
-        const pannedLeft = total > 6 && range.to < total - 2.0;
-        setIsPanned(pannedLeft || isUserPannedRef.current);
+        const pannedLeft = total > 6 && range.to < total - 1.5;
+        setIsPanned(isUserPannedRef.current || pannedLeft);
       } else {
-        setIsPanned(false);
+        setIsPanned(isUserPannedRef.current);
       }
     };
 
@@ -2072,14 +2089,15 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         </div>
       )}
 
-      {/* Return to live right edge when panned */}
+      {/* Compact return-to-live card; only shown while the user is browsing history. */}
       {isPanned && (
         <button
           type="button"
           onClick={resetView}
-          className="absolute bottom-7 right-[72px] z-[5] rounded border border-white/15 bg-[#111]/90 px-2 py-1 font-mono text-[9px] text-white/70 hover:text-white"
+          className="absolute bottom-7 right-[66px] z-[5] inline-flex h-[27px] items-center gap-1.5 rounded-[5px] border border-[#4BCB79]/55 bg-gradient-to-r from-[#10251A]/95 via-[#0B1B13]/95 to-[#101A14]/95 px-2.5 text-[10px] font-medium tracking-[0.01em] text-[#B9F2CD] shadow-[0_2px_10px_rgba(30,180,91,0.10)] transition-colors hover:border-[#65E895]/75 hover:text-white active:scale-[0.98]"
         >
-          LIVE
+          <ChevronsRight className="h-[13px] w-[13px] shrink-0 text-[#70E99A]" strokeWidth={2.1} />
+          <span className="whitespace-nowrap">Go back to live</span>
         </button>
       )}
     </div>
