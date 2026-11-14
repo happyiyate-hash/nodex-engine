@@ -293,7 +293,6 @@ export const TokenDetailPage: React.FC = () => {
         <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.5} />
         <span>Back</span>
       </button>
-}
     </div>
   );
 };
