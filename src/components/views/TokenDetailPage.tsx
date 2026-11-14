@@ -534,7 +534,7 @@ export const TokenDetailPage: React.FC = () => {
         className="w-full min-w-0 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
       >
       {activeDetailTab === 'Info' && (
-        <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
+        <section aria-label="Token information" className="w-full space-y-6 px-3 pb-6 pt-5">
           <div className="space-y-4">
             <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
@@ -573,7 +573,7 @@ export const TokenDetailPage: React.FC = () => {
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Creator</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {activeToken.creator_wallet ? `${activeToken.creator_wallet.slice(0, 7)}..${activeToken.creator_wallet.slice(-5)}` : 'Unavailable'}
+                    {activeToken.creator_wallet ? `${activeToken.creator_wallet.slice(0, 5)}...${activeToken.creator_wallet.slice(-5)}` : 'Unavailable'}
                   </span>
                   <button
                     type="button"
@@ -592,7 +592,7 @@ export const TokenDetailPage: React.FC = () => {
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Mint Address</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {activeToken.mint}
+                    {`${activeToken.mint.slice(0, 5)}...${activeToken.mint.slice(-5)}`}
                   </span>
                   <button
                     type="button"
@@ -676,7 +676,7 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {activeDetailTab === 'Position' && (
-        <section aria-label="Token position" className="w-full space-y-5 px-1 pb-8 pt-5">
+        <section aria-label="Token position" className="w-full space-y-5 px-3 pb-8 pt-5">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <h2 className="min-w-0 truncate text-[19px] font-semibold leading-tight tracking-tight text-white/95">
               {(displayPosition.name || activeToken.name || '').length <= 18
