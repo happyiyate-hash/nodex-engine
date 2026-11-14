@@ -527,7 +527,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </nav>
       <div
-        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         style={{ height: 'calc(100% - 36px)' }}
       >
       {activeDetailTab === 'Info' && (
