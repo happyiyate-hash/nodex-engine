@@ -425,16 +425,6 @@ export const TokenDetailPage: React.FC = () => {
                 onClick={(e) => {
                   if (suppressTimeframeClickRef.current) return;
                   setTimeframe(tf);
-                  const container = timeframeScrollRef.current;
-                  const button = e.currentTarget;
-                  if (!container) return;
-                  const left = button.offsetLeft;
-                  const right = left + button.offsetWidth;
-                  if (left < container.scrollLeft + 8) {
-                    container.scrollTo({ left: Math.max(0, left - 8), behavior: 'smooth' });
-                  } else if (right > container.scrollLeft + container.clientWidth - 8) {
-                    container.scrollTo({ left: right - container.clientWidth + 8, behavior: 'smooth' });
-                  }
                 }}
                 className={`inline-flex h-10 min-w-[2.75rem] shrink-0 touch-pan-x items-center justify-center rounded-md px-2 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
                   timeframe === tf ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:text-white/90'
