@@ -213,7 +213,35 @@ export const TokenDetailPage: React.FC = () => {
         }}
       >
       {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
-      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] pt-14 pb-2">
+      <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] px-3 pt-2 pb-2">
+        {/* Token market overview fills the space above the chart. */}
+        <div className="mb-2 flex h-[84px] w-full min-w-0 items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0b0b0b] px-3">
+          <TokenAvatar
+            symbol={activeToken.symbol}
+            logoUrl={activeToken.logo_url}
+            size="lg"
+            className="!h-[68px] !w-[68px] !text-2xl"
+          />
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold tracking-tight text-white/95">
+                {activeToken.name || activeToken.symbol || 'Unknown token'}
+              </p>
+              <p className="mt-1 truncate text-[10px] font-medium tracking-wide text-white/40">
+                {activeToken.symbol ? `${activeToken.symbol}` : 'Token'}{activeToken.decimals != null ? ` · ${activeToken.decimals} decimals` : ''}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
+              <p className="mt-0.5 font-mono text-[16px] font-semibold tracking-tight text-white/95">
+                {Number.isFinite(activeToken.market_cap_usd) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(activeToken.market_cap_usd) : '—'}
+              </p>
+              <p className={`mt-0.5 font-mono text-[10px] font-semibold ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
+                {marketChangePct == null ? '—' : `${isPositive ? '+' : ''}${marketChangePct.toFixed(2)}%`}
+              </p>
+            </div>
+          </div>
+        </div>
         {/* Live Scrub Indicator (if dragging); kept inside the plot area. */}
         {scrubTime && (
           <div className="absolute top-3 right-4 z-10 rounded border border-white/10 bg-[#0a0a0c]/80 px-2 py-0.5 font-mono text-[10px] text-white/50">
