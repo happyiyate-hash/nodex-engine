@@ -204,7 +204,9 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
         scan_attempt: incomingScanAttempt || previousScanAttempt,
         progress: 0,
         stage: 'retry_wait',
-        sub_event: 'Retrying security scan',
+        sub_event: data.retry_after
+          ? `Retrying security scan (attempt ${incomingScanAttempt || previousScanAttempt}) — next retry at ${String(data.retry_after)}`
+          : `Retrying security scan (attempt ${incomingScanAttempt || previousScanAttempt})`,
       }
     : event.event_type === 'token_scan_started'
     ? {
