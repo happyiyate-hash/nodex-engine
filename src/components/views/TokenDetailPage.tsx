@@ -21,6 +21,7 @@ export const TokenDetailPage: React.FC = () => {
   const [copiedMint, setCopiedMint] = useState(false);
   const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('24H');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
+  const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades' | 'Transactions'>('Info');
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [headerOffset, setHeaderOffset] = useState(0);
@@ -284,6 +285,34 @@ export const TokenDetailPage: React.FC = () => {
             <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-3" style={{ background: 'linear-gradient(to left, #000 0%, rgba(0,0,0,0.42) 45%, transparent 100%)' }} />
           </div>
         </div>
+
+        {/* Detail navigation: full-width baseline with a movable active indicator. */}
+        <nav
+          aria-label="Token details"
+          className="mt-2 w-full overflow-hidden border-b-2 border-white/30"
+        >
+          <div className="flex w-full items-stretch gap-1 overflow-x-auto overscroll-x-contain px-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+            {(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                aria-current={activeDetailTab === tab ? 'page' : undefined}
+                onClick={() => setActiveDetailTab(tab)}
+                className={`relative inline-flex min-h-11 shrink-0 items-center justify-center px-3 text-[12px] font-medium tracking-normal transition-colors ${
+                  activeDetailTab === tab ? 'text-white' : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                {tab}
+                {activeDetailTab === tab && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-3 -bottom-[2px] h-[3px] rounded-full bg-white"
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+        </nav>
       </section>
 
 
