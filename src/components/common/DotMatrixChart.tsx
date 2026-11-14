@@ -1893,8 +1893,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     onPriceHover?.(null, null);
   };
 
-  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
-
   return (
     <div
       ref={containerRef}
