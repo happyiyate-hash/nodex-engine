@@ -252,10 +252,6 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
     );
   };
 
-  return (b.intelligence?.activity_score ?? -1) - (a.intelligence?.activity_score ?? -1);
-    });
-  const selectedDeveloper = developerRows.find((developer) => developer.address === selectedCreatorAddress) ?? null;
-
   return (
     <div className={embedded ? "w-full min-w-0 bg-black text-white" : "flex h-full w-full flex-col overflow-hidden bg-black text-white"}>
       {!embedded && <header className="shrink-0 flex-none border-b border-white/[0.08] bg-black/95 px-4 pb-3 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
