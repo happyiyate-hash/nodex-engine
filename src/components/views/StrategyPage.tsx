@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { StrategyConfig } from '../../types';
+import { apiClient } from '../../services/rest';
 import { useToast } from '../ui/ToastProvider';
 import {
   Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
@@ -90,7 +91,7 @@ const ToggleRow = ({
   </label>
 );
 
-export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelligence: () => void }> = ({ embedded = false, onOpenDeveloperIntelligence }) => {
+export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelligence?: () => void }> = ({ embedded = false, onOpenDeveloperIntelligence }) => {
   const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig, engineStatus } = useTerminal();
   const { showToast, updateToast } = useToast();
   const paperMode = engineStatus.operating_mode.toLowerCase() !== 'real';
@@ -259,13 +260,15 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
         <p className="mt-0.5 text-[10px] text-white/40">Risk rules, take profit, stop loss, and paper execution parameters.</p>
       </header>}
       <div className={embedded ? "w-full min-w-0 px-3" : "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4"}>
-      <section className="mb-5 border-b border-white/[0.08] pb-5">
-        <button type="button" onClick={onOpenDeveloperIntelligence} className="flex w-full items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-4 text-left transition-colors hover:bg-white/[0.05] active:bg-white/[0.07]">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/[0.09] bg-white/[0.04]"><Users className="h-[18px] w-[18px] text-white/70" /></span>
-          <span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold text-white/90">Developer Intelligence</span><span className="mt-1 block text-[10px] text-white/40">Profiles, reputation scores and creator history</span></span>
-          <ArrowRight className="h-4 w-4 shrink-0 text-white/40" />
-        </button>
-      </section>
+      {onOpenDeveloperIntelligence && (
+        <section className="mb-5 border-b border-white/[0.08] pb-5">
+          <button type="button" onClick={onOpenDeveloperIntelligence} className="flex w-full items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-4 text-left transition-colors hover:bg-white/[0.05] active:bg-white/[0.07]">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/[0.09] bg-white/[0.04]"><Users className="h-[18px] w-[18px] text-white/70" /></span>
+            <span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold text-white/90">Developer Intelligence</span><span className="mt-1 block text-[10px] text-white/40">Profiles, reputation scores and creator history</span></span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-white/40" />
+          </button>
+        </section>
+      )}
 
         <section className="pt-0">
         <ToggleRow
