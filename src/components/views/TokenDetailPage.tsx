@@ -612,13 +612,13 @@ export const TokenDetailPage: React.FC = () => {
       {activeDetailTab === 'Holders' && (
         <section aria-label="Token holders" className="w-full space-y-6 px-1 pb-8 pt-5">
           <div className="grid w-full grid-cols-2 gap-2.5">
-            <div className="min-w-0 rounded-xl bg-white/[0.12] px-3.5 py-3">
+            <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Total Holders</p>
-              <p className="mt-1 font-mono text-[19px] font-medium tracking-tight text-white/95">8,426</p>
+              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">8,426</p>
             </div>
-            <div className="min-w-0 rounded-xl bg-white/[0.12] px-3.5 py-3">
+            <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Top 10 Ownership</p>
-              <p className="mt-1 font-mono text-[19px] font-medium tracking-tight text-white/95">34.8%</p>
+              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">34.8%</p>
             </div>
           </div>
 
