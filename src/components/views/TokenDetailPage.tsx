@@ -154,8 +154,13 @@ export const TokenDetailPage: React.FC = () => {
         const side = Math.random() < 0.54 ? 'buy' : 'sell';
         const amount = Number((0.35 + Math.random() * 34.65).toFixed(2));
         const id = Date.now() + Math.random();
-        const offset = 7 + Math.floor(Math.random() * 42);
-        return { id, amount, side, offset };
+        // Keep the stream tight against the chart's left edge, with occasional
+        // wider gaps and a small sideways drift so entries don't form one column.
+        const offset = Math.random() < 0.78
+          ? 2 + Math.floor(Math.random() * 22)
+          : 24 + Math.floor(Math.random() * 15);
+        const drift = -15 + Math.floor(Math.random() * 31);
+        return { id, amount, side, offset, drift };
       });
       setFloatingAmounts((current) => [
         ...current.filter((item) => now - item.id < 3600),
@@ -414,7 +419,7 @@ export const TokenDetailPage: React.FC = () => {
             0% { transform: translate3d(0, 0, 0); opacity: 0; }
             10% { opacity: 0.92; }
             76% { opacity: 0.78; }
-            100% { transform: translate3d(0, -286px, 0); opacity: 0; }
+            100% { transform: translate3d(var(--flow-drift), -286px, 0); opacity: 0; }
           }
         `}</style>
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
@@ -445,16 +450,19 @@ export const TokenDetailPage: React.FC = () => {
             {floatingAmounts.map((item) => (
               <span
                 key={item.id}
-                className={`absolute bottom-5 whitespace-nowrap font-mono text-[11px] font-semibold tabular-nums tracking-tight ${
+                className={`absolute bottom-5 whitespace-nowrap font-mono text-[12px] font-medium tabular-nums tracking-[-0.045em] ${
                   item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
                 }`}
                 style={{
                   left: `${item.offset}px`,
+                  ['--flow-drift' as string]: `${item.drift}px`,
                   animation: 'nodex-money-flow 3.4s linear forwards',
                   textShadow: '0 1px 8px rgba(0,0,0,0.9)',
                 }}
               >
-                {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
+                <span className="inline-block origin-left scale-x-[0.92]">
+                  {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
+                </span>
               </span>
             ))}
           </div>
