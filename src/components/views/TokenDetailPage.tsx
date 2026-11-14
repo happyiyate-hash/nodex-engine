@@ -384,7 +384,7 @@ export const TokenDetailPage: React.FC = () => {
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
         <div className="-mx-3 w-[calc(100%+1.5rem)]">
           <DotMatrixChart
-            key={activeToken.mint}
+            key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
             currentPrice={liveTokenPrice}
             marketCap={simulatedMarketCap}
             entryPrice={activePosition ? entryPriceUsd : undefined}
@@ -579,7 +579,7 @@ export const TokenDetailPage: React.FC = () => {
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Creator</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {activeToken.creator_wallet || 'Unavailable'}
+                    {activeToken.creator_wallet ? `${activeToken.creator_wallet.slice(0, 7)}..${activeToken.creator_wallet.slice(-5)}` : 'Unavailable'}
                   </span>
                   <button
                     type="button"
