@@ -1225,7 +1225,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
       const labelEveryBars = Math.max(1, Math.ceil(76 / spacing));
       const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
-      const lastLogical = Math.floor(range.to / labelEveryBars) * labelEveryBars;
+      // Render a little beyond the visible logical range. Canvas clipping keeps
+      // these labels hidden until they naturally slide in from the right edge.
+      const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
+      const lastLogical = Math.floor(preloadLogicalTo / labelEveryBars) * labelEveryBars;
       const lastBar = bars[bars.length - 1];
       const lastIndex = bars.length - 1;
 
