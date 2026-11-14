@@ -457,7 +457,25 @@ export const TokenDetailPage: React.FC = () => {
                     : 'nodex-money-flow-sell 3.4s linear forwards',
                 }}
               >
-                {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
+                <span className="inline-flex items-center gap-0.5">
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 12 12"
+                    className="h-2.5 w-2.5 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="miter"
+                  >
+                    {item.side === 'buy' ? (
+                      <path d="M2 7.8 L6 3.6 L10 7.8" />
+                    ) : (
+                      <path d="M2 4.2 L6 8.4 L10 4.2" />
+                    )}
+                  </svg>
+                  {formatUsd(item.amount)}
+                </span>
               </span>
             ))}
             {/* Dark translucent brush sits above the amount stream to create a soft, flowing-in-dark look. */}
