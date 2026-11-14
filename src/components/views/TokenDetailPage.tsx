@@ -34,51 +34,6 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
-  const tabContentScrollRef = useRef<HTMLDivElement>(null);
-
-  // Keep downward drags inside the tab from reaching Android Chrome's
-  // pull-to-refresh gesture. At the tab's top edge, hand the drag to the
-  // overview scroller so the chart can be revealed naturally.
-  useEffect(() => {
-    const tabScroller = tabContentScrollRef.current;
-    if (!tabScroller) return;
-    let previousY: number | null = null;
-
-    const handleTouchStart = (event: TouchEvent) => {
-      previousY = event.touches[0]?.clientY ?? null;
-    };
-    const handleTouchMove = (event: TouchEvent) => {
-      const currentY = event.touches[0]?.clientY;
-      if (previousY == null || currentY == null) return;
-      const deltaY = currentY - previousY;
-      previousY = currentY;
-      if (deltaY <= 0) return;
-
-      // Let the tab's own content scroll until it reaches its top boundary.
-      if (tabScroller.scrollTop > 1) return;
-
-      // Cancel the browser gesture before it can become pull-to-refresh.
-      if (event.cancelable) event.preventDefault();
-
-      const pageScroller = pageScrollRef.current;
-      if (pageScroller) {
-        pageScroller.scrollTop = Math.max(0, pageScroller.scrollTop - deltaY);
-      }
-    };
-    const resetTouch = () => { previousY = null; };
-    const options: AddEventListenerOptions = { passive: false, capture: true };
-
-    tabScroller.addEventListener('touchstart', handleTouchStart, { passive: true, capture: true });
-    tabScroller.addEventListener('touchmove', handleTouchMove, options);
-    tabScroller.addEventListener('touchend', resetTouch, { passive: true, capture: true });
-    tabScroller.addEventListener('touchcancel', resetTouch, { passive: true, capture: true });
-    return () => {
-      tabScroller.removeEventListener('touchstart', handleTouchStart, true);
-      tabScroller.removeEventListener('touchmove', handleTouchMove, true);
-      tabScroller.removeEventListener('touchend', resetTouch, true);
-      tabScroller.removeEventListener('touchcancel', resetTouch, true);
-    };
-  }, []);
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
@@ -340,7 +295,7 @@ export const TokenDetailPage: React.FC = () => {
       {/* One continuous page scroller: overview, chart, sticky tabs, and tab content share the same scroll. */}
       <section
         ref={pageScrollRef}
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-none bg-[#000000]"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-y-none bg-[#000000] [touch-action:pan-y]"
         onScroll={(event) => {
           const top = event.currentTarget.scrollTop;
           setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
@@ -574,9 +529,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </nav>
       <div
-        ref={tabContentScrollRef}
-        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-y-none pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
-        style={{ height: 'calc(100% - 36px)', touchAction: 'pan-y' }}
+        className="w-full min-w-0 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
