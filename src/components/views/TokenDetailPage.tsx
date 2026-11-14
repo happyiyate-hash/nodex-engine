@@ -293,7 +293,7 @@ export const TokenDetailPage: React.FC = () => {
       >
       {/* One continuous page scroller: overview, chart, sticky tabs, and tab content share the same scroll. */}
       <section
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000]"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000]"
         onScroll={(event) => {
           const top = event.currentTarget.scrollTop;
           setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
@@ -527,7 +527,8 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </nav>
       <div
-        className="min-w-0 overflow-visible pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        style={{ height: 'calc(100% - 36px)' }}
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
