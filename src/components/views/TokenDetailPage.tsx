@@ -178,9 +178,9 @@ export const TokenDetailPage: React.FC = () => {
                 onClick={closeTokenDetail}
                 aria-label="Go back"
                 title="Go back"
-                className="inline-flex h-9 w-8 shrink-0 items-center justify-center text-white/55 transition-colors hover:text-white/80 active:text-white"
+                className="inline-flex h-10 w-9 shrink-0 items-center justify-center text-white/55 transition-colors hover:text-white/80 active:text-white"
               >
-                <ChevronLeft className="h-[21px] w-[21px]" strokeWidth={1.7} />
+                <ChevronLeft className="h-[29px] w-[29px]" strokeWidth={1.8} />
               </button>
               <span className="truncate text-[12px] font-medium tracking-wide text-white/65">
                 {activeToken.symbol || 'Token'}
@@ -188,9 +188,26 @@ export const TokenDetailPage: React.FC = () => {
             </div>
           ) : (
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-              <TokenAvatar symbol={activeToken.symbol} logoUrl={activeToken.logo_url} size="md" className="shrink-0" />
-              <div className="min-w-0 truncate text-[12px] font-medium tracking-[0.01em] text-white/90">
-                {activeToken.name || activeToken.symbol || 'Unknown token'}
+              <TokenAvatar
+                symbol={activeToken.symbol}
+                logoUrl={activeToken.logo_url}
+                size="lg"
+                className="!h-[46px] !w-[46px] shrink-0 !rounded-lg !text-lg"
+              />
+              <div className="flex min-w-0 flex-col justify-center gap-1 leading-tight">
+                <span className="truncate text-[12px] font-semibold tracking-wide text-white/90">
+                  {activeToken.symbol || 'Token'}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyMint}
+                  aria-label="Copy contract address"
+                  title="Copy contract address"
+                  className="flex min-w-0 items-center gap-1 text-[9px] font-mono text-white/40 transition-colors hover:text-white/75"
+                >
+                  <span className="truncate">{activeToken.mint.slice(0, 4)}...{activeToken.mint.slice(-4)}</span>
+                  {copiedMint ? <Check className="h-2.5 w-2.5 shrink-0 text-emerald-400" /> : <Copy className="h-2.5 w-2.5 shrink-0" />}
+                </button>
               </div>
             </div>
           )}
