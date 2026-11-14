@@ -458,36 +458,13 @@ export const TokenDetailPage: React.FC = () => {
                 }}
               >
                 <span className="inline-flex items-center gap-0.5">
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 12 12"
-                    className="h-2.5 w-2.5 shrink-0"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.1"
-                    strokeLinecap="round"
-                    strokeLinejoin="miter"
-                  >
-                    {item.side === 'buy' ? (
-                      <path d="M2 7.8 L6 3.6 L10 7.8" />
-                    ) : (
-                      <path d="M2 4.2 L6 8.4 L10 4.2" />
-                    )}
-                  </svg>
+                  <span aria-hidden="true" className="text-[11px] font-bold leading-none">
+                    {item.side === 'buy' ? '▲' : '▼'}
+                  </span>
                   {formatUsd(item.amount)}
                 </span>
               </span>
             ))}
-            {/* Dark translucent brush sits above the amount stream to create a soft, flowing-in-dark look. */}
-            <div
-              className="pointer-events-none absolute inset-y-0 left-0 z-30 w-[20%]"
-              style={{
-                background: 'linear-gradient(to right, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.56) 3%, rgba(0,0,0,0.34) 42%, rgba(0,0,0,0.12) 78%, rgba(0,0,0,0) 100%)',
-                backdropFilter: 'blur(2px)',
-                WebkitBackdropFilter: 'blur(2px)',
-                boxShadow: 'inset -12px 0 18px -18px rgba(0,0,0,0.85)',
-              }}
-            />
           </div>
         </div>
 
