@@ -339,7 +339,7 @@ export const TokenDetailPage: React.FC = () => {
       >
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
       <div className="relative w-full min-w-0 max-w-full overflow-x-clip bg-[#000000] px-3 pt-2 pb-2">
-        <div className="flex w-full min-w-0 items-center justify-between gap-3">
+        <div className="relative z-20 flex w-full min-w-0 items-center justify-between gap-3 bg-[#000000]">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="relative shrink-0">
               <TokenAvatar
@@ -421,7 +421,7 @@ export const TokenDetailPage: React.FC = () => {
         )}
 
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
-        <div className="-mx-3 -mt-3 w-[calc(100%+1.5rem)]">
+        <div className="relative z-0 -mx-3 -mt-3 w-[calc(100%+1.5rem)]">
           <DotMatrixChart
             key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
             currentPrice={liveTokenPrice}
