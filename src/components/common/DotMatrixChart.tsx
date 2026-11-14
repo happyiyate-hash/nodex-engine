@@ -632,6 +632,7 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
 
 export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   currentPrice,
+  marketCap,
   entryPrice,
   priceHistory,
   isPositive = true,
