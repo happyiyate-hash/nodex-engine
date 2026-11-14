@@ -1763,10 +1763,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       {/* Layer 2.5: Gentle axis-edge brushes; numbers fade only as they approach the outer edges. */}
       <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
         <div
-          className="absolute right-0 top-0 h-16 w-[72px]"
+          className="absolute right-0 top-[12px] h-16 w-[72px]"
           style={{
             background:
-              'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.10) 24%, rgba(0,0,0,0.045) 58%, rgba(0,0,0,0) 100%)',
+              'linear-gradient(to bottom, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.15) 24%, rgba(0,0,0,0.065) 58%, rgba(0,0,0,0) 100%)',
           }}
         />
         <div
