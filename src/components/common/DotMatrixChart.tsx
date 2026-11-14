@@ -1432,6 +1432,23 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             }
             committedNewBar = true;
           }
+
+          if (!isUserPannedRef.current) {
+            const targetScrollPos = BASE_RIGHT_OFFSET;
+            const currentScrollPos = chart.timeScale().scrollPosition();
+            const scrollBlend = 1 - Math.exp(-8 * dt);
+            const nextScrollPos =
+              currentScrollPos + (targetScrollPos - currentScrollPos) * scrollBlend;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(nextScrollPos, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            if (Math.abs(targetScrollPos - nextScrollPos) < 0.08) {
+              isAutoPositioningRef.current = false;
+            }
+          }
         }
 
         // 3. Smooth Y-axis scale easing without sudden step jumps
