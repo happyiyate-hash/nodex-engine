@@ -491,6 +491,18 @@ class LiveTipPrimitive implements ISeriesPrimitive<Time> {
         ctx.stroke();
       }
 
+      // Prominent live-price guide: a continuous dashed line extending left from the moving axis card.
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(colors.line, 0.92);
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'butt';
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, cardCenterY);
+      ctx.lineTo(plotW, cardCenterY);
+      ctx.stroke();
+      ctx.restore();
+
       // 3. In Line mode, draw the single calm pulsing filled halo + bigger dot tightly locked at (liveX, guideY)
       if (
         this.mode === 'line' &&
@@ -975,7 +987,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       },
       grid: {
         vertLines: { visible: false },
-        horzLines: { visible: false },
+        // Fine, low-contrast guides extend left from the right-side price labels.
+        horzLines: {
+          visible: true,
+          color: 'rgba(255,255,255,0.055)',
+          style: LineStyle.Solid,
+        },
       },
       rightPriceScale: {
         borderVisible: false,
