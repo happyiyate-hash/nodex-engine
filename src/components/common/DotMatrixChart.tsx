@@ -1003,7 +1003,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       timeScale: {
         borderVisible: true,
         borderColor: 'rgba(255,255,255,0.11)',
-        ticksVisible: false,
+        ticksVisible: true,
         timeVisible: true,
         secondsVisible: timeframeRef.current === '1m',
         rightOffset: BASE_RIGHT_OFFSET,
@@ -1769,14 +1769,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         style={{ position: 'absolute', top: 34, left: 0, right: 0, bottom: 0, width: '100%', height: 'calc(100% - 34px)' }}
         className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
-      {/* Fine custom time-axis ticks; the heavier native marks are disabled. */}
-      <canvas
-        ref={timeTicksCanvasRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute bottom-[21px] left-0 z-[2] h-[5px] max-w-full"
-        style={{ width: '100%', height: 5 }}
-      />
-
       {/* Layer 2.5: Axis-edge brushes sit above chart labels so the price numbers fade beneath them. */}
       <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[4] overflow-hidden">
         <div
