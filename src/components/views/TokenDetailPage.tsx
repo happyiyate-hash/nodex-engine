@@ -368,10 +368,6 @@ export const TokenDetailPage: React.FC = () => {
         />
       </section>
 
-      <div className="mx-4 mt-2 rounded-md border border-amber-400/20 bg-amber-400/[0.05] px-3 py-2 text-[10px] font-mono text-amber-200/75">
-        DEMO MODE · Price and chart are simulated locally for interface testing. No real market feed or trade execution is connected.
-      </div>
-
       {/* Compact, full-width position and live market information. */}
       <section className="w-full px-4 sm:px-6 pt-3 pb-3 max-w-4xl mx-auto font-mono border-b border-white/[0.10]">
         <div className="space-y-3">
