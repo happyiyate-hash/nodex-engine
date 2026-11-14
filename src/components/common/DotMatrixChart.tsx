@@ -960,7 +960,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const host = tvContainerRef.current;
     if (!host) return;
 
-    const axisFontFamily = "'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, sans-serif";
+    const axisFontFamily = "'Barlow', 'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, sans-serif";
     const chart = createChart(host, {
       autoSize: true,
       width: Math.max(1, host.clientWidth || 320),
@@ -969,7 +969,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: CHART_THEME.axisTextColor,
         fontFamily: axisFontFamily,
-        fontSize: 10,
+        fontSize: 10.5,
         attributionLogo: false,
       },
       grid: {
@@ -979,12 +979,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       rightPriceScale: {
         borderVisible: false,
         entireTextOnly: true,
-        minimumWidth: 66,
+        minimumWidth: 74,
         scaleMargins: { top: 0.11, bottom: 0.015 },
       },
       timeScale: {
         borderVisible: true,
-        borderColor: 'rgba(255,255,255,0.055)',
+        borderColor: 'rgba(255,255,255,0.035)',
         ticksVisible: true,
         timeVisible: true,
         secondsVisible: timeframeRef.current === '1m',
@@ -1703,7 +1703,25 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="relative z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
 
-      {/* Layer 2.5: Very light top-edge seam blend. */}
+      {/* Layer 2.5: Soft top/bottom fade confined to the right price scale. */}
+      <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
+        <div
+          className="absolute right-0 top-0 h-12 w-[78px]"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(255,255,255,0.025) 0%, rgba(0,0,0,0.045) 30%, rgba(0,0,0,0.14) 100%)',
+          }}
+        />
+        <div
+          className="absolute right-0 bottom-0 h-12 w-[78px]"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(255,255,255,0.025) 0%, rgba(0,0,0,0.045) 30%, rgba(0,0,0,0.14) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2.6: Very light top-edge seam blend. */}
       <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
         <div
           className="absolute inset-x-0 top-0 h-10"
