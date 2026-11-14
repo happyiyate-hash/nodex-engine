@@ -5,7 +5,7 @@ import { apiClient } from '../../services/rest';
 import { useToast } from '../ui/ToastProvider';
 import {
   Activity, Check, ChevronDown, ChevronRight, History, ShieldAlert, ShieldCheck, SlidersHorizontal,
-  TrendingUp, X, Plus, Pencil, Trash2, Users, Wallet, BarChart3, Search,
+  TrendingUp, X, Plus, Pencil, Users, Wallet, BarChart3,
 } from 'lucide-react';
 
 type RiskTarget = 'stop_loss_pct' | 'take_profit_pct';
