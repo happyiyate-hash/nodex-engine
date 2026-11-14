@@ -22,6 +22,7 @@ export const TokenDetailPage: React.FC = () => {
   const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('1S');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades' | 'Transactions'>('Info');
+  const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -740,6 +741,78 @@ export const TokenDetailPage: React.FC = () => {
           {!activePosition && (
             <p className="text-[10px] text-white/25">Illustrative values only · This is not a real or recorded paper position.</p>
           )}
+        </section>
+      )}
+
+
+      {activeDetailTab === 'Trades' && (
+        <section aria-label="Token trades" className="w-full space-y-5 px-3 pb-8 pt-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-[16px] font-semibold tracking-tight text-white/95">Recent Trades</h2>
+              <p className="mt-1 text-[10px] text-white/40">On-chain buys and sells for this token</p>
+            </div>
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/[0.10] px-2 py-1 text-[9px] font-medium tracking-wide text-white/45">
+              <span className="h-1.5 w-1.5 rounded-full bg-white/25" />
+              FEED OFFLINE
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="min-w-0 rounded-lg bg-white/[0.07] px-3 py-3">
+              <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Buy Volume</p>
+              <p className="mt-1.5 font-mono text-[20px] font-medium tabular-nums text-[#6CE094]">—</p>
+              <p className="mt-0.5 text-[10px] text-white/30">Last 5 minutes</p>
+            </div>
+            <div className="min-w-0 rounded-lg bg-white/[0.07] px-3 py-3">
+              <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Sell Volume</p>
+              <p className="mt-1.5 font-mono text-[20px] font-medium tabular-nums text-[#F06A6A]">—</p>
+              <p className="mt-0.5 text-[10px] text-white/30">Last 5 minutes</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-medium text-white/55">Buy / Sell Pressure</span>
+              <span className="font-mono tabular-nums text-white/30">Waiting for trades</span>
+            </div>
+            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/[0.10]">
+              <div className="h-full w-1/2 bg-[#6CE094]/35" />
+              <div className="h-full w-1/2 bg-[#F06A6A]/35" />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.10] pb-3">
+            <h3 className="text-[12px] font-medium text-white/85">Trade History</h3>
+            <div className="flex items-center gap-1 rounded-lg bg-white/[0.06] p-0.5">
+              {(['All', 'Buys', 'Sells'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  aria-pressed={tradeFilter === filter}
+                  onClick={() => setTradeFilter(filter)}
+                  className={`rounded-md px-2.5 py-1.5 text-[10px] font-medium transition-colors ${
+                    tradeFilter === filter ? 'bg-white/[0.14] text-white' : 'text-white/45 hover:text-white/80'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex min-h-[190px] flex-col items-center justify-center px-5 py-8 text-center">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.10] bg-white/[0.04]">
+              <ChartCandlestick className="h-5 w-5 text-white/45" strokeWidth={1.6} />
+            </div>
+            <p className="text-[13px] font-medium text-white/80">Waiting for on-chain trades</p>
+            <p className="mt-1.5 max-w-[250px] text-[11px] leading-relaxed text-white/40">
+              Verified buys and sells will appear here with wallet, amount, price and transaction time when the live feed is connected.
+            </p>
+            <span className="mt-4 rounded-md border border-white/[0.08] px-2.5 py-1 text-[9px] tracking-wide text-white/30">
+              {tradeFilter === 'All' ? 'ALL TRADES' : tradeFilter.toUpperCase()} · NO SAMPLE DATA
+            </span>
+          </div>
         </section>
       )}
 
