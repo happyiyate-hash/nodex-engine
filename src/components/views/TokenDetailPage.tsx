@@ -234,16 +234,16 @@ export const TokenDetailPage: React.FC = () => {
           }}
         />
 
-        <div className="mt-2 flex h-11 w-full items-stretch px-2 font-mono">
+        <div className="mt-2 flex h-14 w-full items-stretch px-2 font-mono">
           <div className="relative flex min-w-0 basis-[60%] items-center overflow-hidden">
-            <div className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex h-full min-w-0 flex-1 touch-pan-x select-none items-center gap-2.5 overflow-x-auto overscroll-x-contain px-2 py-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
             {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
               <button
                 key={tf}
                 type="button"
                 onClick={() => setTimeframe(tf)}
-                className={`shrink-0 rounded-md px-2 py-1.5 text-[12px] font-semibold tracking-[0.015em] transition-colors ${
-                  timeframe === tf ? 'bg-white/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]' : 'text-white/45 hover:text-white/85'
+                className={`min-h-11 shrink-0 touch-manipulation rounded-md px-3.5 py-2 text-[13px] font-semibold tracking-[0.035em] transition-colors ${
+                  timeframe === tf ? 'bg-white/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]' : 'text-white/65 hover:text-white/90'
                 }`}
               >
                 {tf}
