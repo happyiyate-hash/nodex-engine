@@ -22,6 +22,8 @@ export const TokenDetailPage: React.FC = () => {
   const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('24H');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades' | 'Transactions'>('Info');
+  const detailTabsRef = useRef<HTMLDivElement>(null);
+  const detailTabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [headerOffset, setHeaderOffset] = useState(0);
@@ -286,30 +288,50 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Detail navigation: inset hairline baseline and a smoothly sliding active indicator. */}
+        {/* Detail navigation: horizontally scrollable tabs with a continuously sliding indicator. */}
         <nav
           aria-label="Token details"
-          className="mx-2 mt-0.5 w-auto overflow-hidden border-b border-white/25"
+          className="mx-2 mt-0.5 w-auto border-b border-white/25"
         >
-          <div className="relative flex min-w-[380px] w-full items-stretch overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
-            {(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                aria-current={activeDetailTab === tab ? 'page' : undefined}
-                onClick={() => setActiveDetailTab(tab)}
-                className={`relative z-[1] inline-flex min-h-9 min-w-[76px] flex-1 items-center justify-center px-2 text-[14px] font-light leading-none tracking-normal transition-colors ${
-                  activeDetailTab === tab ? 'text-white' : 'text-white/50 hover:text-white/80'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute bottom-[-1px] left-0 z-[2] h-[2px] w-1/5 rounded-full bg-white transition-transform duration-300 ease-out"
-              style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).indexOf(activeDetailTab) * 100}%)` }}
-            />
+          <div
+            ref={detailTabsRef}
+            className="w-full touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+          >
+            <div className="relative flex min-w-full w-max items-stretch">
+              {(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).map((tab, index) => (
+                <button
+                  key={tab}
+                  ref={(element) => { detailTabButtonRefs.current[tab] = element; }}
+                  type="button"
+                  aria-current={activeDetailTab === tab ? 'page' : undefined}
+                  onClick={() => {
+                    setActiveDetailTab(tab);
+                    const container = detailTabsRef.current;
+                    const button = detailTabButtonRefs.current[tab];
+                    if (!container || !button) return;
+                    const tabLeft = button.offsetLeft;
+                    const tabRight = tabLeft + button.offsetWidth;
+                    const visibleLeft = container.scrollLeft;
+                    const visibleRight = visibleLeft + container.clientWidth;
+                    if (tabLeft < visibleLeft) {
+                      container.scrollTo({ left: tabLeft, behavior: 'smooth' });
+                    } else if (tabRight > visibleRight) {
+                      container.scrollTo({ left: tabRight - container.clientWidth, behavior: 'smooth' });
+                    }
+                  }}
+                  className={`relative z-[1] inline-flex h-9 w-[92px] shrink-0 items-center justify-center px-2 text-[14px] font-light leading-none tracking-normal transition-colors ${
+                    activeDetailTab === tab ? 'text-white' : 'text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-[-1px] left-0 z-[2] h-[2px] w-[92px] rounded-full bg-white transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).indexOf(activeDetailTab) * 92}px)` }}
+              />
+            </div>
           </div>
         </nav>
       </section>
