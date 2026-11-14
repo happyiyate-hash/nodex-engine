@@ -1245,7 +1245,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
       for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
         const x = chart.timeScale().logicalToCoordinate(logical as never);
-        if (x === null || !Number.isFinite(x) || x < -45 || x > plotRight + 45) continue;
+        if (x === null || !Number.isFinite(x) || x > plotRight + 45) continue;
         const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
         labelCandidates.push({ x, label: formatBucketTime(timestampMs, timeframeRef.current) });
       }
@@ -1961,12 +1961,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         }}
       />
 
-      {/* Layer 2.56: Very soft left-edge brush; older chart history fades away as it exits. */}
+      {/* Layer 2.56: Light left-edge brush; it gently deepens toward the chart interior.
+          Kept below the timestamp canvas so labels remain visible until they truly exit. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-[34px] bottom-[19px] z-[4] w-[38px]"
+        className="pointer-events-none absolute left-0 top-[34px] bottom-[19px] z-[3] w-[44px]"
         style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.22) 34%, rgba(0,0,0,0.07) 68%, rgba(0,0,0,0) 100%)',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.035) 0%, rgba(0,0,0,0.075) 42%, rgba(0,0,0,0.14) 76%, rgba(0,0,0,0.20) 100%)',
         }}
       />
 
