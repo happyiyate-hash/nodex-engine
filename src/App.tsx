@@ -290,7 +290,7 @@ const MainLayout: React.FC = () => {
           </div>
         )}
       </main>
-      {!selectedToken && activeTab !== 'event_monitor' && !(activeTab === 'settings' && settingsSubpage) && <MobileNav />}
+      {!selectedToken && activeTab !== 'event_monitor' && !(activeTab === 'settings' && settingsSubpage) && !(activeTab === 'strategy' && developerIntelligenceOpen) && <MobileNav />}
     </div>
   );
 };
