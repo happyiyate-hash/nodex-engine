@@ -442,18 +442,16 @@ export const TokenDetailPage: React.FC = () => {
             {floatingAmounts.map((item) => (
               <span
                 key={item.id}
-                className={`absolute bottom-5 whitespace-nowrap font-mono text-[12px] font-normal tabular-nums tracking-[-0.045em] ${
-                  item.side === 'buy' ? 'text-[#22C55E]' : 'text-[#EF4444]'
+                className={`absolute bottom-5 whitespace-nowrap font-sans text-[10px] font-light tabular-nums tracking-[-0.02em] ${
+                  item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
                 }`}
                 style={{
-                  left: '2px',
+                  left: '10px',
                   animation: 'nodex-money-flow 3.4s linear forwards',
                   textShadow: '0 1px 8px rgba(0,0,0,0.9)',
                 }}
               >
-                <span className="inline-block origin-left scale-x-[0.92]">
-                  {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
-                </span>
+                {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
               </span>
             ))}
             {/* Dark translucent brush sits above the amount stream to create a soft, flowing-in-dark look. */}
