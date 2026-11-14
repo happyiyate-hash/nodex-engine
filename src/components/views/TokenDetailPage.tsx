@@ -448,8 +448,7 @@ export const TokenDetailPage: React.FC = () => {
                 style={{
                   left: '10px',
                   animation: 'nodex-money-flow 3.4s linear forwards',
-                  textShadow: '0 1px 8px rgba(0,0,0,0.9)',
-                }}
+                        }}
               >
                 {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
               </span>
