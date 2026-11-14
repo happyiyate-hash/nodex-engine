@@ -315,6 +315,21 @@ export interface PreferredOwner {
   label: string;
 }
 
+export interface CreatorIntelligence {
+  creator_address: string;
+  display_label: string;
+  observations_count: number;
+  qualified_observations: number;
+  buy_count: number;
+  sell_count: number;
+  unique_buyers: number;
+  independent_buyers: number;
+  sniper_concentration_pct: number;
+  activity_score: number;
+  source: string;
+  updated_at: string;
+}
+
 export interface StrategyConfig {
   min_liquidity_usd: number;
   max_entry_price_usd: number;
