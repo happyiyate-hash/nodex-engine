@@ -5,6 +5,7 @@ import { MobileNav } from './components/layout/MobileNav';
 import { PositionsPage } from './components/views/PositionsPage';
 import { LiveFeedPage } from './components/views/LiveFeedPage';
 import { StrategyPage } from './components/views/StrategyPage';
+import { DeveloperIntelligencePage } from './components/views/DeveloperIntelligencePage';
 import { TokenIntelligencePage } from './components/views/TokenIntelligencePage';
 import { SettingsPage } from './components/views/SettingsPage';
 import { StorageManagementPage } from './components/views/StorageManagementPage';
@@ -37,6 +38,7 @@ const getScrollableAncestor = (target: EventTarget | null, boundary: HTMLElement
 const MainLayout: React.FC = () => {
   const [settingsSubpage, setSettingsSubpage] = useState(false);
   const [storagePageOpen, setStoragePageOpen] = useState(false);
+  const [developerIntelligenceOpen, setDeveloperIntelligenceOpen] = useState(false);
   const { activeTab, selectedToken, refreshBackendState, events, tokens } = useTerminal();
   const { showToast } = useToast();
   const seenTradeNotificationIds = useRef<Set<string>>(new Set());
@@ -262,7 +264,9 @@ const MainLayout: React.FC = () => {
 
         {visitedTabs.has('strategy') && (
           <div className={`h-full w-full flex-col min-h-0 ${!selectedToken && activeTab === 'strategy' ? 'flex' : 'hidden'}`}>
-            <StrategyPage />
+            {developerIntelligenceOpen
+              ? <DeveloperIntelligencePage onBack={() => setDeveloperIntelligenceOpen(false)} />
+              : <StrategyPage onOpenDeveloperIntelligence={() => setDeveloperIntelligenceOpen(true)} />}
           </div>
         )}
 
