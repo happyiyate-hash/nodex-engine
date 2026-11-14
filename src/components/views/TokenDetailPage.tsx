@@ -387,7 +387,7 @@ export const TokenDetailPage: React.FC = () => {
         )}
 
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
-        <div className="-mx-3 w-[calc(100%+1.5rem)]">
+        <div className="-mx-3 -mt-3 w-[calc(100%+1.5rem)]">
           <DotMatrixChart
             key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
             currentPrice={liveTokenPrice}
