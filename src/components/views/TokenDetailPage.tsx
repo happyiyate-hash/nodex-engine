@@ -234,9 +234,11 @@ export const TokenDetailPage: React.FC = () => {
               <p className="mt-0.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
                 {Number.isFinite(activeToken.market_cap_usd) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(activeToken.market_cap_usd) : '—'}
               </p>
-              <p className={`mt-0.5 font-sans text-[12px] font-medium tabular-nums ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-                {marketChangePct == null ? '—' : `${isPositive ? '+' : ''}${marketChangePct.toFixed(2)}%`}
-              </p>
+              <div className="mt-1 flex justify-end">
+                <span className={`inline-flex items-center justify-center rounded-md px-1.5 py-0.5 font-sans text-[11px] font-semibold tabular-nums leading-none ${isPositive ? 'bg-[#6CE094]/15 text-[#6CE094]' : 'bg-[#F06A6A]/15 text-[#F06A6A]'}`}>
+                  {marketChangePct == null ? '—' : `${isPositive ? '+' : ''}${marketChangePct.toFixed(2)}%`}
+                </span>
+              </div>
             </div>
           {/* Live Scrub Indicator (if dragging); kept inside the plot area. */}
         {scrubTime && (
