@@ -83,7 +83,7 @@ const CHART_THEME = {
   liveBadge: {
     minWidth: 46,
     height: 24,
-    rightInset: 2,
+    rightInset: 4,
     textColor: '#FFFFFF',
   },
   directionCard: {
@@ -165,16 +165,11 @@ const formatPrice = (price: number) => {
 
 const formatMarketCap = (value: number): string => {
   if (!Number.isFinite(value)) return '—';
-  if (value <= 0) return '$0';
-  const formatCompact = (scaled: number, suffix: string) => {
-    const absScaled = Math.abs(scaled);
-    const decimals = absScaled >= 100 ? 1 : 2;
-    return `$${scaled.toFixed(decimals).replace(/\.?0+$/, '')}${suffix}`;
-  };
-  if (value >= 1_000_000_000) return formatCompact(value / 1_000_000_000, 'B');
-  if (value >= 1_000_000) return formatCompact(value / 1_000_000, 'M');
-  if (value >= 1_000) return formatCompact(value / 1_000, 'K');
-  return `$${value.toFixed(value >= 100 ? 0 : 2).replace(/\.?0+$/, '')}`;
+  if (value <= 0) return '$0.00';
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
+  return `$${value.toFixed(2)}`;
 };
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -1039,7 +1034,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
       const axisW = Math.max(44, chart.priceScale('right').width() || hostW - plotW || 52);
       const badgeH = CHART_THEME.liveBadge.height;
-      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - 2);
+      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - CHART_THEME.liveBadge.rightInset);
       const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
 
       badge.style.opacity = '1';
@@ -1256,17 +1251,18 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       if (!canvas) return;
 
       const width = host.clientWidth;
-      const heightPx = 19;
+      const axisH = Math.max(19, Math.round(chart.timeScale().height()) || 26);
       const dpr = Math.max(1, window.devicePixelRatio || 1);
       if (width <= 0) return;
 
       canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(heightPx * dpr);
+      canvas.height = Math.round(axisH * dpr);
       canvas.style.width = String(width) + 'px';
+      canvas.style.height = String(axisH) + 'px';
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, width, heightPx);
+      ctx.clearRect(0, 0, width, axisH);
 
       const range = chart.timeScale().getVisibleLogicalRange();
       const bars = committedBarsRef.current;
@@ -1275,9 +1271,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const priceScaleW = Math.max(0, chart.priceScale('right').width());
       if (timeFadeOverlayRef.current) {
         timeFadeOverlayRef.current.style.right = `${priceScaleW}px`;
+        timeFadeOverlayRef.current.style.height = `${axisH}px`;
       }
       if (timeTickCapRef.current) {
         timeTickCapRef.current.style.right = `${priceScaleW}px`;
+        timeTickCapRef.current.style.bottom = `${axisH - 1}px`;
       }
       const plotRight = Math.max(0, width - priceScaleW);
       const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
@@ -1295,7 +1293,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, 0, Math.max(0, plotRight - 2), heightPx);
+      ctx.rect(0, 0, Math.max(0, plotRight - 2), axisH);
       ctx.clip();
       ctx.font = "500 12px 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
       ctx.textAlign = 'center';
@@ -1319,16 +1317,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const right = candidate.x + labelWidth / 2;
         if (left < previousRight + labelGap) continue;
 
-        // Short tick begins at the time-axis top border and points to this
-        // timestamp's exact center, never to an unrelated grid subdivision.
-        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-        ctx.lineWidth = 0.6;
+        // Center the crisp vertical pointer tick between the top border and the
+        // timestamp text, leaving clean breathing space on both sides.
+        const tickX = Math.round(candidate.x) + 0.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.34)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(Math.round(candidate.x) + 0.5, 0.5);
-        ctx.lineTo(Math.round(candidate.x) + 0.5, 3.4);
+        ctx.moveTo(tickX, 3.2);
+        ctx.lineTo(tickX, 7.2);
         ctx.stroke();
 
-        ctx.fillText(candidate.label, candidate.x, 11.5);
+        ctx.fillText(candidate.label, candidate.x, 14);
         previousRight = right;
       }
       ctx.restore();
@@ -1983,13 +1982,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       <canvas
         ref={timeLabelsCanvasRef}
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[19px] w-full"
+        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[26px] w-full"
       />
       {/* Layer 2.5: Soft smoke-like edge brushes. Darkest only at the outer
           upper/lower corners, feathering gently inward without a hard dark band. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[19px] z-[4] overflow-hidden"
+        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[26px] z-[4] overflow-hidden"
       >
         <div
           className="absolute inset-y-0 left-0 w-[88px]"
@@ -2012,7 +2011,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       <div
         ref={timeFadeOverlayRef}
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[19px] w-[30px]"
+        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[26px] w-[30px]"
         style={{
           background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
         }}
@@ -2020,7 +2019,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       <div
         ref={timeTickCapRef}
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-[14px] right-[54px] z-[6] h-px w-[8px]"
+        className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
         style={{
           background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
         }}

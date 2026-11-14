@@ -153,6 +153,7 @@ export const TokenDetailPage: React.FC = () => {
       style: 'currency',
       currency: 'USD',
       notation: 'compact',
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
 
@@ -309,14 +310,36 @@ export const TokenDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="shrink-0 text-right">
-            <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
-            <p className="mt-0.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
-              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(simulatedMarketCap)}
+          <div className="shrink-0 -mr-1.5 text-right">
+            <p className="pr-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
+            <p className="mt-0.5 pr-1.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
+              {formatCompactMarketCap(simulatedMarketCap)}
             </p>
-            <div className="mt-1 flex justify-end">
-              <span className={`inline-flex items-center justify-center rounded-md px-1.5 py-0.5 font-sans text-[11px] font-semibold tabular-nums leading-none ${isPositive ? 'bg-[#6CE094]/15 text-[#6CE094]' : 'bg-[#F06A6A]/15 text-[#F06A6A]'}`}>
-                {marketChangePct == null ? '—' : `${isPositive ? '+' : ''}${marketChangePct.toFixed(2)}%`}
+            <div className="mt-0.5 flex justify-end">
+              <span
+                className={`inline-flex items-center justify-center gap-1 rounded-[4px] px-2 py-1 font-sans text-[12.5px] font-semibold tabular-nums leading-none transition-colors ${
+                  isPositive ? 'bg-[#6CE094]/15 text-[#6CE094]' : 'bg-[#F06A6A]/15 text-[#F06A6A]'
+                }`}
+              >
+                {marketChangePct != null && (
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 12 12"
+                    className="h-2.5 w-2.5 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="miter"
+                  >
+                    {isPositive ? (
+                      <path d="M2 7.8 L6 3.6 L10 7.8" />
+                    ) : (
+                      <path d="M2 4.2 L6 8.4 L10 4.2" />
+                    )}
+                  </svg>
+                )}
+                <span>{marketChangePct == null ? '—' : `${Math.abs(marketChangePct).toFixed(2)}%`}</span>
               </span>
             </div>
           </div>
@@ -328,22 +351,24 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Chart canvas remains untouched; controls sit beneath its time axis. */}
-        <DotMatrixChart
-          key={activeToken.mint}
-          currentPrice={liveTokenPrice}
-          marketCap={simulatedMarketCap}
-          entryPrice={activePosition ? entryPriceUsd : undefined}
-          priceHistory={demoPriceHistory}
-          isPositive={isPositive}
-          timeframe={timeframe}
-          chartType={chartType}
-          height={328}
-          onPriceHover={(p, t) => {
-            setScrubPrice(p);
-            setScrubTime(t);
-          }}
-        />
+        {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
+        <div className="-mx-3 w-[calc(100%+1.5rem)]">
+          <DotMatrixChart
+            key={activeToken.mint}
+            currentPrice={liveTokenPrice}
+            marketCap={simulatedMarketCap}
+            entryPrice={activePosition ? entryPriceUsd : undefined}
+            priceHistory={demoPriceHistory}
+            isPositive={isPositive}
+            timeframe={timeframe}
+            chartType={chartType}
+            height={328}
+            onPriceHover={(p, t) => {
+              setScrubPrice(p);
+              setScrubTime(t);
+            }}
+          />
+        </div>
 
         <div className="mt-1 flex h-14 w-full items-center font-sans">
           <div className="relative flex h-full min-w-0 flex-1 items-center overflow-hidden">
