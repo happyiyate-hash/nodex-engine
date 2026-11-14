@@ -1974,7 +1974,21 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
       <div
         ref={tvContainerRef}
-        style={{ position: 'absolute', top: 34, left: 0, right: 0, bottom: 0, width: '100%', height: 'calc(100% - 34px)' }}
+        style={{
+          position: 'absolute',
+          top: 34,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: 'calc(100% - 34px)',
+          // Fade the chart itself into view over the first ~12% of its width.
+          // This is a real alpha mask, not a dark overlay or rectangular brush.
+          maskImage:
+            'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 2%, rgba(0,0,0,0.38) 5%, rgba(0,0,0,0.78) 9%, #000000 12%, #000000 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent 0%, rgba(0,0,0,0.12) 2%, rgba(0,0,0,0.38) 5%, rgba(0,0,0,0.78) 9%, #000000 12%, #000000 100%)',
+        }}
         className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
       {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
@@ -1990,13 +2004,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[26px] z-[4] overflow-hidden"
       >
-        <div
-          className="absolute inset-y-0 left-0 w-[88px]"
-          style={{
-            background:
-              'radial-gradient(ellipse 100% 58% at 0% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 0% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
-          }}
-        />
         <div
           className="absolute inset-y-0 right-0 w-[88px]"
           style={{
@@ -2022,17 +2029,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
         style={{
           background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
-        }}
-      />
-
-      {/* Layer 2.58: Short left-side chart brush. It starts soft at the edge and
-          deepens inward to make the old line trail dissolve into the background.
-          The floating trade amounts are rendered by the parent above this layer. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute top-[34px] bottom-[26px] left-0 z-[4] w-[112px]"
-        style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.38) 48%, rgba(0,0,0,0.68) 100%)',
         }}
       />
 
