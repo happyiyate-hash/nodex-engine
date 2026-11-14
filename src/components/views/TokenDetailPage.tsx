@@ -386,13 +386,13 @@ export const TokenDetailPage: React.FC = () => {
 
       {activeDetailTab === 'Holders' && (
         <section aria-label="Token holders" className="w-full space-y-6 px-4 pb-8 pt-5 sm:px-5">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-3">
-              <p className="text-[11px] text-white/40">Total Holders</p>
+          <div className="flex w-full flex-col gap-2.5">
+            <div className="w-full rounded-xl bg-white/[0.12] px-4 py-3">
+              <p className="text-[11px] text-white/55">Total Holders</p>
               <p className="mt-1 font-mono text-[19px] font-medium tracking-tight text-white/95">8,426</p>
             </div>
-            <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-3">
-              <p className="text-[11px] text-white/40">Top 10 Ownership</p>
+            <div className="w-full rounded-xl bg-white/[0.12] px-4 py-3">
+              <p className="text-[11px] text-white/55">Top 10 Ownership</p>
               <p className="mt-1 font-mono text-[19px] font-medium tracking-tight text-white/95">34.8%</p>
             </div>
           </div>
@@ -415,17 +415,16 @@ export const TokenDetailPage: React.FC = () => {
                 { address: '1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfGhJkL567', balance: '14.2M', share: 1.42, initials: '1Z' },
                 { address: '0xYz3aBc6dEf9gHi2jKl5mNpQrStUvWxYzAbCdEfG890', balance: '12.1M', share: 1.21, initials: '0X' },
               ].map((holder, index) => (
-                <div key={holder.address} className="flex items-center gap-3 border-b border-white/[0.07] py-3.5 last:border-b-0">
-                  <span className="w-4 shrink-0 text-center font-mono text-[11px] text-white/35">{index + 1}</span>
-                  <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.07] text-[10px] font-semibold tracking-wide text-white/75">
-                    {holder.initials}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <div className="flex min-w-0 items-center gap-1.5">
+                <div key={holder.address} className="border-b border-white/[0.07] py-3.5 last:border-b-0">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.07] text-[10px] font-semibold tracking-wide text-white/75">
+                      {holder.initials}
+                    </div>
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
                       <span className="min-w-0 truncate font-mono text-[11px] text-white/75">{holder.address.slice(0, 5)}...{holder.address.slice(-5)}</span>
                       <button
                         type="button"
-                        aria-label={`Copy holder ${index + 1} wallet address`}
+                        aria-label={`Copy holder wallet address ${index + 1}`}
                         title="Copy wallet address"
                         onClick={() => navigator.clipboard.writeText(holder.address)}
                         className="shrink-0 rounded p-1 text-white/35 transition-colors hover:bg-white/[0.07] hover:text-white/90"
@@ -433,13 +432,13 @@ export const TokenDetailPage: React.FC = () => {
                         <Copy className="h-3 w-3" />
                       </button>
                     </div>
-                    <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                      <div className="h-full rounded-full bg-white/55" style={{ width: `${holder.share}%` }} />
+                    <div className="shrink-0 text-right">
+                      <p className="font-mono text-[12px] font-medium text-white/90">{holder.balance}</p>
+                      <p className="mt-1 font-mono text-[10px] text-white/40">{holder.share.toFixed(2)}%</p>
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="font-mono text-[12px] font-medium text-white/90">{holder.balance}</p>
-                    <p className="mt-1 font-mono text-[10px] text-white/40">{holder.share.toFixed(2)}%</p>
+                  <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/[0.07]">
+                    <div className="h-full rounded-full bg-white/55" style={{ width: `${holder.share}%` }} />
                   </div>
                 </div>
               ))}
