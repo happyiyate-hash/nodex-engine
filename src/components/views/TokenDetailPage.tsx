@@ -33,6 +33,9 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+  const pageScrollRef = useRef<HTMLElement>(null);
+  const tabContentScrollRef = useRef<HTMLDivElement>(null);
+  const tabTouchYRef = useRef<number | null>(null);
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
@@ -293,6 +296,7 @@ export const TokenDetailPage: React.FC = () => {
       >
       {/* One continuous page scroller: overview, chart, sticky tabs, and tab content share the same scroll. */}
       <section
+        ref={pageScrollRef}
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000]"
         onScroll={(event) => {
           const top = event.currentTarget.scrollTop;
@@ -527,8 +531,35 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </nav>
       <div
-        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
-        style={{ height: 'calc(100% - 36px)' }}
+        ref={tabContentScrollRef}
+        onTouchStart={(event) => {
+          tabTouchYRef.current = event.touches[0]?.clientY ?? null;
+        }}
+        onTouchMove={(event) => {
+          const previousY = tabTouchYRef.current;
+          const currentY = event.touches[0]?.clientY;
+          if (previousY == null || currentY == null) return;
+          const deltaY = currentY - previousY;
+          tabTouchYRef.current = currentY;
+          const tabScroller = tabContentScrollRef.current;
+          const pageScroller = pageScrollRef.current;
+          if (!tabScroller || !pageScroller) return;
+
+          // At the top of a tab, take over downward drags and move the
+          // outer token page instead of allowing browser pull-to-refresh.
+          if (tabScroller.scrollTop <= 1 && deltaY > 0) {
+            event.preventDefault();
+            pageScroller.scrollTop = Math.max(0, pageScroller.scrollTop - deltaY);
+          }
+        }}
+        onTouchEnd={() => {
+          tabTouchYRef.current = null;
+        }}
+        onTouchCancel={() => {
+          tabTouchYRef.current = null;
+        }}
+        className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-y-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        style={{ height: 'calc(100% - 36px)', touchAction: 'pan-y' }}
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
