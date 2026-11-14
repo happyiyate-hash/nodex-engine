@@ -2030,7 +2030,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           The floating trade amounts are rendered by the parent above this layer. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-[34px] bottom-[26px] left-0 z-[4] w-[112px]"
+        className="pointer-events-none absolute top-[34px] bottom-[26px] left-0 z-[4] w-[112px]"
         style={{
           background: 'linear-gradient(to right, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.38) 48%, rgba(0,0,0,0.68) 100%)',
         }}
