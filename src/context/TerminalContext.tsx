@@ -260,18 +260,41 @@ function mergeTokenEvent(previous: DiscoveredToken | undefined, event: NodeXEven
             }
           : ['market_subscription_requested', 'market_subscription_subscribed', 'market_subscription_active', 'market_subscription_waiting'].includes(event.event_type)
             && previous?.qualification_status === 'qualified'
-            ? {
-                status: 'verified',
-                label: 'Verified',
-                stage: 'waiting_for_market_data',
-                sub_event: 'Getting market data',
-              }
+            ? (() => {
+                const subscriptionStages: Record<string, { stage: string; message: string }> = {
+                  market_subscription_requested: { stage: 'market_subscription_requested', message: 'Requesting market-data subscription' },
+                  market_subscription_subscribed: { stage: 'market_subscription_subscribed', message: 'Market-data subscription acknowledged' },
+                  market_subscription_active: { stage: 'market_subscription_active', message: 'Market-data stream active' },
+                  market_subscription_waiting: { stage: 'market_subscription_waiting', message: 'Waiting for market-subscription capacity' },
+                };
+                const state = subscriptionStages[event.event_type];
+                return {
+                  status: 'verified',
+                  label: 'Verified',
+                  stage: state.stage,
+                  sub_event: String(data.message || state.message),
+                };
+              })()
             : event.event_type === 'market_subscription_failed' && previous?.qualification_status === 'qualified'
               ? {
                   status: 'verified',
                   label: 'Verified',
                   stage: 'market_data_unavailable',
-                  sub_event: 'Market data unavailable',
+                  sub_event: String(data.reason || data.message || 'Market-data subscription failed'),
+                }
+            : event.event_type === 'market_monitoring_expired' && previous?.qualification_status === 'qualified'
+              ? {
+                  status: 'monitoring_stopped',
+                  label: 'Monitoring stopped',
+                  stage: 'early_entry_window_expired',
+                  sub_event: String(data.message || 'Early-entry monitoring window expired'),
+                }
+            : event.event_type === 'market_subscriptions_removed' && previous?.qualification_status === 'qualified'
+              ? {
+                  status: 'monitoring_stopped',
+                  label: 'Monitoring stopped',
+                  stage: 'market_feed_removed',
+                  sub_event: String(data.message || 'Market feed subscription was removed'),
                 }
             : event.event_type === 'market_curve_completed' && previous?.qualification_status === 'qualified'
               ? {
