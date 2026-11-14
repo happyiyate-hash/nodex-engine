@@ -745,5 +745,6 @@ export const TokenDetailPage: React.FC = () => {
       </section>
 
     </div>
+    </div>
   );
 };
