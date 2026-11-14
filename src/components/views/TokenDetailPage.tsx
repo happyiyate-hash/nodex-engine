@@ -21,8 +21,9 @@ export const TokenDetailPage: React.FC = () => {
   const [copiedMint, setCopiedMint] = useState(false);
   const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('1S');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
-  const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades' | 'Transactions'>('Info');
+  const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
+  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; amount: number; side: 'buy' | 'sell'; offset: number }>>([]);
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -140,6 +141,22 @@ export const TokenDetailPage: React.FC = () => {
       cancelled = true;
       if (timeout !== undefined) window.clearTimeout(timeout);
     };
+  }, [activeToken?.mint]);
+
+  // Demo-only stream preview. Replace this generator with verified swap events
+  // from the backend when the live market-activity event contract is connected.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const side = Math.random() < 0.56 ? 'buy' : 'sell';
+      const amount = Number((0.75 + Math.random() * 18.25).toFixed(2));
+      const id = Date.now() + Math.floor(Math.random() * 1000);
+      const offset = 8 + Math.floor(Math.random() * 34);
+      setFloatingAmounts((current) => [
+        ...current.filter((item) => Date.now() - item.id < 3400),
+        { id, amount, side, offset },
+      ].slice(-14));
+    }, 720);
+    return () => window.clearInterval(interval);
   }, [activeToken?.mint]);
 
   if (!activeToken) return null;
@@ -385,6 +402,15 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         )}
 
+        {/* Demo-only animation preview; connect verified backend swap events here later. */}
+        <style>{`
+          @keyframes nodex-money-flow {
+            0% { transform: translate3d(0, 0, 0); opacity: 0; }
+            10% { opacity: 0.92; }
+            76% { opacity: 0.78; }
+            100% { transform: translate3d(0, -286px, 0); opacity: 0; }
+          }
+        `}</style>
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
         <div className="relative z-0 -mx-3 -mt-3 w-[calc(100%+1.5rem)]">
           <DotMatrixChart
@@ -402,6 +428,30 @@ export const TokenDetailPage: React.FC = () => {
               setScrubTime(t);
             }}
           />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
+            style={{
+              maskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 82%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 82%, transparent 100%)',
+            }}
+          >
+            {floatingAmounts.map((item) => (
+              <span
+                key={item.id}
+                className={`absolute bottom-5 whitespace-nowrap font-mono text-[11px] font-semibold tabular-nums tracking-tight ${
+                  item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
+                }`}
+                style={{
+                  left: `${item.offset}px`,
+                  animation: 'nodex-money-flow 3.4s linear forwards',
+                  textShadow: '0 1px 8px rgba(0,0,0,0.9)',
+                }}
+              >
+                {item.side === 'buy' ? '+' : '−'}{formatUsd(item.amount)}
+              </span>
+            ))}
+          </div>
         </div>
 
         <div className="mt-1 flex h-14 w-full items-center bg-[#000000] font-sans">
@@ -509,7 +559,7 @@ export const TokenDetailPage: React.FC = () => {
               className="w-full overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
             >
               <div className="relative flex min-w-full w-max items-stretch">
-              {(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).map((tab, index) => (
+              {(['Info', 'Holders', 'Position', 'Trades'] as const).map((tab, index) => (
                 <button
                   key={tab}
                   type="button"
@@ -525,7 +575,7 @@ export const TokenDetailPage: React.FC = () => {
               <span
                 aria-hidden="true"
                 className="pointer-events-none absolute bottom-[-1px] left-0 z-[2] h-[2px] w-[86px] rounded-full bg-white transition-transform duration-300 ease-out"
-                style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).indexOf(activeDetailTab) * 86}px)` }}
+                style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades'] as const).indexOf(activeDetailTab) * 86}px)` }}
               />
               </div>
             </div>
