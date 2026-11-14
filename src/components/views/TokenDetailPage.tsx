@@ -502,7 +502,7 @@ export const TokenDetailPage: React.FC = () => {
           className="sticky top-0 z-30 mx-1.5 mt-0.5 w-auto border-b border-white/25 bg-[#000000]"
         >
           <div
-            className="w-full touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+            className="w-full overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
           >
             <div className="relative flex min-w-full w-max items-stretch">
               {(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).map((tab, index) => (
