@@ -961,7 +961,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const host = tvContainerRef.current;
     if (!host) return;
 
-    const axisFontFamily = "'Barlow', 'Barlow Semi Condensed', -apple-system, BlinkMacSystemFont, sans-serif";
+    const axisFontFamily = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif";
     const chart = createChart(host, {
       autoSize: true,
       width: Math.max(1, host.clientWidth || 320),
