@@ -526,7 +526,7 @@ export const TokenDetailPage: React.FC = () => {
         </nav>
 
       {activeDetailTab === 'Info' && (
-        <section aria-label="Token information" className="w-full space-y-6 px-4 pb-6 pt-5 sm:px-5">
+        <section aria-label="Token information" className="w-full space-y-6 px-2 pb-6 pt-5">
           <div className="space-y-4">
             <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
@@ -574,7 +574,7 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       {activeDetailTab === 'Holders' && (
-        <section aria-label="Token holders" className="w-full space-y-6 px-4 pb-8 pt-5 sm:px-5">
+        <section aria-label="Token holders" className="w-full space-y-6 px-2 pb-8 pt-5">
           <div className="grid w-full grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-xl bg-white/[0.12] px-3.5 py-3">
               <p className="text-[11px] text-white/55">Total Holders</p>
