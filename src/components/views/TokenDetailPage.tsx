@@ -143,19 +143,25 @@ export const TokenDetailPage: React.FC = () => {
     };
   }, [activeToken?.mint]);
 
-  // Demo-only stream preview. Replace this generator with verified swap events
-  // from the backend when the live market-activity event contract is connected.
+  // Temporary high-activity preview: simulate a busy stream of buys and sells.
+  // Replace this generator with verified backend swap events after visual tuning.
   useEffect(() => {
+    if (!activeToken) return;
     const interval = window.setInterval(() => {
-      const side = Math.random() < 0.56 ? 'buy' : 'sell';
-      const amount = Number((0.75 + Math.random() * 18.25).toFixed(2));
-      const id = Date.now() + Math.floor(Math.random() * 1000);
-      const offset = 8 + Math.floor(Math.random() * 34);
+      const now = Date.now();
+      const batchSize = Math.random() < 0.24 ? 2 : 1;
+      const incoming = Array.from({ length: batchSize }, () => {
+        const side = Math.random() < 0.54 ? 'buy' : 'sell';
+        const amount = Number((0.35 + Math.random() * 34.65).toFixed(2));
+        const id = Date.now() + Math.random();
+        const offset = 7 + Math.floor(Math.random() * 42);
+        return { id, amount, side, offset };
+      });
       setFloatingAmounts((current) => [
-        ...current.filter((item) => Date.now() - item.id < 3400),
-        { id, amount, side, offset },
-      ].slice(-14));
-    }, 720);
+        ...current.filter((item) => now - item.id < 3600),
+        ...incoming,
+      ].slice(-28));
+    }, 300);
     return () => window.clearInterval(interval);
   }, [activeToken?.mint]);
 
