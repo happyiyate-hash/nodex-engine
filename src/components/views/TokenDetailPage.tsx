@@ -648,7 +648,7 @@ export const TokenDetailPage: React.FC = () => {
                     <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10px] font-semibold tracking-wide text-white/75">
                       {holder.initials}
                     </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate font-mono text-[11px] text-white/80">{holder.address.slice(0, 5)}...{holder.address.slice(-5)}</span>
                       <span className="font-mono text-[11px] font-medium text-white/95">{holder.balance}</span>
                     </div>
@@ -759,15 +759,13 @@ export const TokenDetailPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
-            <div className="min-w-0 rounded-lg bg-white/[0.07] px-3 py-3">
+            <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Buy Volume</p>
-              <p className="mt-1.5 font-mono text-[20px] font-medium tabular-nums text-[#6CE094]">24.86 SOL</p>
-              <p className="mt-0.5 text-[10px] text-white/30">$3,720.40 · Last 5 min</p>
+              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatUsd(24.86 * 149.60)}</p>
             </div>
-            <div className="min-w-0 rounded-lg bg-white/[0.07] px-3 py-3">
+            <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Sell Volume</p>
-              <p className="mt-1.5 font-mono text-[20px] font-medium tabular-nums text-[#F06A6A]">15.32 SOL</p>
-              <p className="mt-0.5 text-[10px] text-white/30">$2,293.80 · Last 5 min</p>
+              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatUsd(15.32 * 149.60)}</p>
             </div>
           </div>
 
@@ -784,14 +782,14 @@ export const TokenDetailPage: React.FC = () => {
 
           <div className="flex items-center justify-between gap-3 border-b border-white/[0.10] pb-3">
             <h3 className="text-[12px] font-medium text-white/85">Trade History <span className="ml-1 text-white/35">(8)</span></h3>
-            <div className="flex items-center gap-1 rounded-lg bg-white/[0.06] p-0.5">
+            <div className="flex items-center gap-1 rounded-md bg-white/[0.06] p-0.5">
               {(['All', 'Buys', 'Sells'] as const).map((filter) => (
                 <button
                   key={filter}
                   type="button"
                   aria-pressed={tradeFilter === filter}
                   onClick={() => setTradeFilter(filter)}
-                  className={`rounded-md px-2.5 py-1.5 text-[10px] font-medium transition-colors ${
+                  className={`rounded-sm px-2.5 py-1 text-[10px] font-medium transition-colors ${
                     tradeFilter === filter ? 'bg-white/[0.14] text-white' : 'text-white/45 hover:text-white/80'
                   }`}
                 >
@@ -814,8 +812,8 @@ export const TokenDetailPage: React.FC = () => {
             ]
               .filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? trade.side === 'BUY' : trade.side === 'SELL'))
               .map((trade, index) => (
-                <div key={trade.wallet} className="flex min-w-0 items-center gap-2.5 border-b border-white/[0.07] py-3 last:border-b-0">
-                  <span className={`inline-flex h-6 w-[42px] shrink-0 items-center justify-center rounded text-[9px] font-bold tracking-wide ${
+                <div key={trade.wallet} className="flex min-w-0 items-center gap-2.5 border-b border-white/[0.07] py-2 last:border-b-0">
+                  <span className={`inline-flex h-5 w-[42px] shrink-0 items-center justify-center rounded-sm text-[9px] font-bold tracking-wide ${
                     trade.side === 'BUY' ? 'bg-[#6CE094]/[0.12] text-[#6CE094]' : 'bg-[#F06A6A]/[0.12] text-[#F06A6A]'
                   }`}>
                     {trade.side}
@@ -838,8 +836,7 @@ export const TokenDetailPage: React.FC = () => {
                   <div className="shrink-0 text-right">
                     <p className={`font-mono text-[11px] font-medium tabular-nums ${
                       trade.side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
-                    }`}>{trade.sol} SOL</p>
-                    <p className="mt-1 font-mono text-[9px] tabular-nums text-white/40">{trade.price}</p>
+                    }`}>{formatUsd(Number(trade.sol) * 149.60)}</p>
                   </div>
                 </div>
               ))}
