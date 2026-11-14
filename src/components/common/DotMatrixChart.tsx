@@ -1760,8 +1760,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         style={{ width: '100%', height: 5 }}
       />
 
-      {/* Layer 2.5: Gentle axis-edge brushes; numbers fade only as they approach the outer edges. */}
-      <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
+      {/* Layer 2.5: Axis-edge brushes sit above chart labels so the price numbers fade beneath them. */}
+      <div className="pointer-events-none absolute inset-0 z-[4] overflow-hidden">
         <div
           className="absolute right-0 top-[12px] h-16 w-[72px]"
           style={{
