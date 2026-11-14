@@ -212,35 +212,48 @@ export const TokenDetailPage: React.FC = () => {
           }
         }}
       >
-      {/* 2. FULL BACKGROUND CHART (PURE BLACK WITH FADING DOT MATRIX & TARGET TRACKER LINE) */}
+      {/* Compact token overview: identity on the left, market cap and change on the right. */}
       <section className="relative w-full min-w-0 max-w-full overflow-x-hidden bg-[#000000] px-3 pt-2 pb-2">
-          <TokenAvatar
-            symbol={activeToken.symbol}
-            logoUrl={activeToken.logo_url}
-            size="lg"
-            className="!h-[68px] !w-[68px] !rounded-lg !text-2xl"
-          />
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
+        <div className="flex w-full min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <TokenAvatar
+              symbol={activeToken.symbol}
+              logoUrl={activeToken.logo_url}
+              size="lg"
+              className="!h-[52px] !w-[52px] shrink-0 !rounded-lg !text-xl"
+            />
+            <div className="flex min-w-0 flex-col justify-center gap-1">
               <p className="truncate text-[13px] font-semibold tracking-tight text-white/95">
                 {activeToken.name || activeToken.symbol || 'Unknown token'}
               </p>
-              <p className="mt-1 truncate text-[12px] font-medium tracking-wide text-white/55">
-                {activeToken.symbol || 'Token'}
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
-              <p className="mt-0.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
-                {Number.isFinite(activeToken.market_cap_usd) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(activeToken.market_cap_usd) : '—'}
-              </p>
-              <div className="mt-1 flex justify-end">
-                <span className={`inline-flex items-center justify-center rounded-md px-1.5 py-0.5 font-sans text-[11px] font-semibold tabular-nums leading-none ${isPositive ? 'bg-[#6CE094]/15 text-[#6CE094]' : 'bg-[#F06A6A]/15 text-[#F06A6A]'}`}>
-                  {marketChangePct == null ? '—' : `${isPositive ? '+' : ''}${marketChangePct.toFixed(2)}%`}
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-[12px] font-medium tracking-wide text-white/55">
+                  {activeToken.symbol || 'Token'}
                 </span>
+                <button
+                  type="button"
+                  onClick={handleCopyMint}
+                  aria-label="Copy contract address"
+                  title="Copy contract address"
+                  className="inline-flex shrink-0 items-center justify-center rounded p-0.5 text-white/45 transition-colors hover:text-white/90"
+                >
+                  {copiedMint ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                </button>
               </div>
             </div>
           </div>
+          <div className="shrink-0 text-right">
+            <p className="text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
+            <p className="mt-0.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
+              {Number.isFinite(activeToken.market_cap_usd) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(activeToken.market_cap_usd) : '—'}
+            </p>
+            <div className="mt-1 flex justify-end">
+              <span className={`inline-flex items-center justify-center rounded-md px-1.5 py-0.5 font-sans text-[11px] font-semibold tabular-nums leading-none ${isPositive ? 'bg-[#6CE094]/15 text-[#6CE094]' : 'bg-[#F06A6A]/15 text-[#F06A6A]'}`}>
+                {marketChangePct == null ? '—' : `${isPositive ? '+' : ''}${marketChangePct.toFixed(2)}%`}
+              </span>
+            </div>
+          </div>
+        </div>
           {/* Live Scrub Indicator (if dragging); kept inside the plot area. */}
         {scrubTime && (
           <div className="absolute top-3 right-4 z-10 rounded border border-white/10 bg-[#0a0a0c]/80 px-2 py-0.5 font-mono text-[10px] text-white/50">
