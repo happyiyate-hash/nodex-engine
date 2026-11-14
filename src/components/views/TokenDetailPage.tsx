@@ -288,13 +288,8 @@ export const TokenDetailPage: React.FC = () => {
       </header>
 
       <div
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(3.5rem+env(safe-area-inset-bottom))]"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 59px)' }}
-        onScroll={(event) => {
-          // Keep the navigation fixed; fade cleanly with hysteresis to prevent edge jitter.
-          const top = event.currentTarget.scrollTop;
-          setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
-        }}
       >
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
       <section className="relative w-full min-w-0 max-w-full overflow-x-clip bg-[#000000] px-3 pt-2 pb-2">
@@ -520,7 +515,16 @@ export const TokenDetailPage: React.FC = () => {
             </div>
           </div>
         </nav>
+      </section>
 
+      {/* Each detail tab gets its own vertical scroll area; chart controls and tab bar stay fixed. */}
+      <div
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        onScroll={(event) => {
+          const top = event.currentTarget.scrollTop;
+          setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
+        }}
+      >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
           <div className="space-y-4">
@@ -617,7 +621,7 @@ export const TokenDetailPage: React.FC = () => {
               <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Largest Holders</h2>
               <span className="text-[10px] text-white/35">Ranked by balance</span>
             </div>
-            <div className="max-h-[calc(100dvh-env(safe-area-inset-top)-310px)] min-h-[180px] touch-pan-y overflow-y-auto overscroll-contain [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.2)_transparent]">
+            <div className="w-full">
               {[
                 { address: '7xKX9mPq2vRt4nHs8aBcDeFgHiJkLmNpQrStUvWxYz12', balance: '82.4M', share: 8.24, initials: '7X' },
                 { address: '9pLm3qRs6tUv8wXy2zAbCdEfGhJkMnPqRtUvWxYz1234', balance: '61.8M', share: 6.18, initials: '9P' },
@@ -731,7 +735,7 @@ export const TokenDetailPage: React.FC = () => {
         </section>
       )}
 
-      </section>
+      </div>
       </div>
 
     </div>
