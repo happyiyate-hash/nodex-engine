@@ -56,9 +56,9 @@ const CHART_THEME = {
   background: '#000000',
   dots: {
     enabled: true,
-    spacing: 7,
-    radius: 0.6,
-    maxOpacity: 0.22,
+    spacing: 6,
+    radius: 0.48,
+    maxOpacity: 0.14,
     sheenColor: '232, 238, 248',
   },
   upColor: '#6CE094',
