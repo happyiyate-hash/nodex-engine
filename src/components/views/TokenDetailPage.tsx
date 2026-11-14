@@ -291,8 +291,16 @@ export const TokenDetailPage: React.FC = () => {
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 59px)' }}
       >
+      {/* Upper half: chart and timeframe controls scroll together, independently of the tabs. */}
+      <section
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000] [touch-action:pan-y]"
+        onScroll={(event) => {
+          const top = event.currentTarget.scrollTop;
+          setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
+        }}
+      >
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
-      <section className="relative w-full min-w-0 max-w-full overflow-x-clip bg-[#000000] px-3 pt-2 pb-2">
+      <div className="relative w-full min-w-0 max-w-full overflow-x-clip bg-[#000000] px-3 pt-2 pb-2">
         <div className="flex w-full min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="relative shrink-0">
@@ -433,7 +441,7 @@ export const TokenDetailPage: React.FC = () => {
                 tfDragStateRef.current.active = false;
                 tfDragStateRef.current.moved = false;
               }}
-              className="flex h-full w-full min-w-0 touch-pan-x select-none items-center gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
+              className="flex h-full w-full min-w-0 touch-auto select-none items-center gap-1 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
             >
             {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
               <button
@@ -443,7 +451,7 @@ export const TokenDetailPage: React.FC = () => {
                   if (suppressTimeframeClickRef.current) return;
                   setTimeframe(tf);
                 }}
-                className={`inline-flex h-10 min-w-[2.75rem] shrink-0 touch-pan-x items-center justify-center rounded-md px-2 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
+                className={`inline-flex h-10 min-w-[2.75rem] shrink-0 touch-auto items-center justify-center rounded-md px-2 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
                   timeframe === tf ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:text-white/90'
                 }`}
               >
@@ -485,6 +493,11 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
 
+      </div>
+      </section>
+
+      {/* Lower half: tab navigation stays fixed while the selected tab content scrolls. */}
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#000000]">
         {/* Detail navigation: horizontally scrollable tabs with a continuously sliding indicator. */}
         <nav
           aria-label="Token details"
@@ -515,15 +528,11 @@ export const TokenDetailPage: React.FC = () => {
             </div>
           </div>
         </nav>
-      </section>
-
-      {/* Each detail tab gets its own vertical scroll area; chart controls and tab bar stay fixed. */}
       <div
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
-        onScroll={(event) => {
-          const top = event.currentTarget.scrollTop;
-          setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
-        }}
+      >
+      <div
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
@@ -736,7 +745,7 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       </div>
-      </div>
+      </section>
 
     </div>
   );
