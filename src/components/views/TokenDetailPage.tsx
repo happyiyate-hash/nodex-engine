@@ -291,7 +291,7 @@ export const TokenDetailPage: React.FC = () => {
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 59px)' }}
       >
-      {/* Upper half: chart and timeframe controls scroll together, independently of the tabs. */}
+      {/* One continuous page scroller: overview, chart, sticky tabs, and tab content share the same scroll. */}
       <section
         className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-[#000000]"
         onScroll={(event) => {
@@ -494,14 +494,12 @@ export const TokenDetailPage: React.FC = () => {
         </div>
 
       </div>
-      </section>
 
-      {/* Lower half: tab navigation stays fixed while the selected tab content scrolls. */}
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#000000]">
+        {/* Tabs stick at the top of the same page scroller after the overview moves away. */}
         {/* Detail navigation: horizontally scrollable tabs with a continuously sliding indicator. */}
         <nav
           aria-label="Token details"
-          className="mx-1.5 mt-0.5 w-auto border-b border-white/25 bg-[#000000]"
+          className="sticky top-0 z-30 mx-1.5 mt-0.5 w-auto border-b border-white/25 bg-[#000000]"
         >
           <div
             className="w-full touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden"
@@ -529,7 +527,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </nav>
       <div
-        className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+        className="min-w-0 overflow-visible pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-1 pb-6 pt-5">
@@ -742,9 +740,8 @@ export const TokenDetailPage: React.FC = () => {
       )}
 
       </div>
-      </section>
 
-    </div>
+    </section>
     </div>
   );
 };
