@@ -357,6 +357,9 @@ export class NodeXRestClient {
     };
   }
   public async getPaperWallet(): Promise<PaperWalletSnapshot> { return this.request<PaperWalletSnapshot>('/api/v1/paper-wallet'); }
+  public async getCreatorIntelligence(limit = 100): Promise<CreatorIntelligence[]> {
+    return this.request<CreatorIntelligence[]>(`/api/v1/creators/intelligence?limit=${Math.min(500, Math.max(1, limit))}`);
+  }
   public async getRecentTokens(limit=100): Promise<TokenLaunchRecord[]> {
     return this.request<any[]>(`/api/v1/tokens/recent?limit=${Math.min(500,Math.max(1,limit))}`);
   }
