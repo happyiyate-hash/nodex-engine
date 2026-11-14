@@ -384,6 +384,71 @@ export const TokenDetailPage: React.FC = () => {
         </section>
       )}
 
+      {activeDetailTab === 'Holders' && (
+        <section aria-label="Token holders" className="w-full space-y-6 px-4 pb-8 pt-5 sm:px-5">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-3">
+              <p className="text-[11px] text-white/40">Total Holders</p>
+              <p className="mt-1 font-mono text-[19px] font-medium tracking-tight text-white/95">8,426</p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-3">
+              <p className="text-[11px] text-white/40">Top 10 Ownership</p>
+              <p className="mt-1 font-mono text-[19px] font-medium tracking-tight text-white/95">34.8%</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Largest Holders</h2>
+              <span className="text-[10px] text-white/35">Ranked by balance</span>
+            </div>
+            <div className="space-y-0">
+              {[
+                { address: '7xKX9mPq2vRt4nHs8aBcDeFgHiJkLmNpQrStUvWxYz12', balance: '82.4M', share: 8.24, initials: '7X' },
+                { address: '9pLm3qRs6tUv8wXy2zAbCdEfGhJkMnPqRtUvWxYz1234', balance: '61.8M', share: 6.18, initials: '9P' },
+                { address: '4dEf7gHi2jKl5mNp8qRsTuVwXyZaBcDeFgHiJkLmN567', balance: '48.2M', share: 4.82, initials: '4D' },
+                { address: '2aBc5dEf8gHi1jKl4mNpQrStUvWxYzAbCdEfGhJkL890', balance: '36.5M', share: 3.65, initials: '2A' },
+                { address: '8wXy1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfG345', balance: '29.1M', share: 2.91, initials: '8W' },
+                { address: '5mNp8qRs1tUv4wXy7zAbCdEfGhJkLmNpQrStUvWxYz678', balance: '24.7M', share: 2.47, initials: '5M' },
+                { address: '3qRs6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbC901', balance: '19.3M', share: 1.93, initials: '3Q' },
+                { address: '6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbCdEfG234', balance: '16.8M', share: 1.68, initials: '6T' },
+                { address: '1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfGhJkL567', balance: '14.2M', share: 1.42, initials: '1Z' },
+                { address: '0xYz3aBc6dEf9gHi2jKl5mNpQrStUvWxYzAbCdEfG890', balance: '12.1M', share: 1.21, initials: '0X' },
+              ].map((holder, index) => (
+                <div key={holder.address} className="flex items-center gap-3 border-b border-white/[0.07] py-3.5 last:border-b-0">
+                  <span className="w-4 shrink-0 text-center font-mono text-[11px] text-white/35">{index + 1}</span>
+                  <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.07] text-[10px] font-semibold tracking-wide text-white/75">
+                    {holder.initials}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="min-w-0 truncate font-mono text-[11px] text-white/75">{holder.address.slice(0, 5)}...{holder.address.slice(-5)}</span>
+                      <button
+                        type="button"
+                        aria-label={`Copy holder ${index + 1} wallet address`}
+                        title="Copy wallet address"
+                        onClick={() => navigator.clipboard.writeText(holder.address)}
+                        className="shrink-0 rounded p-1 text-white/35 transition-colors hover:bg-white/[0.07] hover:text-white/90"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.07]">
+                      <div className="h-full rounded-full bg-white/55" style={{ width: `${holder.share}%` }} />
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-mono text-[12px] font-medium text-white/90">{holder.balance}</p>
+                    <p className="mt-1 font-mono text-[10px] text-white/40">{holder.share.toFixed(2)}%</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-white/25">Preview data · Wallets are illustrative and will be replaced with verified on-chain holders.</p>
+        </section>
+      )}
+
       </div>
 
       {/* Fixed return control: stays above the device's bottom safe area while content scrolls. */}
