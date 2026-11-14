@@ -57,7 +57,9 @@ const CHART_THEME = {
     enabled: true,
     spacing: 6,
     radius: 0.52,
-    maxOpacity: 0.21,
+    maxOpacity: 0.155,
+    shadowBlur: 1.6,
+    shadowColor: 'rgba(205, 216, 232, 0.16)',
     sheenColor: '232, 238, 248',
   },
   upColor: '#6CE094',
@@ -961,6 +963,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const alpha = Math.max(0, Math.min(0.26, maxOpacity * fadeY * fadeX * sheenBoost));
         if (alpha <= 0.005) continue;
 
+        // A faint halo softens each pin-sized dot so the grid feels
+        // lightly textured rather than like a row of sharp pixels.
+        ctx.shadowBlur = CHART_THEME.dots.shadowBlur;
+        ctx.shadowColor = CHART_THEME.dots.shadowColor;
         ctx.fillStyle = `rgba(${sheenColor}, ${alpha.toFixed(3)})`;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
