@@ -235,7 +235,7 @@ export const TokenDetailPage: React.FC = () => {
           }}
         />
 
-        <div className="mt-2 flex h-12 w-full items-center px-2 font-mono">
+        <div className="mt-1 flex h-11 w-full items-center px-2 font-mono">
           <div className="relative flex min-w-0 basis-[60%] items-center overflow-hidden">
             <div className="flex h-9 min-w-0 flex-1 touch-pan-x select-none items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg bg-transparent p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
             {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
@@ -286,31 +286,30 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Detail navigation: full-width baseline with a movable active indicator. */}
+        {/* Detail navigation: inset hairline baseline and a smoothly sliding active indicator. */}
         <nav
           aria-label="Token details"
-          className="mt-2 w-full overflow-hidden border-b-2 border-white/30"
+          className="mx-2 mt-0.5 w-auto overflow-hidden border-b border-white/25"
         >
-          <div className="flex w-full items-stretch gap-1 overflow-x-auto overscroll-x-contain px-2 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+          <div className="relative flex min-w-[380px] w-full items-stretch overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
             {(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
                 aria-current={activeDetailTab === tab ? 'page' : undefined}
                 onClick={() => setActiveDetailTab(tab)}
-                className={`relative inline-flex min-h-11 shrink-0 items-center justify-center px-3 text-[12px] font-medium tracking-normal transition-colors ${
+                className={`relative z-[1] inline-flex min-h-9 min-w-[76px] flex-1 items-center justify-center px-2 text-[14px] font-light leading-none tracking-normal transition-colors ${
                   activeDetailTab === tab ? 'text-white' : 'text-white/50 hover:text-white/80'
                 }`}
               >
                 {tab}
-                {activeDetailTab === tab && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-3 -bottom-[2px] h-[3px] rounded-full bg-white"
-                  />
-                )}
               </button>
             ))}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-[-1px] left-0 z-[2] h-[2px] w-1/5 rounded-full bg-white transition-transform duration-300 ease-out"
+              style={{ transform: `translateX(${(['Info', 'Holders', 'Position', 'Trades', 'Transactions'] as const).indexOf(activeDetailTab) * 100}%)` }}
+            />
           </div>
         </nav>
       </section>
