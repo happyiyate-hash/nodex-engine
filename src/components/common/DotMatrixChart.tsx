@@ -1749,8 +1749,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
       <div
         ref={tvContainerRef}
-        style={{ width: '100%', height }}
-        className="relative z-[1] w-full min-w-0 max-w-full overflow-hidden"
+        style={{ position: 'absolute', top: 34, left: 0, right: 0, bottom: 0, width: '100%', height: 'calc(100% - 34px)' }}
+        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
       {/* Fine custom time-axis ticks; the heavier native marks are disabled. */}
       <canvas
@@ -1761,7 +1761,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       />
 
       {/* Layer 2.5: Axis-edge brushes sit above chart labels so the price numbers fade beneath them. */}
-      <div className="pointer-events-none absolute inset-0 z-[4] overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[4] overflow-hidden">
         <div
           className="absolute right-0 top-[12px] h-16 w-[72px]"
           style={{
@@ -1779,7 +1779,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       </div>
 
       {/* Layer 2.6: Very light top-edge seam blend. */}
-      <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[2] overflow-hidden">
         <div
           className="absolute inset-x-0 top-0 h-10"
           style={{
@@ -1790,7 +1790,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       </div>
 
       {/* Layer 3: Right-axis live-price pill card with clean crisp typography */}
-      <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[3] overflow-hidden">
         <div
           ref={badgeRef}
           style={{
