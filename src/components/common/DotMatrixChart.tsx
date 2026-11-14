@@ -1935,20 +1935,24 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         aria-hidden="true"
         className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[19px] w-full"
       />
-      {/* Layer 2.5: Axis-edge brushes sit above chart labels so the price numbers fade beneath them. */}
-      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[4] overflow-hidden">
+      {/* Layer 2.5: Soft smoke-like edge brushes. Darkest only at the outer
+          upper/lower corners, feathering gently inward without a hard dark band. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[19px] z-[4] overflow-hidden"
+      >
         <div
-          className="absolute right-0 top-[12px] h-16 w-[72px]"
+          className="absolute inset-y-0 left-0 w-[88px]"
           style={{
             background:
-              'linear-gradient(to bottom, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.15) 24%, rgba(0,0,0,0.065) 58%, rgba(0,0,0,0) 100%)',
+              'radial-gradient(ellipse 100% 58% at 0% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 0% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
           }}
         />
         <div
-          className="absolute right-0 bottom-0 h-16 w-[72px]"
+          className="absolute inset-y-0 right-0 w-[88px]"
           style={{
             background:
-              'linear-gradient(to top, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.10) 24%, rgba(0,0,0,0.045) 58%, rgba(0,0,0,0) 100%)',
+              'radial-gradient(ellipse 100% 58% at 100% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 100% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
           }}
         />
       </div>
@@ -1967,16 +1971,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="pointer-events-none absolute bottom-[14px] right-[68px] z-[6] h-px w-[8px]"
         style={{
           background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
-        }}
-      />
-
-      {/* Layer 2.56: Light left-edge brush; it gently deepens toward the chart interior.
-          Kept below the timestamp canvas so labels remain visible until they truly exit. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-[34px] bottom-[19px] z-[3] w-[44px]"
-        style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0.035) 0%, rgba(0,0,0,0.075) 42%, rgba(0,0,0,0.14) 76%, rgba(0,0,0,0.20) 100%)',
         }}
       />
 
