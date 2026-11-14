@@ -144,6 +144,22 @@ export const TokenDetailPage: React.FC = () => {
 
   if (!activeToken) return null;
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
+  // Design-only fallback: keep the Position tab populated while the paper
+  // engine has not opened a real position for the selected token.
+  // This object is local to the UI and is never sent to the backend.
+  const displayPosition = activePosition ?? {
+    mint: activeToken.mint,
+    symbol: activeToken.symbol,
+    logo_url: activeToken.logo_url,
+    name: activeToken.name,
+    current_position_value_usd: 125.40,
+    pnl_usd: 18.75,
+    initial_investment_usd: 106.65,
+    entry_price_usd: 0.0000105,
+    current_price_usd: 0.00001235,
+    amount_tokens: 10157142.8571,
+    entry_time: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
+  };
   const liveTokenPrice = demoPrice;
   const currentPrice = scrubPrice ?? liveTokenPrice;
   // Keep the displayed percentage tied to the actual simulated price
@@ -667,84 +683,75 @@ export const TokenDetailPage: React.FC = () => {
 
       {activeDetailTab === 'Position' && (
         <section aria-label="Token position" className="w-full space-y-6 px-1 pb-8 pt-5">
-          {activePosition ? (
-            <>
-              <div className="flex min-w-0 items-center gap-3">
-                <TokenAvatar
-                  symbol={activePosition.symbol || activeToken.symbol}
-                  logoUrl={activePosition.logo_url || activeToken.logo_url}
-                  size="lg"
-                  className="!h-11 !w-11 shrink-0 !rounded-lg"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-semibold text-white/95">
-                    {activePosition.name || activeToken.name || activePosition.symbol || activeToken.symbol}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-white/40">Open paper position</p>
-                </div>
-                <span className="rounded-md bg-white/[0.08] px-2 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/65">
-                  PAPER
-                </span>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-[10px] font-medium uppercase tracking-[0.13em] text-white/40">Position value</p>
-                <p className="font-sans text-[30px] font-semibold leading-tight tracking-tight tabular-nums text-white">
-                  {formatUsd(activePosition.current_position_value_usd)}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className={`font-mono text-[13px] font-semibold tabular-nums ${activePosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-                    {activePosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(activePosition.pnl_usd))}
-                  </span>
-                  <span className="text-[10px] text-white/35">Unrealized PnL</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-x-5 gap-y-5 border-y border-white/[0.10] py-4">
-                <div className="min-w-0 space-y-1">
-                  <p className="text-[10px] text-white/40">Invested</p>
-                  <p className="truncate font-mono text-[16px] font-medium tabular-nums text-white/95">
-                    {formatUsd(activePosition.initial_investment_usd)}
-                  </p>
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <p className="text-[10px] text-white/40">Profit / Loss</p>
-                  <p className={`truncate font-mono text-[16px] font-medium tabular-nums ${activePosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-                    {activePosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(activePosition.pnl_usd))}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h2 className="text-[12px] font-medium text-white/85">Position details</h2>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-[11px] text-white/40">Entry price</span>
-                  <span className="font-mono text-[12px] tabular-nums text-white/85">{formatUsd(activePosition.entry_price_usd, 8)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-[11px] text-white/40">Current price</span>
-                  <span className="font-mono text-[12px] tabular-nums text-white/85">{formatUsd(activePosition.current_price_usd, 8)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-[11px] text-white/40">Token amount</span>
-                  <span className="font-mono text-[12px] tabular-nums text-white/85">{new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(activePosition.amount_tokens)}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-[11px] text-white/40">Opened</span>
-                  <span className="text-[11px] tabular-nums text-white/75">{new Date(activePosition.entry_time).toLocaleString()}</span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex min-h-[210px] flex-col items-center justify-center gap-2 text-center">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06]">
-                <ChartLine className="h-5 w-5 text-white/45" />
-              </div>
-              <p className="text-[13px] font-medium text-white/85">No open position</p>
-              <p className="max-w-[230px] text-[11px] leading-relaxed text-white/40">
-                NodeX has not opened a paper position for this token yet.
+          <div className="flex min-w-0 items-center gap-3">
+            <TokenAvatar
+              symbol={displayPosition.symbol || activeToken.symbol}
+              logoUrl={displayPosition.logo_url || activeToken.logo_url}
+              size="lg"
+              className="!h-11 !w-11 shrink-0 !rounded-lg"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold text-white/95">
+                {displayPosition.name || activeToken.name || displayPosition.symbol || activeToken.symbol}
+              </p>
+              <p className="mt-0.5 text-[11px] text-white/40">
+                {activePosition ? 'Open paper position' : 'Sample position · design preview'}
               </p>
             </div>
+            <span className="rounded-md bg-white/[0.08] px-2 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/65">
+              {activePosition ? 'PAPER' : 'DEMO'}
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-[10px] font-medium uppercase tracking-[0.13em] text-white/40">Position value</p>
+            <p className="font-sans text-[30px] font-semibold leading-tight tracking-tight tabular-nums text-white">
+              {formatUsd(displayPosition.current_position_value_usd)}
+            </p>
+            <div className="flex items-center gap-2">
+              <span className={`font-mono text-[13px] font-semibold tabular-nums ${displayPosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
+                {displayPosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(displayPosition.pnl_usd))}
+              </span>
+              <span className="text-[10px] text-white/35">Unrealized PnL</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-5 gap-y-5 border-y border-white/[0.10] py-4">
+            <div className="min-w-0 space-y-1">
+              <p className="text-[10px] text-white/40">Invested</p>
+              <p className="truncate font-mono text-[16px] font-medium tabular-nums text-white/95">
+                {formatUsd(displayPosition.initial_investment_usd)}
+              </p>
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="text-[10px] text-white/40">Profit / Loss</p>
+              <p className={`truncate font-mono text-[16px] font-medium tabular-nums ${displayPosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
+                {displayPosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(displayPosition.pnl_usd))}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h2 className="text-[12px] font-medium text-white/85">Position details</h2>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[11px] text-white/40">Entry price</span>
+              <span className="font-mono text-[12px] tabular-nums text-white/85">{formatUsd(displayPosition.entry_price_usd, 8)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[11px] text-white/40">Current price</span>
+              <span className="font-mono text-[12px] tabular-nums text-white/85">{formatUsd(displayPosition.current_price_usd, 8)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[11px] text-white/40">Token amount</span>
+              <span className="font-mono text-[12px] tabular-nums text-white/85">{new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(displayPosition.amount_tokens)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[11px] text-white/40">Opened</span>
+              <span className="text-[11px] tabular-nums text-white/75">{new Date(displayPosition.entry_time).toLocaleString()}</span>
+            </div>
+          </div>
+          {!activePosition && (
+            <p className="text-[10px] text-white/25">Illustrative values only · This is not a real or recorded paper position.</p>
           )}
         </section>
       )}
