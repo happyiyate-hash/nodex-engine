@@ -37,6 +37,40 @@ export const TokenDetailPage: React.FC = () => {
   const tabContentScrollRef = useRef<HTMLDivElement>(null);
   const tabTouchYRef = useRef<number | null>(null);
 
+  // Native non-passive handling prevents Android Chrome pull-to-refresh at the
+  // top of tab content and transfers the downward drag to the outer page.
+  useEffect(() => {
+    const tabScroller = tabContentScrollRef.current;
+    if (!tabScroller) return;
+    let previousY: number | null = null;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      previousY = event.touches[0]?.clientY ?? null;
+    };
+    const handleTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY;
+      if (previousY == null || currentY == null) return;
+      const deltaY = currentY - previousY;
+      previousY = currentY;
+      const pageScroller = pageScrollRef.current;
+      if (!pageScroller || deltaY <= 0 || tabScroller.scrollTop > 1) return;
+      event.preventDefault();
+      pageScroller.scrollTop = Math.max(0, pageScroller.scrollTop - deltaY);
+    };
+    const resetTouch = () => { previousY = null; };
+
+    tabScroller.addEventListener('touchstart', handleTouchStart, { passive: true });
+    tabScroller.addEventListener('touchmove', handleTouchMove, { passive: false });
+    tabScroller.addEventListener('touchend', resetTouch, { passive: true });
+    tabScroller.addEventListener('touchcancel', resetTouch, { passive: true });
+    return () => {
+      tabScroller.removeEventListener('touchstart', handleTouchStart);
+      tabScroller.removeEventListener('touchmove', handleTouchMove);
+      tabScroller.removeEventListener('touchend', resetTouch);
+      tabScroller.removeEventListener('touchcancel', resetTouch);
+    };
+  }, []);
+
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
   const activeToken = selectedToken
@@ -532,32 +566,6 @@ export const TokenDetailPage: React.FC = () => {
         </nav>
       <div
         ref={tabContentScrollRef}
-        onTouchStart={(event) => {
-          tabTouchYRef.current = event.touches[0]?.clientY ?? null;
-        }}
-        onTouchMove={(event) => {
-          const previousY = tabTouchYRef.current;
-          const currentY = event.touches[0]?.clientY;
-          if (previousY == null || currentY == null) return;
-          const deltaY = currentY - previousY;
-          tabTouchYRef.current = currentY;
-          const tabScroller = tabContentScrollRef.current;
-          const pageScroller = pageScrollRef.current;
-          if (!tabScroller || !pageScroller) return;
-
-          // At the top of a tab, take over downward drags and move the
-          // outer token page instead of allowing browser pull-to-refresh.
-          if (tabScroller.scrollTop <= 1 && deltaY > 0) {
-            event.preventDefault();
-            pageScroller.scrollTop = Math.max(0, pageScroller.scrollTop - deltaY);
-          }
-        }}
-        onTouchEnd={() => {
-          tabTouchYRef.current = null;
-        }}
-        onTouchCancel={() => {
-          tabTouchYRef.current = null;
-        }}
         className="min-h-0 min-w-0 shrink-0 overflow-y-auto overflow-x-hidden overscroll-y-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
         style={{ height: 'calc(100% - 36px)', touchAction: 'pan-y' }}
       >
