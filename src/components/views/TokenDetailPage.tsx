@@ -234,16 +234,16 @@ export const TokenDetailPage: React.FC = () => {
           }}
         />
 
-        <div className="mt-2 flex h-14 w-full items-stretch px-2 font-mono">
+        <div className="mt-2 flex h-12 w-full items-center px-2 font-mono">
           <div className="relative flex min-w-0 basis-[60%] items-center overflow-hidden">
-            <div className="flex h-full min-w-0 flex-1 touch-pan-x select-none items-center gap-2.5 overflow-x-auto overscroll-x-contain px-2 py-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+            <div className="flex h-9 min-w-0 flex-1 touch-pan-x select-none items-center gap-1 overflow-x-auto overscroll-x-contain rounded-lg bg-white/[0.045] p-1 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
             {(['1S', '5S', '10S', '1M', '5M', '15M', '30M', '1H', '24H'] as const).map((tf) => (
               <button
                 key={tf}
                 type="button"
                 onClick={() => setTimeframe(tf)}
-                className={`min-h-11 shrink-0 touch-manipulation rounded-md px-3.5 py-2 text-[13px] font-semibold tracking-[0.035em] transition-colors ${
-                  timeframe === tf ? 'bg-white/[0.12] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12)]' : 'text-white/65 hover:text-white/90'
+                className={`inline-flex h-7 min-w-[2.35rem] shrink-0 touch-manipulation items-center justify-center rounded-md px-2 text-[12px] font-medium leading-none tracking-normal transition-colors ${
+                  timeframe === tf ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:text-white/90'
                 }`}
               >
                 {tf}
@@ -251,10 +251,10 @@ export const TokenDetailPage: React.FC = () => {
             ))}
             </div>
             <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 z-[2] w-3" style={{ background: 'linear-gradient(to right, #000 0%, rgba(0,0,0,0.48) 38%, transparent 100%)' }} />
-            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-4" style={{ background: 'linear-gradient(to left, #000 0%, rgba(0,0,0,0.52) 42%, transparent 100%)' }} />
+            <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 z-[2] w-3" style={{ background: 'linear-gradient(to left, #000 0%, rgba(0,0,0,0.52) 42%, transparent 100%)' }} />
           </div>
 
-          <div aria-hidden="true" className="mx-2 my-1 w-px shrink-0 bg-white/20" />
+          <div aria-hidden="true" className="mx-1.5 my-1 w-px shrink-0 bg-white/15" />
 
           <div className="relative flex min-w-0 basis-[40%] items-center justify-end gap-1 overflow-hidden pl-1">
             <button
