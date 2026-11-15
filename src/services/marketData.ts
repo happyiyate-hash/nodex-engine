@@ -57,13 +57,21 @@ export const marketDataService = {
   },
 
   async request<T>(action: 'health' | 'providers' | 'ws-ticket', settings: MarketDataConnectionSettings): Promise<T> {
-    const response = await fetch(`/api/market-data/${action}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        restUrl: settings.restUrl,
-        apiKey: cleanKey(settings.apiKey),
-      }),
+    const routes = {
+      health: { path: '/health', method: 'GET' as const },
+      providers: { path: '/providers/status', method: 'GET' as const },
+      'ws-ticket': { path: '/api/v1/ws-ticket', method: 'POST' as const },
+    };
+    const route = routes[action];
+    const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : `${settings.restUrl}/`;
+    const url = new URL(route.path, baseUrl);
+    const response = await fetch(url.toString(), {
+      method: route.method,
+      headers: {
+        'x-api-key': cleanKey(settings.apiKey),
+        ...(route.method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(route.method === 'POST' ? { body: '{}' } : {}),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
