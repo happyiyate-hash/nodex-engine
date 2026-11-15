@@ -601,8 +601,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                   <p className={`mt-1 text-[11px] font-semibold ${marketDataRestOnline === true ? 'text-emerald-300' : marketDataRestOnline === false ? 'text-red-300' : 'text-white/50'}`}>{marketDataRestOnline === true ? 'Online' : marketDataRestOnline === false ? 'Unavailable' : 'Not checked'}</p>
                 </div>
                 <div className="min-w-0 px-2 last:pr-0">
-                  <div className="flex items-center gap-1.5"><Activity className="h-3.5 w-3.5 shrink-0 text-white/50" /><span className="truncate text-[10px] text-white/55">Providers</span></div>
-                  <p className={`mt-1 text-[11px] font-semibold ${marketDataProvidersConfigured === true ? 'text-emerald-300' : marketDataProvidersConfigured === false ? 'text-amber-300' : 'text-white/50'}`}>{marketDataProvidersConfigured === true ? 'Configured' : marketDataProvidersConfigured === false ? 'Not configured' : 'Unknown'}</p>
+                  <div className="flex items-center gap-1.5"><Activity className="h-3.5 w-3.5 shrink-0 text-white/50" /><span className="truncate text-[10px] text-white/55">Service</span></div>
+                  <p className={`mt-1 text-[11px] font-semibold ${marketDataRestOnline === true ? 'text-emerald-300' : marketDataRestOnline === false ? 'text-red-300' : 'text-white/50'}`}>{marketDataRestOnline === true ? 'Running' : marketDataRestOnline === false ? 'Unavailable' : 'Not checked'}</p>
                 </div>
               </div>
               <p className="mt-1.5 text-right text-[9px] tabular-nums text-white/30">{marketDataStatusCheckedAt ? `Updated ${marketDataStatusCheckedAt.toLocaleTimeString()}` : 'Checking connection status…'}</p>
