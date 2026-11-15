@@ -1,16 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { TerminalProvider, useTerminal } from './context/TerminalContext';
 import { MobileNav } from './components/layout/MobileNav';
-import { PositionsPage } from './components/views/PositionsPage';
-import { LiveFeedPage } from './components/views/LiveFeedPage';
-import { StrategyPage } from './components/views/StrategyPage';
-import { DeveloperIntelligencePage } from './components/views/DeveloperIntelligencePage';
-import { TokenIntelligencePage } from './components/views/TokenIntelligencePage';
-import { SettingsPage } from './components/views/SettingsPage';
-import { StorageManagementPage } from './components/views/StorageManagementPage';
-import { TokenDetailPage } from './components/views/TokenDetailPage';
-import { LogsPage } from './components/views/LogsPage';
+const PositionsPage = lazy(() => import('./components/views/PositionsPage').then((module) => ({ default: module.PositionsPage })));
+const LiveFeedPage = lazy(() => import('./components/views/LiveFeedPage').then((module) => ({ default: module.LiveFeedPage })));
+const StrategyPage = lazy(() => import('./components/views/StrategyPage').then((module) => ({ default: module.StrategyPage })));
+const DeveloperIntelligencePage = lazy(() => import('./components/views/DeveloperIntelligencePage').then((module) => ({ default: module.DeveloperIntelligencePage })));
+const TokenIntelligencePage = lazy(() => import('./components/views/TokenIntelligencePage').then((module) => ({ default: module.TokenIntelligencePage })));
+const SettingsPage = lazy(() => import('./components/views/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const StorageManagementPage = lazy(() => import('./components/views/StorageManagementPage').then((module) => ({ default: module.StorageManagementPage })));
+const TokenDetailPage = lazy(() => import('./components/views/TokenDetailPage').then((module) => ({ default: module.TokenDetailPage })));
+const LogsPage = lazy(() => import('./components/views/LogsPage').then((module) => ({ default: module.LogsPage })));
 import { installFetchLogger } from './services/engineLogs';
 import { ToastProvider, useToast } from './components/ui/ToastProvider';
 
@@ -229,6 +229,7 @@ const MainLayout: React.FC = () => {
   return (
     <div className="fixed inset-0 h-full w-full overflow-hidden bg-black text-white font-sans selection:bg-white/20 select-none">
       <main ref={mainRef} className="relative z-10 flex h-full w-full flex-col overflow-hidden bg-black focus:outline-none">
+        <Suspense fallback={<div className="flex h-full w-full items-center justify-center bg-black text-xs text-white/45">Loading NodeX…</div>}>
         <div
           aria-live="polite"
           aria-label={isRefreshing ? 'Refreshing page' : 'Pull down to refresh'}
@@ -291,6 +292,7 @@ const MainLayout: React.FC = () => {
             <TokenDetailPage />
           </div>
         )}
+        </Suspense>
       </main>
       {!selectedToken && activeTab !== 'event_monitor' && !(activeTab === 'settings' && settingsSubpage) && !(activeTab === 'strategy' && developerIntelligenceOpen) && <MobileNav />}
     </div>
