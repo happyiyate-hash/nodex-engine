@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowLeft, Bell, Check, ChevronRight, Download, FileText,
   Database, HardDrive, Pause, Play, PlugZap, Radar, RefreshCw,
-  SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu,
+  SlidersHorizontal, Trash2, Wifi, Eye, EyeOff, Server, Cpu, X,
 } from 'lucide-react';
 import { useTerminal } from '../../context/TerminalContext';
 import { apiClient, cleanHeaderValue } from '../../services/rest';
