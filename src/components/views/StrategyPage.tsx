@@ -261,11 +261,11 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
       </header>}
       <div className={embedded ? "w-full min-w-0 px-3" : "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-4"}>
       {onOpenDeveloperIntelligence && (
-        <section className="mb-5 border-b border-white/[0.08] pb-5">
-          <button type="button" onClick={onOpenDeveloperIntelligence} className="group flex w-full items-center gap-3 border-b border-violet-400/20 py-4 text-left transition-colors hover:bg-violet-400/[0.045] active:bg-violet-400/[0.08]">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-violet-300/25 bg-gradient-to-br from-violet-500/25 to-indigo-500/10 shadow-[0_0_22px_rgba(139,92,246,0.12)]"><Users className="h-[18px] w-[18px] text-violet-200" /></span>
+        <section className="mb-5 pb-2">
+          <button type="button" onClick={onOpenDeveloperIntelligence} className="group flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-white/[0.025] active:bg-white/[0.04]">
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-orange-400/15 to-amber-300/10"><Users className="h-[18px] w-[18px] text-amber-300" /></span>
             <span className="min-w-0 flex-1"><span className="block text-[12px] font-semibold text-white">Preferred Owners</span><span className="mt-1 block text-[10px] text-white/45">Developer profiles, reputation and creator history</span></span>
-            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-violet-400/10 text-violet-200 transition-transform group-hover:translate-x-0.5"><ArrowRight className="h-4 w-4" /></span>
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-orange-400/10 text-amber-200 transition-transform group-hover:translate-x-0.5"><ArrowRight className="h-4 w-4" /></span>
           </button>
         </section>
       )}
