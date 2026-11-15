@@ -14,17 +14,12 @@ export interface MarketDataHealth {
 const STORAGE_KEY = 'nodex.market-data-connection.v1';
 
 function cleanKey(value: string): string {
-  return value
-    .replace(/[\\u200B-\\u200D\\uFEFF\\u2060\\u00A0]/g, '')
-    .replace(/[\\u2018\\u2019]/g, "'")
-    .replace(/[\\u201C\\u201D]/g, '"')
-    .replace(/[\\u2013\\u2014]/g, '-')
-    .replace(/[^\\x00-\\xFF]/g, '')
-    .trim();
+  return value.trim();
 }
 
 export function normalizeMarketDataSettings(value: MarketDataConnectionSettings): MarketDataConnectionSettings {
-  const restUrl = value.restUrl.trim().replace(/\\/$/, '');
+  const rawRestUrl = value.restUrl.trim();
+  const restUrl = rawRestUrl.endsWith('/') ? rawRestUrl.slice(0, -1) : rawRestUrl;
   let wsUrl = value.wsUrl.trim();
   if (!wsUrl && restUrl) {
     const parsed = new URL(restUrl);
