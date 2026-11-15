@@ -40,6 +40,7 @@ if (!releaseBlock.includes("getDefaultProguardFile('proguard-android-optimize.tx
   releaseBlock = "    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'\n" + releaseBlock;
 }
 
+releaseBlock = '\n' + releaseBlock.trimStart() + '\n    ';
 gradle = gradle.slice(0, blockStart) + releaseBlock + gradle.slice(blockEnd);
 writeFileSync(gradlePath, gradle);
 console.log('Android Release optimization enabled: R8 minification, resource shrinking, and optimized ProGuard defaults.');
