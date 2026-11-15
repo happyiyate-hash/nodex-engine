@@ -460,7 +460,8 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     setMarketDataMessage('');
     setMarketDataMessageSuccess(false);
     try {
-      const restUrl = marketDataRestUrlDraft.trim().replace(/\\/$/, '');
+      const rawRestUrl = marketDataRestUrlDraft.trim();
+      const restUrl = rawRestUrl.endsWith('/') ? rawRestUrl.slice(0, -1) : rawRestUrl;
       const parsedRest = new URL(restUrl);
       if (parsedRest.protocol !== 'https:' || parsedRest.pathname !== '/' || parsedRest.search || parsedRest.hash) {
         throw new Error('Enter the HTTPS origin of the Market Data REST API, for example https://your-server.com.');
