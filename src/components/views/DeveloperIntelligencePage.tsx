@@ -86,13 +86,15 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
   };
 
   const headerPanel = (title: string, meta: string, back: () => void, action?: React.ReactNode, extra?: React.ReactNode) => (
-    <header className={`relative z-10 flex shrink-0 flex-col rounded-b-[22px] bg-[#151515] px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+8px)] ${extra ? 'min-h-[158px]' : 'min-h-[104px]'}`}>
-      <div className="flex h-9 items-center justify-between">
-        <button type="button" onClick={back} aria-label="Go back" className="grid size-9 place-items-center rounded-full bg-black/55 text-white/85 shadow-sm active:scale-95"><ArrowLeft className="h-4 w-4" /></button>
+    <header className={`relative z-10 flex shrink-0 flex-col rounded-b-[22px] bg-[#151515] px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+8px)] ${extra ? 'min-h-[138px]' : 'min-h-[104px]'}`}>
+      <div className="flex h-9 min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <button type="button" onClick={back} aria-label="Go back" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-white/85 shadow-sm active:scale-95"><ArrowLeft className="h-4 w-4" /></button>
+          <h1 className="truncate text-[16px] font-semibold tracking-tight text-white">{title}</h1>
+        </div>
         {action}
       </div>
-      <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
-        <h1 className="truncate text-[16px] font-semibold tracking-tight text-white">{title}</h1>
+      <div className="mt-1 flex justify-end">
         <span className="shrink-0 text-[10px] font-medium text-orange-200/75">{meta}</span>
       </div>
       {extra}
@@ -156,17 +158,17 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
         <div className="rounded-lg bg-black/25 px-2.5 py-2"><p className="text-[8px] uppercase tracking-wider text-amber-200/65">Auto tracked</p><p className="mt-0.5 text-[17px] font-semibold tabular-nums text-amber-100">{developers.filter((d) => !d.owner && !!d.intelligence).length}</p></div>
       </div>)}
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-10 pt-3">
-      <label className="relative mb-3 block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search developer or wallet address" className="h-11 w-full rounded-xl bg-[#171717] pl-10 pr-3 text-[11px] text-white outline-none placeholder:text-white/30 focus:ring-1 focus:ring-amber-400/30" /></label>
+      <label className="relative mb-3 block"><Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search developer or wallet address" className="h-9 w-full rounded-lg bg-[#171717] pl-9 pr-3 text-[11px] text-white outline-none placeholder:text-white/30 focus:ring-1 focus:ring-amber-400/30" /></label>
       {error && <div className="mb-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] p-3 text-[10px] text-amber-200/80">{error}<button type="button" onClick={() => void load()} className="ml-2 underline">Retry</button></div>}
       {loading ? <div className="flex items-center justify-center gap-2 py-12 text-[10px] text-white/40"><Activity className="h-4 w-4 animate-pulse" /> Loading developer records…</div>
         : filtered.length === 0 ? <div className="rounded-xl bg-[#171717] px-5 py-10 text-center"><Users className="mx-auto h-6 w-6 text-white/25" /><p className="mt-3 text-[12px] font-medium text-white/70">{developers.length ? 'No matching developers' : 'No developers tracked yet'}</p><p className="mt-1 text-[10px] leading-relaxed text-white/35">Add a wallet manually or wait for the backend to record creator intelligence.</p><button type="button" onClick={openAdd} className="mt-4 rounded-full bg-white px-4 py-2 text-[10px] font-semibold text-black">Add developer</button></div>
         : <div className="space-y-2">{filtered.map((developer) => {
           const info = developer.intelligence; const label = developer.owner?.label || info?.display_label || 'Unnamed developer';
-          const palette = developer.owner ? 'bg-gradient-to-r from-orange-500/[0.12] via-[#1b160f] to-[#19150f]' : 'bg-gradient-to-r from-amber-400/[0.10] via-[#1a1712] to-[#18150f]';
-          return <button key={developer.address} type="button" onClick={() => setSelectedAddress(developer.address)} className={`group flex w-full items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition-colors hover:brightness-110 active:scale-[0.99] ${palette}`}>
-            <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${developer.owner ? 'bg-orange-400/10' : 'bg-amber-300/10'}`}><Wallet className={`h-[17px] w-[17px] ${developer.owner ? 'text-orange-300' : 'text-amber-200'}`} /></span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-white/90">{label}</span><span className="mt-1 block truncate font-mono text-[9px] text-white/35">{shortAddress(developer.address)}</span><span className="mt-1.5 flex flex-wrap items-center gap-1.5">{developer.owner && <span className="rounded-full bg-orange-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-orange-200">MANUAL</span>}{info && <span className="rounded-full bg-amber-300/10 px-1.5 py-0.5 text-[8px] font-semibold text-amber-200">TRACKED</span>}{!info && <span className="text-[8px] text-white/30">Awaiting observations</span>}</span></span>
-            <span className="shrink-0 text-right"><span className={`block text-[13px] font-bold tabular-nums ${info ? 'text-amber-200' : 'text-white/35'}`}>{info ? info.activity_score.toFixed(1) : '—'}</span><span className="text-[8px] uppercase tracking-wider text-white/40">Activity</span></span><span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/25 text-white/45 transition-all group-hover:translate-x-0.5 group-hover:bg-white/[0.09] group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
+          const palette = 'bg-gradient-to-r from-[#f1f2f3] via-[#dfe2e5] to-[#cfd3d7]';
+          return <button key={developer.address} type="button" onClick={() => setSelectedAddress(developer.address)} className={`group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[#17191c] shadow-sm transition-colors hover:brightness-105 active:scale-[0.99] ${palette}`}>
+            <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${developer.owner ? 'bg-[#b86a24]/15' : 'bg-[#8c742c]/15'}`}><Wallet className={`h-[17px] w-[17px] ${developer.owner ? 'text-[#98501c]' : 'text-[#80651b]'}`} /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#17191c]">{label}</span><span className="mt-1 block truncate font-mono text-[9px] text-[#4d5359]">{shortAddress(developer.address)}</span><span className="mt-1.5 flex flex-wrap items-center gap-1.5">{developer.owner && <span className="rounded-full bg-[#b86a24]/15 px-1.5 py-0.5 text-[8px] font-semibold text-[#814414]">MANUAL</span>}{info && <span className="rounded-full bg-[#8c742c]/15 px-1.5 py-0.5 text-[8px] font-semibold text-[#6e5818]">TRACKED</span>}{!info && <span className="text-[8px] text-[#626970]">Awaiting observations</span>}</span></span>
+            <span className="shrink-0 text-right"><span className={`block text-[13px] font-bold tabular-nums ${info ? 'text-[#785c18]' : 'text-[#777e84]'}`}>{info ? info.activity_score.toFixed(1) : '—'}</span><span className="text-[8px] uppercase tracking-wider text-[#596168]">Activity</span></span><span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/[0.06] text-[#596168] transition-all group-hover:translate-x-0.5 group-hover:bg-black/[0.10] group-hover:text-[#17191c]"><ArrowRight className="h-4 w-4" /></span>
           </button>;
         })}</div>}
       <p className="mt-4 flex items-center gap-1.5 text-[9px] text-white/30"><Clock3 className="h-3 w-3" /> Automatic records reflect only data currently returned by the backend.</p>
