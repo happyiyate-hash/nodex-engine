@@ -789,6 +789,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                     </div>
                   </Field>
                   <p className="text-[9px] leading-relaxed text-amber-200/50">This key is stored locally on this device. It is sent directly from this device to the Market Data service when making requests; it is not shared with other users or browsers. Anyone with access to this browser profile may be able to retrieve it.</p>
+                  {marketDataMessage && <p className={`rounded-lg border p-3 text-[10px] ${marketDataMessageSuccess ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200' : 'border-red-500/20 bg-red-500/[0.06] text-red-200'}`} role="status">{marketDataMessage}</p>}
                   <button type="button" onClick={() => void saveMarketDataConnection()} disabled={savingMarketDataConnection} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
                     {savingMarketDataConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
                     {savingMarketDataConnection ? 'Verifying connection…' : 'Save & connect'}
