@@ -85,8 +85,8 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
     catch { showToast({ title: 'Copy unavailable', description: 'Your device did not allow copying this address.', tone: 'warning' }); }
   };
 
-  const headerPanel = (title: string, meta: string, back: () => void, action?: React.ReactNode) => (
-    <header className="relative z-10 flex min-h-[104px] shrink-0 flex-col rounded-b-[22px] bg-[#151515] px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+8px)]">
+  const headerPanel = (title: string, meta: string, back: () => void, action?: React.ReactNode, extra?: React.ReactNode) => (
+    <header className={`relative z-10 flex shrink-0 flex-col rounded-b-[22px] bg-[#151515] px-4 pb-4 pt-[calc(env(safe-area-inset-top,0px)+8px)] ${extra ? 'min-h-[158px]' : 'min-h-[104px]'}`}>
       <div className="flex h-9 items-center justify-between">
         <button type="button" onClick={back} aria-label="Go back" className="grid size-9 place-items-center rounded-full bg-black/55 text-white/85 shadow-sm active:scale-95"><ArrowLeft className="h-4 w-4" /></button>
         {action}
@@ -95,6 +95,7 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
         <h1 className="truncate text-[16px] font-semibold tracking-tight text-white">{title}</h1>
         <span className="shrink-0 text-[10px] font-medium text-orange-200/75">{meta}</span>
       </div>
+      {extra}
     </header>
   );
 
@@ -107,7 +108,17 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
     ] as const : [];
     return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
       {headerPanel('Developer profile', 'PROFILE', () => setSelectedAddress(null),
-        <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[10px] font-semibold text-white/85 active:scale-95"><Pencil className="h-3.5 w-3.5" /> Edit</button>)}
+        <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[10px] font-semibold text-white/85 active:scale-95"><Pencil className="h-3.5 w-3.5" /> Edit</button>,
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="min-w-0 rounded-lg bg-black/25 px-2.5 py-2">
+            <div className="flex items-baseline justify-between gap-1"><span className="truncate text-[9px] text-orange-100/65">Developer score</span><span className="text-[15px] font-bold tabular-nums text-orange-100">{info ? info.activity_score.toFixed(1) : '—'}<span className="ml-0.5 text-[8px] font-normal text-white/35">/100</span></span></div>
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-amber-300" style={{ width: `${Math.max(0, Math.min(100, info?.activity_score ?? 0))}%` }} /></div>
+          </div>
+          <div className="min-w-0 rounded-lg bg-black/25 px-2.5 py-2">
+            <div className="flex items-baseline justify-between gap-1"><span className="truncate text-[9px] text-amber-100/65">Qualified rate</span><span className="text-[15px] font-bold tabular-nums text-amber-100">{info && info.observations_count > 0 ? (info.qualified_observations / info.observations_count * 100).toFixed(1) : '—'}<span className="ml-0.5 text-[8px] font-normal text-white/35">%</span></span></div>
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-yellow-200" style={{ width: `${info && info.observations_count > 0 ? Math.max(0, Math.min(100, info.qualified_observations / info.observations_count * 100)) : 0}%` }} /></div>
+          </div>
+        </div>)}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-4">
         <section className="relative overflow-hidden rounded-xl bg-[#171717] p-3.5">
           <div className="flex items-start gap-3">
@@ -138,7 +149,12 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
 
   return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
     {headerPanel('Preferred Owners', `${developers.length} developers`, onBack,
-      <button type="button" onClick={openAdd} aria-label="Add developer" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-orange-200 active:scale-95"><Plus className="h-4 w-4" /></button>)}
+      <button type="button" onClick={openAdd} aria-label="Add developer" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-orange-200 active:scale-95"><Plus className="h-4 w-4" /></button>,
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-black/25 px-2.5 py-2"><p className="text-[8px] uppercase tracking-wider text-white/40">Total</p><p className="mt-0.5 text-[17px] font-semibold tabular-nums text-white">{developers.length}</p></div>
+        <div className="rounded-lg bg-black/25 px-2.5 py-2"><p className="text-[8px] uppercase tracking-wider text-orange-200/65">Manual</p><p className="mt-0.5 text-[17px] font-semibold tabular-nums text-orange-100">{developers.filter((d) => !!d.owner).length}</p></div>
+        <div className="rounded-lg bg-black/25 px-2.5 py-2"><p className="text-[8px] uppercase tracking-wider text-amber-200/65">Auto tracked</p><p className="mt-0.5 text-[17px] font-semibold tabular-nums text-amber-100">{developers.filter((d) => !d.owner && !!d.intelligence).length}</p></div>
+      </div>)}
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-4">
       <label className="relative mb-4 block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search developer or wallet address" className="h-11 w-full rounded-xl bg-[#171717] pl-10 pr-3 text-[11px] text-white outline-none placeholder:text-white/30 focus:ring-1 focus:ring-amber-400/30" /></label>
       {error && <div className="mb-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] p-3 text-[10px] text-amber-200/80">{error}<button type="button" onClick={() => void load()} className="ml-2 underline">Retry</button></div>}
