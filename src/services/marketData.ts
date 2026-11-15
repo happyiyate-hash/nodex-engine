@@ -38,6 +38,7 @@ export function normalizeMarketDataSettings(value: MarketDataConnectionSettings)
 }
 
 export const marketDataService = {
+  normalizeMarketDataSettings,
   loadSettings(): MarketDataConnectionSettings {
     if (typeof window === 'undefined') return { restUrl: '', wsUrl: '', apiKey: '' };
     try {
