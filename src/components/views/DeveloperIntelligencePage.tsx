@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, ArrowLeft, ArrowRight, BarChart3, Check, Clock3, Copy, Layers3, Pencil, Plus, Search, ShieldAlert, TrendingUp, Users, Wallet, X } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, Check, Copy, Pencil, Plus, Search, Users, Wallet, X } from 'lucide-react';
 import { apiClient } from '../../services/rest';
 import { useTerminal } from '../../context/TerminalContext';
 import { useToast } from '../ui/ToastProvider';
-import { CreatorIntelligence, PreferredOwner } from '../../types';
+import { CreatorIntelligence, PreferredOwner, TokenLaunchRecord } from '../../types';
 
 type Developer = { address: string; owner?: PreferredOwner; intelligence?: CreatorIntelligence };
 const shortAddress = (value: string) => value.length > 18 ? value.slice(0, 7) + '…' + value.slice(-7) : value;
@@ -12,6 +12,9 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
   const { strategyConfig, saveStrategyConfig } = useTerminal();
   const { showToast } = useToast();
   const [records, setRecords] = useState<CreatorIntelligence[]>([]);
+  const [developerTokens, setDeveloperTokens] = useState<Array<{ launch: TokenLaunchRecord; detail: Record<string, any> | null }>>([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [tokensError, setTokensError] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -47,6 +50,36 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
   }, [records, strategyConfig.preferred_owners]);
 
   const selected = developers.find((d) => d.address === selectedAddress) || null;
+
+  useEffect(() => {
+    if (!selectedAddress) {
+      setDeveloperTokens([]);
+      setTokensError('');
+      setTokensLoading(false);
+      return;
+    }
+    let active = true;
+    setTokensLoading(true);
+    setTokensError('');
+    void (async () => {
+      try {
+        const launches = await apiClient.getRecentTokens(500);
+        const matching = launches
+          .filter((launch) => launch.creator_address === selectedAddress)
+          .sort((a, b) => Date.parse(b.detected_at) - Date.parse(a.detected_at));
+        const details = await Promise.all(matching.map(async (launch) => {
+          try { return { launch, detail: await apiClient.getTokenState(launch.mint_address) }; }
+          catch { return { launch, detail: null }; }
+        }));
+        if (active) setDeveloperTokens(details);
+      } catch (e) {
+        if (active) setTokensError(e instanceof Error ? e.message : 'Could not load this developer’s token records.');
+      } finally {
+        if (active) setTokensLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [selectedAddress]);
   const infoLabel = (developer: Developer) => developer.owner?.label || developer.intelligence?.display_label || 'Wallet details';
   const filtered = developers.filter((d) => {
     const q = search.trim().toLowerCase();
@@ -103,11 +136,6 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
 
   if (selected) {
     const info = selected.intelligence;
-    const stats = info ? [
-      ['Observations', info.observations_count, Activity], ['Qualified', info.qualified_observations, ShieldAlert],
-      ['Buy count', info.buy_count, TrendingUp], ['Sell count', info.sell_count, BarChart3],
-      ['Unique buyers', info.unique_buyers, Users], ['Independent buyers', info.independent_buyers, Users],
-    ] as const : [];
     return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
       {headerPanel('Developer profile', 'PROFILE', () => setSelectedAddress(null),
         <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[10px] font-semibold text-white active:scale-95"><Pencil className="h-3.5 w-3.5" /> Edit</button>,
@@ -121,29 +149,48 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
             <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-yellow-200" style={{ width: `${info && info.observations_count > 0 ? Math.max(0, Math.min(100, info.qualified_observations / info.observations_count * 100)) : 0}%` }} /></div>
           </div>
         </div>)}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-4">
-        <section className="relative overflow-hidden rounded-xl bg-[#171717] p-3.5">
-          <div className="flex items-start gap-3">
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-orange-400/20 to-amber-300/10"><Wallet className="h-5 w-5 text-amber-300" /></div>
-            <div className="min-w-0 flex-1"><h2 className="truncate text-[16px] font-semibold">{selected.owner?.label || info?.display_label || 'Unnamed developer'}</h2><p className="mt-1 break-all font-mono text-[10px] text-white/40">{selected.address}</p>
-              <div className="mt-3 flex flex-wrap gap-1.5">{selected.owner && <span className="rounded-full bg-orange-400/10 px-2 py-1 text-[8px] font-semibold text-orange-200">MANUALLY ADDED</span>}{info && <span className="rounded-full bg-amber-300/10 px-2 py-1 text-[8px] font-semibold text-amber-200">INTELLIGENCE RECORD</span>}</div>
-            </div>
-            <button type="button" onClick={() => void copyAddress(selected.address)} aria-label="Copy address" className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.06] text-white/60"><Copy className="h-4 w-4" /></button>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-10 pt-3">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">Recorded tokens</h2>
+          <span className="text-[9px] tabular-nums text-white/35">{developerTokens.length} tokens</span>
+        </div>
+        {tokensLoading ? (
+          <div className="flex items-center justify-center gap-2 rounded-xl bg-[#171717] py-10 text-[10px] text-white/40"><Activity className="h-4 w-4 animate-pulse" /> Loading recorded tokens…</div>
+        ) : tokensError ? (
+          <div className="rounded-xl bg-[#171717] px-4 py-6 text-center text-[10px] leading-relaxed text-white/45">{tokensError}<button type="button" onClick={() => setSelectedAddress(null)} className="ml-1 text-white underline">Back</button></div>
+        ) : developerTokens.length === 0 ? (
+          <div className="rounded-xl bg-[#171717] px-4 py-8 text-center text-[10px] leading-relaxed text-white/40">No token launch records are currently associated with this developer.</div>
+        ) : (
+          <div className="space-y-2">
+            {developerTokens.map(({ launch, detail }) => {
+              const identity = detail?.identity || {};
+              const security = detail?.security || {};
+              const rawScore = security.safety_score ?? security.security_score ?? security.overall_score ?? security.score;
+              const score = typeof rawScore === 'number' && Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : null;
+              const tokenName = typeof identity.name === 'string' && identity.name.trim() ? identity.name : 'Unknown token';
+              const symbol = typeof identity.symbol === 'string' && identity.symbol.trim() ? identity.symbol : '';
+              const decision = typeof security.decision === 'string' ? security.decision : 'UNVERIFIED';
+              return (
+                <article key={launch.mint_address} className="rounded-xl bg-[#171717] px-3 py-3">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-semibold text-white">{tokenName}{symbol ? <span className="ml-1.5 text-[10px] font-medium text-white/45">${symbol}</span> : null}</p>
+                      <p className="mt-1 truncate font-mono text-[9px] text-white/35">{shortAddress(launch.mint_address)}</p>
+                      <p className="mt-1 text-[8px] uppercase tracking-wider text-white/35">{decision.replace(/_/g, ' ')} · {new Date(launch.detected_at).toLocaleDateString()}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[16px] font-bold tabular-nums text-white">{score === null ? '—' : score.toFixed(1) + '%'}</p>
+                      <p className="text-[8px] uppercase tracking-wider text-white/40">Strength</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-amber-300 transition-[width]" style={{ width: score === null ? '0%' : score + '%' }} />
+                  </div>
+                </article>
+              );
+            })}
           </div>
-        </section>
-        <section className="mt-5"><div className="mb-2 flex items-center justify-between"><h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">Reputation overview</h3><span className="text-[9px] text-white/30">Backend data</span></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl bg-[#17130f] p-2"><p className="text-[9px] uppercase tracking-wider text-orange-200/75">Activity score</p><p className="mt-1 text-[28px] font-semibold tabular-nums">{info ? info.activity_score.toFixed(1) : '—'}<span className="ml-1 text-[10px] font-normal text-white/35">/ 100</span></p><p className="mt-1 text-[9px] text-white/35">Not yet a verified overall reputation rating</p></div>
-            <div className="rounded-xl bg-[#19160f] p-2"><p className="text-[9px] uppercase tracking-wider text-amber-200/75">Observations</p><p className="mt-1 text-[28px] font-semibold tabular-nums">{info ? info.observations_count.toLocaleString() : '—'}</p><p className="mt-1 text-[9px] text-white/35">{info ? info.qualified_observations.toLocaleString() + ' qualified' : 'No automatic observations yet'}</p></div>
-          </div>
-        </section>
-        <section className="mt-5"><h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">Activity statistics</h3>
-          {info ? <div className="grid grid-cols-2 gap-2">{stats.map(([label, value, Icon], index) => <div key={label} className={`flex items-center gap-3 rounded-xl bg-[#171717] p-2 ${['bg-[#171717]','bg-[#1b1711]','bg-[#171717]','bg-[#1b1711]','bg-[#171717]','bg-[#1b1711]'][index % 6]}`}><Icon className="h-4 w-4 shrink-0 text-white/65" /><div><p className="text-[9px] text-white/40">{label}</p><p className="mt-0.5 text-[15px] font-semibold tabular-nums">{value.toLocaleString()}</p></div></div>)}</div>
-            : <div className="rounded-xl bg-[#171717] px-4 py-6 text-center text-[10px] leading-relaxed text-white/40">No automatic activity statistics have been recorded for this manually added wallet yet.</div>}
-          {info && <div className="mt-2 rounded-xl bg-[#171717] p-3"><div className="flex items-center justify-between"><span className="text-[10px] text-white/45">Sniper concentration</span><span className="text-[12px] font-semibold tabular-nums">{info.sniper_concentration_pct.toFixed(1)}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-white/75" style={{ width: Math.max(0, Math.min(100, info.sniper_concentration_pct)) + '%' }} /></div><div className="mt-3 flex justify-between gap-3 text-[9px] text-white/35"><span>{info.source}</span><span>{new Date(info.updated_at).toLocaleString()}</span></div></div>}
-        </section>
-        <section className="mt-5"><h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">Launch history</h3><div className="flex items-start gap-3 rounded-xl bg-[#171717] p-3"><Layers3 className="mt-0.5 h-4 w-4 shrink-0 text-white/35" /><div><p className="text-[11px] font-medium text-white/75">Token launch records are not available yet</p><p className="mt-1 text-[10px] leading-relaxed text-white/40">The current creator-intelligence API does not return per-token launch, graduation or migration history. This section will use real backend records when that data is added.</p></div></div></section>
-        <section className="mt-3"><h3 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/45">Manual controls</h3><div className="rounded-xl bg-[#171717] p-3 text-[10px] leading-relaxed text-white/40">Edit currently manages the manual preferred-owner wallet and label. Manual score overrides and risk labels need backend support and are not shown as editable until they can be saved.</div></section>
+        )}
       </div>
       {editOpen && <EditSheet title="Edit developer details" address={addressDraft} setAddress={setAddressDraft} label={labelDraft} setLabel={setLabelDraft} error={formError} saving={saving} onClose={() => setEditOpen(false)} onSave={() => void saveDeveloper()} />}
     </div>;
