@@ -788,7 +788,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                       <button type="button" onClick={() => setShowMarketDataApiKey((visible) => !visible)} aria-label={showMarketDataApiKey ? 'Hide API key' : 'Show API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showMarketDataApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
                     </div>
                   </Field>
-                  <p className="text-[9px] leading-relaxed text-amber-200/50">This key is stored locally on this device. It is sent to the app's connection proxy only when making Market Data requests; it is not shared with other users or browsers. Anyone with access to this browser profile may be able to retrieve it.</p>
+                  <p className="text-[9px] leading-relaxed text-amber-200/50">This key is stored locally on this device. It is sent directly from this device to the Market Data service when making requests; it is not shared with other users or browsers. Anyone with access to this browser profile may be able to retrieve it.</p>
                   <button type="button" onClick={() => void saveMarketDataConnection()} disabled={savingMarketDataConnection} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
                     {savingMarketDataConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
                     {savingMarketDataConnection ? 'Verifying connection…' : 'Save & connect'}
