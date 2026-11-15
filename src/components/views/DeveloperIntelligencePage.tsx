@@ -106,7 +106,7 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
       ['Unique buyers', info.unique_buyers, Users], ['Independent buyers', info.independent_buyers, Users],
     ] as const : [];
     return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
-      {headerPanel('Developer profile', infoLabel(selected), () => setSelectedAddress(null),
+      {headerPanel('Developer profile', 'PROFILE', () => setSelectedAddress(null),
         <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[10px] font-semibold text-white/85 active:scale-95"><Pencil className="h-3.5 w-3.5" /> Edit</button>)}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-4">
         <section className="relative overflow-hidden rounded-xl bg-[#171717] p-3.5">
@@ -140,7 +140,6 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
     {headerPanel('Preferred Owners', `${developers.length} developers`, onBack,
       <button type="button" onClick={openAdd} aria-label="Add developer" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-orange-200 active:scale-95"><Plus className="h-4 w-4" /></button>)}
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-4">
-      <div className="mb-4 grid grid-cols-2 gap-2"><div className="rounded-xl bg-[#171717] p-3"><p className="text-[9px] uppercase tracking-wider text-white/40">Tracked developers</p><p className="mt-1 text-[23px] font-semibold tabular-nums">{developers.length}</p></div><div className="rounded-xl bg-[#171717] p-3"><p className="text-[9px] uppercase tracking-wider text-white/40">Manual profiles</p><p className="mt-1 text-[23px] font-semibold tabular-nums">{strategyConfig.preferred_owners.length}<span className="ml-1 text-[10px] font-normal text-white/35">/ 500</span></p></div></div>
       <label className="relative mb-4 block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search developer or wallet address" className="h-11 w-full rounded-xl bg-[#171717] pl-10 pr-3 text-[11px] text-white outline-none placeholder:text-white/30 focus:ring-1 focus:ring-amber-400/30" /></label>
       {error && <div className="mb-3 rounded-xl border border-amber-300/15 bg-amber-300/[0.04] p-3 text-[10px] text-amber-200/80">{error}<button type="button" onClick={() => void load()} className="ml-2 underline">Retry</button></div>}
       {loading ? <div className="flex items-center justify-center gap-2 py-12 text-[10px] text-white/40"><Activity className="h-4 w-4 animate-pulse" /> Loading developer records…</div>
