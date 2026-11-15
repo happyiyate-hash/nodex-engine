@@ -7,6 +7,7 @@ import {
 import { useTerminal } from '../../context/TerminalContext';
 import { apiClient, cleanHeaderValue } from '../../services/rest';
 import { wsService } from '../../services/websocket';
+import { MarketDataConnectionSettings, MarketDataHealth, marketDataService } from '../../services/marketData';
 import { StrategyPage } from './StrategyPage';
 
 type RuntimeControlKey = 'token_discovery_enabled' | 'new_entries_enabled' | 'position_monitoring_enabled';
@@ -14,6 +15,7 @@ type SettingsSection =
   | 'home'
   | 'engine'
   | 'connections'
+  | 'market_data'
   | 'discovery'
   | 'trading'
   | 'notifications'
@@ -24,6 +26,7 @@ const sections = [
   { id: 'engine_logs', title: 'Live Activity Stream', description: 'Watch provider requests, responses and token scan activity in real time.', icon: FileText },
   { id: 'engine', title: 'Engine Control', description: 'Start, pause and manage engine operations.', icon: Activity },
   { id: 'connections', title: 'API & Connections', description: 'Connect this app to your NodeX backend.', icon: PlugZap },
+  { id: 'market_data', title: 'Market Data API', description: 'Connect the independent live market-data service.', icon: Activity },
   { id: 'discovery', title: 'Token Discovery', description: 'Scanning sources, approval modes and filters.', icon: Radar },
   { id: 'trading', title: 'Trading Configuration', description: 'Stop loss, take profit, position sizing and risk.', icon: SlidersHorizontal },
   { id: 'notifications', title: 'Notifications', description: 'Choose which engine events should alert you.', icon: Bell },
@@ -86,6 +89,21 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [testingConnection, setTestingConnection] = useState(false);
   const [healthMessage, setHealthMessage] = useState('');
   const [connectionSheetOpen, setConnectionSheetOpen] = useState(false);
+  const [marketDataSettings, setMarketDataSettings] = useState<MarketDataConnectionSettings>(() => marketDataService.loadSettings());
+  const [marketDataRestUrlDraft, setMarketDataRestUrlDraft] = useState(() => marketDataService.loadSettings().restUrl);
+  const [marketDataWsUrlDraft, setMarketDataWsUrlDraft] = useState(() => marketDataService.loadSettings().wsUrl);
+  const [marketDataApiKeyDraft, setMarketDataApiKeyDraft] = useState(() => marketDataService.loadSettings().apiKey);
+  const [marketDataSheetOpen, setMarketDataSheetOpen] = useState(false);
+  const [showMarketDataApiKey, setShowMarketDataApiKey] = useState(false);
+  const [savingMarketDataConnection, setSavingMarketDataConnection] = useState(false);
+  const [marketDataRestOnline, setMarketDataRestOnline] = useState<boolean | null>(null);
+  const [marketDataWsOnline, setMarketDataWsOnline] = useState<boolean | null>(null);
+  const [marketDataProvidersConfigured, setMarketDataProvidersConfigured] = useState<boolean | null>(null);
+  const [checkingMarketData, setCheckingMarketData] = useState(false);
+  const [marketDataMessage, setMarketDataMessage] = useState('');
+  const [marketDataMessageSuccess, setMarketDataMessageSuccess] = useState(false);
+  const [marketDataStatusCheckedAt, setMarketDataStatusCheckedAt] = useState<Date | null>(null);
+  const marketDataSocketRef = useRef<WebSocket | null>(null);
   const [restOnline, setRestOnline] = useState<boolean | null>(null);
   const [runtimeSnapshot, setRuntimeSnapshot] = useState<{ running: boolean } | null>(null);
   const [testingRest, setTestingRest] = useState(false);
@@ -346,6 +364,159 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
     }
   };
 
+  const refreshMarketDataStatus = async (connection: MarketDataConnectionSettings = marketDataSettings) => {
+    if (!connection.restUrl || !connection.apiKey) {
+      setMarketDataRestOnline(null);
+      setMarketDataWsOnline(null);
+      setMarketDataProvidersConfigured(null);
+      setMarketDataMessage('Configure the Market Data REST URL and API key to connect this device.');
+      return;
+    }
+    setCheckingMarketData(true);
+    setMarketDataMessage('');
+    try {
+      const health = await marketDataService.request<MarketDataHealth>('health', connection);
+      setMarketDataRestOnline(health.status === 'ok');
+      const providers = await marketDataService.request<Array<Record<string, unknown>>>('providers', connection);
+      setMarketDataProvidersConfigured(Boolean(health.providers_configured));
+      setMarketDataMessage(
+        health.providers_configured
+          ? `Market Data service is reachable. ${providers.length} provider status record(s) returned.`
+          : 'Market Data API is reachable and authenticated, but no upstream price provider is configured yet.'
+      );
+      marketDataSocketRef.current?.close();
+      marketDataSocketRef.current = null;
+      try {
+        const socket = await marketDataService.connectWebSocket(connection, (connected, message) => {
+          setMarketDataWsOnline(connected);
+          if (!connected && message) setMarketDataMessage(message);
+        });
+        marketDataSocketRef.current = socket;
+        setMarketDataWsOnline(true);
+      } catch (error) {
+        setMarketDataWsOnline(false);
+        setMarketDataMessage(error instanceof Error ? error.message : 'Market Data WebSocket connection failed.');
+      }
+    } catch (error) {
+      setMarketDataRestOnline(false);
+      setMarketDataProvidersConfigured(false);
+      setMarketDataWsOnline(false);
+      setMarketDataMessage(error instanceof Error ? error.message : 'Could not reach the Market Data service.');
+    } finally {
+      setCheckingMarketData(false);
+      setMarketDataStatusCheckedAt(new Date());
+    }
+  };
+
+  const testMarketDataRest = async () => {
+    setCheckingMarketData(true);
+    setMarketDataMessage('');
+    try {
+      const health = await marketDataService.request<MarketDataHealth>('health', marketDataSettings);
+      const providers = await marketDataService.request<Array<Record<string, unknown>>>('providers', marketDataSettings);
+      setMarketDataRestOnline(health.status === 'ok');
+      setMarketDataProvidersConfigured(Boolean(health.providers_configured));
+      setMarketDataMessage(
+        health.providers_configured
+          ? `REST authenticated successfully · ${providers.length} provider status record(s).`
+          : 'REST authenticated successfully, but the Token Data backend has no upstream provider configured yet.'
+      );
+      setMarketDataMessageSuccess(true);
+    } catch (error) {
+      setMarketDataRestOnline(false);
+      setMarketDataMessage(error instanceof Error ? error.message : 'Market Data REST test failed.');
+      setMarketDataMessageSuccess(false);
+    } finally {
+      setCheckingMarketData(false);
+      setMarketDataStatusCheckedAt(new Date());
+    }
+  };
+
+  const testMarketDataWebSocket = async () => {
+    setCheckingMarketData(true);
+    setMarketDataMessage('');
+    try {
+      marketDataSocketRef.current?.close();
+      const socket = await marketDataService.connectWebSocket(marketDataSettings, (connected, message) => {
+        setMarketDataWsOnline(connected);
+        if (!connected && message) setMarketDataMessage(message);
+      });
+      marketDataSocketRef.current = socket;
+      setMarketDataWsOnline(true);
+      setMarketDataMessage('Authenticated Market Data WebSocket handshake succeeded.');
+      setMarketDataMessageSuccess(true);
+    } catch (error) {
+      setMarketDataWsOnline(false);
+      setMarketDataMessage(error instanceof Error ? error.message : 'Market Data WebSocket test failed.');
+      setMarketDataMessageSuccess(false);
+    } finally {
+      setCheckingMarketData(false);
+      setMarketDataStatusCheckedAt(new Date());
+    }
+  };
+
+  const saveMarketDataConnection = async () => {
+    setSavingMarketDataConnection(true);
+    setMarketDataMessage('');
+    setMarketDataMessageSuccess(false);
+    try {
+      const restUrl = marketDataRestUrlDraft.trim().replace(/\\/$/, '');
+      const parsedRest = new URL(restUrl);
+      if (parsedRest.protocol !== 'https:' || parsedRest.pathname !== '/' || parsedRest.search || parsedRest.hash) {
+        throw new Error('Enter the HTTPS origin of the Market Data REST API, for example https://your-server.com.');
+      }
+      const wsUrl = marketDataWsUrlDraft.trim();
+      if (wsUrl) {
+        const parsedWs = new URL(wsUrl);
+        if (parsedWs.protocol !== 'wss:') throw new Error('Market Data WebSocket URL must start with wss://.');
+      }
+      const apiKey = cleanHeaderValue(marketDataApiKeyDraft);
+      if (!apiKey) throw new Error('Enter the Market Data API key.');
+      const candidate = marketDataService.normalizeMarketDataSettings({ restUrl, wsUrl, apiKey });
+
+      const health = await marketDataService.request<MarketDataHealth>('health', candidate);
+      if (health.status !== 'ok') throw new Error('Market Data REST health check did not return a healthy response.');
+      const providers = await marketDataService.request<Array<Record<string, unknown>>>('providers', candidate);
+      marketDataSocketRef.current?.close();
+      const socket = await marketDataService.connectWebSocket(candidate, (connected, message) => {
+        setMarketDataWsOnline(connected);
+        if (!connected && message) setMarketDataMessage(message);
+      });
+
+      const saved = marketDataService.saveSettings(candidate);
+      setMarketDataSettings(saved);
+      setMarketDataRestUrlDraft(saved.restUrl);
+      setMarketDataWsUrlDraft(saved.wsUrl);
+      setMarketDataApiKeyDraft(saved.apiKey);
+      marketDataSocketRef.current = socket;
+      setMarketDataRestOnline(true);
+      setMarketDataWsOnline(true);
+      setMarketDataProvidersConfigured(Boolean(health.providers_configured));
+      setMarketDataStatusCheckedAt(new Date());
+      setMarketDataMessage(
+        health.providers_configured
+          ? `Market Data connected successfully · ${providers.length} provider status record(s).`
+          : 'Connection verified and saved on this device. The Market Data backend still needs an upstream provider key before live prices can flow.'
+      );
+      setMarketDataMessageSuccess(true);
+      setMarketDataSheetOpen(false);
+    } catch (error) {
+      setMarketDataMessage(error instanceof Error ? error.message : 'Could not connect to the Market Data service.');
+      setMarketDataMessageSuccess(false);
+    } finally {
+      setSavingMarketDataConnection(false);
+    }
+  };
+
+  useEffect(() => {
+    if (section !== 'market_data') return;
+    void refreshMarketDataStatus(marketDataSettings);
+    return () => {
+      marketDataSocketRef.current?.close();
+      marketDataSocketRef.current = null;
+    };
+  }, [section]);
+
   const clearEngineHistory = async () => {
     setClearingHistory(true);
     setStorageMessage('');
@@ -411,7 +582,31 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         </>
       ) : (
         <>
-          {section === 'connections' ? (
+          {section === 'market_data' ? (
+            <header className="shrink-0 flex-none w-full border-b border-white/[0.08] bg-black/95 px-4 pb-2.5 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
+              <div className="mb-2.5 flex items-center gap-2">
+                <button type="button" onClick={() => navigateSection('home')} aria-label="Back to Settings" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/65 active:bg-white/[0.08]">
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <h1 className="text-[14px] font-semibold tracking-tight text-white">Market Data API</h1>
+              </div>
+              <div className="grid w-full grid-cols-3 divide-x divide-white/[0.08]">
+                <div className="min-w-0 px-2 first:pl-0">
+                  <div className="flex items-center gap-1.5"><Wifi className="h-3.5 w-3.5 shrink-0 text-white/50" /><span className="truncate text-[10px] text-white/55">WebSocket</span></div>
+                  <p className={`mt-1 text-[11px] font-semibold ${marketDataWsOnline === true ? 'text-emerald-300' : marketDataWsOnline === false ? 'text-red-300' : 'text-white/50'}`}>{marketDataWsOnline === true ? 'Connected' : marketDataWsOnline === false ? 'Disconnected' : 'Not checked'}</p>
+                </div>
+                <div className="min-w-0 px-2">
+                  <div className="flex items-center gap-1.5"><Server className="h-3.5 w-3.5 shrink-0 text-white/50" /><span className="truncate text-[10px] text-white/55">REST API</span></div>
+                  <p className={`mt-1 text-[11px] font-semibold ${marketDataRestOnline === true ? 'text-emerald-300' : marketDataRestOnline === false ? 'text-red-300' : 'text-white/50'}`}>{marketDataRestOnline === true ? 'Online' : marketDataRestOnline === false ? 'Unavailable' : 'Not checked'}</p>
+                </div>
+                <div className="min-w-0 px-2 last:pr-0">
+                  <div className="flex items-center gap-1.5"><Activity className="h-3.5 w-3.5 shrink-0 text-white/50" /><span className="truncate text-[10px] text-white/55">Providers</span></div>
+                  <p className={`mt-1 text-[11px] font-semibold ${marketDataProvidersConfigured === true ? 'text-emerald-300' : marketDataProvidersConfigured === false ? 'text-amber-300' : 'text-white/50'}`}>{marketDataProvidersConfigured === true ? 'Configured' : marketDataProvidersConfigured === false ? 'Not configured' : 'Unknown'}</p>
+                </div>
+              </div>
+              <p className="mt-1.5 text-right text-[9px] tabular-nums text-white/30">{marketDataStatusCheckedAt ? `Updated ${marketDataStatusCheckedAt.toLocaleTimeString()}` : 'Checking connection status…'}</p>
+            </header>
+          ) : section === 'connections' ? (
             <header className="shrink-0 flex-none w-full border-b border-white/[0.08] bg-black/95 px-4 pb-2.5 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
               <h1 className="mb-2.5 text-[14px] font-semibold tracking-tight text-white">API &amp; Connections</h1>
               <div className="grid w-full grid-cols-3 divide-x divide-white/[0.08]">
@@ -520,6 +715,88 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           {runtimeControlMessage && <p className="rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] text-white/65">{runtimeControlMessage}</p>}
           {!settings.adminApiKey && <p className="text-[10px] text-amber-200/75">Save the Engine API key in API & Connections to change runtime controls.</p>}
           {backendError && <p className="rounded-lg border border-amber-500/20 bg-amber-500/[0.06] p-3 text-[10px] text-amber-200">{backendError}</p>}
+        </div>
+      )}
+
+      {section === 'market_data' && (
+        <div className="space-y-3 pt-2 pb-24">
+          <div>
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Market Data connection controls</p>
+            <div className="space-y-3">
+              <div className="rounded-lg bg-[#101010] p-3">
+                <p className="text-[12px] font-semibold text-white/90">Test WebSocket</p>
+                <p className="mt-1 text-[10px] text-white/40">Request a fresh one-time ticket and verify the authenticated WSS handshake.</p>
+                <button type="button" onClick={() => void testMarketDataWebSocket()} disabled={checkingMarketData || !marketDataSettings.apiKey || !marketDataSettings.restUrl} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/[0.16] bg-white/[0.04] px-4 py-2.5 text-[11px] font-semibold text-white active:bg-white/[0.10] disabled:opacity-40">
+                  <Wifi className={`h-4 w-4 ${checkingMarketData ? 'animate-pulse' : ''}`} />
+                  {checkingMarketData ? 'Checking connection…' : 'Test WebSocket'}
+                </button>
+              </div>
+              <div className="rounded-lg bg-[#101010] p-3">
+                <p className="text-[12px] font-semibold text-white/90">Test REST API</p>
+                <p className="mt-1 text-[10px] text-white/40">Verify service health and authenticated provider-status access.</p>
+                <button type="button" onClick={() => void testMarketDataRest()} disabled={checkingMarketData || !marketDataSettings.apiKey || !marketDataSettings.restUrl} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/[0.16] bg-white/[0.04] px-4 py-2.5 text-[11px] font-semibold text-white active:bg-white/[0.10] disabled:opacity-40">
+                  <RefreshCw className={`h-4 w-4 ${checkingMarketData ? 'animate-spin' : ''}`} />
+                  {checkingMarketData ? 'Checking connection…' : 'Test REST API'}
+                </button>
+              </div>
+              <div className="rounded-lg bg-[#101010] p-3">
+                <p className="text-[12px] font-semibold text-white/90">Market Data service</p>
+                <p className="mt-1 text-[10px] text-white/40">Independent service connection. This does not control or replace the NodeX trading engine.</p>
+                <div className="mt-3 divide-y divide-white/[0.06]">
+                  <StatusLine label="REST service" value={marketDataRestOnline === true ? 'Online' : marketDataRestOnline === false ? 'Unavailable' : 'Not checked'} good={marketDataRestOnline === null ? undefined : marketDataRestOnline} />
+                  <StatusLine label="WebSocket handshake" value={marketDataWsOnline === true ? 'Connected' : marketDataWsOnline === false ? 'Disconnected' : 'Not checked'} good={marketDataWsOnline === null ? undefined : marketDataWsOnline} />
+                  <StatusLine label="Upstream price providers" value={marketDataProvidersConfigured === true ? 'Configured' : marketDataProvidersConfigured === false ? 'Not configured' : 'Unknown'} good={marketDataProvidersConfigured === null ? undefined : marketDataProvidersConfigured} />
+                </div>
+              </div>
+            </div>
+            {marketDataMessage && <p className={`mt-3 rounded-lg border p-3 text-[10px] ${marketDataMessageSuccess ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200' : 'border-white/[0.08] bg-white/[0.025] text-white/70'}`} role="status">{marketDataMessage}</p>}
+          </div>
+
+          <button type="button" onClick={() => {
+            setMarketDataRestUrlDraft(marketDataSettings.restUrl);
+            setMarketDataWsUrlDraft(marketDataSettings.wsUrl);
+            setMarketDataApiKeyDraft(marketDataSettings.apiKey);
+            setMarketDataMessage('');
+            setMarketDataSheetOpen(true);
+          }} className="flex w-full items-center justify-between rounded-lg bg-[#101010] px-3 py-3.5 text-left transition-colors active:bg-white/[0.05]">
+            <span className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06]"><PlugZap className="h-4 w-4 text-white/75" /></span>
+              <span><span className="block text-[12px] font-semibold text-white/90">Configuration settings</span><span className="mt-0.5 block text-[10px] text-white/40">Market Data REST URL, WebSocket URL and API key</span></span>
+            </span>
+            <ChevronRight className="h-4 w-4 text-white/40" />
+          </button>
+
+          {marketDataSheetOpen && (
+            <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setMarketDataSheetOpen(false); }}>
+              <section role="dialog" aria-modal="true" aria-labelledby="market-data-sheet-title" className="max-h-[88dvh] w-full max-w-xl overflow-y-auto rounded-t-xl border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
+                <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div><h2 id="market-data-sheet-title" className="text-[15px] font-semibold text-white">Market Data configuration</h2><p className="mt-1 text-[10px] text-white/40">Credentials are saved only in this browser or app profile.</p></div>
+                  <button type="button" onClick={() => setMarketDataSheetOpen(false)} aria-label="Close configuration" className="rounded-lg px-3 py-1.5 text-[11px] text-white/55">Close</button>
+                </div>
+                <div className="space-y-4">
+                  <Field label="Market Data REST API URL" hint="Enter the HTTPS origin of your Market Data backend.">
+                    <input className={inputClass} type="url" value={marketDataRestUrlDraft} onChange={(event) => setMarketDataRestUrlDraft(event.target.value)} placeholder="https://your-market-data-server.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                  </Field>
+                  <Field label="Market Data WebSocket URL" hint="Leave blank to derive wss:// and /ws/tokens from the REST URL.">
+                    <input className={inputClass} type="url" value={marketDataWsUrlDraft} onChange={(event) => setMarketDataWsUrlDraft(event.target.value)} placeholder="wss://your-market-data-server.com/ws/tokens" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                  </Field>
+                  <Field label="Market Data API key">
+                    <div className="relative">
+                      <input type={showMarketDataApiKey ? 'text' : 'password'} value={marketDataApiKeyDraft} onChange={(event) => setMarketDataApiKeyDraft(event.target.value)} placeholder="Paste Market Data API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className={`pr-11 ${inputClass}`} />
+                      <button type="button" onClick={() => setShowMarketDataApiKey((visible) => !visible)} aria-label={showMarketDataApiKey ? 'Hide API key' : 'Show API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showMarketDataApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                    </div>
+                  </Field>
+                  <p className="text-[9px] leading-relaxed text-amber-200/50">This key is stored locally on this device. It is sent to the app's connection proxy only when making Market Data requests; it is not shared with other users or browsers. Anyone with access to this browser profile may be able to retrieve it.</p>
+                  <button type="button" onClick={() => void saveMarketDataConnection()} disabled={savingMarketDataConnection} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
+                    {savingMarketDataConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+                    {savingMarketDataConnection ? 'Verifying connection…' : 'Save & connect'}
+                  </button>
+                  <p className="text-[9px] leading-relaxed text-white/30">Saving verifies REST health, authenticated provider access, a one-time WebSocket ticket and the secure WebSocket handshake before saving these settings on this device.</p>
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       )}
 
