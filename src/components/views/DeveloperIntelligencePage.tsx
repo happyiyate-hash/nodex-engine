@@ -47,6 +47,7 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
   }, [records, strategyConfig.preferred_owners]);
 
   const selected = developers.find((d) => d.address === selectedAddress) || null;
+  const infoLabel = (developer: Developer) => developer.owner?.label || developer.intelligence?.display_label || 'Wallet details';
   const filtered = developers.filter((d) => {
     const q = search.trim().toLowerCase();
     return !q || d.address.toLowerCase().includes(q) || (d.owner?.label || d.intelligence?.display_label || '').toLowerCase().includes(q);
@@ -84,11 +85,16 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
     catch { showToast({ title: 'Copy unavailable', description: 'Your device did not allow copying this address.', tone: 'warning' }); }
   };
 
-  const header = (title: string, subtitle: string, back: () => void, action?: React.ReactNode) => (
-    <header className="flex shrink-0 items-center gap-3 bg-black px-4 pb-3 pt-[max(env(safe-area-inset-top,0px),12px)] backdrop-blur-xl">
-      <button type="button" onClick={back} aria-label="Go back" className="grid size-9 shrink-0 place-items-center rounded-full border border-white/[0.09] bg-white/[0.035] text-white/75"><ArrowLeft className="h-4 w-4" /></button>
-      <div className="min-w-0 flex-1"><h1 className="truncate text-[15px] font-semibold text-white">{title}</h1><p className="mt-0.5 truncate text-[10px] text-white/40">{subtitle}</p></div>
-      {action}
+  const headerPanel = (title: string, meta: string, back: () => void, action?: React.ReactNode) => (
+    <header className="relative z-10 flex min-h-[104px] shrink-0 flex-col rounded-b-[22px] bg-[#151515] px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+8px)]">
+      <div className="flex h-9 items-center justify-between">
+        <button type="button" onClick={back} aria-label="Go back" className="grid size-9 place-items-center rounded-full bg-black/55 text-white/85 shadow-sm active:scale-95"><ArrowLeft className="h-4 w-4" /></button>
+        {action}
+      </div>
+      <div className="mt-2 flex min-w-0 items-end justify-between gap-3">
+        <h1 className="truncate text-[16px] font-semibold tracking-tight text-white">{title}</h1>
+        <span className="shrink-0 text-[10px] font-medium text-orange-200/75">{meta}</span>
+      </div>
     </header>
   );
 
@@ -100,8 +106,8 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
       ['Unique buyers', info.unique_buyers, Users], ['Independent buyers', info.independent_buyers, Users],
     ] as const : [];
     return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
-      {header('Developer profile', 'Creator intelligence and wallet record', () => setSelectedAddress(null),
-        <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-white/15 px-3 text-[10px] font-semibold text-white/85"><Pencil className="h-3.5 w-3.5" /> Edit</button>)}
+      {headerPanel('Developer profile', infoLabel(selected), () => setSelectedAddress(null),
+        <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[10px] font-semibold text-white/85 active:scale-95"><Pencil className="h-3.5 w-3.5" /> Edit</button>)}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-4">
         <section className="relative overflow-hidden rounded-xl bg-[#171717] p-3.5">
           <div className="flex items-start gap-3">
@@ -131,8 +137,8 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
   }
 
   return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
-    {header('Developer Intelligence', 'All manually added and automatically discovered creators', onBack,
-      <button type="button" onClick={openAdd} className="grid size-9 shrink-0 place-items-center rounded-full bg-white text-black"><Plus className="h-4 w-4" /></button>)}
+    {headerPanel('Preferred Owners', `${developers.length} developers`, onBack,
+      <button type="button" onClick={openAdd} aria-label="Add developer" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-orange-200 active:scale-95"><Plus className="h-4 w-4" /></button>)}
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-10 pt-4">
       <div className="mb-4 grid grid-cols-2 gap-2"><div className="rounded-xl bg-[#171717] p-3"><p className="text-[9px] uppercase tracking-wider text-white/40">Tracked developers</p><p className="mt-1 text-[23px] font-semibold tabular-nums">{developers.length}</p></div><div className="rounded-xl bg-[#171717] p-3"><p className="text-[9px] uppercase tracking-wider text-white/40">Manual profiles</p><p className="mt-1 text-[23px] font-semibold tabular-nums">{strategyConfig.preferred_owners.length}<span className="ml-1 text-[10px] font-normal text-white/35">/ 500</span></p></div></div>
       <label className="relative mb-4 block"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search developer or wallet address" className="h-11 w-full rounded-xl bg-[#171717] pl-10 pr-3 text-[11px] text-white outline-none placeholder:text-white/30 focus:ring-1 focus:ring-amber-400/30" /></label>
