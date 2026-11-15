@@ -4,7 +4,7 @@ import { join } from 'node:path';
 const gradlePath = join(process.cwd(), 'android', 'app', 'build.gradle');
 let gradle = readFileSync(gradlePath, 'utf8');
 
-const releaseMatch = /release\\s*\\{/m.exec(gradle);
+const releaseMatch = /release\s*\{/m.exec(gradle);
 if (!releaseMatch) {
   throw new Error('Could not find the Android release buildType in android/app/build.gradle.');
 }
@@ -23,21 +23,21 @@ for (let index = blockStart; index < gradle.length; index += 1) {
 if (blockEnd < 0) throw new Error('Could not parse the Android release buildType block.');
 
 let releaseBlock = gradle.slice(blockStart, blockEnd);
-releaseBlock = releaseBlock.replace(/^\\s*minifyEnabled\\s+false\\s*$/m, '');
-releaseBlock = releaseBlock.replace(/^\\s*shrinkResources\\s+false\\s*$/m, '');
+releaseBlock = releaseBlock.replace(/^\s*minifyEnabled\s+false\s*$/m, '');
+releaseBlock = releaseBlock.replace(/^\s*shrinkResources\s+false\s*$/m, '');
 releaseBlock = releaseBlock.replace(
-  /getDefaultProguardFile\\(['"]proguard-android(?:-optimize)?\\.txt['"]\\)/,
+  /getDefaultProguardFile\(['"]proguard-android(?:-optimize)?\.txt['"]\)/,
   "getDefaultProguardFile('proguard-android-optimize.txt')",
 );
 
-if (!/^\\s*minifyEnabled\\s+true\\s*$/m.test(releaseBlock)) {
-  releaseBlock = "    minifyEnabled true\\n" + releaseBlock;
+if (!/^\s*minifyEnabled\s+true\s*$/m.test(releaseBlock)) {
+  releaseBlock = "    minifyEnabled true\n" + releaseBlock;
 }
-if (!/^\\s*shrinkResources\\s+true\\s*$/m.test(releaseBlock)) {
-  releaseBlock = "    shrinkResources true\\n" + releaseBlock;
+if (!/^\s*shrinkResources\s+true\s*$/m.test(releaseBlock)) {
+  releaseBlock = "    shrinkResources true\n" + releaseBlock;
 }
 if (!releaseBlock.includes("getDefaultProguardFile('proguard-android-optimize.txt')")) {
-  releaseBlock = "    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'\\n" + releaseBlock;
+  releaseBlock = "    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'\n" + releaseBlock;
 }
 
 gradle = gradle.slice(0, blockStart) + releaseBlock + gradle.slice(blockEnd);
