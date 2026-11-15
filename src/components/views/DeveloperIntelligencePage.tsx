@@ -89,7 +89,7 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
     <header className={`relative z-10 flex shrink-0 flex-col rounded-b-[22px] bg-[#151515] px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+8px)] ${extra ? 'min-h-[138px]' : 'min-h-[104px]'}`}>
       <div className="flex h-9 min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
-          <button type="button" onClick={back} aria-label="Go back" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-white/85 shadow-sm active:scale-95"><ArrowLeft className="h-4 w-4" /></button>
+          <button type="button" onClick={back} aria-label="Go back" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-white shadow-sm active:scale-95"><ArrowLeft className="h-4 w-4" /></button>
           <h1 className="truncate text-[16px] font-semibold tracking-tight text-white">{title}</h1>
         </div>
         {action}
@@ -110,7 +110,7 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
     ] as const : [];
     return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
       {headerPanel('Developer profile', 'PROFILE', () => setSelectedAddress(null),
-        <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[10px] font-semibold text-white/85 active:scale-95"><Pencil className="h-3.5 w-3.5" /> Edit</button>,
+        <button type="button" onClick={openEdit} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-black/55 px-3 text-[10px] font-semibold text-white active:scale-95"><Pencil className="h-3.5 w-3.5" /> Edit</button>,
         <div className="mt-3 grid grid-cols-2 gap-3">
           <div className="min-w-0 rounded-lg bg-black/25 px-2.5 py-2">
             <div className="flex items-baseline justify-between gap-1"><span className="truncate text-[9px] text-orange-100/65">Developer score</span><span className="text-[15px] font-bold tabular-nums text-orange-100">{info ? info.activity_score.toFixed(1) : '—'}<span className="ml-0.5 text-[8px] font-normal text-white/35">/100</span></span></div>
@@ -151,7 +151,7 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
 
   return <div className="flex h-full min-h-0 w-full flex-col bg-black text-white">
     {headerPanel('Preferred Owners', `${developers.length} developers`, onBack,
-      <button type="button" onClick={openAdd} aria-label="Add developer" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-orange-200 active:scale-95"><Plus className="h-4 w-4" /></button>,
+      <button type="button" onClick={openAdd} aria-label="Add developer" className="grid size-9 shrink-0 place-items-center rounded-full bg-black/55 text-white active:scale-95"><Plus className="h-4 w-4" /></button>,
       <div className="mt-3 grid grid-cols-3 gap-2">
         <div className="rounded-lg bg-black/25 px-2.5 py-2"><p className="text-[8px] uppercase tracking-wider text-white/40">Total</p><p className="mt-0.5 text-[17px] font-semibold tabular-nums text-white">{developers.length}</p></div>
         <div className="rounded-lg bg-black/25 px-2.5 py-2"><p className="text-[8px] uppercase tracking-wider text-orange-200/65">Manual</p><p className="mt-0.5 text-[17px] font-semibold tabular-nums text-orange-100">{developers.filter((d) => !!d.owner).length}</p></div>
@@ -164,11 +164,11 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
         : filtered.length === 0 ? <div className="rounded-xl bg-[#171717] px-5 py-10 text-center"><Users className="mx-auto h-6 w-6 text-white/25" /><p className="mt-3 text-[12px] font-medium text-white/70">{developers.length ? 'No matching developers' : 'No developers tracked yet'}</p><p className="mt-1 text-[10px] leading-relaxed text-white/35">Add a wallet manually or wait for the backend to record creator intelligence.</p><button type="button" onClick={openAdd} className="mt-4 rounded-full bg-white px-4 py-2 text-[10px] font-semibold text-black">Add developer</button></div>
         : <div className="space-y-2">{filtered.map((developer) => {
           const info = developer.intelligence; const label = developer.owner?.label || info?.display_label || 'Unnamed developer';
-          const palette = 'bg-gradient-to-r from-[#f1f2f3] via-[#dfe2e5] to-[#cfd3d7]';
-          return <button key={developer.address} type="button" onClick={() => setSelectedAddress(developer.address)} className={`group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[#17191c] shadow-sm transition-colors hover:brightness-105 active:scale-[0.99] ${palette}`}>
-            <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${developer.owner ? 'bg-[#b86a24]/15' : 'bg-[#8c742c]/15'}`}><Wallet className={`h-[17px] w-[17px] ${developer.owner ? 'text-[#98501c]' : 'text-[#80651b]'}`} /></span>
-            <span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-[#17191c]">{label}</span><span className="mt-1 block truncate font-mono text-[9px] text-[#4d5359]">{shortAddress(developer.address)}</span><span className="mt-1.5 flex flex-wrap items-center gap-1.5">{developer.owner && <span className="rounded-full bg-[#b86a24]/15 px-1.5 py-0.5 text-[8px] font-semibold text-[#814414]">MANUAL</span>}{info && <span className="rounded-full bg-[#8c742c]/15 px-1.5 py-0.5 text-[8px] font-semibold text-[#6e5818]">TRACKED</span>}{!info && <span className="text-[8px] text-[#626970]">Awaiting observations</span>}</span></span>
-            <span className="shrink-0 text-right"><span className={`block text-[13px] font-bold tabular-nums ${info ? 'text-[#785c18]' : 'text-[#777e84]'}`}>{info ? info.activity_score.toFixed(1) : '—'}</span><span className="text-[8px] uppercase tracking-wider text-[#596168]">Activity</span></span><span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/[0.06] text-[#596168] transition-all group-hover:translate-x-0.5 group-hover:bg-black/[0.10] group-hover:text-[#17191c]"><ArrowRight className="h-4 w-4" /></span>
+          const palette = 'bg-[#171717]';
+          return <button key={developer.address} type="button" onClick={() => setSelectedAddress(developer.address)} className={`group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-white shadow-sm transition-colors hover:bg-[#1d1d1d] active:scale-[0.99] ${palette}`}>
+            <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${'bg-white/[0.07]'}`}><Wallet className={`h-[17px] w-[17px] ${'text-white'}`} /></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-white">{label}</span><span className="mt-1 block truncate font-mono text-[9px] text-white/40">{shortAddress(developer.address)}</span><span className="mt-1.5 flex flex-wrap items-center gap-1.5">{developer.owner && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[8px] font-semibold text-white/80">MANUAL</span>}{info && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[8px] font-semibold text-white/80">TRACKED</span>}{!info && <span className="text-[8px] text-white/35">Awaiting observations</span>}</span></span>
+            <span className="shrink-0 text-right"><span className={`block text-[13px] font-bold tabular-nums ${info ? 'text-white' : 'text-white/40'}`}>{info ? info.activity_score.toFixed(1) : '—'}</span><span className="text-[8px] uppercase tracking-wider text-white/40">Activity</span></span><span className="grid size-7 shrink-0 place-items-center rounded-full bg-white/[0.07] text-white transition-all group-hover:translate-x-0.5 group-hover:bg-white/[0.12] group-hover:text-white"><ArrowRight className="h-4 w-4" /></span>
           </button>;
         })}</div>}
       <p className="mt-4 flex items-center gap-1.5 text-[9px] text-white/30"><Clock3 className="h-3 w-3" /> Automatic records reflect only data currently returned by the backend.</p>
