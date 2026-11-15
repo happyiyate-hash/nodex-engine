@@ -768,37 +768,103 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           </button>
 
           {marketDataSheetOpen && (
-            <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setMarketDataSheetOpen(false); }}>
-              <section role="dialog" aria-modal="true" aria-labelledby="market-data-sheet-title" className="max-h-[88dvh] w-full max-w-xl overflow-y-auto rounded-t-xl border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
-                <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
-                <div className="mb-5 flex items-start justify-between gap-3">
-                  <div><h2 id="market-data-sheet-title" className="text-[15px] font-semibold text-white">Market Data configuration</h2><p className="mt-1 text-[10px] text-white/40">Credentials are saved only in this browser or app profile.</p></div>
-                  <button type="button" onClick={() => setMarketDataSheetOpen(false)} aria-label="Close configuration" className="rounded-lg px-3 py-1.5 text-[11px] text-white/55">Close</button>
+            <div
+              className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 backdrop-blur-[2px]"
+              onClick={(event) => { if (event.target === event.currentTarget) setMarketDataSheetOpen(false); }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="market-data-sheet-title"
+                className="flex max-h-[76dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-x-0 border-b-0 border-t border-white/[0.14] bg-[#0b0b0b] shadow-[0_-12px_40px_rgba(0,0,0,.45)]"
+              >
+                <div className="shrink-0 px-4 pt-2.5">
+                  <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-white/20" />
+                  <div className="flex items-center justify-between border-b border-white/[0.07] pb-3">
+                    <div className="min-w-0">
+                      <h2 id="market-data-sheet-title" className="text-[14px] font-semibold text-white">Market Data API</h2>
+                      <p className="mt-0.5 text-[10px] text-white/40">Connection details for this device</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMarketDataSheetOpen(false)}
+                      aria-label="Close configuration"
+                      className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/55 transition-colors active:bg-white/[0.08]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  <Field label="Market Data REST API URL" hint="Enter the HTTPS origin of your Market Data backend.">
-                    <input className={inputClass} type="url" value={marketDataRestUrlDraft} onChange={(event) => setMarketDataRestUrlDraft(event.target.value)} placeholder="https://your-market-data-server.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+                  <Field label="REST API URL">
+                    <input
+                      className={`${inputClass} rounded-lg px-3 py-2.5 text-[12px]`}
+                      type="url"
+                      value={marketDataRestUrlDraft}
+                      onChange={(event) => setMarketDataRestUrlDraft(event.target.value)}
+                      placeholder="https://your-market-data-server.com"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
                   </Field>
-                  <Field label="Market Data WebSocket URL" hint="Leave blank to derive wss:// and /ws/tokens from the REST URL.">
-                    <input className={inputClass} type="url" value={marketDataWsUrlDraft} onChange={(event) => setMarketDataWsUrlDraft(event.target.value)} placeholder="wss://your-market-data-server.com/ws/tokens" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                  <Field label="WebSocket URL">
+                    <input
+                      className={`${inputClass} rounded-lg px-3 py-2.5 text-[12px]`}
+                      type="url"
+                      value={marketDataWsUrlDraft}
+                      onChange={(event) => setMarketDataWsUrlDraft(event.target.value)}
+                      placeholder="Optional — derived from REST URL"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
                   </Field>
-                  <Field label="Market Data API key">
+                  <Field label="API key">
                     <div className="relative">
-                      <input type={showMarketDataApiKey ? 'text' : 'password'} value={marketDataApiKeyDraft} onChange={(event) => setMarketDataApiKeyDraft(event.target.value)} placeholder="Paste Market Data API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className={`pr-11 ${inputClass}`} />
-                      <button type="button" onClick={() => setShowMarketDataApiKey((visible) => !visible)} aria-label={showMarketDataApiKey ? 'Hide API key' : 'Show API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showMarketDataApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                      <input
+                        type={showMarketDataApiKey ? 'text' : 'password'}
+                        value={marketDataApiKeyDraft}
+                        onChange={(event) => setMarketDataApiKeyDraft(event.target.value)}
+                        placeholder="Enter Market Data API key"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        autoComplete="new-password"
+                        className={`pr-11 rounded-lg px-3 py-2.5 text-[12px] ${inputClass}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowMarketDataApiKey((visible) => !visible)}
+                        aria-label={showMarketDataApiKey ? 'Hide API key' : 'Show API key'}
+                        className="absolute inset-y-0 right-1 flex w-9 items-center justify-center rounded-lg text-white/45"
+                      >
+                        {showMarketDataApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
                   </Field>
-                  <p className="text-[9px] leading-relaxed text-amber-200/50">This key is stored locally on this device. It is sent directly from this device to the Market Data service when making requests; it is not shared with other users or browsers. Anyone with access to this browser profile may be able to retrieve it.</p>
-                  {marketDataMessage && <p className={`rounded-lg border p-3 text-[10px] ${marketDataMessageSuccess ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200' : 'border-red-500/20 bg-red-500/[0.06] text-red-200'}`} role="status">{marketDataMessage}</p>}
-                  <button type="button" onClick={() => void saveMarketDataConnection()} disabled={savingMarketDataConnection} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
+                  <p className="text-[9px] leading-snug text-white/35">Saved locally on this device. Anyone with access to this browser profile may be able to retrieve the key.</p>
+                  {marketDataMessage && (
+                    <p className={`rounded-md border px-3 py-2 text-[10px] leading-snug ${marketDataMessageSuccess ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200' : 'border-red-500/20 bg-red-500/[0.06] text-red-200'}`} role="status">
+                      {marketDataMessage}
+                    </p>
+                  )}
+                </div>
+
+                <div className="shrink-0 border-t border-white/[0.08] bg-[#0b0b0b] px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3">
+                  <button
+                    type="button"
+                    onClick={() => void saveMarketDataConnection()}
+                    disabled={savingMarketDataConnection}
+                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-[12px] font-semibold text-black transition-opacity disabled:opacity-50"
+                  >
                     {savingMarketDataConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                    {savingMarketDataConnection ? 'Verifying connection…' : 'Save & connect'}
+                    {savingMarketDataConnection ? 'Verifying connection…' : 'Save & Connect'}
                   </button>
-                  <p className="text-[9px] leading-relaxed text-white/30">Saving verifies REST health, authenticated provider access, a one-time WebSocket ticket and the secure WebSocket handshake before saving these settings on this device.</p>
                 </div>
               </section>
             </div>
-          )}
+          )}}
         </div>
       )}
 
