@@ -261,7 +261,22 @@ export const TokenDetailPage: React.FC = () => {
               if (sectionTopic === 'token.identity') return { ...base, identity: { ...base.identity, ...section } };
               if (sectionTopic === 'token.info') return { ...base, info: { ...base.info, ...section } };
               if (sectionTopic === 'token.holders') return { ...base, holders: { ...base.holders, ...section } };
-              if (sectionTopic === 'token.trades') return { ...base, trades: { ...base.trades, ...section } };
+              if (sectionTopic === 'token.trades') {
+                const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
+                for (const trade of [...(section.recent || []), ...(base.trades?.recent || [])]) {
+                  recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
+                }
+                return {
+                  ...base,
+                  trades: {
+                    ...base.trades,
+                    ...section,
+                    recent: [...recentById.values()]
+                      .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
+                      .slice(0, 200),
+                  },
+                };
+              }
               return base;
             });
             return;
