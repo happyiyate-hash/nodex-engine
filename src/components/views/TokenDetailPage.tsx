@@ -73,6 +73,10 @@ export const TokenDetailPage: React.FC = () => {
   const [floatingAmounts, setFloatingAmounts] = useState<FloatingTradeAmount[]>([]);
   const nextFloatingAnimationAtRef = useRef(0);
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
+  // Backend OHLC updates take precedence over an in-flight historical snapshot
+  // for the same timeframe/bucket, preventing late chunks from rolling the
+  // visible candle backwards.
+  const liveChartOverridesRef = useRef<Record<string, Map<number, TokenChartPoint>>>({});
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -228,6 +232,7 @@ export const TokenDetailPage: React.FC = () => {
             setChartHistoryLoading(true);
             setMarketDataStreamError('');
             setMarketDataSnapshot(emptyTokenSnapshot(mint, String(message.timeframe || '1M')));
+            liveChartOverridesRef.current = {};
             setChartSeriesByTimeframe({});
             return;
           }
@@ -254,20 +259,29 @@ export const TokenDetailPage: React.FC = () => {
           if (message.event === 'chart_history_chunk') {
             const chartTimeframe = String(message.data?.timeframe || '1M');
             const incoming = Array.isArray(message.data?.points) ? message.data.points : [];
-            const points = incoming.map((point: any) => ({
-              timestamp_ms: Number(point.timestamp_ms), open: Number(point.open),
-              high: Number(point.high), low: Number(point.low), close: Number(point.close),
-              volume: Number(point.volume || 0),
-            })).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
+            const interval = chartIntervalMs[chartTimeframe] || 60_000;
+            const liveOverrides = liveChartOverridesRef.current[chartTimeframe] || new Map<number, TokenChartPoint>();
+            const points = incoming.map((point: any) => {
+              const rawTimestamp = Number(point.timestamp_ms);
+              const bucketTimestamp = Math.floor(rawTimestamp / interval) * interval;
+              return {
+                timestamp_ms: bucketTimestamp, open: Number(point.open),
+                high: Number(point.high), low: Number(point.low), close: Number(point.close),
+                volume: Number(point.volume || 0),
+              };
+            }).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
             setChartSeriesByTimeframe((previous) => {
               const merged = new Map((previous[chartTimeframe] || []).map((point) => [point.timestamp_ms, point]));
-              for (const point of points) merged.set(point.timestamp_ms, point);
+              for (const point of points) {
+                merged.set(point.timestamp_ms, liveOverrides.get(point.timestamp_ms) || point);
+              }
               return { ...previous, [chartTimeframe]: [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
             });
             return;
           }
           if (message.event === 'chart_history_completed') {
-            setChartHistoryLoading(false);
+            const chartTimeframe = String(message.data?.timeframe || '1M');
+            if (chartTimeframe === timeframe) setChartHistoryLoading(false);
             return;
           }
           if (message.event === 'snapshot_completed') {
@@ -293,17 +307,40 @@ export const TokenDetailPage: React.FC = () => {
           } else if (topic === 'token.chart') {
             const eventTimeframe = String(data.timeframe || '');
             if (eventTimeframe && Array.isArray(data.points)) {
-              const points = data.points.map((point: any) => ({ timestamp_ms: Number(point.timestamp_ms), open: Number(point.open), high: Number(point.high), low: Number(point.low), close: Number(point.close), volume: Number(point.volume || 0) })).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
-              setChartSeriesByTimeframe((previous) => ({ ...previous, [eventTimeframe]: points.slice(-5000) }));
+              const interval = chartIntervalMs[eventTimeframe] || 60_000;
+              const points = data.points.map((point: any) => {
+                const timestamp = Number(point.timestamp_ms);
+                return { timestamp_ms: Math.floor(timestamp / interval) * interval, open: Number(point.open), high: Number(point.high), low: Number(point.low), close: Number(point.close), volume: Number(point.volume || 0) };
+              }).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
+              const liveOverrides = liveChartOverridesRef.current[eventTimeframe] || new Map<number, TokenChartPoint>();
+              setChartSeriesByTimeframe((previous) => {
+                const merged = new Map<number, TokenChartPoint>();
+                for (const point of points) merged.set(point.timestamp_ms, liveOverrides.get(point.timestamp_ms) || point);
+                return { ...previous, [eventTimeframe]: [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
+              });
               if (eventTimeframe === timeframe) setChartHistoryLoading(false);
             } else if (eventTimeframe) {
               const point = data.point || data.candle || data;
               const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0), close = Number(point.close ?? point.price ?? 0);
-              if (timestamp > 0 && close > 0) {
-                const normalized: TokenChartPoint = { timestamp_ms: timestamp, open: Number(point.open ?? close), high: Number(point.high ?? close), low: Number(point.low ?? close), close, volume: Number(point.volume || 0) };
+              const interval = chartIntervalMs[eventTimeframe] || 60_000;
+              const bucketTimestamp = Math.floor(timestamp / interval) * interval;
+              if (bucketTimestamp > 0 && close > 0) {
+                const normalized: TokenChartPoint = {
+                  timestamp_ms: bucketTimestamp,
+                  open: Number(point.open ?? close),
+                  high: Number(point.high ?? close),
+                  low: Number(point.low ?? close),
+                  close,
+                  volume: Number(point.volume || 0),
+                };
+                const overrides = liveChartOverridesRef.current[eventTimeframe] || new Map<number, TokenChartPoint>();
+                overrides.set(bucketTimestamp, normalized);
+                liveChartOverridesRef.current[eventTimeframe] = overrides;
                 setChartSeriesByTimeframe((previous) => {
                   const current = previous[eventTimeframe] || [];
-                  return { ...previous, [eventTimeframe]: [...current.filter((item) => item.timestamp_ms !== timestamp), normalized].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
+                  const merged = new Map(current.map((item) => [item.timestamp_ms, item]));
+                  merged.set(bucketTimestamp, normalized);
+                  return { ...previous, [eventTimeframe]: [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
                 });
               }
             }
@@ -387,11 +424,18 @@ export const TokenDetailPage: React.FC = () => {
   const cachedChartPoints = chartSeriesByTimeframe[timeframe] || [];
   const baseChartPoints = chartSeriesByTimeframe['1M'] || (marketDataSnapshot?.chart?.timeframe === '1M' ? marketDataSnapshot?.chart?.points || [] : []);
   const isSubMinuteTimeframe = timeframe === '1S' || timeframe === '5S' || timeframe === '10S';
+  // Prefer the backend's timeframe-specific OHLC series whenever present.
+  // Raw recent trades are only a fallback for sub-minute charts with no stored
+  // history; combining both would count the same swaps twice.
   const locallyAggregatedPoints = isSubMinuteTimeframe
-    ? aggregateChartPoints([...cachedChartPoints, ...tradesToChartPoints(marketDataSnapshot?.trades?.recent || [], timeframe)], timeframe)
+    ? (cachedChartPoints.length > 0
+      ? aggregateChartPoints(cachedChartPoints, timeframe)
+      : tradesToChartPoints(marketDataSnapshot?.trades?.recent || [], timeframe))
     : timeframe === '1M'
       ? (cachedChartPoints.length > 0 ? cachedChartPoints : baseChartPoints)
-      : aggregateChartPoints([...baseChartPoints, ...cachedChartPoints], timeframe);
+      : (cachedChartPoints.length > 0
+        ? aggregateChartPoints(cachedChartPoints, timeframe)
+        : aggregateChartPoints(baseChartPoints, timeframe));
   const chartHistory: import('../../types').PricePoint[] = locallyAggregatedPoints.map((point) => ({
     time: Number(point.timestamp_ms),
     price: Number(point.close),
