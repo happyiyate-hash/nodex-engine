@@ -203,7 +203,7 @@ export const TokenDetailPage: React.FC = () => {
       }
       setTokenSnapshotLoading(false);
       setMarketDataLoading(false);
-      if (chartTimeframe === timeframe.toUpperCase() || !normalized.chart.points.length) {
+      if (chartTimeframe === timeframe.toUpperCase() || ['1S', '5S', '10S'].includes(timeframe) || !normalized.chart.points.length) {
         setChartHistoryLoading(false);
       }
     }).catch((error) => {
@@ -230,8 +230,10 @@ export const TokenDetailPage: React.FC = () => {
       const connected = status === 'connected';
       setMarketDataStreamConnected(connected);
       setSniperSubscriptionStatus(connected ? 'connecting' : 'disconnected');
-      if (!connected) setMarketDataStreamError('NodeX sniper engine stream is disconnected.');
-      else setMarketDataStreamError('');
+      if (!connected) {
+        setMarketDataStreamError('NodeX sniper engine stream is disconnected.');
+        setChartHistoryLoading(false);
+      } else setMarketDataStreamError('');
     });
 
     const unsubscribeEvents = wsService.subscribe((event) => {
@@ -355,7 +357,7 @@ export const TokenDetailPage: React.FC = () => {
           setMarketDataStreamError(String(data.reason || 'NodeX engine rejected the token subscription.'));
           // Keep the independent REST dossier request alive. If it also failed,
           // finish the chart skeleton and render the explicit empty state.
-          if (tokenSnapshotError) setChartHistoryLoading(false);
+          setChartHistoryLoading(false);
           setMarketDataLoading(false);
         } else if (command === 'set_chart_timeframe') {
           // History failure must not mark the live market stream as disconnected.
@@ -682,7 +684,7 @@ export const TokenDetailPage: React.FC = () => {
                 </div>
               )}
             </div>
-          ) : chartHistoryLoading ? (
+          ) : chartHistoryLoading || tokenSnapshotLoading ? (
             <div aria-label="Loading chart data" className="h-[328px] w-full animate-pulse bg-white/[0.025]">
               <div className="flex h-full flex-col justify-between p-5">
                 <div className="h-3 w-24 rounded bg-white/[0.07]" />
