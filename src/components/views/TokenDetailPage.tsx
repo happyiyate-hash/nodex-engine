@@ -118,7 +118,6 @@ export const TokenDetailPage: React.FC = () => {
     };
     const requestedTimeframe = serverTimeframe[timeframe];
     wsService.subscribeToken(mint, requestedTimeframe || '5m');
-    if (requestedTimeframe) wsService.setChartTimeframe(mint, requestedTimeframe);
 
     const unsubscribeStatus = wsService.onStatusChange((status) => {
       const connected = status === 'connected';
