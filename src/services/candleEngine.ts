@@ -43,6 +43,11 @@ type CandleBucket = {
 };
 
 const MAX_CANDLES_PER_TIMEFRAME = 5_000;
+
+/** Frontend chart timestamps are Unix epoch milliseconds, never seconds. */
+export function isUnixTimestampMilliseconds(value: number): boolean {
+  return Number.isFinite(value) && value >= 100_000_000_000 && value <= 8_640_000_000_000_000;
+}
 const MAX_SEEN_TRADES = 30_000;
 
 function compareTrades(a: NormalizedTrade, b: NormalizedTrade): number {
@@ -79,7 +84,7 @@ export class CandleEngine {
     const timestamp = Number(trade.timestamp_ms);
     const price = Number(trade.price_usd);
     const rawVolume = Number(trade.volume_usd ?? 0);
-    if (!Number.isFinite(timestamp) || timestamp <= 0 ||
+    if (!isUnixTimestampMilliseconds(timestamp) ||
         !Number.isFinite(price) || price <= 0) return false;
 
     const normalizedEventIndex = Number.isFinite(eventIndex) ? eventIndex : 0;
