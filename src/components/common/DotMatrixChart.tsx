@@ -1884,7 +1884,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const hasHistoricalCorrection =
         seedBars.some((bar) => {
           const previous = committedByTime.get(bar.time);
-          return !previous || (
+          return (!previous && bar.time < latest.time) || (
+            previous !== undefined &&
             bar.time < latest.time &&
             (bar.open !== previous.open || bar.high !== previous.high ||
               bar.low !== previous.low || bar.close !== previous.close)
