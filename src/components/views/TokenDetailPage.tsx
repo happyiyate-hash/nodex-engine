@@ -493,7 +493,7 @@ export const TokenDetailPage: React.FC = () => {
   }, [activeToken?.mint]);
 
   // Keep connection and loading failures visible until the user dismisses them.
-  // Clearing the underlying error after recovery does not auto-hide this notice.
+  // A successful recovery does not auto-hide an error already shown to the user.
   useEffect(() => {
     const message = marketDataStreamError || marketDataError;
     if (message && !message.startsWith('Recovering confirmed trades after a stream gap')) {
@@ -715,13 +715,7 @@ export const TokenDetailPage: React.FC = () => {
           <div className="flex min-w-0 items-start gap-2.5 rounded-lg border border-[#F0B45A]/30 bg-[#241A0B]/95 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-xl">
             <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#F0B45A]" aria-hidden="true" />
             <p className="min-w-0 flex-1 break-words text-[11px] leading-relaxed text-[#F6D7A8]">{connectionNotice}</p>
-            <button
-              type="button"
-              onClick={() => setConnectionNotice('')}
-              aria-label="Dismiss notification"
-              title="Dismiss notification"
-              className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#F6D7A8]/70 transition-colors hover:bg-white/[0.08] hover:text-white"
-            >
+            <button type="button" onClick={() => setConnectionNotice('')} aria-label="Dismiss notification" title="Dismiss notification" className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#F6D7A8]/70 transition-colors hover:bg-white/[0.08] hover:text-white">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -1287,3 +1281,23 @@ export const TokenDetailPage: React.FC = () => {
                       <span className="text-[9px] text-white/35">{trade.token_amount == null ? 'Token amount unavailable' : Number(trade.token_amount).toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' tokens'} · {age}</span>
                     </div>
                     <div className="shrink-0 text-right">
+                      <p className={'font-mono text-[11px] font-medium tabular-nums ' + (side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]')}>{formatUsd(amount)}</p>
+                      {trade.price_usd != null && <p className="text-[9px] text-white/35">{formatUsd(trade.price_usd, 8)}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            {!marketDataLoading && (marketDataSnapshot?.trades?.recent || []).filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? String(trade.side).toLowerCase() === 'buy' : String(trade.side).toLowerCase() === 'sell')).length === 0 && (
+              <p className="py-8 text-center text-[11px] text-white/40">No trade data available.</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      </div>
+
+    </section>
+    </div>
+    </div>
+  );
+};
