@@ -140,6 +140,8 @@ export const TokenDetailPage: React.FC = () => {
     let socket: WebSocket | null = null;
     let retryTimer: number | undefined;
     let retryDelay = 1000;
+    let hasConnectedOnce = false;
+    let connect: () => Promise<void>;
     const refreshSnapshot = async () => {
       const settings = marketDataService.loadSettings();
       if (!settings.restUrl) return;
@@ -163,7 +165,7 @@ export const TokenDetailPage: React.FC = () => {
       retryDelay = Math.min(retryDelay * 2, 30000);
       retryTimer = window.setTimeout(() => { retryTimer = undefined; void connect(); }, delay);
     };
-    const connect = async () => {
+    connect = async () => {
       const settings = marketDataService.loadSettings();
       if (!settings.restUrl || !settings.wsUrl) {
         setMarketDataStreamConnected(false);
@@ -177,7 +179,8 @@ export const TokenDetailPage: React.FC = () => {
         retryDelay = 1000;
         setMarketDataStreamConnected(true);
         setMarketDataStreamError('');
-        void refreshSnapshot();
+        if (hasConnectedOnce) void refreshSnapshot();
+        hasConnectedOnce = true;
         socket.send(JSON.stringify({
           command: 'subscribe',
           mint,
