@@ -217,6 +217,7 @@ export const TokenDetailPage: React.FC = () => {
         socket.addEventListener('message', (messageEvent) => {
           let message: any;
           try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
+          if (message.mint && message.mint !== mint) return;
           if (message.event === 'resync_required') {
             setMarketDataStreamError('Restoring the latest market snapshot after a stream gap…');
             socket?.send(JSON.stringify({ command: 'request_snapshot', timeframe }));
