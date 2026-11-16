@@ -44,7 +44,6 @@ export const TokenDetailPage: React.FC = () => {
     moved: false,
   });
   const suppressTimeframeClickRef = useRef(false);
-  const [scrubPrice, setScrubPrice] = useState<number | null>(null);
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
@@ -60,6 +59,11 @@ export const TokenDetailPage: React.FC = () => {
   const activeToken = selectedToken
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : null;
+
+  useEffect(() => {
+    setTimeframe('1S');
+    setScrubTime(null);
+  }, [activeToken?.mint]);
 
   // Load the selected mint from the independent Token Data service. The mint
   // is part of the snapshot URL and the saved Market Data key is sent as x-api-key.
@@ -480,7 +484,7 @@ export const TokenDetailPage: React.FC = () => {
               timeframe={timeframe}
               chartType={chartType}
               height={328}
-              onPriceHover={(p, t) => {
+              onPriceHover={(_p, t) => {
                 setScrubPrice(p);
                 setScrubTime(t);
               }}
