@@ -658,6 +658,12 @@ export const TokenDetailPage: React.FC = () => {
 
   return (
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#000000] text-white select-none font-sans">
+      <style>{`
+        @keyframes nodex-toast-drop {
+          from { opacity: 0; transform: translate3d(0, -12px, 0); }
+          to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+      `}</style>
       {/* The safe area remains covered while the token navigation stays permanently visible. */}
       <div
         aria-hidden="true"
@@ -750,6 +756,17 @@ export const TokenDetailPage: React.FC = () => {
         </div>
       </header>
 
+      {connectionNotice && (
+        <div className="pointer-events-none absolute inset-x-0 z-[60] px-3" style={{ top: 'calc(env(safe-area-inset-top) + 64px)' }} role="alert" aria-live="assertive">
+          <div className="pointer-events-auto flex min-w-0 animate-[nodex-toast-drop_220ms_ease-out] items-start gap-2.5 rounded-lg border border-[#F0B45A]/30 bg-[#241A0B]/95 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#F0B45A]" aria-hidden="true" />
+            <p className="min-w-0 flex-1 break-words text-[11px] leading-relaxed text-[#F6D7A8]">{connectionNotice}</p>
+            <button type="button" onClick={() => setConnectionNotice('')} aria-label="Dismiss notification" title="Dismiss notification" className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#F6D7A8]/70 transition-colors hover:bg-white/[0.08] hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
       <div
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 59px)' }}
@@ -763,17 +780,7 @@ export const TokenDetailPage: React.FC = () => {
           setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
         }}
       >
-      {connectionNotice && (
-        <div className="sticky top-0 z-30 w-full px-3 pt-2" role="alert" aria-live="assertive">
-          <div className="flex min-w-0 items-start gap-2.5 rounded-lg border border-[#F0B45A]/30 bg-[#241A0B]/95 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#F0B45A]" aria-hidden="true" />
-            <p className="min-w-0 flex-1 break-words text-[11px] leading-relaxed text-[#F6D7A8]">{connectionNotice}</p>
-            <button type="button" onClick={() => setConnectionNotice('')} aria-label="Dismiss notification" title="Dismiss notification" className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#F6D7A8]/70 transition-colors hover:bg-white/[0.08] hover:text-white">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
+
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
       <div className="relative w-full min-w-0 max-w-full overflow-x-clip bg-[#000000] px-3 pt-2 pb-2">
         <div className="relative z-20 flex w-full min-w-0 items-center justify-between gap-3 bg-[#000000]">
@@ -873,16 +880,7 @@ export const TokenDetailPage: React.FC = () => {
         `}</style>
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
         <div className="relative z-0 -mx-3 -mt-3 w-[calc(100%+1.5rem)]">
-          {marketDataError && (
-            <div role="status" className="mx-3 mb-2 rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[10px] text-amber-100/75">
-              {marketDataError}
-            </div>
-          )}
-          {!marketDataError && marketDataStreamError && (
-            <div role="status" className="mx-3 mb-2 rounded-md border border-white/[0.10] bg-white/[0.04] px-3 py-2 text-[10px] text-white/55">
-              {marketDataStreamError}
-            </div>
-          )}
+
           {hasChartData ? (
             <div className="relative">
               <DotMatrixChart
