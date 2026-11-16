@@ -1881,6 +1881,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const latest = seedBars[seedBars.length - 1];
       const lastCommitted = committed[committed.length - 1];
       const committedByTime = new Map(committed.map((bar) => [bar.time, bar]));
+      const incomingTimes = new Set(seedBars.map((bar) => bar.time));
       const hasHistoricalCorrection =
         seedBars.some((bar) => {
           const previous = committedByTime.get(bar.time);
@@ -1891,7 +1892,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
               bar.low !== previous.low || bar.close !== previous.close)
           );
         }) ||
-        committed.some((bar) => !seedBars.some((incoming) => incoming.time === bar.time));
+        committed.some((bar) => !incomingTimes.has(bar.time));
 
       if (hasHistoricalCorrection) {
         // A delayed trade may correct a candle behind the active bucket.
