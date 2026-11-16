@@ -11,6 +11,7 @@ import {
   Check,
   ChartLine,
   ChartCandlestick,
+  X,
 } from 'lucide-react';
 
 type TokenChartPoint = { timestamp_ms: number; open: number; high: number; low: number; close: number; volume: number };
@@ -73,6 +74,7 @@ export const TokenDetailPage: React.FC = () => {
   const [marketDataError, setMarketDataError] = useState('');
   const [marketDataStreamConnected, setMarketDataStreamConnected] = useState(false);
   const [marketDataStreamError, setMarketDataStreamError] = useState('');
+  const [connectionNotice, setConnectionNotice] = useState('');
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
@@ -84,6 +86,7 @@ export const TokenDetailPage: React.FC = () => {
     tradeCandleEngineRef.current.reset();
     lastTradeCursorRef.current = 0;
     lastPrimaryMarketUpdateAtRef.current = 0;
+    setConnectionNotice('');
     setTimeframe('1S');
     setScrubTime(null);
   }, [activeToken?.mint]);
@@ -489,6 +492,15 @@ export const TokenDetailPage: React.FC = () => {
     };
   }, [activeToken?.mint]);
 
+  // Keep connection and loading failures visible until the user dismisses them.
+  // Clearing the underlying error after recovery does not auto-hide this notice.
+  useEffect(() => {
+    const message = marketDataStreamError || marketDataError;
+    if (message && !message.startsWith('Recovering confirmed trades after a stream gap')) {
+      setConnectionNotice(message);
+    }
+  }, [marketDataError, marketDataStreamError]);
+
   // The trading engine is an independent backup source for the market panel.
   // It never feeds CandleEngine: only confirmed token.trades events may move charts.
   useEffect(() => {
@@ -698,6 +710,23 @@ export const TokenDetailPage: React.FC = () => {
           setIsHeaderExpanded((prev) => (prev ? top > 48 : top > 72));
         }}
       >
+      {connectionNotice && (
+        <div className="sticky top-0 z-30 w-full px-3 pt-2" role="alert" aria-live="assertive">
+          <div className="flex min-w-0 items-start gap-2.5 rounded-lg border border-[#F0B45A]/30 bg-[#241A0B]/95 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#F0B45A]" aria-hidden="true" />
+            <p className="min-w-0 flex-1 break-words text-[11px] leading-relaxed text-[#F6D7A8]">{connectionNotice}</p>
+            <button
+              type="button"
+              onClick={() => setConnectionNotice('')}
+              aria-label="Dismiss notification"
+              title="Dismiss notification"
+              className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#F6D7A8]/70 transition-colors hover:bg-white/[0.08] hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Compact token overview: identity on the left, market cap and change on the right. */}
       <div className="relative w-full min-w-0 max-w-full overflow-x-clip bg-[#000000] px-3 pt-2 pb-2">
         <div className="relative z-20 flex w-full min-w-0 items-center justify-between gap-3 bg-[#000000]">
@@ -1258,23 +1287,3 @@ export const TokenDetailPage: React.FC = () => {
                       <span className="text-[9px] text-white/35">{trade.token_amount == null ? 'Token amount unavailable' : Number(trade.token_amount).toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' tokens'} · {age}</span>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className={'font-mono text-[11px] font-medium tabular-nums ' + (side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]')}>{formatUsd(amount)}</p>
-                      {trade.price_usd != null && <p className="text-[9px] text-white/35">{formatUsd(trade.price_usd, 8)}</p>}
-                    </div>
-                  </div>
-                );
-              })}
-            {!marketDataLoading && (marketDataSnapshot?.trades?.recent || []).filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? String(trade.side).toLowerCase() === 'buy' : String(trade.side).toLowerCase() === 'sell')).length === 0 && (
-              <p className="py-8 text-center text-[11px] text-white/40">No trade data available.</p>
-            )}
-          </div>
-        </section>
-      )}
-
-      </div>
-
-    </section>
-    </div>
-    </div>
-  );
-};
