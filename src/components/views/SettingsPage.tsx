@@ -475,20 +475,24 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       if (!apiKey) throw new Error('Enter the Market Data API key.');
       const candidate = marketDataService.normalizeMarketDataSettings({ restUrl, wsUrl, apiKey });
 
-      const health = await marketDataService.request<MarketDataHealth>('health', candidate);
-      if (health.status !== 'ok') throw new Error('Market Data REST health check did not return a healthy response.');
-      const providers = await marketDataService.request<Array<Record<string, unknown>>>('providers', candidate);
-      marketDataSocketRef.current?.close();
-      const socket = await marketDataService.connectWebSocket(candidate, (connected, message) => {
-        setMarketDataWsOnline(connected);
-        if (!connected && message) setMarketDataMessage(message);
-      });
-
+      // Persist the independent Market Data credentials before remote checks.
+      // If authentication fails, Token Details must still use the newly entered key
+      // rather than silently continuing with a stale key from local storage.
       const saved = marketDataService.saveSettings(candidate);
       setMarketDataSettings(saved);
       setMarketDataRestUrlDraft(saved.restUrl);
       setMarketDataWsUrlDraft(saved.wsUrl);
       setMarketDataApiKeyDraft(saved.apiKey);
+
+      const health = await marketDataService.request<MarketDataHealth>('health', saved);
+      if (health.status !== 'ok') throw new Error('Market Data REST health check did not return a healthy response.');
+      const providers = await marketDataService.request<Array<Record<string, unknown>>>('providers', saved);
+      marketDataSocketRef.current?.close();
+      const socket = await marketDataService.connectWebSocket(saved, (connected, message) => {
+        setMarketDataWsOnline(connected);
+        if (!connected && message) setMarketDataMessage(message);
+      });
+
       marketDataSocketRef.current = socket;
       setMarketDataRestOnline(true);
       setMarketDataWsOnline(true);
