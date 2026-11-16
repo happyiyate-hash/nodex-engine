@@ -3,6 +3,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
 import { marketDataService } from '../../services/marketData';
+import { wsService } from '../../services/websocket';
 import { CandleEngine, type ConfirmedTrade } from '../../services/candleEngine';
 import {
   ChevronLeft,
@@ -64,6 +65,8 @@ export const TokenDetailPage: React.FC = () => {
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
   const marketDataSocketRef = useRef<WebSocket | null>(null);
+  // Primary market-data quotes take precedence; engine ticks fill gaps only.
+  const lastPrimaryMarketUpdateAtRef = useRef(0);
   const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(false);
   const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
@@ -80,6 +83,7 @@ export const TokenDetailPage: React.FC = () => {
   useEffect(() => {
     tradeCandleEngineRef.current.reset();
     lastTradeCursorRef.current = 0;
+    lastPrimaryMarketUpdateAtRef.current = 0;
     setTimeframe('1S');
     setScrubTime(null);
   }, [activeToken?.mint]);
@@ -340,7 +344,12 @@ export const TokenDetailPage: React.FC = () => {
             }
             setMarketDataSnapshot((previous) => {
               const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-              if (sectionTopic === 'token.market') return { ...base, market: { ...base.market, ...section } };
+              if (sectionTopic === 'token.market') {
+                if (section.price_usd != null || section.market_cap_usd != null || section.price_sol != null) {
+                  lastPrimaryMarketUpdateAtRef.current = Date.now();
+                }
+                return { ...base, market: { ...base.market, ...section } };
+              }
               if (sectionTopic === 'token.identity') return { ...base, identity: { ...base.identity, ...section } };
               if (sectionTopic === 'token.info') return { ...base, info: { ...base.info, ...section } };
               if (sectionTopic === 'token.holders') return { ...base, holders: { ...base.holders, ...section } };
@@ -392,6 +401,9 @@ export const TokenDetailPage: React.FC = () => {
           const topic = String(message.topic || '');
           if (topic === 'token.market') {
             const patch = data.market && typeof data.market === 'object' ? data.market : data;
+            if (patch.price_usd != null || patch.market_cap_usd != null || patch.price_sol != null) {
+              lastPrimaryMarketUpdateAtRef.current = Date.now();
+            }
             setMarketDataSnapshot((previous) => { const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint); return { ...base, market: { ...base.market, ...patch } }; });
           } else if (topic === 'token.chart') {
             // The REST response is the sole historical candle baseline.
@@ -475,6 +487,48 @@ export const TokenDetailPage: React.FC = () => {
       if (marketDataSocketRef.current === socket) marketDataSocketRef.current = null;
       setMarketDataStreamConnected(false);
     };
+  }, [activeToken?.mint]);
+
+  // The trading engine is an independent backup source for the market panel.
+  // It never feeds CandleEngine: only confirmed token.trades events may move charts.
+  useEffect(() => {
+    const mint = activeToken?.mint;
+    if (!mint) return;
+
+    return wsService.subscribe((event) => {
+      if (!['market_tick', 'market_price_update', 'token_market_update'].includes(event.event_type)) return;
+      const data = event.data && typeof event.data === 'object' ? event.data : {};
+      const eventMint = String(data.mint_address || data.token_mint || data.base_mint || event.token_mint || '');
+      if (eventMint !== mint) return;
+
+      // Prefer the dedicated Market Data stream whenever it has delivered a
+      // real quote recently. The engine is a fallback, not a competing writer.
+      if (Date.now() - lastPrimaryMarketUpdateAtRef.current < 12_000) return;
+
+      const patch: Record<string, number> = {};
+      const priceUsd = Number(data.price_usd);
+      const priceSol = Number(data.price_sol);
+      const marketCapUsd = Number(data.market_cap_usd);
+      const marketCapSol = Number(data.market_cap_sol);
+      const solPriceUsd = Number(data.sol_price_usd);
+      if (Number.isFinite(priceUsd) && priceUsd > 0) patch.price_usd = priceUsd;
+      if (Number.isFinite(priceSol) && priceSol > 0) patch.price_sol = priceSol;
+      if (Number.isFinite(marketCapUsd) && marketCapUsd > 0) {
+        patch.market_cap_usd = marketCapUsd;
+      } else if (
+        Number.isFinite(marketCapSol) && marketCapSol > 0 &&
+        Number.isFinite(solPriceUsd) && solPriceUsd > 0 &&
+        String(data.sol_price_status || '').toLowerCase() === 'live'
+      ) {
+        patch.market_cap_usd = marketCapSol * solPriceUsd;
+      }
+      if (!Object.keys(patch).length) return;
+
+      setMarketDataSnapshot((previous) => {
+        const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+        return { ...base, market: { ...base.market, ...patch } };
+      });
+    });
   }, [activeToken?.mint]);
 
   if (!activeToken) return null;
