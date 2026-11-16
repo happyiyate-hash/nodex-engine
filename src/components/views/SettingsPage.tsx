@@ -932,41 +932,130 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           </button>
 
           {connectionSheetOpen && (
-            <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/75 px-0 backdrop-blur-sm" onClick={(event) => { if (event.target === event.currentTarget) setConnectionSheetOpen(false); }}>
-              <section role="dialog" aria-modal="true" aria-labelledby="connection-sheet-title" className="max-h-[88dvh] w-full max-w-xl overflow-y-auto rounded-t-xl border border-white/[0.10] bg-[#111] px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-3 shadow-[0_-18px_60px_rgba(0,0,0,.6)]">
-                <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-white/20" />
-                <div className="mb-5 flex items-start justify-between gap-3">
-                  <div><h2 id="connection-sheet-title" className="text-[15px] font-semibold text-white">Connection configuration</h2><p className="mt-1 text-[10px] text-white/40">Credentials stay in this browser profile and are not shown on the status page.</p></div>
-                  <button type="button" onClick={() => setConnectionSheetOpen(false)} aria-label="Close configuration" className="rounded-lg px-3 py-1.5 text-[11px] text-white/55">Close</button>
+            <div
+              className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 backdrop-blur-[2px]"
+              onClick={(event) => { if (event.target === event.currentTarget) setConnectionSheetOpen(false); }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="connection-sheet-title"
+                className="flex max-h-[76dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border-x-0 border-b-0 border-t border-white/[0.14] bg-[#0b0b0b] shadow-[0_-12px_40px_rgba(0,0,0,.45)]"
+              >
+                <div className="shrink-0 px-4 pt-2.5">
+                  <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-white/20" />
+                  <div className="flex items-center justify-between border-b border-white/[0.07] pb-3">
+                    <div className="min-w-0">
+                      <h2 id="connection-sheet-title" className="text-[14px] font-semibold text-white">API & Connections</h2>
+                      <p className="mt-0.5 text-[10px] text-white/40">Backend credentials for this device</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConnectionSheetOpen(false)}
+                      aria-label="Close configuration"
+                      className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/55 transition-colors active:bg-white/[0.08]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-4">
-                  <Field label="REST API server URL" hint="Use the HTTPS origin of your NodeX backend.">
-                    <input className={`${inputClass} ${connectionErrorField === 'url' ? 'border-red-400' : ''}`} type="url" value={backendUrl} onChange={(event) => { setBackendUrl(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); setConnectionErrorField(''); }} placeholder="https://your-server.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+                  <Field label="REST API server URL">
+                    <input
+                      className={`${inputClass} rounded-lg px-3 py-2.5 text-[12px] ${connectionErrorField === 'url' ? 'border-red-400' : ''}`}
+                      type="url"
+                      value={backendUrl}
+                      onChange={(event) => { setBackendUrl(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); setConnectionErrorField(''); }}
+                      placeholder="https://your-server.com"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
                   </Field>
-                  <Field label="WebSocket URL (optional)" hint="Leave blank to derive the secure WebSocket address from the REST API URL.">
-                    <input className={inputClass} type="url" value={websocketUrl} onChange={(event) => { setWebsocketUrl(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); }} placeholder="wss://your-server.com/api/v1/ws" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+                  <Field label="WebSocket URL (optional)">
+                    <input
+                      className={`${inputClass} rounded-lg px-3 py-2.5 text-[12px]`}
+                      type="url"
+                      value={websocketUrl}
+                      onChange={(event) => { setWebsocketUrl(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); }}
+                      placeholder="Optional — derived from REST URL"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
                   </Field>
                   <Field label="Backend API key">
                     <div className="relative">
-                      <input type={showOperatorKey ? 'text' : 'password'} value={operatorKey} onChange={(event) => { setOperatorKey(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); setConnectionErrorField(''); }} placeholder="Paste operator API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className={`pr-11 ${inputClass} ${connectionErrorField === 'key' ? 'border-red-400' : ''}`} />
-                      <button type="button" onClick={() => setShowOperatorKey((visible) => !visible)} aria-label={showOperatorKey ? 'Hide API key' : 'Show API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showOperatorKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                      <input
+                        type={showOperatorKey ? 'text' : 'password'}
+                        value={operatorKey}
+                        onChange={(event) => { setOperatorKey(event.target.value); setConnectionNeedsAttach(true); setConnectionMessage(''); setConnectionErrorField(''); }}
+                        placeholder="Paste operator API key"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        autoComplete="new-password"
+                        className={`pr-11 rounded-lg px-3 py-2.5 text-[12px] ${inputClass} ${connectionErrorField === 'key' ? 'border-red-400' : ''}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowOperatorKey((visible) => !visible)}
+                        aria-label={showOperatorKey ? 'Hide API key' : 'Show API key'}
+                        className="absolute inset-y-0 right-1 flex w-9 items-center justify-center rounded-lg text-white/45"
+                      >
+                        {showOperatorKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
                   </Field>
-                  <Field label="TokenCare API key" hint="Used to recover missing token logos. Saved on this device and read by the app when a logo-recovery group is ready.">
+                  <Field label="TokenCare API key">
                     <div className="relative">
-                      <input type={showTokenCareKey ? 'text' : 'password'} value={tokenCareApiKey} onChange={(event) => { setTokenCareApiKey(event.target.value); setTokenCareKeyMessage(''); }} placeholder="Paste TokenCare API key" autoCapitalize="none" autoCorrect="off" autoComplete="new-password" className={`pr-11 ${inputClass}`} />
-                      <button type="button" onClick={() => setShowTokenCareKey((visible) => !visible)} aria-label={showTokenCareKey ? 'Hide TokenCare API key' : 'Show TokenCare API key'} className="absolute inset-y-0 right-2 flex w-9 items-center justify-center rounded-lg text-white/45">{showTokenCareKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+                      <input
+                        type={showTokenCareKey ? 'text' : 'password'}
+                        value={tokenCareApiKey}
+                        onChange={(event) => { setTokenCareApiKey(event.target.value); setTokenCareKeyMessage(''); }}
+                        placeholder="Paste TokenCare API key"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        autoComplete="new-password"
+                        className={`pr-11 rounded-lg px-3 py-2.5 text-[12px] ${inputClass}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTokenCareKey((visible) => !visible)}
+                        aria-label={showTokenCareKey ? 'Hide TokenCare API key' : 'Show TokenCare API key'}
+                        className="absolute inset-y-0 right-1 flex w-9 items-center justify-center rounded-lg text-white/45"
+                      >
+                        {showTokenCareKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
                   </Field>
-                  <button type="button" onClick={() => { const key = cleanHeaderValue(tokenCareApiKey); updateConnectionDraft({ tokenCareApiKey: key }); setTokenCareApiKey(key); setTokenCareKeyMessage(key ? 'TokenCare key saved on this device.' : 'TokenCare key cleared.'); }} className="flex w-full items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] py-2.5 text-[11px] font-medium text-white/80">Save TokenCare key</button>
-                  {tokenCareKeyMessage && <p className="text-[10px] text-emerald-300" role="status">{tokenCareKeyMessage}</p>}
-                  <p className="text-[9px] leading-relaxed text-amber-200/50">This key is stored in this browser or app profile and is sent directly to TokenCare for logo lookups. Anyone with access to this device profile may be able to retrieve it.</p>
-                  {connectionMessage && <p className={`text-[11px] ${connectionSuccess ? 'text-emerald-300' : 'text-red-300'}`} role="status">{connectionMessage}</p>}
-                  <button type="button" onClick={attachConnection} disabled={savingConnection} className="flex w-full items-center justify-center gap-2 rounded-lg bg-white py-3.5 text-[12px] font-semibold text-black disabled:opacity-50">
-                    {savingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                    {savingConnection ? 'Verifying connection…' : 'Save & connect'}
+                  <button
+                    type="button"
+                    onClick={() => { const key = cleanHeaderValue(tokenCareApiKey); updateConnectionDraft({ tokenCareApiKey: key }); setTokenCareApiKey(key); setTokenCareKeyMessage(key ? 'TokenCare key saved on this device.' : 'TokenCare key cleared.'); }}
+                    className="flex min-h-9 w-full items-center justify-center rounded-lg border border-white/[0.10] bg-white/[0.04] px-3 py-2 text-[10px] font-medium text-white/75"
+                  >
+                    Save TokenCare key
                   </button>
-                  <p className="text-[9px] leading-relaxed text-white/30">Saving verifies the REST API, requests a one-time WebSocket ticket, and tests the secure WebSocket handshake before applying the new settings.</p>
+                  {tokenCareKeyMessage && <p className="text-[10px] text-emerald-300" role="status">{tokenCareKeyMessage}</p>}
+                  <p className="text-[9px] leading-snug text-white/35">TokenCare key is stored on this device and sent to TokenCare only for missing-logo lookups. Anyone with access to this browser profile may be able to retrieve it.</p>
+                  {connectionMessage && (
+                    <p className={`rounded-md border px-3 py-2 text-[10px] leading-snug ${connectionSuccess ? 'border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200' : 'border-red-500/20 bg-red-500/[0.06] text-red-200'}`} role="status">
+                      {connectionMessage}
+                    </p>
+                  )}
+                  <p className="text-[9px] leading-snug text-white/35">Credentials are saved locally on this device. Saving verifies REST access and the authenticated WebSocket handshake before applying the connection.</p>
+                </div>
+
+                <div className="shrink-0 border-t border-white/[0.08] bg-[#0b0b0b] px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3">
+                  <button
+                    type="button"
+                    onClick={() => void attachConnection()}
+                    disabled={savingConnection}
+                    className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-[12px] font-semibold text-black transition-opacity disabled:opacity-50"
+                  >
+                    {savingConnection ? <RefreshCw className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+                    {savingConnection ? 'Verifying connection…' : 'Save & Connect'}
+                  </button>
                 </div>
               </section>
             </div>
