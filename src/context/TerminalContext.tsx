@@ -40,7 +40,7 @@ interface TerminalContextType {
   isStreamPaused: boolean;
   toggleStreamPause: () => void;
   clearEvents: () => void;
-  clearBrowserHistory: () => void;
+  clearBrowserHistory: () => Promise<void>;
   removeTokensByMint: (mints: string[]) => void;
   toggleEngine: () => void;
   toggleStrategy: () => void;
@@ -1391,15 +1391,15 @@ export const TerminalProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const toggleEngine = () => sendPause(engineStatus.running);
   const toggleStrategy = () => setBackendError('Strategy controls are unavailable until the backend strategy-control API is implemented.');
   const clearEvents = () => { setEvents([]); setSelectedEvent(null); };
-  const clearBrowserHistory = () => {
+  const clearBrowserHistory = async (): Promise<void> => {
     setEvents([]);
     setLaunches([]);
     setTokens([]);
     lifecycleCacheSignatures.current.clear();
-    void clearTokenLifecycleCache().catch((error) => console.warn('NodeX lifecycle cache clear failed:', error));
     setSelectedEvent(null);
     setSelectedToken(null);
     setBackendError(null);
+    await clearTokenLifecycleCache();
   };
   const removeTokensByMint = (mints: string[]) => {
     if (!mints.length) return;
