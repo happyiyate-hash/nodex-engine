@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
+import { marketDataService } from '../../services/marketData';
 import {
   ChevronLeft,
   Copy,
@@ -9,6 +10,17 @@ import {
   ChartLine,
   ChartCandlestick,
 } from 'lucide-react';
+
+interface TokenDataSnapshot {
+  mint: string;
+  identity: { name?: string | null; symbol?: string | null; logo_url?: string | null; mint_address?: string; creator_address?: string | null; created_at?: string | null };
+  market: { price_usd?: number | null; price_sol?: number | null; market_cap_usd?: number | null; liquidity_usd?: number | null; change_1m_pct?: number | null; change_5m_pct?: number | null; change_24h_pct?: number | null; volume_24h_usd?: number | null; transactions_24h?: number | null; buy_volume_usd?: number | null; sell_volume_usd?: number | null; buy_pressure_pct?: number | null };
+  chart: { timeframe: string; points: Array<{ timestamp_ms: number; open: number; high: number; low: number; close: number; volume: number }> };
+  trades: { recent: Array<{ signature: string; event_index: number; side: string; trader?: string | null; amount_sol?: number | null; token_amount?: number | null; price_usd?: number | null; volume_usd?: number | null; timestamp_ms: number }> };
+  holders: { total_count?: number | null; top_10_ownership_pct?: number | null; largest: Array<{ address: string; token_amount: number; supply_pct?: number | null; rank: number }> };
+  info: { decimals?: number | null; total_supply?: string | null; circulating_supply?: string | null; token_standard?: string | null; creator_address?: string | null };
+  data_status?: Record<string, string>;
+}
 
 export const TokenDetailPage: React.FC = () => {
   const {
@@ -36,176 +48,192 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
+  const marketDataSocketRef = useRef<WebSocket | null>(null);
+  const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
+  const [marketDataLoading, setMarketDataLoading] = useState(false);
+  const [marketDataError, setMarketDataError] = useState('');
+  const [marketDataStreamConnected, setMarketDataStreamConnected] = useState(false);
+  const [marketDataStreamError, setMarketDataStreamError] = useState('');
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
   const activeToken = selectedToken
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
-    : tokens[0];
+    : null;
 
-  // Always start each newly opened token on the 1-second chart, regardless of
-  // the timeframe selected on a previously viewed token.
+  // Load the selected mint from the independent Token Data service. The mint
+  // is part of the snapshot URL and the saved Market Data key is sent as x-api-key.
   useEffect(() => {
-    setTimeframe('1S');
-  }, [activeToken?.mint]);
-
-  // Isolated Token Details demo tape. The simulated market has distinct
-  // accumulation, pump, pullback and consolidation phases for chart testing.
-  const DEMO_START_PRICE_USD = 0.0000125;
-  const DEMO_START_MARKET_CAP_USD = 42500;
-  const [demoPrice, setDemoPrice] = useState(DEMO_START_PRICE_USD);
-  const simulatedMarketCap = DEMO_START_MARKET_CAP_USD * (demoPrice / DEMO_START_PRICE_USD);
-  const [demoPriceHistory, setDemoPriceHistory] = useState<import('../../types').PricePoint[]>([]);
-
-  useEffect(() => {
-    if (!activeToken?.mint) return;
-    let price = DEMO_START_PRICE_USD;
-    let tick = 0;
-    let phase: 'accumulation' | 'pump' | 'pullback' | 'consolidation' = 'accumulation';
-    let phaseTicks = 0;
-    let timeout: number | undefined;
+    const mint = activeToken?.mint;
+    if (!mint) return;
     let cancelled = false;
-    const startedAt = Date.now();
-    const first: import('../../types').PricePoint = {
-      time: startedAt, price, open: price, high: price, low: price, close: price, volume: 0,
+    const loadSnapshot = async () => {
+      setMarketDataLoading(true);
+      setMarketDataError('');
+      setMarketDataSnapshot(null);
+      const settings = marketDataService.loadSettings();
+      if (!settings.restUrl || !settings.apiKey) {
+        setMarketDataError('Market Data API is not configured. Add its REST URL and API key in Settings.');
+        setMarketDataLoading(false);
+        return;
+      }
+      try {
+        const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
+        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=' + encodeURIComponent(timeframe), baseUrl);
+        const response = await fetch(url.toString(), { headers: { 'x-api-key': settings.apiKey } });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(typeof payload === 'string' ? payload : (payload.error || payload.message || 'Token snapshot request failed (HTTP ' + response.status + ').'));
+        if (!cancelled) setMarketDataSnapshot(payload as TokenDataSnapshot);
+      } catch (error) {
+        if (!cancelled) setMarketDataError(error instanceof Error ? error.message : 'Could not load token market data.');
+      } finally {
+        if (!cancelled) setMarketDataLoading(false);
+      }
     };
-    setDemoPrice(price);
-    setDemoPriceHistory([first]);
+    void loadSnapshot();
+    return () => { cancelled = true; };
+  }, [activeToken?.mint, timeframe]);
 
-    const scheduleNextTick = () => {
-      // Frequent updates make the demo responsive while leaving occasional pauses.
-      const delay = Math.random() < 0.08
-        ? 550 + Math.floor(Math.random() * 350)
-        : 140 + Math.floor(Math.random() * 220);
-      timeout = window.setTimeout(() => {
-        if (cancelled) return;
-        tick += 1;
-        phaseTicks += 1;
-        const previous = price;
-
-        // Cycle through visibly different market behaviours instead of a
-        // uniform random walk: flat trading, a fast pump, a retracement,
-        // then sideways consolidation before the next move.
-        if (phase === 'accumulation' && phaseTicks >= 18 + Math.floor(Math.random() * 22)) {
-          phase = 'pump';
-          phaseTicks = 0;
-        } else if (phase === 'pump' && phaseTicks >= 12 + Math.floor(Math.random() * 13)) {
-          phase = 'pullback';
-          phaseTicks = 0;
-        } else if (phase === 'pullback' && phaseTicks >= 10 + Math.floor(Math.random() * 12)) {
-          phase = 'consolidation';
-          phaseTicks = 0;
-        } else if (phase === 'consolidation' && phaseTicks >= 16 + Math.floor(Math.random() * 20)) {
-          phase = 'accumulation';
-          phaseTicks = 0;
+  // One authenticated WebSocket session per selected token. The API key is
+  // exchanged for a short-lived ticket; the mint and topics are sent in subscribe.
+  useEffect(() => {
+    const mint = activeToken?.mint;
+    if (!mint) return;
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    const connect = async () => {
+      const settings = marketDataService.loadSettings();
+      if (!settings.restUrl || !settings.apiKey || !settings.wsUrl) {
+        setMarketDataStreamConnected(false);
+        setMarketDataStreamError('Market Data WebSocket is not configured.');
+        return;
+      }
+      try {
+        socket = await marketDataService.connectWebSocket(settings);
+        if (cancelled) { socket.close(); return; }
+        marketDataSocketRef.current = socket;
+        setMarketDataStreamConnected(true);
+        setMarketDataStreamError('');
+        socket.send(JSON.stringify({
+          command: 'subscribe',
+          mint,
+          topics: ['token.market', 'token.chart', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
+        }));
+        socket.send(JSON.stringify({ command: 'set_chart_timeframe', timeframe }));
+        socket.addEventListener('message', (messageEvent) => {
+          let message: any;
+          try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
+          if (message.event === 'resync_required') {
+            setMarketDataStreamError('Market Data stream requested a refresh. Reopen this token to resync.');
+            return;
+          }
+          if (message.event === 'error') {
+            setMarketDataStreamError(String(message.message || message.code || 'Market Data stream reported an error.'));
+            return;
+          }
+          const data = message.data && typeof message.data === 'object' ? message.data : {};
+          const topic = String(message.topic || '');
+          if (topic === 'token.market') {
+            const patch = data.market && typeof data.market === 'object' ? data.market : data;
+            setMarketDataSnapshot((previous) => previous ? { ...previous, market: { ...previous.market, ...patch } } : previous);
+          } else if (topic === 'token.chart') {
+            const point = data.point || data.candle || data;
+            const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0);
+            const close = Number(point.close ?? point.price ?? 0);
+            if (timestamp > 0 && close > 0) {
+              const normalized = { timestamp_ms: timestamp, open: Number(point.open ?? close), high: Number(point.high ?? close), low: Number(point.low ?? close), close, volume: Number(point.volume || 0) };
+              setMarketDataSnapshot((previous) => previous ? {
+                ...previous,
+                chart: { ...previous.chart, points: [...previous.chart.points.filter((item) => item.timestamp_ms !== timestamp), normalized].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) },
+              } : previous);
+            }
+          } else if (topic === 'token.trades') {
+            const trade = data.trade || data;
+            if (trade.signature) setMarketDataSnapshot((previous) => previous ? {
+              ...previous,
+              trades: { recent: [trade, ...previous.trades.recent.filter((item) => item.signature !== trade.signature)].slice(0, 100) },
+            } : previous);
+          } else if (topic === 'token.holders') {
+            const holders = data.holders && typeof data.holders === 'object' ? data.holders : data;
+            setMarketDataSnapshot((previous) => previous ? { ...previous, holders: { ...previous.holders, ...holders } } : previous);
+          } else if (topic === 'token.info' || topic === 'token.creator') {
+            setMarketDataSnapshot((previous) => previous ? {
+              ...previous,
+              identity: { ...previous.identity, ...(data.identity || {}), ...(topic === 'token.creator' ? { creator_address: data.creator_address || data.address } : {}) },
+              info: { ...previous.info, ...(data.info || {}) },
+            } : previous);
+          } else if (topic === 'token.activity') {
+            const side = String(data.side || data.type || '').toLowerCase();
+            const amount = Number(data.amount_sol ?? data.amount ?? data.volume_sol ?? 0);
+            if ((side === 'buy' || side === 'sell') && amount > 0) {
+              const id = Number(message.sequence || message.timestamp_ms || Date.now());
+              setFloatingAmounts((current) => [...current.filter((item) => Date.now() - item.id < 3600), { id, amount, side }].slice(-12));
+            }
+          }
+        });
+        socket.addEventListener('close', () => {
+          if (!cancelled) {
+            setMarketDataStreamConnected(false);
+            setMarketDataStreamError('Market Data stream disconnected.');
+          }
+        });
+        socket.addEventListener('error', () => {
+          if (!cancelled) {
+            setMarketDataStreamConnected(false);
+            setMarketDataStreamError('Market Data stream connection error.');
+          }
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setMarketDataStreamConnected(false);
+          setMarketDataStreamError(error instanceof Error ? error.message : 'Could not connect to Market Data stream.');
         }
-
-        let change = 0;
-        if (phase === 'pump') {
-          change = Math.random() < 0.13
-            ? 0.018 + Math.random() * 0.018
-            : 0.0035 + Math.random() * 0.0105;
-        } else if (phase === 'pullback') {
-          change = -(0.003 + Math.random() * 0.010);
-          if (Math.random() < 0.16) change += 0.006 + Math.random() * 0.008;
-        } else if (phase === 'consolidation') {
-          change = (Math.random() - 0.5) * 0.0022;
-          if (Math.random() < 0.18) change = 0;
-        } else {
-          change = (Math.random() - 0.47) * 0.0032;
-          if (Math.random() < 0.2) change = 0;
-        }
-
-        // Tiny oscillations keep the tape alive between larger market phases.
-        const microMove = Math.sin(tick * 0.73) * 0.00045;
-        price = Math.max(DEMO_START_PRICE_USD * 0.08, previous * (1 + change + microMove));
-        const wick = 0.001 + Math.random() * 0.004;
-        const point: import('../../types').PricePoint = {
-          time: Date.now(),
-          price,
-          open: previous,
-          high: Math.max(previous, price) * (1 + wick),
-          low: Math.min(previous, price) * (1 - wick),
-          close: price,
-          volume: phase === 'pump'
-            ? 80 + Math.floor(Math.random() * 420)
-            : 5 + Math.floor(Math.random() * 110),
-        };
-        setDemoPrice(price);
-        setDemoPriceHistory((history) => [...history, point].slice(-6000));
-        scheduleNextTick();
-      }, delay);
+      }
     };
-    scheduleNextTick();
+    void connect();
     return () => {
       cancelled = true;
-      if (timeout !== undefined) window.clearTimeout(timeout);
+      if (socket) socket.close();
+      if (marketDataSocketRef.current === socket) marketDataSocketRef.current = null;
+      setMarketDataStreamConnected(false);
     };
   }, [activeToken?.mint]);
 
-  // Temporary preview: one amount per beat, all moving in a fixed vertical lane.
-  // Replace this generator with verified backend swap events after visual tuning.
   useEffect(() => {
-    if (!activeToken) return;
-    const interval = window.setInterval(() => {
-      const now = Date.now();
-      const incoming = {
-        id: now,
-        amount: Number((0.35 + Math.random() * 34.65).toFixed(2)),
-        side: (Math.random() < 0.54 ? 'buy' : 'sell') as 'buy' | 'sell',
-      };
-      setFloatingAmounts((current) => [
-        ...current.filter((item) => now - item.id < 3600),
-        incoming,
-      ].slice(-12));
-    }, 440);
-    return () => window.clearInterval(interval);
-  }, [activeToken?.mint]);
+    const socket = marketDataSocketRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ command: 'set_chart_timeframe', timeframe }));
+    }
+  }, [timeframe]);
 
   if (!activeToken) return null;
-  const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
-  // Design-only fallback: keep the Position tab populated while the paper
-  // engine has not opened a real position for the selected token.
-  // This object is local to the UI and is never sent to the backend.
-  const displayPosition = activePosition ?? {
-    mint: activeToken.mint,
-    symbol: activeToken.symbol,
-    logo_url: activeToken.logo_url,
-    name: activeToken.name,
-    current_position_value_usd: 125.40,
-    pnl_usd: 18.75,
-    initial_investment_usd: 106.65,
-    entry_price_usd: 0.0000105,
-    current_price_usd: 0.00001235,
-    amount_tokens: 10157142.8571,
-    entry_time: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-  };
-  const liveTokenPrice = demoPrice;
+  const activePosition = positions.find((position) => position.mint === activeToken.mint && position.status === 'OPEN');
+  const chartHistory: import('../../types').PricePoint[] = (marketDataSnapshot?.chart?.points || []).map((point) => ({
+    time: Number(point.timestamp_ms),
+    price: Number(point.close),
+    open: Number(point.open),
+    high: Number(point.high),
+    low: Number(point.low),
+    close: Number(point.close),
+    volume: Number(point.volume || 0),
+  })).filter((point) => Number.isFinite(point.time) && point.time > 0 && Number.isFinite(point.price) && point.price > 0);
+  const lastChartPoint = chartHistory[chartHistory.length - 1];
+  const liveTokenPrice = Number(marketDataSnapshot?.market?.price_usd ?? lastChartPoint?.close ?? 0);
   const currentPrice = scrubPrice ?? liveTokenPrice;
-  // Keep the displayed percentage tied to the actual simulated price
-  // relative to its seed. Do not alternate the sign by animation phase:
-  // that made the header turn red while the price tape was still rising.
-  const marketChangePct = ((demoPrice / DEMO_START_PRICE_USD) - 1) * 100;
+  const marketCap = marketDataSnapshot?.market?.market_cap_usd ?? null;
+  const marketChangePct = marketDataSnapshot?.market?.change_24h_pct ?? null;
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
-  const hasMarketPrice = liveTokenPrice > 0;
-  const displayMarketCap = DEMO_START_MARKET_CAP_USD * (currentPrice / DEMO_START_PRICE_USD);
-  const formatCompactMarketCap = (value: number) =>
-    new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      notation: 'compact',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-
-  const formatUsd = (value: number, maximumFractionDigits = 2) =>
-    new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits,
-    }).format(Number.isFinite(value) ? value : 0);
+  const hasMarketPrice = Number.isFinite(liveTokenPrice) && liveTokenPrice > 0;
+  const hasChartData = chartHistory.length > 0;
+  const formatCompactMarketCap = (value: number | null | undefined) => {
+    if (value == null || !Number.isFinite(Number(value))) return '—';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value));
+  };
+  const formatUsd = (value: number | null | undefined, maximumFractionDigits = 2) => {
+    if (value == null || !Number.isFinite(Number(value))) return '—';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits }).format(Number(value));
+  };
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
@@ -299,7 +327,7 @@ export const TokenDetailPage: React.FC = () => {
             </div>
             <div className="shrink-0 text-right leading-none">
               <div className="font-sans text-[14px] font-semibold tabular-nums tracking-tight text-white">
-                {hasMarketPrice ? formatCompactMarketCap(displayMarketCap) : 'MC unavailable'}
+                {hasMarketPrice ? formatCompactMarketCap(marketCap) : 'MC unavailable'}
               </div>
               <div className={`mt-1 flex items-center justify-end gap-0.5 font-mono text-[10px] font-semibold ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
                 <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${marketChangePct.toFixed(2)}%`}</span>
@@ -367,7 +395,7 @@ export const TokenDetailPage: React.FC = () => {
           <div className="shrink-0 -mr-1.5 text-right">
             <p className="pr-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
             <p className="mt-0.5 pr-1.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
-              {formatCompactMarketCap(simulatedMarketCap)}
+              {formatCompactMarketCap(marketCap)}
             </p>
             <div className="mt-0.5 flex justify-end">
               <span
@@ -424,9 +452,9 @@ export const TokenDetailPage: React.FC = () => {
           <DotMatrixChart
             key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
             currentPrice={liveTokenPrice}
-            marketCap={simulatedMarketCap}
+            marketCap={marketCap ?? undefined}
             entryPrice={activePosition ? entryPriceUsd : undefined}
-            priceHistory={demoPriceHistory}
+            priceHistory={chartHistory}
             isPositive={isPositive}
             timeframe={timeframe}
             chartType={chartType}
