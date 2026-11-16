@@ -14,30 +14,6 @@ import {
 
 type TokenChartPoint = { timestamp_ms: number; open: number; high: number; low: number; close: number; volume: number };
 type FloatingTradeAmount = { id: string; amount: number; side: 'buy' | 'sell'; unit: 'USD' | 'SOL'; delayMs: number };
-const chartIntervalMs: Record<string, number> = { '1S': 1000, '5S': 5000, '10S': 10000, '1M': 60000, '5M': 300000, '15M': 900000, '30M': 1800000, '1H': 3600000, '24H': 86400000 };
-function aggregateChartPoints(points: TokenChartPoint[], timeframe: string): TokenChartPoint[] {
-  const interval = chartIntervalMs[timeframe] || 60000;
-  const buckets = new Map<number, TokenChartPoint>();
-  for (const point of [...points].sort((a, b) => a.timestamp_ms - b.timestamp_ms)) {
-    const bucket = Math.floor(point.timestamp_ms / interval) * interval;
-    const current = buckets.get(bucket);
-    if (current) { current.high = Math.max(current.high, point.high); current.low = Math.min(current.low, point.low); current.close = point.close; current.volume += point.volume || 0; }
-    else buckets.set(bucket, { ...point, timestamp_ms: bucket });
-  }
-  return [...buckets.values()].slice(-5000);
-}
-function tradesToChartPoints(trades: TokenDataSnapshot['trades']['recent'], timeframe: string): TokenChartPoint[] {
-  const interval = chartIntervalMs[timeframe] || 1000;
-  const buckets = new Map<number, TokenChartPoint>();
-  for (const trade of [...trades].sort((a, b) => a.timestamp_ms - b.timestamp_ms)) {
-    const price = Number(trade.price_usd), timestamp = Number(trade.timestamp_ms);
-    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0) continue;
-    const bucket = Math.floor(timestamp / interval) * interval, volume = Number(trade.volume_usd || 0), current = buckets.get(bucket);
-    if (current) { current.high = Math.max(current.high, price); current.low = Math.min(current.low, price); current.close = price; current.volume += Number.isFinite(volume) && volume > 0 ? volume : 0; }
-    else buckets.set(bucket, { timestamp_ms: bucket, open: price, high: price, low: price, close: price, volume: Number.isFinite(volume) && volume > 0 ? volume : 0 });
-  }
-  return [...buckets.values()].slice(-5000);
-}
 
 interface TokenDataSnapshot {
   mint: string;
@@ -124,6 +100,7 @@ export const TokenDetailPage: React.FC = () => {
       if (!settings.restUrl) {
         setMarketDataError('Market Data API is not configured. Add its REST URL and API key in Settings.');
         setMarketDataLoading(false);
+        setChartHistoryLoading(false);
         return;
       }
       try {
@@ -165,7 +142,10 @@ export const TokenDetailPage: React.FC = () => {
       } catch (error) {
         if (!cancelled) setMarketDataError(error instanceof Error ? error.message : 'Could not load token market data.');
       } finally {
-        if (!cancelled && !settings.wsUrl) { setMarketDataLoading(false); setChartHistoryLoading(false); }
+        if (!cancelled) {
+          setMarketDataLoading(false);
+          setChartHistoryLoading(false);
+        }
       }
     };
     void loadSnapshot();
@@ -261,7 +241,6 @@ export const TokenDetailPage: React.FC = () => {
           }
           if (message.event === 'snapshot_started') {
             setMarketDataLoading(true);
-            setChartHistoryLoading(true);
             setMarketDataStreamError('');
             // A socket snapshot refreshes live metadata, not historical chart
             // ownership. Keep the REST baseline and accumulated confirmed trades.
@@ -399,8 +378,6 @@ export const TokenDetailPage: React.FC = () => {
   if (!activeToken) return null;
   const activePosition = positions.find((position) => position.mint === activeToken.mint && position.status === 'OPEN');
   const cachedChartPoints = chartSeriesByTimeframe[timeframe] || [];
-  const baseChartPoints = chartSeriesByTimeframe['1M'] || (marketDataSnapshot?.chart?.timeframe === '1M' ? marketDataSnapshot?.chart?.points || [] : []);
-  const isSubMinuteTimeframe = timeframe === '1S' || timeframe === '5S' || timeframe === '10S';
   // Prefer the backend's timeframe-specific OHLC series whenever present.
   // REST provides the historical baseline for the selected timeframe.
   // Confirmed WebSocket trades update only the local candles layered over it.
