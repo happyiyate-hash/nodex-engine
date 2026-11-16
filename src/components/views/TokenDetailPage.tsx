@@ -226,8 +226,12 @@ export const TokenDetailPage: React.FC = () => {
             if (!response.ok) throw new Error(payload.error || payload.message || 'Missed-trade recovery failed (HTTP ' + response.status + ').');
             if (cancelled) return;
             if (payload.cursor_reset === true) {
-              // The backend's per-token cache expired. Its response restarts
-              // from retained trades; refresh the REST candle baseline too.
+              // The backend's per-token cache expired. Restart from its retained
+              // trade history and move the local cursor back to the new epoch.
+              lastTradeCursorRef.current = Math.min(
+                lastTradeCursorRef.current,
+                Math.max(0, Number(payload.head_cursor) || 0),
+              );
               void refreshSnapshot();
               recoveryCursor = 0;
             }
