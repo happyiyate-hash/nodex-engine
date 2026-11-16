@@ -51,6 +51,7 @@ export const TokenDetailPage: React.FC = () => {
   const nextFloatingAnimationAtRef = useRef(0);
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
   const tradeCandleEngineRef = useRef(new CandleEngine());
+  const lastTradeCursorRef = useRef(0);
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -78,6 +79,7 @@ export const TokenDetailPage: React.FC = () => {
 
   useEffect(() => {
     tradeCandleEngineRef.current.reset();
+    lastTradeCursorRef.current = 0;
     setTimeframe('1S');
     setScrubTime(null);
   }, [activeToken?.mint]);
@@ -204,6 +206,71 @@ export const TokenDetailPage: React.FC = () => {
         }
       }
     };
+    let recoveryPromise: Promise<void> | null = null;
+    const recoverMissedTrades = (): Promise<void> => {
+      if (recoveryPromise) return recoveryPromise;
+      recoveryPromise = (async () => {
+        const settings = marketDataService.loadSettings();
+        if (!settings.restUrl) return;
+        let recoveryCursor = lastTradeCursorRef.current;
+        let pageCount = 0;
+        try {
+          while (!cancelled && pageCount < 100) {
+            const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
+            const url = new URL(
+              'api/v1/tokens/' + encodeURIComponent(mint) + '/trades/missed?after=' + recoveryCursor + '&limit=500',
+              baseUrl,
+            );
+            const response = await fetch(url.toString());
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || payload.message || 'Missed-trade recovery failed (HTTP ' + response.status + ').');
+            if (cancelled) return;
+            if (payload.cursor_reset === true) {
+              // The backend's per-token cache expired. Its response restarts
+              // from retained trades; refresh the REST candle baseline too.
+              void refreshSnapshot();
+              recoveryCursor = 0;
+            }
+            const recovered = Array.isArray(payload.trades) ? payload.trades : [];
+            if (recovered.length > 0) {
+              tradeCandleEngineRef.current.addTrades(recovered as ConfirmedTrade[]);
+              setMarketDataSnapshot((previous) => {
+                const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+                const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
+                for (const trade of [...recovered, ...(base.trades?.recent || [])]) {
+                  recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
+                }
+                return {
+                  ...base,
+                  trades: {
+                    recent: [...recentById.values()]
+                      .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
+                      .slice(0, 200),
+                  },
+                };
+              });
+            }
+            const nextCursor = Number(payload.next_cursor);
+            if (Number.isFinite(nextCursor) && nextCursor >= recoveryCursor) {
+              recoveryCursor = nextCursor;
+            }
+            pageCount += 1;
+            if (payload.has_more !== true || recovered.length === 0) break;
+          }
+          lastTradeCursorRef.current = Math.max(lastTradeCursorRef.current, recoveryCursor);
+          if (pageCount >= 100) {
+            setMarketDataStreamError('Trade recovery reached its page safety limit. Reopen this token to continue recovery.');
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setMarketDataStreamError(error instanceof Error ? error.message : 'Could not recover missed confirmed trades.');
+          }
+        }
+      })().finally(() => {
+        recoveryPromise = null;
+      });
+      return recoveryPromise;
+    };
     const scheduleReconnect = () => {
       if (cancelled || retryTimer !== undefined) return;
       const delay = retryDelay;
@@ -230,12 +297,16 @@ export const TokenDetailPage: React.FC = () => {
           topics: ['token.market', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
           timeframe,
         }));
+        // Subscribe first, then backfill from the durable cursor. Overlap is
+        // safe because CandleEngine deduplicates signature:event_index.
+        void recoverMissedTrades();
         socket.addEventListener('message', (messageEvent) => {
           let message: any;
           try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
           if (message.mint && message.mint !== mint) return;
           if (message.event === 'resync_required') {
-            setMarketDataStreamError('Restoring the latest market snapshot after a stream gap…');
+            setMarketDataStreamError('Recovering confirmed trades after a stream gap…');
+            void recoverMissedTrades();
             socket?.send(JSON.stringify({ command: 'request_snapshot', timeframe }));
             return;
           }
@@ -316,6 +387,10 @@ export const TokenDetailPage: React.FC = () => {
             return;
           } else if (topic === 'token.trades') {
             const trade = data.trade || data;
+            const liveCursor = Number(trade.cursor);
+            if (Number.isFinite(liveCursor) && liveCursor > 0) {
+              lastTradeCursorRef.current = Math.max(lastTradeCursorRef.current, liveCursor);
+            }
             tradeCandleEngineRef.current.addTrade(trade as ConfirmedTrade);
             if (trade.signature) setMarketDataSnapshot((previous) => {
               const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
