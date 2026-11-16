@@ -35,7 +35,7 @@ export const TokenDetailPage: React.FC = () => {
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
-  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; amount: number; side: 'buy' | 'sell' }>>([]);
+  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; amount: number; side: 'buy' | 'sell'; unit: 'USD' | 'SOL' }>>([]);
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -48,6 +48,8 @@ export const TokenDetailPage: React.FC = () => {
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
   const marketDataSocketRef = useRef<WebSocket | null>(null);
+  const timeframeRef = useRef(timeframe);
+  timeframeRef.current = timeframe;
   const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(false);
   const [marketDataError, setMarketDataError] = useState('');
@@ -141,15 +143,32 @@ export const TokenDetailPage: React.FC = () => {
             const patch = data.market && typeof data.market === 'object' ? data.market : data;
             setMarketDataSnapshot((previous) => previous ? { ...previous, market: { ...previous.market, ...patch } } : previous);
           } else if (topic === 'token.chart') {
-            const point = data.point || data.candle || data;
-            const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0);
-            const close = Number(point.close ?? point.price ?? 0);
-            if (timestamp > 0 && close > 0) {
-              const normalized = { timestamp_ms: timestamp, open: Number(point.open ?? close), high: Number(point.high ?? close), low: Number(point.low ?? close), close, volume: Number(point.volume || 0) };
+            const eventTimeframe = String(data.timeframe || '');
+            if (eventTimeframe && eventTimeframe !== timeframeRef.current) return;
+            if (Array.isArray(data.points)) {
+              const points = data.points.map((point: any) => ({
+                timestamp_ms: Number(point.timestamp_ms),
+                open: Number(point.open),
+                high: Number(point.high),
+                low: Number(point.low),
+                close: Number(point.close),
+                volume: Number(point.volume || 0),
+              })).filter((point: any) => point.timestamp_ms > 0 && point.close > 0);
               setMarketDataSnapshot((previous) => previous ? {
                 ...previous,
-                chart: { ...previous.chart, points: [...previous.chart.points.filter((item) => item.timestamp_ms !== timestamp), normalized].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) },
+                chart: { timeframe: eventTimeframe || timeframeRef.current, points },
               } : previous);
+            } else {
+              const point = data.point || data.candle || data;
+              const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0);
+              const close = Number(point.close ?? point.price ?? 0);
+              if (timestamp > 0 && close > 0) {
+                const normalized = { timestamp_ms: timestamp, open: Number(point.open ?? close), high: Number(point.high ?? close), low: Number(point.low ?? close), close, volume: Number(point.volume || 0) };
+                setMarketDataSnapshot((previous) => previous ? {
+                  ...previous,
+                  chart: { ...previous.chart, timeframe: eventTimeframe || previous.chart.timeframe, points: [...previous.chart.points.filter((item) => item.timestamp_ms !== timestamp), normalized].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) },
+                } : previous);
+              }
             }
           } else if (topic === 'token.trades') {
             const trade = data.trade || data;
@@ -168,10 +187,11 @@ export const TokenDetailPage: React.FC = () => {
             } : previous);
           } else if (topic === 'token.activity') {
             const side = String(data.side || data.type || '').toLowerCase();
-            const amount = Number(data.amount_sol ?? data.amount ?? data.volume_sol ?? 0);
+            const hasUsdAmount = data.volume_usd != null && Number(data.volume_usd) > 0;
+            const amount = Number(hasUsdAmount ? data.volume_usd : (data.amount_sol ?? data.amount ?? data.volume_sol ?? 0));
             if ((side === 'buy' || side === 'sell') && amount > 0) {
               const id = Number(message.sequence || message.timestamp_ms || Date.now());
-              setFloatingAmounts((current) => [...current.filter((item) => Date.now() - item.id < 3600), { id, amount, side }].slice(-12));
+              setFloatingAmounts((current) => [...current.filter((item) => Date.now() - item.id < 3600), { id, amount, side, unit: hasUsdAmount ? 'USD' : 'SOL' }].slice(-12));
             }
           }
         });
@@ -533,7 +553,7 @@ export const TokenDetailPage: React.FC = () => {
                     <span aria-hidden="true" className="text-[11px] font-bold leading-none">
                       {item.side === 'buy' ? '▲' : '▼'}
                     </span>
-                    {formatUsd(item.amount)}
+                    {item.unit === 'USD' ? formatUsd(item.amount) : item.amount.toFixed(4) + ' SOL'}
                   </span>
                 </span>
               ))}
