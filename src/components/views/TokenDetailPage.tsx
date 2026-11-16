@@ -78,7 +78,7 @@ export const TokenDetailPage: React.FC = () => {
       setMarketDataError('');
       setMarketDataSnapshot((previous) => previous?.mint === mint ? previous : null);
       const settings = marketDataService.loadSettings();
-      if (!settings.restUrl || !settings.apiKey) {
+      if (!settings.restUrl) {
         setMarketDataError('Market Data API is not configured. Add its REST URL and API key in Settings.');
         setMarketDataLoading(false);
         return;
