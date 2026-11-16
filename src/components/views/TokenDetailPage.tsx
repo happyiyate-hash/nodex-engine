@@ -49,6 +49,14 @@ interface TokenDataSnapshot {
   data_status?: Record<string, string>;
 }
 
+function emptyTokenSnapshot(mint: string, timeframe = '1M'): TokenDataSnapshot {
+  return {
+    mint, identity: { mint_address: mint }, market: {},
+    chart: { timeframe, points: [] }, trades: { recent: [] },
+    holders: { largest: [] }, info: {}, data_status: {},
+  };
+}
+
 export const TokenDetailPage: React.FC = () => {
   const {
     selectedToken,
@@ -79,6 +87,7 @@ export const TokenDetailPage: React.FC = () => {
   const marketDataSocketRef = useRef<WebSocket | null>(null);
   const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(false);
+  const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
   const [marketDataError, setMarketDataError] = useState('');
   const [marketDataStreamConnected, setMarketDataStreamConnected] = useState(false);
   const [marketDataStreamError, setMarketDataStreamError] = useState('');
@@ -102,10 +111,14 @@ export const TokenDetailPage: React.FC = () => {
     let cancelled = false;
     const loadSnapshot = async () => {
       setMarketDataLoading(true);
+      setChartHistoryLoading(true);
       setMarketDataError('');
       setMarketDataSnapshot((previous) => previous?.mint === mint ? previous : null);
       setChartSeriesByTimeframe((previous) => marketDataSnapshot?.mint === mint ? previous : {});
       const settings = marketDataService.loadSettings();
+      // WebSocket-enabled setups receive the snapshot progressively.
+      // Keep the REST request only for legacy REST-only configurations.
+      if (settings.wsUrl) return;
       if (!settings.restUrl) {
         setMarketDataError('Market Data API is not configured. Add its REST URL and API key in Settings.');
         setMarketDataLoading(false);
@@ -122,11 +135,13 @@ export const TokenDetailPage: React.FC = () => {
           const snapshot = payload as TokenDataSnapshot;
           setMarketDataSnapshot(snapshot);
           if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
+          setMarketDataLoading(false);
+          setChartHistoryLoading(false);
         }
       } catch (error) {
         if (!cancelled) setMarketDataError(error instanceof Error ? error.message : 'Could not load token market data.');
       } finally {
-        if (!cancelled) setMarketDataLoading(false);
+        if (!cancelled && !settings.wsUrl) { setMarketDataLoading(false); setChartHistoryLoading(false); }
       }
     };
     void loadSnapshot();
@@ -180,7 +195,6 @@ export const TokenDetailPage: React.FC = () => {
         retryDelay = 1000;
         setMarketDataStreamConnected(true);
         setMarketDataStreamError('');
-        if (hasConnectedOnce) void refreshSnapshot();
         hasConnectedOnce = true;
         socket.send(JSON.stringify({
           command: 'subscribe',
@@ -192,7 +206,65 @@ export const TokenDetailPage: React.FC = () => {
           try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
           if (message.event === 'resync_required') {
             setMarketDataStreamError('Restoring the latest market snapshot after a stream gap…');
-            void refreshSnapshot();
+            socket?.send(JSON.stringify({ command: 'request_snapshot', timeframe: '1M' }));
+            return;
+          }
+          if (message.event === 'snapshot_started') {
+            setMarketDataLoading(true);
+            setChartHistoryLoading(true);
+            setMarketDataStreamError('');
+            setMarketDataSnapshot(emptyTokenSnapshot(mint, String(message.timeframe || '1M')));
+            setChartSeriesByTimeframe({});
+            return;
+          }
+          if (message.event === 'snapshot_section') {
+            const sectionTopic = String(message.topic || '');
+            const section = message.data && typeof message.data === 'object' ? message.data : {};
+            setMarketDataSnapshot((previous) => {
+              const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+              if (sectionTopic === 'token.market') return { ...base, market: { ...base.market, ...section } };
+              if (sectionTopic === 'token.identity') return { ...base, identity: { ...base.identity, ...section } };
+              if (sectionTopic === 'token.info') return { ...base, info: { ...base.info, ...section } };
+              if (sectionTopic === 'token.holders') return { ...base, holders: { ...base.holders, ...section } };
+              if (sectionTopic === 'token.trades') return { ...base, trades: { ...base.trades, ...section } };
+              return base;
+            });
+            return;
+          }
+          if (message.event === 'chart_history_started') {
+            setChartHistoryLoading(true);
+            const chartTimeframe = String(message.data?.timeframe || '1M');
+            setChartSeriesByTimeframe((previous) => ({ ...previous, [chartTimeframe]: [] }));
+            return;
+          }
+          if (message.event === 'chart_history_chunk') {
+            const chartTimeframe = String(message.data?.timeframe || '1M');
+            const incoming = Array.isArray(message.data?.points) ? message.data.points : [];
+            const points = incoming.map((point: any) => ({
+              timestamp_ms: Number(point.timestamp_ms), open: Number(point.open),
+              high: Number(point.high), low: Number(point.low), close: Number(point.close),
+              volume: Number(point.volume || 0),
+            })).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
+            setChartSeriesByTimeframe((previous) => {
+              const merged = new Map((previous[chartTimeframe] || []).map((point) => [point.timestamp_ms, point]));
+              for (const point of points) merged.set(point.timestamp_ms, point);
+              return { ...previous, [chartTimeframe]: [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
+            });
+            return;
+          }
+          if (message.event === 'chart_history_completed') {
+            setChartHistoryLoading(false);
+            return;
+          }
+          if (message.event === 'snapshot_completed') {
+            setMarketDataLoading(false);
+            setMarketDataStreamError('');
+            return;
+          }
+          if (message.event === 'snapshot_error') {
+            setMarketDataLoading(false);
+            setChartHistoryLoading(false);
+            setMarketDataStreamError(String(message.message || 'Token snapshot could not be loaded.'));
             return;
           }
           if (message.event === 'error') {
@@ -203,7 +275,7 @@ export const TokenDetailPage: React.FC = () => {
           const topic = String(message.topic || '');
           if (topic === 'token.market') {
             const patch = data.market && typeof data.market === 'object' ? data.market : data;
-            setMarketDataSnapshot((previous) => previous ? { ...previous, market: { ...previous.market, ...patch } } : previous);
+            setMarketDataSnapshot((previous) => { const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint); return { ...base, market: { ...base.market, ...patch } }; });
           } else if (topic === 'token.chart') {
             const eventTimeframe = String(data.timeframe || '');
             if (eventTimeframe && Array.isArray(data.points)) {
@@ -222,19 +294,22 @@ export const TokenDetailPage: React.FC = () => {
             }
           } else if (topic === 'token.trades') {
             const trade = data.trade || data;
-            if (trade.signature) setMarketDataSnapshot((previous) => previous ? {
-              ...previous,
-              trades: { recent: [trade, ...previous.trades.recent.filter((item) => !(item.signature === trade.signature && Number(item.event_index || 0) === Number(trade.event_index || 0)))].slice(0, 200) },
-            } : previous);
+            if (trade.signature) setMarketDataSnapshot((previous) => {
+              const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+              return { ...base, trades: { recent: [trade, ...base.trades.recent.filter((item) => !(item.signature === trade.signature && Number(item.event_index || 0) === Number(trade.event_index || 0)))].slice(0, 200) } };
+            });
           } else if (topic === 'token.holders') {
             const holders = data.holders && typeof data.holders === 'object' ? data.holders : data;
-            setMarketDataSnapshot((previous) => previous ? { ...previous, holders: { ...previous.holders, ...holders } } : previous);
+            setMarketDataSnapshot((previous) => { const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint); return { ...base, holders: { ...base.holders, ...holders } }; });
           } else if (topic === 'token.info' || topic === 'token.creator') {
-            setMarketDataSnapshot((previous) => previous ? {
-              ...previous,
-              identity: { ...previous.identity, ...(data.identity || {}), ...(topic === 'token.creator' ? { creator_address: data.creator_address || data.address } : {}) },
-              info: { ...previous.info, ...(data.info || {}) },
-            } : previous);
+            setMarketDataSnapshot((previous) => {
+              const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+              return {
+                ...base,
+                identity: { ...base.identity, ...(data.identity || {}), ...(topic === 'token.creator' ? { creator_address: data.creator_address || data.address } : {}) },
+                info: { ...base.info, ...(data.info || {}) },
+              };
+            });
           } else if (topic === 'token.activity') {
             const side = String(data.side || data.type || '').toLowerCase();
             const hasUsdAmount = data.volume_usd != null && Number(data.volume_usd) > 0;
@@ -553,7 +628,7 @@ export const TokenDetailPage: React.FC = () => {
               {marketDataStreamError}
             </div>
           )}
-          {marketDataLoading ? (
+          {chartHistoryLoading ? (
             <div aria-label="Loading chart data" className="h-[328px] w-full animate-pulse bg-white/[0.025]">
               <div className="flex h-full flex-col justify-between p-5">
                 <div className="h-3 w-24 rounded bg-white/[0.07]" />
