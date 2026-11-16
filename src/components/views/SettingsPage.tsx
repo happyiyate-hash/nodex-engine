@@ -864,7 +864,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                 </div>
               </section>
             </div>
-          )}}
+          )}
         </div>
       )}
 
