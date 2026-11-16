@@ -35,7 +35,7 @@ export function normalizeMarketDataSettings(value: MarketDataConnectionSettings)
 export const marketDataService = {
   normalizeMarketDataSettings,
   loadSettings(): MarketDataConnectionSettings {
-    if (typeof window === 'undefined') return { restUrl: '', wsUrl: '', apiKey: '' };
+    if (typeof window === 'undefined') return { restUrl: '', wsUrl: '' };
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return { restUrl: '', wsUrl: '', apiKey: '' };
