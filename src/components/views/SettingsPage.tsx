@@ -721,15 +721,15 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
             <div className="space-y-3">
               <div className="rounded-lg bg-[#101010] p-3">
                 <p className="text-[12px] font-semibold text-white/90">Test WebSocket</p>
-                <p className="mt-1 text-[10px] text-white/40">Request a fresh one-time ticket and verify the authenticated WSS handshake.</p>
-                <button type="button" onClick={() => void testMarketDataWebSocket()} disabled={checkingMarketData || !marketDataSettings.apiKey || !marketDataSettings.restUrl} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/[0.16] bg-white/[0.04] px-4 py-2.5 text-[11px] font-semibold text-white active:bg-white/[0.10] disabled:opacity-40">
+                <p className="mt-1 text-[10px] text-white/40">Open a direct public WebSocket connection to the market-data service.</p>
+                <button type="button" onClick={() => void testMarketDataWebSocket()} disabled={checkingMarketData || !marketDataSettings.restUrl} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/[0.16] bg-white/[0.04] px-4 py-2.5 text-[11px] font-semibold text-white active:bg-white/[0.10] disabled:opacity-40">
                   <Wifi className={`h-4 w-4 ${checkingMarketData ? 'animate-pulse' : ''}`} />
                   {checkingMarketData ? 'Checking connection…' : 'Test WebSocket'}
                 </button>
               </div>
               <div className="rounded-lg bg-[#101010] p-3">
                 <p className="text-[12px] font-semibold text-white/90">Test REST API</p>
-                <p className="mt-1 text-[10px] text-white/40">Verify service health and authenticated provider-status access.</p>
+                <p className="mt-1 text-[10px] text-white/40">Verify service health and provider-status access.</p>
                 <button type="button" onClick={() => void testMarketDataRest()} disabled={checkingMarketData || !marketDataSettings.apiKey || !marketDataSettings.restUrl} className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/[0.16] bg-white/[0.04] px-4 py-2.5 text-[11px] font-semibold text-white active:bg-white/[0.10] disabled:opacity-40">
                   <RefreshCw className={`h-4 w-4 ${checkingMarketData ? 'animate-spin' : ''}`} />
                   {checkingMarketData ? 'Checking connection…' : 'Test REST API'}
@@ -751,7 +751,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           <button type="button" onClick={() => {
             setMarketDataRestUrlDraft(marketDataSettings.restUrl);
             setMarketDataWsUrlDraft(marketDataSettings.wsUrl);
-            setMarketDataApiKeyDraft(marketDataSettings.apiKey);
             setMarketDataMessage('');
             setMarketDataSheetOpen(true);
           }} className="flex w-full items-center justify-between rounded-lg bg-[#101010] px-3 py-3.5 text-left transition-colors active:bg-white/[0.05]">
