@@ -68,7 +68,7 @@ export const TokenDetailPage: React.FC = () => {
   }, [activeToken?.mint]);
 
   // Load the selected mint from the independent Token Data service. The mint
-  // is part of the snapshot URL and the saved Market Data key is sent as x-api-key.
+  // is part of the snapshot URL; the public read-only endpoint needs no client key.
   useEffect(() => {
     const mint = activeToken?.mint;
     if (!mint) return;
@@ -86,7 +86,7 @@ export const TokenDetailPage: React.FC = () => {
       try {
         const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
         const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=' + encodeURIComponent(timeframe), baseUrl);
-        const response = await fetch(url.toString(), { headers: { 'x-api-key': settings.apiKey } });
+        const response = await fetch(url.toString());
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(typeof payload === 'string' ? payload : (payload.error || payload.message || 'Token snapshot request failed (HTTP ' + response.status + ').'));
         if (!cancelled) setMarketDataSnapshot(payload as TokenDataSnapshot);
@@ -100,8 +100,7 @@ export const TokenDetailPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [activeToken?.mint, timeframe]);
 
-  // One authenticated WebSocket session per selected token. The API key is
-  // exchanged for a short-lived ticket; the mint and topics are sent in subscribe.
+  // One public WebSocket session per selected token. The mint and topics are sent in subscribe.
   useEffect(() => {
     const mint = activeToken?.mint;
     if (!mint) return;
@@ -109,7 +108,7 @@ export const TokenDetailPage: React.FC = () => {
     let socket: WebSocket | null = null;
     const connect = async () => {
       const settings = marketDataService.loadSettings();
-      if (!settings.restUrl || !settings.apiKey || !settings.wsUrl) {
+      if (!settings.restUrl || !settings.wsUrl) {
         setMarketDataStreamConnected(false);
         setMarketDataStreamError('Market Data WebSocket is not configured.');
         return;
@@ -191,7 +190,7 @@ export const TokenDetailPage: React.FC = () => {
             const amount = Number(hasUsdAmount ? data.volume_usd : (data.amount_sol ?? data.amount ?? data.volume_sol ?? 0));
             if ((side === 'buy' || side === 'sell') && amount > 0) {
               const id = Number(message.sequence || message.timestamp_ms || Date.now());
-              setFloatingAmounts((current) => [...current.filter((item) => Date.now() - item.id < 3600), { id, amount, side, unit: hasUsdAmount ? 'USD' : 'SOL' }].slice(-12));
+              setFloatingAmounts((current) => [...current.filter((item) => Date.now() - item.id < 3600), { id, amount, side: side as 'buy' | 'sell', unit: hasUsdAmount ? 'USD' as const : 'SOL' as const }].slice(-12));
             }
           }
         });
@@ -504,8 +503,7 @@ export const TokenDetailPage: React.FC = () => {
               timeframe={timeframe}
               chartType={chartType}
               height={328}
-              onPriceHover={(_p, t) => {
-                setScrubPrice(p);
+              onPriceHover={(_price, t) => {
                 setScrubTime(t);
               }}
             />
