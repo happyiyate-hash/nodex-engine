@@ -240,7 +240,7 @@ export const TokenDetailPage: React.FC = () => {
             const amount = Number(hasUsdAmount ? data.volume_usd : (data.amount_sol ?? data.amount ?? data.volume_sol ?? 0));
             if ((side === 'buy' || side === 'sell') && amount > 0) {
               const id = String(data.signature ? data.signature + ':' + Number(data.event_index || 0) : message.sequence || (String(message.timestamp_ms || Date.now()) + ':' + Math.random().toString(36).slice(2)));
-              setFloatingAmounts((current) => [...current, { id, amount, side: side as 'buy' | 'sell', unit: hasUsdAmount ? 'USD' as const : 'SOL' as const }]));
+              setFloatingAmounts((current) => [...current, { id, amount, side: side as 'buy' | 'sell', unit: hasUsdAmount ? 'USD' as const : 'SOL' as const }]);
             }
           }
         });
