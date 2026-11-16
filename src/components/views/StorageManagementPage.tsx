@@ -4,7 +4,6 @@ import {
   RefreshCw, Signal, Terminal, Trash2, X,
 } from 'lucide-react';
 import { apiClient, StorageOverview } from '../../services/rest';
-import { marketDataService } from '../../services/marketData';
 import { useTerminal } from '../../context/TerminalContext';
 import { useToast } from '../ui/ToastProvider';
 
@@ -177,8 +176,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             adminApiKey: '',
             tokenCareApiKey: '',
           });
-          const emptyMarketData = { restUrl: '', wsUrl: '', apiKey: '' };
-          marketDataService.saveSettings(emptyMarketData);
+          await clearBrowserHistory();
           window.localStorage.clear();
           window.sessionStorage.clear();
 
