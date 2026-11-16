@@ -156,7 +156,6 @@ export const TokenDetailPage: React.FC = () => {
     let socket: WebSocket | null = null;
     let retryTimer: number | undefined;
     let retryDelay = 1000;
-    let hasConnectedOnce = false;
     let connect: () => Promise<void>;
     const refreshSnapshot = async () => {
       const settings = marketDataService.loadSettings();
@@ -171,8 +170,14 @@ export const TokenDetailPage: React.FC = () => {
         const snapshot = payload as TokenDataSnapshot;
         setMarketDataSnapshot(snapshot);
         if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
+        setMarketDataLoading(false);
+        setChartHistoryLoading(false);
       } catch (error) {
-        if (!cancelled) setMarketDataStreamError(error instanceof Error ? error.message : 'Could not restore the latest token snapshot.');
+        if (!cancelled) {
+          setMarketDataLoading(false);
+          setChartHistoryLoading(false);
+          setMarketDataStreamError(error instanceof Error ? error.message : 'Could not restore the latest token snapshot.');
+        }
       }
     };
     const scheduleReconnect = () => {
@@ -195,7 +200,6 @@ export const TokenDetailPage: React.FC = () => {
         retryDelay = 1000;
         setMarketDataStreamConnected(true);
         setMarketDataStreamError('');
-        hasConnectedOnce = true;
         socket.send(JSON.stringify({
           command: 'subscribe',
           mint,
@@ -351,6 +355,8 @@ export const TokenDetailPage: React.FC = () => {
         if (!cancelled) {
           setMarketDataStreamConnected(false);
           setMarketDataStreamError((error instanceof Error ? error.message : 'Could not connect to Market Data stream.') + ' Reconnecting…');
+          // Keep the detail page useful if the WebSocket is temporarily unavailable.
+          void refreshSnapshot();
           scheduleReconnect();
         }
       }
