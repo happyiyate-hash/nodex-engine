@@ -227,7 +227,7 @@ export const TokenDetailPage: React.FC = () => {
         socket.send(JSON.stringify({
           command: 'subscribe',
           mint,
-          topics: ['token.market', 'token.chart', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
+          topics: ['token.market', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
           timeframe,
         }));
         socket.addEventListener('message', (messageEvent) => {
