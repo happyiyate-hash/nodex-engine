@@ -204,6 +204,8 @@ export const TokenDetailPage: React.FC = () => {
         if (snapshot && typeof snapshot === 'object') {
           setMarketDataSnapshot({ ...(snapshot as TokenDataSnapshot), mint });
         }
+        // Do not request history until the engine confirms this mint is subscribed.
+        wsService.setChartTimeframe(mint, requestedTimeframe || '5m');
         setMarketDataLoading(false);
         return;
       }
@@ -234,10 +236,14 @@ export const TokenDetailPage: React.FC = () => {
 
       if (event.event_type === 'command_rejected') {
         const command = String(data.command || '');
-        if (command === 'subscribe_token' || command === 'set_chart_timeframe') {
-          setMarketDataStreamError(String(data.reason || 'NodeX engine rejected the token chart subscription.'));
+        if (command === 'subscribe_token') {
+          setMarketDataStreamError(String(data.reason || 'NodeX engine rejected the token subscription.'));
           setChartHistoryLoading(false);
           setMarketDataLoading(false);
+        } else if (command === 'set_chart_timeframe') {
+          // History failure must not mark the live market stream as disconnected.
+          setChartHistoryLoading(false);
+          setMarketDataError(String(data.reason || 'The engine could not load chart history for this timeframe.'));
         }
       }
     });
