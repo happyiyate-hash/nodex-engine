@@ -75,10 +75,6 @@ export const TokenDetailPage: React.FC = () => {
   const nextFloatingAnimationAtRef = useRef(0);
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
   const tradeCandleEngineRef = useRef(new CandleEngine());
-  // Backend OHLC updates take precedence over an in-flight historical snapshot
-  // for the same timeframe/bucket, preventing late chunks from rolling the
-  // visible candle backwards.
-  const liveChartOverridesRef = useRef<Record<string, Map<number, TokenChartPoint>>>({});
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -110,14 +106,6 @@ export const TokenDetailPage: React.FC = () => {
     setScrubTime(null);
   }, [activeToken?.mint]);
 
-  useEffect(() => {
-    const socket = marketDataSocketRef.current;
-    if (socket?.readyState === WebSocket.OPEN) {
-      setChartHistoryLoading(true);
-      socket.send(JSON.stringify({ command: 'set_chart_timeframe', timeframe }));
-    }
-  }, [timeframe]);
-
   // Load the selected mint from the independent Token Data service. The mint
   // is part of the snapshot URL; the public read-only endpoint needs no client key.
   useEffect(() => {
@@ -131,9 +119,8 @@ export const TokenDetailPage: React.FC = () => {
       setMarketDataSnapshot((previous) => previous?.mint === mint ? previous : null);
       setChartSeriesByTimeframe((previous) => marketDataSnapshot?.mint === mint ? previous : {});
       const settings = marketDataService.loadSettings();
-      // WebSocket-enabled setups receive the snapshot progressively.
-      // Keep the REST request only for legacy REST-only configurations.
-      if (settings.wsUrl) return;
+      // REST owns the historical chart baseline in both REST-only and
+      // WebSocket-enabled configurations. The socket is reserved for live data.
       if (!settings.restUrl) {
         setMarketDataError('Market Data API is not configured. Add its REST URL and API key in Settings.');
         setMarketDataLoading(false);
@@ -141,17 +128,37 @@ export const TokenDetailPage: React.FC = () => {
       }
       try {
         const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
-        // Fetch a single historical baseline. Timeframe changes are aggregated locally.
-        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=1M', baseUrl);
+        // Fetch the historical baseline for the currently selected timeframe.
+        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=' + encodeURIComponent(timeframe), baseUrl);
         const response = await fetch(url.toString());
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(typeof payload === 'string' ? payload : (payload.error || payload.message || 'Token snapshot request failed (HTTP ' + response.status + ').'));
         if (!cancelled) {
           const snapshot = payload as TokenDataSnapshot;
-          tradeCandleEngineRef.current.reset();
+          // Merge snapshot trades into the existing engine: live trades may have
+          // arrived while this HTTP request was in flight.
           tradeCandleEngineRef.current.addTrades(snapshot.trades?.recent || []);
-          setMarketDataSnapshot(snapshot);
-          if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
+          setMarketDataSnapshot((previous) => {
+            const current = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+            const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
+            for (const trade of [...(snapshot.trades?.recent || []), ...(current.trades?.recent || [])]) {
+              recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
+            }
+            return {
+              ...snapshot,
+              trades: {
+                recent: [...recentById.values()]
+                  .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
+                  .slice(0, 200),
+              },
+            };
+          });
+          if (Array.isArray(snapshot.chart?.points)) {
+            setChartSeriesByTimeframe((previous) => ({
+              ...previous,
+              [snapshot.chart.timeframe || timeframe]: snapshot.chart.points,
+            }));
+          }
           setMarketDataLoading(false);
           setChartHistoryLoading(false);
         }
@@ -163,7 +170,7 @@ export const TokenDetailPage: React.FC = () => {
     };
     void loadSnapshot();
     return () => { cancelled = true; };
-  }, [activeToken?.mint]);
+  }, [activeToken?.mint, timeframe]);
 
   // One public WebSocket session per selected token. The mint and topics are sent in subscribe.
   useEffect(() => {
@@ -179,16 +186,34 @@ export const TokenDetailPage: React.FC = () => {
       if (!settings.restUrl) return;
       try {
         const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
-        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=1M', baseUrl);
+        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=' + encodeURIComponent(timeframe), baseUrl);
         const response = await fetch(url.toString());
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || payload.message || 'Token snapshot refresh failed.');
         if (cancelled) return;
         const snapshot = payload as TokenDataSnapshot;
-        tradeCandleEngineRef.current.reset();
         tradeCandleEngineRef.current.addTrades(snapshot.trades?.recent || []);
-        setMarketDataSnapshot(snapshot);
-        if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
+        setMarketDataSnapshot((previous) => {
+          const current = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+          const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
+          for (const trade of [...(snapshot.trades?.recent || []), ...(current.trades?.recent || [])]) {
+            recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
+          }
+          return {
+            ...snapshot,
+            trades: {
+              recent: [...recentById.values()]
+                .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
+                .slice(0, 200),
+            },
+          };
+        });
+        if (Array.isArray(snapshot.chart?.points)) {
+          setChartSeriesByTimeframe((previous) => ({
+            ...previous,
+            [snapshot.chart.timeframe || timeframe]: snapshot.chart.points,
+          }));
+        }
         setMarketDataLoading(false);
         setChartHistoryLoading(false);
       } catch (error) {
@@ -238,10 +263,11 @@ export const TokenDetailPage: React.FC = () => {
             setMarketDataLoading(true);
             setChartHistoryLoading(true);
             setMarketDataStreamError('');
-            setMarketDataSnapshot(emptyTokenSnapshot(mint, String(message.timeframe || '1M')));
-            tradeCandleEngineRef.current.reset();
-            liveChartOverridesRef.current = {};
-            setChartSeriesByTimeframe({});
+            // A socket snapshot refreshes live metadata, not historical chart
+            // ownership. Keep the REST baseline and accumulated confirmed trades.
+            setMarketDataSnapshot((previous) => previous?.mint === mint
+              ? previous
+              : emptyTokenSnapshot(mint, String(message.timeframe || timeframe)));
             return;
           }
           if (message.event === 'snapshot_section') {
@@ -261,38 +287,13 @@ export const TokenDetailPage: React.FC = () => {
             });
             return;
           }
-          if (message.event === 'chart_history_started') {
-            setChartHistoryLoading(true);
-            const chartTimeframe = String(message.data?.timeframe || '1M');
-            setChartSeriesByTimeframe((previous) => ({ ...previous, [chartTimeframe]: [] }));
-            return;
-          }
-          if (message.event === 'chart_history_chunk') {
-            const chartTimeframe = String(message.data?.timeframe || '1M');
-            const incoming = Array.isArray(message.data?.points) ? message.data.points : [];
-            const interval = chartIntervalMs[chartTimeframe] || 60_000;
-            const liveOverrides = liveChartOverridesRef.current[chartTimeframe] || new Map<number, TokenChartPoint>();
-            const points = incoming.map((point: any) => {
-              const rawTimestamp = Number(point.timestamp_ms);
-              const bucketTimestamp = Math.floor(rawTimestamp / interval) * interval;
-              return {
-                timestamp_ms: bucketTimestamp, open: Number(point.open),
-                high: Number(point.high), low: Number(point.low), close: Number(point.close),
-                volume: Number(point.volume || 0),
-              };
-            }).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
-            setChartSeriesByTimeframe((previous) => {
-              const merged = new Map((previous[chartTimeframe] || []).map((point) => [point.timestamp_ms, point]));
-              for (const point of points) {
-                merged.set(point.timestamp_ms, liveOverrides.get(point.timestamp_ms) || point);
-              }
-              return { ...previous, [chartTimeframe]: [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
-            });
-            return;
-          }
-          if (message.event === 'chart_history_completed') {
-            const chartTimeframe = String(message.data?.timeframe || '1M');
-            if (chartTimeframe === timeframe) setChartHistoryLoading(false);
+          if (
+            message.event === 'chart_history_started' ||
+            message.event === 'chart_history_chunk' ||
+            message.event === 'chart_history_completed'
+          ) {
+            // Historical candles come from REST. Ignore socket chart-history
+            // payloads so they cannot clear or replace the REST baseline.
             return;
           }
           if (message.event === 'snapshot_completed') {
@@ -316,45 +317,9 @@ export const TokenDetailPage: React.FC = () => {
             const patch = data.market && typeof data.market === 'object' ? data.market : data;
             setMarketDataSnapshot((previous) => { const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint); return { ...base, market: { ...base.market, ...patch } }; });
           } else if (topic === 'token.chart') {
-            const eventTimeframe = String(data.timeframe || '');
-            if (eventTimeframe && Array.isArray(data.points)) {
-              const interval = chartIntervalMs[eventTimeframe] || 60_000;
-              const points = data.points.map((point: any) => {
-                const timestamp = Number(point.timestamp_ms);
-                return { timestamp_ms: Math.floor(timestamp / interval) * interval, open: Number(point.open), high: Number(point.high), low: Number(point.low), close: Number(point.close), volume: Number(point.volume || 0) };
-              }).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
-              const liveOverrides = liveChartOverridesRef.current[eventTimeframe] || new Map<number, TokenChartPoint>();
-              setChartSeriesByTimeframe((previous) => {
-                const merged = new Map<number, TokenChartPoint>();
-                for (const point of points) merged.set(point.timestamp_ms, liveOverrides.get(point.timestamp_ms) || point);
-                return { ...previous, [eventTimeframe]: [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
-              });
-              if (eventTimeframe === timeframe) setChartHistoryLoading(false);
-            } else if (eventTimeframe) {
-              const point = data.point || data.candle || data;
-              const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0), close = Number(point.close ?? point.price ?? 0);
-              const interval = chartIntervalMs[eventTimeframe] || 60_000;
-              const bucketTimestamp = Math.floor(timestamp / interval) * interval;
-              if (bucketTimestamp > 0 && close > 0) {
-                const normalized: TokenChartPoint = {
-                  timestamp_ms: bucketTimestamp,
-                  open: Number(point.open ?? close),
-                  high: Number(point.high ?? close),
-                  low: Number(point.low ?? close),
-                  close,
-                  volume: Number(point.volume || 0),
-                };
-                const overrides = liveChartOverridesRef.current[eventTimeframe] || new Map<number, TokenChartPoint>();
-                overrides.set(bucketTimestamp, normalized);
-                liveChartOverridesRef.current[eventTimeframe] = overrides;
-                setChartSeriesByTimeframe((previous) => {
-                  const current = previous[eventTimeframe] || [];
-                  const merged = new Map(current.map((item) => [item.timestamp_ms, item]));
-                  merged.set(bucketTimestamp, normalized);
-                  return { ...previous, [eventTimeframe]: [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
-                });
-              }
-            }
+            // The REST response is the sole historical candle baseline.
+            // Live chart updates are driven only by confirmed token.trades events.
+            return;
           } else if (topic === 'token.trades') {
             const trade = data.trade || data;
             tradeCandleEngineRef.current.addTrade(trade as ConfirmedTrade);
@@ -437,17 +402,14 @@ export const TokenDetailPage: React.FC = () => {
   const baseChartPoints = chartSeriesByTimeframe['1M'] || (marketDataSnapshot?.chart?.timeframe === '1M' ? marketDataSnapshot?.chart?.points || [] : []);
   const isSubMinuteTimeframe = timeframe === '1S' || timeframe === '5S' || timeframe === '10S';
   // Prefer the backend's timeframe-specific OHLC series whenever present.
-  // Raw recent trades are only a fallback for sub-minute charts with no stored
-  // history; combining both would count the same swaps twice.
-  const historicalChartPoints = isSubMinuteTimeframe
-    ? aggregateChartPoints(cachedChartPoints, timeframe)
-    : timeframe === '1M'
-      ? (cachedChartPoints.length > 0 ? cachedChartPoints : baseChartPoints)
-      : (cachedChartPoints.length > 0
-        ? aggregateChartPoints(cachedChartPoints, timeframe)
-        : aggregateChartPoints(baseChartPoints, timeframe));
-  // Confirmed trades received by this client own the buckets they touched.
-  // Backend OHLC remains the historical baseline and reconnect recovery source.
+  // REST provides the historical baseline for the selected timeframe.
+  // Confirmed WebSocket trades update only the local candles layered over it.
+  const historicalChartPoints = cachedChartPoints.length > 0
+    ? cachedChartPoints
+    : (marketDataSnapshot?.chart?.timeframe === timeframe
+      ? marketDataSnapshot.chart.points || []
+      : []);
+
   const locallyAggregatedPoints = (() => {
     const merged = new Map<number, TokenChartPoint>(
       historicalChartPoints.map((point) => [point.timestamp_ms, point])
