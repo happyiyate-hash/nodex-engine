@@ -103,6 +103,14 @@ export const TokenDetailPage: React.FC = () => {
     setScrubTime(null);
   }, [activeToken?.mint]);
 
+  useEffect(() => {
+    const socket = marketDataSocketRef.current;
+    if (socket?.readyState === WebSocket.OPEN) {
+      setChartHistoryLoading(true);
+      socket.send(JSON.stringify({ command: 'set_chart_timeframe', timeframe }));
+    }
+  }, [timeframe]);
+
   // Load the selected mint from the independent Token Data service. The mint
   // is part of the snapshot URL; the public read-only endpoint needs no client key.
   useEffect(() => {
@@ -204,13 +212,14 @@ export const TokenDetailPage: React.FC = () => {
           command: 'subscribe',
           mint,
           topics: ['token.market', 'token.chart', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
+          timeframe,
         }));
         socket.addEventListener('message', (messageEvent) => {
           let message: any;
           try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
           if (message.event === 'resync_required') {
             setMarketDataStreamError('Restoring the latest market snapshot after a stream gap…');
-            socket?.send(JSON.stringify({ command: 'request_snapshot', timeframe: '1M' }));
+            socket?.send(JSON.stringify({ command: 'request_snapshot', timeframe }));
             return;
           }
           if (message.event === 'snapshot_started') {
@@ -285,6 +294,7 @@ export const TokenDetailPage: React.FC = () => {
             if (eventTimeframe && Array.isArray(data.points)) {
               const points = data.points.map((point: any) => ({ timestamp_ms: Number(point.timestamp_ms), open: Number(point.open), high: Number(point.high), low: Number(point.low), close: Number(point.close), volume: Number(point.volume || 0) })).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
               setChartSeriesByTimeframe((previous) => ({ ...previous, [eventTimeframe]: points.slice(-5000) }));
+              if (eventTimeframe === timeframe) setChartHistoryLoading(false);
             } else if (eventTimeframe) {
               const point = data.point || data.candle || data;
               const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0), close = Number(point.close ?? point.price ?? 0);
