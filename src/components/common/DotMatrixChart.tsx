@@ -112,7 +112,7 @@ const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
   '15M': 15 * 60_000,
   '30M': 30 * 60_000,
   '1H': 60 * 60_000,
-  '24H': 60 * 60_000,
+  '24H': 24 * 60 * 60_000,
 };
 
 // Exact step interval per bar in Line mode: backward scroll advances continuously
@@ -1873,33 +1873,19 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       return;
     }
 
-    // In Candle mode, keep candlesticks smoothed during the active candle and
-    // scroll backward ONLY when a brand-new candle bucket is created.
+    // In Candle mode the backend supplies authoritative OHLC buckets.
+    // Update the existing active bucket in place; append only strictly newer
+    // buckets. Never synthesize a new candle's open from a stale UI price.
     if (chartType === 'candle' && seedBars.length > 0) {
-      const latest = seedBars[seedBars.length - 1];
       const committed = committedBarsRef.current;
-      const currentDisplay =
-        smoothedPriceRef.current > 0
-          ? smoothedPriceRef.current
-          : latest.close;
+      const latest = seedBars[seedBars.length - 1];
+      const lastCommitted = committed[committed.length - 1];
 
-      if (committed.length === 0 || latest.time > committed[committed.length - 1].time) {
-        const prevCandle = committed[committed.length - 1];
-        const openPrice = prevCandle ? prevCandle.close : latest.open;
-        const nextCandle: NormalizedBar = {
-          time: latest.time,
-          timestampMs: latest.timestampMs,
-          open: openPrice,
-          high: Math.max(openPrice, currentDisplay),
-          low: Math.min(openPrice, currentDisplay),
-          close: currentDisplay,
-        };
-        committed.push(nextCandle);
-        if (committed.length > 2000) {
-          committed.splice(0, committed.length - 2000);
-        }
-        isApplyingAutoScrollRef.current = true;
-        try {
+      if (!lastCommitted || latest.time > lastCommitted.time) {
+        const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
+        for (const bar of nextBars) {
+          const nextCandle = { ...bar };
+          committed.push(nextCandle);
           candleSeries.update({
             time: nextCandle.time,
             open: nextCandle.open,
@@ -1907,8 +1893,54 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             low: nextCandle.low,
             close: nextCandle.close,
           });
-          if (!isUserPannedRef.current) {
+        }
+        if (committed.length > 2000) {
+          committed.splice(0, committed.length - 2000);
+        }
+        if (!isUserPannedRef.current) {
+          isApplyingAutoScrollRef.current = true;
+          try {
             lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else if (latest.time === lastCommitted.time) {
+        const changed =
+          latest.open !== lastCommitted.open ||
+          latest.high !== lastCommitted.high ||
+          latest.low !== lastCommitted.low ||
+          latest.close !== lastCommitted.close;
+        if (changed) {
+          const updated = { ...latest };
+          committed[committed.length - 1] = updated;
+          isApplyingAutoScrollRef.current = true;
+          try {
+            candleSeries.update({
+              time: updated.time,
+              open: updated.open,
+              high: updated.high,
+              low: updated.low,
+              close: updated.close,
+            });
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else {
+        // A corrected/rewound history window cannot be appended incrementally.
+        // Re-seed both series in chronological order and return the viewport
+        // to the latest candle rather than drawing backward.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
             chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
           }
         } finally {
