@@ -70,6 +70,7 @@ export const TokenDetailPage: React.FC = () => {
   const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
   const [marketDataError, setMarketDataError] = useState('');
   const [marketDataStreamConnected, setMarketDataStreamConnected] = useState(false);
+  const [latestConfirmedTradePrice, setLatestConfirmedTradePrice] = useState<number | null>(null);
   const [marketDataStreamError, setMarketDataStreamError] = useState('');
   const [connectionNotice, setConnectionNotice] = useState('');
 
@@ -82,6 +83,7 @@ export const TokenDetailPage: React.FC = () => {
   useEffect(() => {
     tradeCandleEngineRef.current.reset();
     lastTradeCursorRef.current = 0;
+    setLatestConfirmedTradePrice(null);
     setConnectionNotice('');
     setTimeframe('1S');
     setScrubTime(null);
@@ -180,6 +182,7 @@ export const TokenDetailPage: React.FC = () => {
           timestamp_ms: Number(data.timestamp_ms || 0),
         };
         if (!trade.signature || !tradeCandleEngineRef.current.addTrade(trade)) return;
+        setLatestConfirmedTradePrice(priceUsd);
         setMarketDataSnapshot((previous) => {
           const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
           const recent = [...(base.trades?.recent || []), {
@@ -284,7 +287,8 @@ export const TokenDetailPage: React.FC = () => {
   const tokenSymbol = marketDataSnapshot?.identity?.symbol || activeToken.symbol || 'Token';
   const tokenLogoUrl = marketDataSnapshot?.identity?.logo_url || activeToken.logo_url;
   const creatorAddress = marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address || activeToken.creator_wallet || '';
-  const liveTokenPrice = Number(marketDataSnapshot?.market?.price_usd ?? lastChartPoint?.close ?? 0);
+  // Chart price is the last confirmed swap, never an account/market-cap quote.
+  const liveTokenPrice = Number(latestConfirmedTradePrice ?? lastChartPoint?.close ?? 0);
   const marketCap = marketDataSnapshot?.market?.market_cap_usd ?? null;
   const marketChangePct = marketDataSnapshot?.market?.change_24h_pct ?? null;
   const isPositive = (marketChangePct ?? 0) >= 0;
