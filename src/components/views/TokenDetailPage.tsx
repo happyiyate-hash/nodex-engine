@@ -170,6 +170,44 @@ export const TokenDetailPage: React.FC = () => {
     let retryTimer: number | undefined;
     let retryDelay = 1000;
     let connect: () => Promise<void>;
+    // Coalesce bursts of trade events into one React/chart-engine update.
+    let pendingLiveTrades: ConfirmedTrade[] = [];
+    let pendingActivityAmounts: FloatingTradeAmount[] = [];
+    let tradeBatchTimer: number | undefined;
+    // A missing backfill route is a permanent capability failure for this token
+    // session; transient failures use bounded exponential backoff.
+    let recoveryDisabled = false;
+    let recoveryFailureCount = 0;
+    let recoveryRetryAfter = 0;
+    const flushTradeBatch = () => {
+      tradeBatchTimer = undefined;
+      if (cancelled) { pendingLiveTrades = []; pendingActivityAmounts = []; return; }
+      const trades = pendingLiveTrades;
+      const activities = pendingActivityAmounts;
+      pendingLiveTrades = [];
+      pendingActivityAmounts = [];
+      if (trades.length > 0) {
+        tradeCandleEngineRef.current.addTrades(trades);
+        const validTrades = trades.filter((trade) => Boolean(trade.signature));
+        if (validTrades.length > 0) setMarketDataSnapshot((previous) => {
+          const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+          const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
+          for (const trade of [...validTrades, ...(base.trades?.recent || [])]) {
+            recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade as TokenDataSnapshot['trades']['recent'][number]);
+          }
+          return { ...base, trades: { recent: [...recentById.values()].sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms)).slice(0, 200) } };
+        });
+      }
+      if (activities.length > 0) setFloatingAmounts((current) => [...current, ...activities].slice(-40));
+    };
+    const queueTrade = (trade: ConfirmedTrade) => {
+      pendingLiveTrades.push(trade);
+      if (tradeBatchTimer === undefined) tradeBatchTimer = window.setTimeout(flushTradeBatch, 100);
+    };
+    const queueActivity = (activity: FloatingTradeAmount) => {
+      pendingActivityAmounts.push(activity);
+      if (tradeBatchTimer === undefined) tradeBatchTimer = window.setTimeout(flushTradeBatch, 100);
+    };
     const refreshSnapshot = async () => {
       const settings = marketDataService.loadSettings();
       if (!settings.restUrl) return;
@@ -216,6 +254,7 @@ export const TokenDetailPage: React.FC = () => {
     let recoveryPromise: Promise<void> | null = null;
     const recoverMissedTrades = (): Promise<void> => {
       if (recoveryPromise) return recoveryPromise;
+      if (recoveryDisabled || Date.now() < recoveryRetryAfter) return Promise.resolve();
       recoveryPromise = (async () => {
         const settings = marketDataService.loadSettings();
         if (!settings.restUrl) return;
@@ -230,7 +269,11 @@ export const TokenDetailPage: React.FC = () => {
             );
             const response = await fetch(url.toString());
             const payload = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(payload.error || payload.message || 'Missed-trade recovery failed (HTTP ' + response.status + ').');
+            if (!response.ok) {
+              const recoveryError = new Error(payload.error || payload.message || 'Missed-trade recovery failed (HTTP ' + response.status + ').');
+              (recoveryError as Error & { status?: number }).status = response.status;
+              throw recoveryError;
+            }
             if (cancelled) return;
             if (payload.cursor_reset === true) {
               // The backend's per-token cache expired. Restart from its retained
@@ -268,12 +311,23 @@ export const TokenDetailPage: React.FC = () => {
             pageCount += 1;
             if (payload.has_more !== true || recovered.length === 0) break;
           }
+          recoveryFailureCount = 0;
+          recoveryRetryAfter = 0;
           lastTradeCursorRef.current = Math.max(lastTradeCursorRef.current, recoveryCursor);
           if (pageCount >= 100) {
             setMarketDataStreamError('Trade recovery reached its page safety limit. Reopen this token to continue recovery.');
           }
         } catch (error) {
           if (!cancelled) {
+            const status = Number((error as Error & { status?: number })?.status || 0);
+            if (status === 404) {
+              // Stop retrying a route that the deployed API does not expose.
+              recoveryDisabled = true;
+            } else {
+              recoveryFailureCount += 1;
+              const backoffMs = Math.min(60000, 1000 * (2 ** Math.min(recoveryFailureCount - 1, 6)));
+              recoveryRetryAfter = Date.now() + backoffMs;
+            }
             setMarketDataStreamError(error instanceof Error ? error.message : 'Could not recover missed confirmed trades.');
           }
         }
@@ -418,11 +472,7 @@ export const TokenDetailPage: React.FC = () => {
             if (Number.isFinite(liveCursor) && liveCursor > 0) {
               lastTradeCursorRef.current = Math.max(lastTradeCursorRef.current, liveCursor);
             }
-            tradeCandleEngineRef.current.addTrade(trade as ConfirmedTrade);
-            if (trade.signature) setMarketDataSnapshot((previous) => {
-              const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-              return { ...base, trades: { recent: [trade, ...base.trades.recent.filter((item) => !(item.signature === trade.signature && Number(item.event_index || 0) === Number(trade.event_index || 0)))].slice(0, 200) } };
-            });
+            queueTrade(trade as ConfirmedTrade);
           } else if (topic === 'token.holders') {
             const holders = data.holders && typeof data.holders === 'object' ? data.holders : data;
             setMarketDataSnapshot((previous) => { const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint); return { ...base, holders: { ...base.holders, ...holders } }; });
@@ -448,13 +498,13 @@ export const TokenDetailPage: React.FC = () => {
               const startAt = Math.max(now, nextFloatingAnimationAtRef.current);
               const delayMs = startAt - now;
               nextFloatingAnimationAtRef.current = startAt + 320;
-              setFloatingAmounts((current) => [...current, {
+              queueActivity({
                 id,
                 amount,
                 side: side as 'buy' | 'sell',
                 unit: hasUsdAmount ? 'USD' as const : 'SOL' as const,
                 delayMs,
-              }]);
+              });
             }
           }
         });
@@ -486,6 +536,9 @@ export const TokenDetailPage: React.FC = () => {
     return () => {
       cancelled = true;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (tradeBatchTimer !== undefined) window.clearTimeout(tradeBatchTimer);
+      pendingLiveTrades = [];
+      pendingActivityAmounts = [];
       if (socket) socket.close();
       if (marketDataSocketRef.current === socket) marketDataSocketRef.current = null;
       setMarketDataStreamConnected(false);
