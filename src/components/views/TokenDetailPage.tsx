@@ -275,6 +275,7 @@ export const TokenDetailPage: React.FC = () => {
       });
       return recoveryPromise;
     };
+    let hasConnectedBefore = false;
     const scheduleReconnect = () => {
       if (cancelled || retryTimer !== undefined) return;
       const delay = retryDelay;
@@ -295,6 +296,13 @@ export const TokenDetailPage: React.FC = () => {
         retryDelay = 1000;
         setMarketDataStreamConnected(true);
         setMarketDataStreamError('');
+        if (hasConnectedBefore) {
+          // Rebuild the live overlay from the refreshed REST baseline, then
+          // replay every confirmed trade after the durable per-mint cursor.
+          tradeCandleEngineRef.current.reset();
+          void refreshSnapshot();
+        }
+        hasConnectedBefore = true;
         socket.send(JSON.stringify({
           command: 'subscribe',
           mint,
