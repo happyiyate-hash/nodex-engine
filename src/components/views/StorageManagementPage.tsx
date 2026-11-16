@@ -57,21 +57,22 @@ const categories: StorageCategory[] = [
   },
   {
     id: 'local-storage',
-    title: 'Local storage',
-    description: 'Browser storage used by this NodeX app',
+    title: 'Browser storage',
+    description: 'Browser storage used by this NodeX app (Local Storage, IndexedDB and caches)',
     icon: KeyRound,
     accent: 'text-fuchsia-300',
     tint: 'bg-fuchsia-400',
     cleanable: true,
-    note: 'Clears browser storage for this app origin. This may sign you out and reset locally saved preferences.',
+    note: 'Safe Clean removes cached token/history data and app caches while preserving saved API keys and REST/WebSocket URLs. Wipe Clean removes all browser data and saved connection settings for this app origin.',
   },
 ];
 
 export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { removeTokensByMint } = useTerminal();
+  const { removeTokensByMint, clearBrowserHistory, updateSettings } = useTerminal();
   const { showToast, updateToast } = useToast();
   const [selected, setSelected] = useState<StorageCategory | null>(null);
   const [showCleanupConfirmation, setShowCleanupConfirmation] = useState(false);
+  const [localStorageCleanupMode, setLocalStorageCleanupMode] = useState<'safe' | 'wipe'>('safe');
   const [cleanupBusy, setCleanupBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [browserStorage, setBrowserStorage] = useState<BrowserStorageEstimate>({ usage: null, quota: null });
@@ -134,34 +135,78 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
         });
         await refresh(false);
       } else if (categoryId === 'local-storage') {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
+        if (localStorageCleanupMode === 'safe') {
+          // Keep the two durable settings records: backend/operator credentials,
+          // TokenCare key and REST/WebSocket URLs live in the first; Market Data
+          // credentials and REST/WSS URLs live in the second.
+          const protectedSettings = new Set([
+            'nodex.connection-settings.v1',
+            'nodex.market-data-connection.v1',
+          ]);
+          for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+            const key = window.localStorage.key(index);
+            if (key && !protectedSettings.has(key)) window.localStorage.removeItem(key);
+          }
+          window.sessionStorage.clear();
 
-        if ('caches' in window) {
-          const cacheNames = await window.caches.keys();
-          await Promise.all(cacheNames.map((name) => window.caches.delete(name)));
+          // Clear transient token/history state (including the NodeX token
+          // registry object store in IndexedDB) without deleting the database
+          // or the saved connection settings.
+          await clearBrowserHistory();
+
+          // CacheStorage contains rebuildable app/offline assets, not credentials.
+          if ('caches' in window) {
+            const cacheNames = await window.caches.keys();
+            await Promise.all(cacheNames.map((name) => window.caches.delete(name)));
+          }
+
+          setBrowserStorage(await getBrowserStorageEstimate());
+          updateToast(toastId, {
+            title: 'Safe Clean completed',
+            description: 'Cached tokens, browser history, session data and app caches were cleared. Your saved API keys, REST URLs and WebSocket URLs were preserved.',
+            tone: 'success',
+            duration: 6500,
+          });
+        } else {
+          // Wipe the in-memory connection settings as well as every browser
+          // storage surface, so credentials do not remain active in this session.
+          updateSettings({
+            backendUrl: '',
+            wsUrlOverride: '',
+            adminApiKey: '',
+            tokenCareApiKey: '',
+          });
+          const emptyMarketData = { restUrl: '', wsUrl: '', apiKey: '' };
+          marketDataService.saveSettings(emptyMarketData);
+          window.localStorage.clear();
+          window.sessionStorage.clear();
+
+          if ('caches' in window) {
+            const cacheNames = await window.caches.keys();
+            await Promise.all(cacheNames.map((name) => window.caches.delete(name)));
+          }
+
+          if ('databases' in indexedDB) {
+            const databases = await (indexedDB as IDBFactory & { databases: () => Promise<Array<{ name?: string }>> }).databases();
+            await Promise.all(databases.map((database) => database.name ? new Promise<void>((resolve) => {
+              const request = indexedDB.deleteDatabase(database.name!);
+              request.onsuccess = request.onerror = request.onblocked = () => resolve();
+            }) : Promise.resolve()));
+          }
+
+          if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.unregister()));
+          }
+
+          setBrowserStorage(await getBrowserStorageEstimate());
+          updateToast(toastId, {
+            title: 'Wipe Clean completed',
+            description: 'All app-origin local/session storage, IndexedDB databases, caches, service workers, API keys and saved REST/WebSocket URLs were removed. Server-side data was not changed.',
+            tone: 'success',
+            duration: 7000,
+          });
         }
-
-        if ('databases' in indexedDB) {
-          const databases = await (indexedDB as IDBFactory & { databases: () => Promise<Array<{ name?: string }>> }).databases();
-          await Promise.all(databases.map((database) => database.name ? new Promise<void>((resolve) => {
-            const request = indexedDB.deleteDatabase(database.name!);
-            request.onsuccess = request.onerror = request.onblocked = () => resolve();
-          }) : Promise.resolve()));
-        }
-
-        if ('serviceWorker' in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map((registration) => registration.unregister()));
-        }
-
-        setBrowserStorage(await getBrowserStorageEstimate());
-        updateToast(toastId, {
-          title: 'Browser storage cleanup completed',
-          description: 'Local storage, session storage, caches, IndexedDB databases and service worker registrations were cleared. You may need to sign in again.',
-          tone: 'success',
-          duration: 6500,
-        });
       } else if (categoryId === 'system_logs') {
         const result = await apiClient.cleanupSystemJournal();
         setServerStorage(result.overview);
@@ -392,9 +437,14 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 <Trash2 className="h-3.5 w-3.5" /> Clean system journal
               </button>
             ) : selected.id === 'local-storage' ? (
-              <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
-                <Trash2 className="h-3.5 w-3.5" /> Clear local storage
-              </button>
+              <div className="mt-5 grid grid-cols-1 gap-2">
+                <button type="button" onClick={() => { setLocalStorageCleanupMode('safe'); setShowCleanupConfirmation(true); }} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
+                  <Archive className="h-3.5 w-3.5" /> Safe Clean
+                </button>
+                <button type="button" onClick={() => { setLocalStorageCleanupMode('wipe'); setShowCleanupConfirmation(true); }} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-red-400/25 bg-red-500/[0.08] text-[11px] font-bold text-red-200 transition-transform active:scale-[0.98]">
+                  <Trash2 className="h-3.5 w-3.5" /> Wipe Clean
+                </button>
+              </div>
             ) : (
               <p className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-[10px] leading-relaxed text-white/40">
                 {selected.cleanable ? 'No cleanup operation is available for this category.' : 'This category is protected from cleanup.'}
@@ -411,15 +461,17 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-400/[0.12] bg-amber-400/[0.05]"><Trash2 className="h-4 w-4 text-amber-200/80" /></span>
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} aria-label="Close cleanup confirmation" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
             </div>
-            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">{selected.id === 'database' ? 'Clean unused token records?' : selected.id === 'system_logs' ? 'Clean system journal?' : 'Clear local storage?'}</h2>
+            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">{selected.id === 'database' ? 'Clean unused token records?' : selected.id === 'system_logs' ? 'Clean system journal?' : localStorageCleanupMode === 'safe' ? 'Run Safe Clean?' : 'Wipe all app storage?'}</h2>
             <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.id === 'database'
               ? 'This sends an authenticated request to SQLite cleanup. It removes rejected, failed-scan, failed-metadata and other tokens that have never entered paper trading, plus their launch and chart history. Any token with an open or closed paper position is preserved. Paper wallet, ledger, balances, schema, active discovery and the SQLite file itself are not deleted.'
               : selected.id === 'system_logs'
                 ? 'This sends an authenticated request to the backend to rotate and vacuum archived system-wide journal files. It does not clean SQLite token records, paper-trading data or browser storage. The server may reject the request if cleanup is disabled or OS permissions are insufficient.'
-                : "This clears this app's browser storage, including local and session storage, IndexedDB databases, cached files and service worker registrations. It may sign you out and reset saved preferences. Browser-managed cookies and server-side data are not included."}</p>
+                : localStorageCleanupMode === 'safe'
+                  ? 'This removes cached token records from NodeX IndexedDB, in-memory token/history data, session storage and rebuildable app caches. Your saved backend API key, TokenCare key, Market Data API key, REST URLs and WebSocket URLs are preserved. Server-side data is untouched.'
+                  : 'This permanently removes all app-origin local and session storage, every IndexedDB database, cached files, service worker registrations, saved API keys and REST/WebSocket URLs. The app will need to be configured again. Server-side data and browser-managed cookies are not included.'}</p>
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} disabled={cleanupBusy} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black disabled:opacity-50">{cleanupBusy ? 'Cleaning…' : selected.id === 'database' ? 'Clean unused tokens' : selected.id === 'system_logs' ? 'Clean journal' : 'Clear everything'}</button>
+              <button type="button" onClick={confirmCleanup} disabled={cleanupBusy} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black disabled:opacity-50">{cleanupBusy ? 'Cleaning…' : selected.id === 'database' ? 'Clean unused tokens' : selected.id === 'system_logs' ? 'Clean journal' : localStorageCleanupMode === 'safe' ? 'Safe Clean' : 'Wipe Clean'}</button>
             </div>
           </section>
         </div>
