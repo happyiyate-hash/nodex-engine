@@ -218,13 +218,15 @@ export const TokenDetailPage: React.FC = () => {
     volume: Number(point.volume || 0),
   })).filter((point) => Number.isFinite(point.time) && point.time > 0 && Number.isFinite(point.price) && point.price > 0);
   const lastChartPoint = chartHistory[chartHistory.length - 1];
+  const tokenName = marketDataSnapshot?.identity?.name || activeToken.name || activeToken.symbol || 'Unknown token';
+  const tokenSymbol = marketDataSnapshot?.identity?.symbol || activeToken.symbol || 'Token';
+  const tokenLogoUrl = marketDataSnapshot?.identity?.logo_url || activeToken.logo_url;
+  const creatorAddress = marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address || activeToken.creator_wallet || '';
   const liveTokenPrice = Number(marketDataSnapshot?.market?.price_usd ?? lastChartPoint?.close ?? 0);
-  const currentPrice = scrubPrice ?? liveTokenPrice;
   const marketCap = marketDataSnapshot?.market?.market_cap_usd ?? null;
   const marketChangePct = marketDataSnapshot?.market?.change_24h_pct ?? null;
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
-  const hasMarketPrice = Number.isFinite(liveTokenPrice) && liveTokenPrice > 0;
   const hasChartData = chartHistory.length > 0;
   const formatCompactMarketCap = (value: number | null | undefined) => {
     if (value == null || !Number.isFinite(Number(value))) return '—';
@@ -276,7 +278,7 @@ export const TokenDetailPage: React.FC = () => {
                 <ChevronLeft className="h-[29px] w-[29px]" strokeWidth={1.8} />
               </button>
               <span className="truncate text-[12px] font-medium tracking-wide text-white/65">
-                {activeToken.symbol || 'Token'}
+                {tokenSymbol}
               </span>
             </div>
           </div>
@@ -292,8 +294,8 @@ export const TokenDetailPage: React.FC = () => {
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <div className="relative shrink-0">
                 <TokenAvatar
-                  symbol={activeToken.symbol}
-                  logoUrl={activeToken.logo_url}
+                  symbol={tokenSymbol}
+                  logoUrl={tokenLogoUrl}
                   size="lg"
                   className="!h-[46px] !w-[46px] shrink-0 !rounded-lg !text-lg"
                 />
@@ -374,7 +376,7 @@ export const TokenDetailPage: React.FC = () => {
             </div>
             <div className="flex min-w-0 flex-col justify-center gap-1">
               <p className="truncate text-[13px] font-semibold tracking-tight text-white/95">
-                {activeToken.name || activeToken.symbol || 'Unknown token'}
+                {tokenName}
               </p>
               <div className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate text-[12px] font-medium tracking-wide text-white/55">
@@ -707,13 +709,13 @@ export const TokenDetailPage: React.FC = () => {
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Creator</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {(marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address) ? String(marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address).slice(0, 5) + '...' + String(marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address).slice(-5) : 'Unavailable'}
+                    {creatorAddress ? creatorAddress.slice(0, 5) + '...' + creatorAddress.slice(-5) : 'Unavailable'}
                   </span>
                   <button
                     type="button"
-                    disabled={!marketDataSnapshot?.identity?.creator_address && !marketDataSnapshot?.info?.creator_address}
+                    disabled={!creatorAddress}
                     onClick={() => {
-                      const creator = marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address;
+                      const creator = creatorAddress;
                       if (creator) navigator.clipboard.writeText(creator);
                     }}
                     aria-label="Copy creator address"
@@ -808,7 +810,7 @@ export const TokenDetailPage: React.FC = () => {
             <>
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <h2 className="min-w-0 truncate text-[19px] font-semibold leading-tight tracking-tight text-white/95">
-                  {(activePosition.name || activeToken.name || '').length <= 18 ? (activePosition.name || activeToken.name || activePosition.symbol || activeToken.symbol || 'Token') : (activePosition.symbol || activeToken.symbol || 'Token')}
+                  {(activePosition.name || tokenName || '').length <= 18 ? (activePosition.name || tokenName || activePosition.symbol || tokenSymbol) : (activePosition.symbol || tokenSymbol)}
                 </h2>
                 <span className="shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/70">OPEN</span>
               </div>
