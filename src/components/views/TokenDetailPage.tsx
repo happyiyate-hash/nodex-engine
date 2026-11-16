@@ -316,7 +316,7 @@ export const TokenDetailPage: React.FC = () => {
               </div>
               <div className="flex min-w-0 flex-col justify-center gap-1 leading-tight">
                 <span className="truncate text-[12px] font-semibold tracking-wide text-white/90">
-                  {activeToken.symbol || 'Token'}
+                  {tokenSymbol}
                 </span>
                 <button
                   type="button"
@@ -362,8 +362,8 @@ export const TokenDetailPage: React.FC = () => {
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="relative shrink-0">
               <TokenAvatar
-                symbol={activeToken.symbol}
-                logoUrl={activeToken.logo_url}
+                symbol={tokenSymbol}
+                logoUrl={tokenLogoUrl}
                 size="lg"
                 className="!h-[52px] !w-[52px] shrink-0 !rounded-lg !text-xl"
               />
