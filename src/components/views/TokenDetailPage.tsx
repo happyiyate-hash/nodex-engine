@@ -327,10 +327,10 @@ export const TokenDetailPage: React.FC = () => {
             </div>
             <div className="shrink-0 text-right leading-none">
               <div className="font-sans text-[14px] font-semibold tabular-nums tracking-tight text-white">
-                {hasMarketPrice ? formatCompactMarketCap(marketCap) : 'MC unavailable'}
+                {marketCap != null ? formatCompactMarketCap(marketCap) : 'MC unavailable'}
               </div>
               <div className={`mt-1 flex items-center justify-end gap-0.5 font-mono text-[10px] font-semibold ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-                <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${marketChangePct.toFixed(2)}%`}</span>
+                <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${Math.abs(Number(marketChangePct)).toFixed(2)}%`}</span>
               </div>
             </div>
           </div>
@@ -433,7 +433,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Demo-only animation preview; connect verified backend swap events here later. */}
+        {/* Live activity animation, populated only by verified backend activity events. */}
         <style>{`
           @keyframes nodex-money-flow {
             0% { transform: translate3d(0, 0, 0); opacity: 0; }
@@ -449,21 +449,45 @@ export const TokenDetailPage: React.FC = () => {
         `}</style>
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
         <div className="relative z-0 -mx-3 -mt-3 w-[calc(100%+1.5rem)]">
-          <DotMatrixChart
-            key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
-            currentPrice={liveTokenPrice}
-            marketCap={marketCap ?? undefined}
-            entryPrice={activePosition ? entryPriceUsd : undefined}
-            priceHistory={chartHistory}
-            isPositive={isPositive}
-            timeframe={timeframe}
-            chartType={chartType}
-            height={328}
-            onPriceHover={(p, t) => {
-              setScrubPrice(p);
-              setScrubTime(t);
-            }}
-          />
+          {marketDataError && (
+            <div role="status" className="mx-3 mb-2 rounded-md border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[10px] text-amber-100/75">
+              {marketDataError}
+            </div>
+          )}
+          {!marketDataError && marketDataStreamError && (
+            <div role="status" className="mx-3 mb-2 rounded-md border border-white/[0.10] bg-white/[0.04] px-3 py-2 text-[10px] text-white/55">
+              {marketDataStreamError}
+            </div>
+          )}
+          {marketDataLoading ? (
+            <div aria-label="Loading chart data" className="h-[328px] w-full animate-pulse bg-white/[0.025]">
+              <div className="flex h-full flex-col justify-between p-5">
+                <div className="h-3 w-24 rounded bg-white/[0.07]" />
+                <div className="h-24 w-full rounded bg-white/[0.035]" />
+                <div className="h-3 w-32 rounded bg-white/[0.07]" />
+              </div>
+            </div>
+          ) : hasChartData ? (
+            <DotMatrixChart
+              key={activeToken.mint + ':' + timeframe}
+              currentPrice={liveTokenPrice}
+              marketCap={marketCap ?? undefined}
+              entryPrice={activePosition ? entryPriceUsd : undefined}
+              priceHistory={chartHistory}
+              isPositive={isPositive}
+              timeframe={timeframe}
+              chartType={chartType}
+              height={328}
+              onPriceHover={(p, t) => {
+                setScrubPrice(p);
+                setScrubTime(t);
+              }}
+            />
+          ) : (
+            <div role="status" className="flex h-[328px] w-full items-center justify-center border-y border-white/[0.06] bg-white/[0.015]">
+              <span className="text-[11px] text-white/40">No chart data available for {timeframe}</span>
+            </div>
+          )}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
@@ -647,12 +671,12 @@ export const TokenDetailPage: React.FC = () => {
             <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
               {[
-                { label: 'Market Cap', value: '$42.5K' },
-                { label: 'Liquidity', value: '$18.2K' },
-                { label: '24H Volume', value: '$126K' },
-                { label: '24H Transactions', value: '2,481' },
-                { label: 'Total Supply', value: '1B' },
-                { label: 'Circulating Supply', value: '850M' },
+                { label: 'Market Cap', value: formatCompactMarketCap(marketDataSnapshot?.market?.market_cap_usd) },
+                { label: 'Liquidity', value: formatUsd(marketDataSnapshot?.market?.liquidity_usd) },
+                { label: '24H Volume', value: formatUsd(marketDataSnapshot?.market?.volume_24h_usd) },
+                { label: '24H Transactions', value: marketDataSnapshot?.market?.transactions_24h == null ? '—' : Number(marketDataSnapshot.market.transactions_24h).toLocaleString('en-US') },
+                { label: 'Total Supply', value: marketDataSnapshot?.info?.total_supply || '—' },
+                { label: 'Circulating Supply', value: marketDataSnapshot?.info?.circulating_supply || '—' },
               ].map((item) => (
                 <div key={item.label} className="min-w-0 space-y-1">
                   <p className="text-[11px] font-normal text-white/40">{item.label}</p>
@@ -667,28 +691,30 @@ export const TokenDetailPage: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Token Standard</span>
-                <span className="text-[12px] font-medium text-white/85">SPL Token</span>
+                <span className="text-[12px] font-medium text-white/85">{marketDataSnapshot?.info?.token_standard || 'Unavailable'}</span>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Decimals</span>
-                <span className="font-mono text-[12px] font-medium text-white/85">6</span>
+                <span className="font-mono text-[12px] font-medium text-white/85">{marketDataSnapshot?.info?.decimals ?? 'Unavailable'}</span>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Created At</span>
-                <span className="text-[12px] font-medium text-white/85">Nov 14, 2026</span>
+                <span className="text-[12px] font-medium text-white/85">
+                  {marketDataSnapshot?.identity?.created_at ? new Date(marketDataSnapshot.identity.created_at).toLocaleString() : 'Unavailable'}
+                </span>
               </div>
               <div className="space-y-4 border-t border-white/[0.10] pt-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Creator</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {activeToken.creator_wallet ? `${activeToken.creator_wallet.slice(0, 5)}...${activeToken.creator_wallet.slice(-5)}` : 'Unavailable'}
+                    {(marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address) ? String(marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address).slice(0, 5) + '...' + String(marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address).slice(-5) : 'Unavailable'}
                   </span>
                   <button
                     type="button"
-                    disabled={!activeToken.creator_wallet}
+                    disabled={!marketDataSnapshot?.identity?.creator_address && !marketDataSnapshot?.info?.creator_address}
                     onClick={() => {
-                      if (!activeToken.creator_wallet) return;
-                      navigator.clipboard.writeText(activeToken.creator_wallet);
+                      const creator = marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address;
+                      if (creator) navigator.clipboard.writeText(creator);
                     }}
                     aria-label="Copy creator address"
                     title="Copy creator address"
@@ -700,7 +726,7 @@ export const TokenDetailPage: React.FC = () => {
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Mint Address</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {`${activeToken.mint.slice(0, 5)}...${activeToken.mint.slice(-5)}`}
+                    {activeToken.mint.slice(0, 5)}...{activeToken.mint.slice(-5)}
                   </span>
                   <button
                     type="button"
@@ -715,7 +741,6 @@ export const TokenDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <p className="text-[10px] text-white/25">Preview data · Values will be connected to live token data later.</p>
         </section>
       )}
 
@@ -724,50 +749,42 @@ export const TokenDetailPage: React.FC = () => {
           <div className="grid w-full grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Total Holders</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">8,426</p>
+              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
+                {marketDataSnapshot?.holders?.total_count == null ? '—' : Number(marketDataSnapshot.holders.total_count).toLocaleString('en-US')}
+              </p>
             </div>
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Top 10 Ownership</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">34.8%</p>
+              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
+                {marketDataSnapshot?.holders?.top_10_ownership_pct == null ? '—' : Number(marketDataSnapshot.holders.top_10_ownership_pct).toFixed(2) + '%'}
+              </p>
             </div>
           </div>
-
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Largest Holders</h2>
               <span className="text-[10px] text-white/35">Ranked by balance</span>
             </div>
             <div className="w-full">
-              {[
-                { address: '7xKX9mPq2vRt4nHs8aBcDeFgHiJkLmNpQrStUvWxYz12', balance: '82.4M', share: 8.24, initials: '7X' },
-                { address: '9pLm3qRs6tUv8wXy2zAbCdEfGhJkMnPqRtUvWxYz1234', balance: '61.8M', share: 6.18, initials: '9P' },
-                { address: '4dEf7gHi2jKl5mNp8qRsTuVwXyZaBcDeFgHiJkLmN567', balance: '48.2M', share: 4.82, initials: '4D' },
-                { address: '2aBc5dEf8gHi1jKl4mNpQrStUvWxYzAbCdEfGhJkL890', balance: '36.5M', share: 3.65, initials: '2A' },
-                { address: '8wXy1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfG345', balance: '29.1M', share: 2.91, initials: '8W' },
-                { address: '5mNp8qRs1tUv4wXy7zAbCdEfGhJkLmNpQrStUvWxYz678', balance: '24.7M', share: 2.47, initials: '5M' },
-                { address: '3qRs6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbC901', balance: '19.3M', share: 1.93, initials: '3Q' },
-                { address: '6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbCdEfG234', balance: '16.8M', share: 1.68, initials: '6T' },
-                { address: '1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfGhJkL567', balance: '14.2M', share: 1.42, initials: '1Z' },
-                { address: '0xYz3aBc6dEf9gHi2jKl5mNpQrStUvWxYzAbCdEfG890', balance: '12.1M', share: 1.21, initials: '0X' },
-              ].map((holder, index) => (
+              {(marketDataSnapshot?.holders?.largest || []).map((holder, index) => (
                 <div key={holder.address} className="border-b border-white/[0.07] py-3.5 last:border-b-0">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10px] font-semibold tracking-wide text-white/75">
-                      {holder.initials}
+                      {holder.address.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="truncate font-mono text-[11px] text-white/80">{holder.address.slice(0, 5)}...{holder.address.slice(-5)}</span>
-                      <span className="font-mono text-[11px] font-medium text-white/95">{holder.balance}</span>
+                      <span className="font-mono text-[11px] font-medium text-white/95">{Number(holder.token_amount).toLocaleString('en-US', { maximumFractionDigits: 4 })}</span>
                     </div>
                     <div className="flex w-[76px] shrink-0 flex-col items-end gap-1.5">
-                      <span className="font-mono text-[11px] text-white/65">{holder.share.toFixed(2)}%</span>
+                      <span className="font-mono text-[11px] text-white/65">{holder.supply_pct == null ? '—' : Number(holder.supply_pct).toFixed(2) + '%'}</span>
                       <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/[0.12]">
-                        <div className="h-full rounded-full bg-white" style={{ width: `${Math.min((holder.share / 10) * 100, 100)}%` }} />
+                        <div className="h-full rounded-full bg-white" style={{ width: holder.supply_pct == null ? '0%' : Math.min(Number(holder.supply_pct), 100) + '%' }} />
                       </div>
                     </div>
                     <button
                       type="button"
-                      aria-label={`Copy holder wallet address ${index + 1}`}
+                      aria-label={'Copy holder wallet address ' + (index + 1)}
                       title="Copy wallet address"
                       onClick={() => navigator.clipboard.writeText(holder.address)}
                       className="shrink-0 rounded p-1 text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white/90"
@@ -777,80 +794,52 @@ export const TokenDetailPage: React.FC = () => {
                   </div>
                 </div>
               ))}
+              {!marketDataLoading && (marketDataSnapshot?.holders?.largest || []).length === 0 && (
+                <p className="py-8 text-center text-[11px] text-white/40">No holder data available.</p>
+              )}
             </div>
           </div>
-          <p className="text-[10px] text-white/25">Preview data · Wallets are illustrative and will be replaced with verified on-chain holders.</p>
         </section>
       )}
 
       {activeDetailTab === 'Position' && (
         <section aria-label="Token position" className="w-full space-y-5 px-3 pb-8 pt-5">
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <h2 className="min-w-0 truncate text-[19px] font-semibold leading-tight tracking-tight text-white/95">
-              {(displayPosition.name || activeToken.name || '').length <= 18
-                ? (displayPosition.name || activeToken.name || displayPosition.symbol || activeToken.symbol || 'Token')
-                : (displayPosition.symbol || activeToken.symbol || 'Token')}
-            </h2>
-            <span className="shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/70">
-              {activePosition ? 'OPEN' : 'DEMO'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 items-end gap-3">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Position value</p>
-              <p className="truncate font-sans text-[27px] font-semibold leading-tight tracking-tight tabular-nums text-white">
-                {formatUsd(displayPosition.current_position_value_usd)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1 text-right">
-              <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Unrealized P&amp;L</p>
-              <p className={`truncate font-mono text-[17px] font-semibold leading-tight tabular-nums ${displayPosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-                {displayPosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(displayPosition.pnl_usd))}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-5 border-y border-white/[0.10] py-4">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Entry Price</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {formatUsd(displayPosition.entry_price_usd, 8)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Current Price</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {formatUsd(displayPosition.current_price_usd, 8)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Invested Amount</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {formatUsd(displayPosition.initial_investment_usd)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Total Holdings</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {new Intl.NumberFormat('en-US', {
-                  notation: 'compact',
-                  maximumFractionDigits: 2,
-                }).format(displayPosition.amount_tokens)}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] text-white/40">Opened</span>
-            <span className="text-[10px] tabular-nums text-white/65">{new Date(displayPosition.entry_time).toLocaleString()}</span>
-          </div>
-          {!activePosition && (
-            <p className="text-[10px] text-white/25">Illustrative values only · This is not a real or recorded paper position.</p>
+          {activePosition ? (
+            <>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <h2 className="min-w-0 truncate text-[19px] font-semibold leading-tight tracking-tight text-white/95">
+                  {(activePosition.name || activeToken.name || '').length <= 18 ? (activePosition.name || activeToken.name || activePosition.symbol || activeToken.symbol || 'Token') : (activePosition.symbol || activeToken.symbol || 'Token')}
+                </h2>
+                <span className="shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/70">OPEN</span>
+              </div>
+              <div className="grid grid-cols-2 items-end gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Position value</p>
+                  <p className="truncate font-sans text-[27px] font-semibold leading-tight tracking-tight tabular-nums text-white">{formatUsd(activePosition.current_position_value_usd)}</p>
+                </div>
+                <div className="min-w-0 space-y-1 text-right">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Unrealized P&amp;L</p>
+                  <p className={'truncate font-mono text-[17px] font-semibold leading-tight tabular-nums ' + (activePosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]')}>
+                    {activePosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(activePosition.pnl_usd))}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-5 border-y border-white/[0.10] py-4">
+                <div className="min-w-0 space-y-1"><p className="text-[10px] text-white/40">Entry Price</p><p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{formatUsd(activePosition.entry_price_usd, 8)}</p></div>
+                <div className="min-w-0 space-y-1"><p className="text-[10px] text-white/40">Current Price</p><p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{formatUsd(activePosition.current_price_usd, 8)}</p></div>
+                <div className="min-w-0 space-y-1"><p className="text-[10px] text-white/40">Invested Amount</p><p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{formatUsd(activePosition.initial_investment_usd)}</p></div>
+                <div className="min-w-0 space-y-1"><p className="text-[10px] text-white/40">Total Holdings</p><p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{Number(activePosition.amount_tokens).toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 })}</p></div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] text-white/40">Opened</span>
+                <span className="text-[10px] tabular-nums text-white/65">{new Date(activePosition.entry_time).toLocaleString()}</span>
+              </div>
+            </>
+          ) : (
+            <p className="py-10 text-center text-[11px] text-white/40">No open paper position for this token.</p>
           )}
         </section>
       )}
-
 
       {activeDetailTab === 'Trades' && (
         <section aria-label="Token trades" className="w-full space-y-5 px-3 pb-8 pt-5">
@@ -859,96 +848,71 @@ export const TokenDetailPage: React.FC = () => {
               <h2 className="text-[16px] font-semibold tracking-tight text-white/95">Recent Trades</h2>
               <p className="mt-1 text-[10px] text-white/40">Latest activity for this token</p>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/[0.10] px-2 py-1 text-[9px] font-medium tracking-wide text-amber-300/80">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-300/70" />
-              DEMO DATA
+            <span className={'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/[0.10] px-2 py-1 text-[9px] font-medium tracking-wide ' + (marketDataStreamConnected ? 'text-emerald-300/80' : 'text-white/40')}>
+              <span className={'h-1.5 w-1.5 rounded-full ' + (marketDataStreamConnected ? 'bg-emerald-300/70' : 'bg-white/30')} />
+              {marketDataStreamConnected ? 'LIVE STREAM' : 'SNAPSHOT'}
             </span>
           </div>
-
           <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Buy Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatUsd(24.86 * 149.60)}</p>
+              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatUsd(marketDataSnapshot?.market?.buy_volume_usd)}</p>
             </div>
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Sell Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatUsd(15.32 * 149.60)}</p>
+              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatUsd(marketDataSnapshot?.market?.sell_volume_usd)}</p>
             </div>
           </div>
-
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[10px]">
               <span className="font-medium text-white/55">Buy / Sell Pressure</span>
-              <span className="font-mono tabular-nums text-white/55">62% <span className="text-white/25">/</span> 38%</span>
+              <span className="font-mono tabular-nums text-white/55">{marketDataSnapshot?.market?.buy_pressure_pct == null ? '—' : Number(marketDataSnapshot.market.buy_pressure_pct).toFixed(1) + '%'} <span className="text-white/25">/</span> {marketDataSnapshot?.market?.buy_pressure_pct == null ? '—' : (100 - Number(marketDataSnapshot.market.buy_pressure_pct)).toFixed(1) + '%'}</span>
             </div>
             <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/[0.10]">
-              <div className="h-full w-[62%] bg-[#6CE094]" />
-              <div className="h-full w-[38%] bg-[#F06A6A]" />
+              <div className="h-full bg-[#6CE094]" style={{ width: marketDataSnapshot?.market?.buy_pressure_pct == null ? '0%' : Math.max(0, Math.min(100, Number(marketDataSnapshot.market.buy_pressure_pct))) + '%' }} />
+              <div className="h-full bg-[#F06A6A]" style={{ width: marketDataSnapshot?.market?.buy_pressure_pct == null ? '0%' : Math.max(0, Math.min(100, 100 - Number(marketDataSnapshot.market.buy_pressure_pct))) + '%' }} />
             </div>
           </div>
-
           <div className="flex items-center justify-between gap-3 border-b border-white/[0.10] pb-3">
-            <h3 className="text-[12px] font-medium text-white/85">Trade History <span className="ml-1 text-white/35">(8)</span></h3>
+            <h3 className="text-[12px] font-medium text-white/85">Trade History <span className="ml-1 text-white/35">({(marketDataSnapshot?.trades?.recent || []).length})</span></h3>
             <div className="flex items-center gap-1 rounded-md bg-white/[0.06] p-0.5">
               {(['All', 'Buys', 'Sells'] as const).map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  aria-pressed={tradeFilter === filter}
-                  onClick={() => setTradeFilter(filter)}
-                  className={`rounded-sm px-2.5 py-1 text-[10px] font-medium transition-colors ${
-                    tradeFilter === filter ? 'bg-white/[0.14] text-white' : 'text-white/45 hover:text-white/80'
-                  }`}
-                >
+                <button key={filter} type="button" aria-pressed={tradeFilter === filter} onClick={() => setTradeFilter(filter)} className={'rounded-sm px-2.5 py-1 text-[10px] font-medium transition-colors ' + (tradeFilter === filter ? 'bg-white/[0.14] text-white' : 'text-white/45 hover:text-white/80')}>
                   {filter}
                 </button>
               ))}
             </div>
           </div>
-
           <div className="space-y-0">
-            {[
-              { side: 'BUY', wallet: '7xKX9mPq2vRt4nHs8aBcDeFgHiJkLmNpQrStUvWxYz12', sol: '4.25', tokens: '342.8K', price: '$0.0000124', time: '2s ago' },
-              { side: 'BUY', wallet: '9pLm3qRs6tUv8wXy2zAbCdEfGhJkMnPqRtUvWxYz1234', sol: '1.80', tokens: '145.2K', price: '$0.0000124', time: '8s ago' },
-              { side: 'SELL', wallet: '4dEf7gHi2jKl5mNp8qRsTuVwXyZaBcDeFgHiJkLmN567', sol: '2.65', tokens: '214.1K', price: '$0.0000123', time: '14s ago' },
-              { side: 'BUY', wallet: '2aBc5dEf8gHi1jKl4mNpQrStUvWxYzAbCdEfGhJkL890', sol: '6.10', tokens: '493.6K', price: '$0.0000124', time: '21s ago' },
-              { side: 'SELL', wallet: '8wXy1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfG345', sol: '3.40', tokens: '275.8K', price: '$0.0000123', time: '29s ago' },
-              { side: 'BUY', wallet: '5mNp8qRs1tUv4wXy7zAbCdEfGhJkLmNpQrStUvWxYz678', sol: '5.75', tokens: '464.9K', price: '$0.0000124', time: '36s ago' },
-              { side: 'BUY', wallet: '3qRs6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbC901', sol: '2.96', tokens: '239.1K', price: '$0.0000124', time: '48s ago' },
-              { side: 'SELL', wallet: '6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbCdEfG234', sol: '9.27', tokens: '751.3K', price: '$0.0000123', time: '1m ago' },
-            ]
-              .filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? trade.side === 'BUY' : trade.side === 'SELL'))
-              .map((trade, index) => (
-                <div key={trade.wallet} className="flex min-w-0 items-center gap-2.5 border-b border-white/[0.07] py-2 last:border-b-0">
-                  <span className={`inline-flex h-5 w-[42px] shrink-0 items-center justify-center rounded-sm text-[9px] font-bold tracking-wide ${
-                    trade.side === 'BUY' ? 'bg-[#6CE094]/[0.12] text-[#6CE094]' : 'bg-[#F06A6A]/[0.12] text-[#F06A6A]'
-                  }`}>
-                    {trade.side}
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate font-mono text-[10px] text-white/75">{trade.wallet.slice(0, 5)}...{trade.wallet.slice(-5)}</span>
-                      <button
-                        type="button"
-                        aria-label="Copy trader wallet"
-                        title="Copy trader wallet"
-                        onClick={() => navigator.clipboard.writeText(trade.wallet)}
-                        className="shrink-0 text-white/30 transition-colors hover:text-white/80"
-                      >
-                        <Copy className="h-2.5 w-2.5" />
-                      </button>
+            {(marketDataSnapshot?.trades?.recent || [])
+              .filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? String(trade.side).toLowerCase() === 'buy' : String(trade.side).toLowerCase() === 'sell'))
+              .map((trade) => {
+                const side = String(trade.side || '').toUpperCase();
+                const trader = String(trade.trader || '');
+                const amount = trade.volume_usd;
+                const ageSeconds = Math.max(0, Math.floor((Date.now() - Number(trade.timestamp_ms)) / 1000));
+                const age = ageSeconds < 60 ? ageSeconds + 's ago' : ageSeconds < 3600 ? Math.floor(ageSeconds / 60) + 'm ago' : Math.floor(ageSeconds / 3600) + 'h ago';
+                return (
+                  <div key={trade.signature + ':' + trade.event_index} className="flex min-w-0 items-center gap-2.5 border-b border-white/[0.07] py-2 last:border-b-0">
+                    <span className={'inline-flex h-5 w-[42px] shrink-0 items-center justify-center rounded-sm text-[9px] font-bold tracking-wide ' + (side === 'BUY' ? 'bg-[#6CE094]/[0.12] text-[#6CE094]' : 'bg-[#F06A6A]/[0.12] text-[#F06A6A]')}>{side || '—'}</span>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate font-mono text-[10px] text-white/75">{trader ? trader.slice(0, 5) + '...' + trader.slice(-5) : 'Wallet unavailable'}</span>
+                        {trader && <button type="button" aria-label="Copy trader wallet" title="Copy trader wallet" onClick={() => navigator.clipboard.writeText(trader)} className="shrink-0 text-white/30 transition-colors hover:text-white/80"><Copy className="h-2.5 w-2.5" /></button>}
+                      </div>
+                      <span className="text-[9px] text-white/35">{trade.token_amount == null ? 'Token amount unavailable' : Number(trade.token_amount).toLocaleString('en-US', { maximumFractionDigits: 4 }) + ' tokens'} · {age}</span>
                     </div>
-                    <span className="text-[9px] text-white/35">{trade.tokens} tokens · {trade.time}</span>
+                    <div className="shrink-0 text-right">
+                      <p className={'font-mono text-[11px] font-medium tabular-nums ' + (side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]')}>{formatUsd(amount)}</p>
+                      {trade.price_usd != null && <p className="text-[9px] text-white/35">{formatUsd(trade.price_usd, 8)}</p>}
+                    </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className={`font-mono text-[11px] font-medium tabular-nums ${
-                      trade.side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
-                    }`}>{formatUsd(Number(trade.sol) * 149.60)}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+            {!marketDataLoading && (marketDataSnapshot?.trades?.recent || []).filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? String(trade.side).toLowerCase() === 'buy' : String(trade.side).toLowerCase() === 'sell')).length === 0 && (
+              <p className="py-8 text-center text-[11px] text-white/40">No trade data available.</p>
+            )}
           </div>
-          <p className="pt-1 text-center text-[9px] text-amber-300/45">Illustrative sample trades · Not live Solana transactions</p>
         </section>
       )}
 
