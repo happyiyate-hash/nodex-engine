@@ -4,6 +4,7 @@ import {
   RefreshCw, Signal, Terminal, Trash2, X,
 } from 'lucide-react';
 import { apiClient, StorageOverview } from '../../services/rest';
+import { marketDataService } from '../../services/marketData';
 import { useTerminal } from '../../context/TerminalContext';
 import { useToast } from '../ui/ToastProvider';
 
