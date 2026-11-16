@@ -634,7 +634,29 @@ export const TokenDetailPage: React.FC = () => {
               {marketDataStreamError}
             </div>
           )}
-          {chartHistoryLoading ? (
+          {hasChartData ? (
+            <div className="relative">
+              <DotMatrixChart
+                key={activeToken.mint + ':' + timeframe}
+                currentPrice={liveTokenPrice}
+                marketCap={marketCap ?? undefined}
+                entryPrice={activePosition ? entryPriceUsd : undefined}
+                priceHistory={chartHistory}
+                isPositive={isPositive}
+                timeframe={timeframe}
+                chartType={chartType}
+                height={328}
+                onPriceHover={(_price, t) => {
+                  setScrubTime(t);
+                }}
+              />
+              {chartHistoryLoading && (
+                <div role="status" aria-live="polite" className="pointer-events-none absolute left-3 top-3 z-30 rounded border border-white/[0.10] bg-black/75 px-2 py-1 text-[9px] text-white/55 backdrop-blur-sm">
+                  Loading chart history…
+                </div>
+              )}
+            </div>
+          ) : chartHistoryLoading ? (
             <div aria-label="Loading chart data" className="h-[328px] w-full animate-pulse bg-white/[0.025]">
               <div className="flex h-full flex-col justify-between p-5">
                 <div className="h-3 w-24 rounded bg-white/[0.07]" />
@@ -642,21 +664,6 @@ export const TokenDetailPage: React.FC = () => {
                 <div className="h-3 w-32 rounded bg-white/[0.07]" />
               </div>
             </div>
-          ) : hasChartData ? (
-            <DotMatrixChart
-              key={activeToken.mint + ':' + timeframe}
-              currentPrice={liveTokenPrice}
-              marketCap={marketCap ?? undefined}
-              entryPrice={activePosition ? entryPriceUsd : undefined}
-              priceHistory={chartHistory}
-              isPositive={isPositive}
-              timeframe={timeframe}
-              chartType={chartType}
-              height={328}
-              onPriceHover={(_price, t) => {
-                setScrubTime(t);
-              }}
-            />
           ) : (
             <div role="status" className="flex h-[328px] w-full items-center justify-center border-y border-white/[0.06] bg-white/[0.015]">
               <span className="text-[11px] text-white/40">No chart data available for {timeframe}</span>
