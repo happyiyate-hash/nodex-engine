@@ -4,6 +4,7 @@ import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
 import { wsService } from '../../services/websocket';
 import { CandleEngine, type ConfirmedTrade } from '../../services/candleEngine';
+import { apiClient } from '../../services/rest';
 import {
   ChevronLeft,
   Copy,
@@ -25,6 +26,64 @@ interface TokenDataSnapshot {
   holders: { total_count?: number | null; top_10_ownership_pct?: number | null; largest: Array<{ address: string; token_amount: number; supply_pct?: number | null; rank: number }> };
   info: { decimals?: number | null; total_supply?: string | null; circulating_supply?: string | null; token_standard?: string | null; creator_address?: string | null };
   data_status?: Record<string, string>;
+}
+
+function normalizeTokenDetailSnapshot(raw: Record<string, any>, mint: string): TokenDataSnapshot {
+  const identity = raw.identity && typeof raw.identity === 'object' ? raw.identity : {};
+  const market = raw.market && typeof raw.market === 'object' ? raw.market : {};
+  const statistics = raw.statistics && typeof raw.statistics === 'object' ? raw.statistics : {};
+  const rawChart = raw.chart && typeof raw.chart === 'object' ? raw.chart : {};
+  const rawPoints = Array.isArray(rawChart.points) ? rawChart.points : Array.isArray(rawChart.candles) ? rawChart.candles : [];
+  const points: TokenChartPoint[] = rawPoints.map((candle: Record<string, any>) => {
+    const rawTime = candle.timestamp_ms ?? candle.open_time_ms ?? candle.time ?? candle.timestamp ?? candle.open_time;
+    const timestamp = Number(rawTime);
+    return {
+      timestamp_ms: Number.isFinite(timestamp) ? (timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp) : Date.parse(String(rawTime || '')),
+      open: Number(candle.open ?? candle.open_price ?? candle.close ?? 0),
+      high: Number(candle.high ?? candle.high_price ?? candle.close ?? 0),
+      low: Number(candle.low ?? candle.low_price ?? candle.close ?? 0),
+      close: Number(candle.close ?? candle.close_price ?? candle.price ?? 0),
+      volume: Number(candle.volume_usd ?? candle.volume_sol ?? candle.volume ?? 0),
+    };
+  }).filter((point) =>
+    Number.isFinite(point.timestamp_ms) && point.timestamp_ms > 0 &&
+    Number.isFinite(point.open) && point.open > 0 &&
+    Number.isFinite(point.high) && point.high > 0 &&
+    Number.isFinite(point.low) && point.low > 0 &&
+    Number.isFinite(point.close) && point.close > 0
+  );
+  return {
+    mint,
+    identity: { ...identity, mint_address: mint },
+    market: {
+      ...market,
+      change_24h_pct: market.change_24h_pct ?? market.price_change_24h_pct ?? null,
+      volume_24h_usd: market.volume_24h_usd ?? market.volume_24h ?? null,
+      transactions_24h: market.transactions_24h ?? market.transactions_24h_count ?? null,
+      volume_5m_usd: market.volume_5m_usd ?? statistics.volume_5m_usd ?? null,
+      volume_1h_usd: market.volume_1h_usd ?? statistics.volume_1h_usd ?? null,
+      buy_volume_usd: market.buy_volume_usd ?? statistics.buy_volume_usd ?? null,
+      sell_volume_usd: market.sell_volume_usd ?? statistics.sell_volume_usd ?? null,
+    },
+    chart: { timeframe: String(rawChart.timeframe || '5m').toUpperCase(), points },
+    trades: { recent: Array.isArray(raw.trades?.recent) ? raw.trades.recent : [] },
+    holders: {
+      total_count: raw.holders?.total_count ?? market.holders ?? null,
+      top_10_ownership_pct: raw.holders?.top_10_ownership_pct ?? null,
+      largest: Array.isArray(raw.holders?.largest) ? raw.holders.largest : [],
+    },
+    info: {
+      ...(raw.info && typeof raw.info === 'object' ? raw.info : {}),
+      decimals: identity.decimals ?? raw.info?.decimals ?? null,
+      total_supply: identity.total_supply ?? identity.total_supply_raw ?? raw.info?.total_supply ?? null,
+      creator_address: identity.creator_address ?? raw.info?.creator_address ?? null,
+    },
+    data_status: {
+      ...(raw.data_status && typeof raw.data_status === 'object' ? raw.data_status : {}),
+      snapshot: 'available',
+      chart: rawChart.status || (points.length ? 'available' : 'unavailable'),
+    },
+  };
 }
 
 function emptyTokenSnapshot(mint: string, timeframe = '1M'): TokenDataSnapshot {
@@ -67,6 +126,9 @@ export const TokenDetailPage: React.FC = () => {
   // Primary market-data quotes take precedence; engine ticks fill gaps only.
   const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(false);
+  const [tokenSnapshotLoading, setTokenSnapshotLoading] = useState(true);
+  const [tokenSnapshotError, setTokenSnapshotError] = useState('');
+  const [sniperSubscriptionStatus, setSniperSubscriptionStatus] = useState<'connecting' | 'connected' | 'rejected' | 'disconnected'>('connecting');
   const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
   const [marketDataError, setMarketDataError] = useState('');
   const [marketDataStreamConnected, setMarketDataStreamConnected] = useState(false);
@@ -84,6 +146,12 @@ export const TokenDetailPage: React.FC = () => {
     tradeCandleEngineRef.current.reset();
     lastTradeCursorRef.current = 0;
     setLatestConfirmedTradePrice(null);
+    setMarketDataSnapshot(null);
+    setChartSeriesByTimeframe({});
+    setTokenSnapshotLoading(true);
+    setTokenSnapshotError('');
+    setSniperSubscriptionStatus('connecting');
+    setChartHistoryLoading(true);
     setConnectionNotice('');
     setTimeframe('1S');
     setScrubTime(null);
@@ -106,9 +174,46 @@ export const TokenDetailPage: React.FC = () => {
 
     let currentSolUsd = 0;
     setMarketDataLoading(true);
-    setChartHistoryLoading(timeframe !== '1S' && timeframe !== '5S' && timeframe !== '10S');
+    setTokenSnapshotLoading(true);
+    setTokenSnapshotError('');
+    setChartHistoryLoading(true);
     setMarketDataError('');
     setMarketDataStreamError('');
+    setSniperSubscriptionStatus('connecting');
+
+    // Fetch the durable token dossier independently of the sniper subscription.
+    // A rejected/no-position sniper subscription must never cancel this REST request.
+    let cancelled = false;
+    void apiClient.getTokenState(mint).then((rawSnapshot) => {
+      if (cancelled) return;
+      const normalized = normalizeTokenDetailSnapshot(rawSnapshot, mint);
+      setMarketDataSnapshot((previous) => {
+        if (!previous || previous.mint !== mint) return normalized;
+        return {
+          ...normalized,
+          market: { ...normalized.market, ...previous.market },
+          trades: {
+            recent: previous.trades?.recent?.length ? previous.trades.recent : normalized.trades.recent,
+          },
+        };
+      });
+      const chartTimeframe = normalized.chart.timeframe.toUpperCase();
+      if (normalized.chart.points.length > 0) {
+        setChartSeriesByTimeframe((previous) => ({ ...previous, [chartTimeframe]: normalized.chart.points }));
+      }
+      setTokenSnapshotLoading(false);
+      setMarketDataLoading(false);
+      if (chartTimeframe === timeframe.toUpperCase() || !normalized.chart.points.length) {
+        setChartHistoryLoading(false);
+      }
+    }).catch((error) => {
+      if (cancelled) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setTokenSnapshotError(message);
+      setTokenSnapshotLoading(false);
+      // If the REST dossier is absent and the live subscription is rejected,
+      // show a deliberate unavailable state rather than an endless skeleton.
+    });
 
     const serverTimeframe: Record<string, '1m' | '5m' | '15m' | '30m' | '1h' | '24h'> = {
       '1M': '1m',
@@ -124,6 +229,7 @@ export const TokenDetailPage: React.FC = () => {
     const unsubscribeStatus = wsService.onStatusChange((status) => {
       const connected = status === 'connected';
       setMarketDataStreamConnected(connected);
+      setSniperSubscriptionStatus(connected ? 'connecting' : 'disconnected');
       if (!connected) setMarketDataStreamError('NodeX sniper engine stream is disconnected.');
       else setMarketDataStreamError('');
     });
@@ -202,9 +308,17 @@ export const TokenDetailPage: React.FC = () => {
       if (event.event_type === 'token_detail_snapshot') {
         const snapshot = data.snapshot;
         if (snapshot && typeof snapshot === 'object') {
-          setMarketDataSnapshot({ ...(snapshot as TokenDataSnapshot), mint });
+          const normalized = normalizeTokenDetailSnapshot(snapshot as Record<string, any>, mint);
+          setMarketDataSnapshot((previous) => previous?.mint === mint
+            ? { ...normalized, market: { ...normalized.market, ...previous.market } }
+            : normalized);
+          if (normalized.chart.points.length > 0) {
+            setChartSeriesByTimeframe((previous) => ({ ...previous, [normalized.chart.timeframe]: normalized.chart.points }));
+          }
         }
-        // Do not request history until the engine confirms this mint is subscribed.
+        setSniperSubscriptionStatus('connected');
+        setTokenSnapshotLoading(false);
+        // Request chart history only after the engine confirms this mint is subscribed.
         wsService.setChartTimeframe(mint, requestedTimeframe || '5m');
         setMarketDataLoading(false);
         return;
@@ -237,8 +351,11 @@ export const TokenDetailPage: React.FC = () => {
       if (event.event_type === 'command_rejected') {
         const command = String(data.command || '');
         if (command === 'subscribe_token') {
+          setSniperSubscriptionStatus('rejected');
           setMarketDataStreamError(String(data.reason || 'NodeX engine rejected the token subscription.'));
-          setChartHistoryLoading(false);
+          // Keep the independent REST dossier request alive. If it also failed,
+          // finish the chart skeleton and render the explicit empty state.
+          if (tokenSnapshotError) setChartHistoryLoading(false);
           setMarketDataLoading(false);
         } else if (command === 'set_chart_timeframe') {
           // History failure must not mark the live market stream as disconnected.
@@ -249,6 +366,7 @@ export const TokenDetailPage: React.FC = () => {
     });
 
     return () => {
+      cancelled = true;
       unsubscribeEvents();
       unsubscribeStatus();
       wsService.unsubscribeToken(mint);
@@ -573,8 +691,16 @@ export const TokenDetailPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div role="status" className="flex h-[328px] w-full items-center justify-center border-y border-white/[0.06] bg-white/[0.015]">
-              <span className="text-[11px] text-white/40">No chart data available for {timeframe}</span>
+            <div role="status" aria-live="polite" className="flex h-[328px] w-full flex-col items-center justify-center gap-2 border-y border-white/[0.06] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.045),rgba(255,255,255,0.008)_58%,transparent_78%)] px-6 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025]">
+                <ChartLine className="h-4 w-4 text-white/35" />
+              </div>
+              <span className="text-[11px] font-medium text-white/65">No chart history yet</span>
+              <span className="max-w-[250px] text-[10px] leading-relaxed text-white/35">
+                {tokenSnapshotError
+                  ? 'The token snapshot could not be loaded. Live confirmed trades will appear here when the stream is available.'
+                  : `No saved candles are available for ${timeframe}. Waiting for new confirmed trades.`}
+              </span>
             </div>
           )}
           <div
@@ -757,8 +883,33 @@ export const TokenDetailPage: React.FC = () => {
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-3 pb-6 pt-5">
+          <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/[0.07] bg-white/[0.018] p-3">
+            <div className="min-w-0">
+              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX REST snapshot</p>
+              <p className={`mt-1 truncate text-[10px] font-medium ${tokenSnapshotLoading ? 'text-amber-300/80' : tokenSnapshotError ? 'text-red-300/80' : 'text-emerald-300/80'}`}>
+                {tokenSnapshotLoading ? 'Requesting token state…' : tokenSnapshotError ? 'Request failed' : 'Received'}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] uppercase tracking-wider text-white/35">Sniper WebSocket</p>
+              <p className={`mt-1 truncate text-[10px] font-medium ${sniperSubscriptionStatus === 'connected' ? 'text-emerald-300/80' : sniperSubscriptionStatus === 'rejected' || sniperSubscriptionStatus === 'disconnected' ? 'text-red-300/80' : 'text-amber-300/80'}`}>
+                {sniperSubscriptionStatus === 'connecting' ? 'Connecting / subscribing…' : sniperSubscriptionStatus === 'connected' ? 'Subscribed' : sniperSubscriptionStatus === 'rejected' ? 'Subscription rejected' : 'Disconnected'}
+              </p>
+            </div>
+            {tokenSnapshotError && (
+              <p className="col-span-2 break-words text-[10px] leading-relaxed text-red-300/70">{tokenSnapshotError}</p>
+            )}
+            {marketDataStreamError && (
+              <p className="col-span-2 break-words text-[10px] leading-relaxed text-amber-200/65">{marketDataStreamError}</p>
+            )}
+          </div>
           <div className="space-y-4">
-            <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
+              <span className="text-[9px] font-mono text-white/30">
+                {tokenSnapshotLoading ? 'FETCHING SNAPSHOT' : tokenSnapshotError ? 'SNAPSHOT UNAVAILABLE' : 'SNAPSHOT RECEIVED'}
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
               {[
                 { label: 'Market Cap', value: formatCompactMarketCap(marketDataSnapshot?.market?.market_cap_usd) },
@@ -770,7 +921,11 @@ export const TokenDetailPage: React.FC = () => {
               ].map((item) => (
                 <div key={item.label} className="min-w-0 space-y-1">
                   <p className="text-[11px] font-normal text-white/40">{item.label}</p>
-                  <p className="truncate font-mono text-[17px] font-medium leading-tight tracking-tight text-white/95">{item.value}</p>
+                  {tokenSnapshotLoading && item.value === '—' ? (
+                    <div aria-label={`Loading ${item.label}`} className="h-[21px] w-24 max-w-full animate-pulse rounded bg-white/[0.075]" />
+                  ) : (
+                    <p className="truncate font-mono text-[17px] font-medium leading-tight tracking-tight text-white/95">{item.value}</p>
+                  )}
                 </div>
               ))}
             </div>
