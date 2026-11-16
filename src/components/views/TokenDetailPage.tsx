@@ -3,6 +3,7 @@ import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
 import { marketDataService } from '../../services/marketData';
+import { CandleEngine, type ConfirmedTrade } from '../../services/candleEngine';
 import {
   ChevronLeft,
   Copy,
@@ -73,6 +74,7 @@ export const TokenDetailPage: React.FC = () => {
   const [floatingAmounts, setFloatingAmounts] = useState<FloatingTradeAmount[]>([]);
   const nextFloatingAnimationAtRef = useRef(0);
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
+  const tradeCandleEngineRef = useRef(new CandleEngine());
   // Backend OHLC updates take precedence over an in-flight historical snapshot
   // for the same timeframe/bucket, preventing late chunks from rolling the
   // visible candle backwards.
@@ -103,6 +105,7 @@ export const TokenDetailPage: React.FC = () => {
     : null;
 
   useEffect(() => {
+    tradeCandleEngineRef.current.reset();
     setTimeframe('1S');
     setScrubTime(null);
   }, [activeToken?.mint]);
@@ -145,6 +148,8 @@ export const TokenDetailPage: React.FC = () => {
         if (!response.ok) throw new Error(typeof payload === 'string' ? payload : (payload.error || payload.message || 'Token snapshot request failed (HTTP ' + response.status + ').'));
         if (!cancelled) {
           const snapshot = payload as TokenDataSnapshot;
+          tradeCandleEngineRef.current.reset();
+          tradeCandleEngineRef.current.addTrades(snapshot.trades?.recent || []);
           setMarketDataSnapshot(snapshot);
           if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
           setMarketDataLoading(false);
@@ -180,6 +185,8 @@ export const TokenDetailPage: React.FC = () => {
         if (!response.ok) throw new Error(payload.error || payload.message || 'Token snapshot refresh failed.');
         if (cancelled) return;
         const snapshot = payload as TokenDataSnapshot;
+        tradeCandleEngineRef.current.reset();
+        tradeCandleEngineRef.current.addTrades(snapshot.trades?.recent || []);
         setMarketDataSnapshot(snapshot);
         if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
         setMarketDataLoading(false);
@@ -232,6 +239,7 @@ export const TokenDetailPage: React.FC = () => {
             setChartHistoryLoading(true);
             setMarketDataStreamError('');
             setMarketDataSnapshot(emptyTokenSnapshot(mint, String(message.timeframe || '1M')));
+            tradeCandleEngineRef.current.reset();
             liveChartOverridesRef.current = {};
             setChartSeriesByTimeframe({});
             return;
@@ -239,6 +247,9 @@ export const TokenDetailPage: React.FC = () => {
           if (message.event === 'snapshot_section') {
             const sectionTopic = String(message.topic || '');
             const section = message.data && typeof message.data === 'object' ? message.data : {};
+            if (sectionTopic === 'token.trades' && Array.isArray(section.recent)) {
+              tradeCandleEngineRef.current.addTrades(section.recent as ConfirmedTrade[]);
+            }
             setMarketDataSnapshot((previous) => {
               const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
               if (sectionTopic === 'token.market') return { ...base, market: { ...base.market, ...section } };
@@ -346,6 +357,7 @@ export const TokenDetailPage: React.FC = () => {
             }
           } else if (topic === 'token.trades') {
             const trade = data.trade || data;
+            tradeCandleEngineRef.current.addTrade(trade as ConfirmedTrade);
             if (trade.signature) setMarketDataSnapshot((previous) => {
               const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
               return { ...base, trades: { recent: [trade, ...base.trades.recent.filter((item) => !(item.signature === trade.signature && Number(item.event_index || 0) === Number(trade.event_index || 0)))].slice(0, 200) } };
@@ -427,15 +439,26 @@ export const TokenDetailPage: React.FC = () => {
   // Prefer the backend's timeframe-specific OHLC series whenever present.
   // Raw recent trades are only a fallback for sub-minute charts with no stored
   // history; combining both would count the same swaps twice.
-  const locallyAggregatedPoints = isSubMinuteTimeframe
-    ? (cachedChartPoints.length > 0
-      ? aggregateChartPoints(cachedChartPoints, timeframe)
-      : tradesToChartPoints(marketDataSnapshot?.trades?.recent || [], timeframe))
+  const historicalChartPoints = isSubMinuteTimeframe
+    ? aggregateChartPoints(cachedChartPoints, timeframe)
     : timeframe === '1M'
       ? (cachedChartPoints.length > 0 ? cachedChartPoints : baseChartPoints)
       : (cachedChartPoints.length > 0
         ? aggregateChartPoints(cachedChartPoints, timeframe)
         : aggregateChartPoints(baseChartPoints, timeframe));
+  // Confirmed trades received by this client own the buckets they touched.
+  // Backend OHLC remains the historical baseline and reconnect recovery source.
+  const locallyAggregatedPoints = (() => {
+    const merged = new Map<number, TokenChartPoint>(
+      historicalChartPoints.map((point) => [point.timestamp_ms, point])
+    );
+    for (const point of tradeCandleEngineRef.current.getPoints(timeframe)) {
+      merged.set(point.timestamp_ms, point);
+    }
+    return [...merged.values()]
+      .sort((a, b) => a.timestamp_ms - b.timestamp_ms)
+      .slice(-5000);
+  })();
   const chartHistory: import('../../types').PricePoint[] = locallyAggregatedPoints.map((point) => ({
     time: Number(point.timestamp_ms),
     price: Number(point.close),
