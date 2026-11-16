@@ -278,9 +278,14 @@ export const TokenDetailPage: React.FC = () => {
 
   if (!activeToken) return null;
   const activePosition = positions.find((position) => position.mint === activeToken.mint && position.status === 'OPEN');
-  const selectedChartPoints = chartSeriesByTimeframe[timeframe] || (timeframe === marketDataSnapshot?.chart?.timeframe ? marketDataSnapshot?.chart?.points || [] : []);
+  const cachedChartPoints = chartSeriesByTimeframe[timeframe] || [];
   const baseChartPoints = chartSeriesByTimeframe['1M'] || (marketDataSnapshot?.chart?.timeframe === '1M' ? marketDataSnapshot?.chart?.points || [] : []);
-  const locallyAggregatedPoints = selectedChartPoints.length > 0 ? selectedChartPoints : (timeframe === '1S' || timeframe === '5S' || timeframe === '10S') ? tradesToChartPoints(marketDataSnapshot?.trades?.recent || [], timeframe) : aggregateChartPoints(baseChartPoints, timeframe);
+  const isSubMinuteTimeframe = timeframe === '1S' || timeframe === '5S' || timeframe === '10S';
+  const locallyAggregatedPoints = isSubMinuteTimeframe
+    ? aggregateChartPoints([...cachedChartPoints, ...tradesToChartPoints(marketDataSnapshot?.trades?.recent || [], timeframe)], timeframe)
+    : timeframe === '1M'
+      ? (cachedChartPoints.length > 0 ? cachedChartPoints : baseChartPoints)
+      : aggregateChartPoints([...baseChartPoints, ...cachedChartPoints], timeframe);
   const chartHistory: import('../../types').PricePoint[] = locallyAggregatedPoints.map((point) => ({
     time: Number(point.timestamp_ms),
     price: Number(point.close),
