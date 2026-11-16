@@ -231,7 +231,7 @@ export class NodeXWebSocketService {
       this.send({command:'set_chart_timeframe',mint:normalized,timeframe});
     }
   }
-  public setChartTimeframe(mint:string,timeframe:'1m'|'5m'|'15m'|'1h'|'24h'):void {
+  public setChartTimeframe(mint:string,timeframe:'1m'|'5m'|'15m'|'30m'|'1h'|'24h'):void {
     const normalized=mint.trim();
     if(!normalized)return;
     this.tokenSubscriptions.set(normalized,timeframe);
