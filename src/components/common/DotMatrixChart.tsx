@@ -891,7 +891,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   // before shrinking/rescaling while preserving clean top headroom.
   const computeTargetYRange = useCallback(
     (rawMin: number, rawMax: number, tf: string) => {
-      const liveVal = smoothedPriceRef.current;
+      // The line chart may smoothly follow the latest quote between trades.
+      // Candlesticks must be scaled only from confirmed-trade OHLC data; a
+      // quote/market-cap refresh is not a trade and must not distort candle
+      // ranges or manufacture wick extremes.
+      const liveVal =
+        chartTypeRef.current === 'line' ? smoothedPriceRef.current : 0;
       const visMin =
         liveVal > 0 && Number.isFinite(liveVal) ? Math.min(rawMin, liveVal) : rawMin;
       const visMax =
@@ -1595,42 +1600,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
               isAutoPositioningRef.current = false;
             }
           }
-        } else if (
-          chartTypeRef.current === 'candle' &&
-          committed.length > 0 &&
-          displayP > 0
-        ) {
-          // Smoothly move the active candle body/wick in lockstep with the line & card;
-          // candle mode stays horizontally still until a new candle is created.
+        } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
+          // Candles are trade-driven only. Do not apply the smoothed quote
+          // (which may come from the market-data/engine price WebSocket) to
+          // the active candle: doing so creates false highs/lows and makes
+          // the OHLC chart disagree with the confirmed trade stream.
           subBarFractionRef.current = 0;
-          const activeCandle = committed[committed.length - 1];
-          const nextHigh = Math.max(activeCandle.high, activeCandle.open, displayP);
-          const nextLow = Math.min(activeCandle.low, activeCandle.open, displayP);
-          const relChange =
-            Math.abs(displayP - activeCandle.close) /
-            Math.max(1e-10, activeCandle.close);
-          if (
-            relChange > 1e-6 ||
-            nextHigh !== activeCandle.high ||
-            nextLow !== activeCandle.low
-          ) {
-            activeCandle.close = displayP;
-            activeCandle.high = nextHigh;
-            activeCandle.low = nextLow;
-            isApplyingAutoScrollRef.current = true;
-            try {
-              candleSeries.update({
-                time: activeCandle.time,
-                open: activeCandle.open,
-                high: activeCandle.high,
-                low: activeCandle.low,
-                close: activeCandle.close,
-              });
-            } finally {
-              isApplyingAutoScrollRef.current = false;
-            }
-            committedNewBar = true;
-          }
 
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             const targetScrollPos = BASE_RIGHT_OFFSET;
