@@ -23,6 +23,7 @@ import {
   createChart,
 } from 'lightweight-charts';
 import { PricePoint } from '../../types';
+import { isUnixTimestampMilliseconds } from '../../services/candleEngine';
 
 export interface PriceTick {
   time: string;
@@ -740,8 +741,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         (point) =>
           Number.isFinite(point.price) &&
           point.price > 0 &&
-          Number.isFinite(point.time) &&
-          point.time > 1_000_000,
+          isUnixTimestampMilliseconds(point.time),
       )
       .slice()
       .sort((a, b) => a.time - b.time);
