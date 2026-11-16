@@ -1859,7 +1859,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
           lastAppliedScrollPosRef.current = pos;
           isAutoPositioningRef.current = true;
-          chart.timeScale().scrollToPosition(pos, true);
+          chart.timeScale().scrollToPosition(pos, false);
           setIsPanned(false);
         }
       } finally {
