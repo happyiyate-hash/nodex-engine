@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
-import { marketDataService } from '../../services/marketData';
 import { wsService } from '../../services/websocket';
 import { CandleEngine, type ConfirmedTrade } from '../../services/candleEngine';
 import {
@@ -65,9 +64,7 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
-  const marketDataSocketRef = useRef<WebSocket | null>(null);
   // Primary market-data quotes take precedence; engine ticks fill gaps only.
-  const lastPrimaryMarketUpdateAtRef = useRef(0);
   const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(false);
   const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
@@ -85,464 +82,9 @@ export const TokenDetailPage: React.FC = () => {
   useEffect(() => {
     tradeCandleEngineRef.current.reset();
     lastTradeCursorRef.current = 0;
-    lastPrimaryMarketUpdateAtRef.current = 0;
     setConnectionNotice('');
     setTimeframe('1S');
     setScrubTime(null);
-  }, [activeToken?.mint]);
-
-  // Load the selected mint from the independent Token Data service. The mint
-  // is part of the snapshot URL; the public read-only endpoint needs no client key.
-  useEffect(() => {
-    const mint = activeToken?.mint;
-    if (!mint) return;
-    let cancelled = false;
-    const loadSnapshot = async () => {
-      setMarketDataLoading(true);
-      setChartHistoryLoading(true);
-      setMarketDataError('');
-      setMarketDataSnapshot((previous) => previous?.mint === mint ? previous : null);
-      setChartSeriesByTimeframe((previous) => marketDataSnapshot?.mint === mint ? previous : {});
-      const settings = marketDataService.loadSettings();
-      // REST owns the historical chart baseline in both REST-only and
-      // WebSocket-enabled configurations. The socket is reserved for live data.
-      if (!settings.restUrl) {
-        setMarketDataError('Market Data API is not configured. Add its REST URL and API key in Settings.');
-        setMarketDataLoading(false);
-        setChartHistoryLoading(false);
-        return;
-      }
-      try {
-        const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
-        // Fetch the historical baseline for the currently selected timeframe.
-        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=' + encodeURIComponent(timeframe), baseUrl);
-        const response = await fetch(url.toString());
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(typeof payload === 'string' ? payload : (payload.error || payload.message || 'Token snapshot request failed (HTTP ' + response.status + ').'));
-        if (!cancelled) {
-          const snapshot = payload as TokenDataSnapshot;
-          // Merge snapshot trades into the existing engine: live trades may have
-          // arrived while this HTTP request was in flight.
-          tradeCandleEngineRef.current.addTrades(snapshot.trades?.recent || []);
-          setMarketDataSnapshot((previous) => {
-            const current = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-            const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
-            for (const trade of [...(snapshot.trades?.recent || []), ...(current.trades?.recent || [])]) {
-              recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
-            }
-            return {
-              ...snapshot,
-              trades: {
-                recent: [...recentById.values()]
-                  .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
-                  .slice(0, 200),
-              },
-            };
-          });
-          if (Array.isArray(snapshot.chart?.points)) {
-            setChartSeriesByTimeframe((previous) => ({
-              ...previous,
-              [snapshot.chart.timeframe || timeframe]: snapshot.chart.points,
-            }));
-          }
-          setMarketDataLoading(false);
-          setChartHistoryLoading(false);
-        }
-      } catch (error) {
-        if (!cancelled) setMarketDataError(error instanceof Error ? error.message : 'Could not load token market data.');
-      } finally {
-        if (!cancelled) {
-          setMarketDataLoading(false);
-          setChartHistoryLoading(false);
-        }
-      }
-    };
-    void loadSnapshot();
-    return () => { cancelled = true; };
-  }, [activeToken?.mint, timeframe]);
-
-  // One public WebSocket session per selected token. The mint and topics are sent in subscribe.
-  useEffect(() => {
-    const mint = activeToken?.mint;
-    if (!mint) return;
-    let cancelled = false;
-    let socket: WebSocket | null = null;
-    let retryTimer: number | undefined;
-    let retryDelay = 1000;
-    let connect: () => Promise<void>;
-    // Coalesce bursts of trade events into one React/chart-engine update.
-    let pendingLiveTrades: ConfirmedTrade[] = [];
-    let pendingActivityAmounts: FloatingTradeAmount[] = [];
-    let tradeBatchTimer: number | undefined;
-    // A missing backfill route is a permanent capability failure for this token
-    // session; transient failures use bounded exponential backoff.
-    let recoveryDisabled = false;
-    let recoveryFailureCount = 0;
-    let recoveryRetryAfter = 0;
-    const flushTradeBatch = () => {
-      tradeBatchTimer = undefined;
-      if (cancelled) { pendingLiveTrades = []; pendingActivityAmounts = []; return; }
-      const trades = pendingLiveTrades;
-      const activities = pendingActivityAmounts;
-      pendingLiveTrades = [];
-      pendingActivityAmounts = [];
-      if (trades.length > 0) {
-        tradeCandleEngineRef.current.addTrades(trades);
-        const validTrades = trades.filter((trade) => Boolean(trade.signature));
-        if (validTrades.length > 0) setMarketDataSnapshot((previous) => {
-          const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-          const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
-          for (const trade of [...validTrades, ...(base.trades?.recent || [])]) {
-            recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade as TokenDataSnapshot['trades']['recent'][number]);
-          }
-          return { ...base, trades: { recent: [...recentById.values()].sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms)).slice(0, 200) } };
-        });
-      }
-      if (activities.length > 0) setFloatingAmounts((current) => [...current, ...activities].slice(-40));
-    };
-    const queueTrade = (trade: ConfirmedTrade) => {
-      pendingLiveTrades.push(trade);
-      if (tradeBatchTimer === undefined) tradeBatchTimer = window.setTimeout(flushTradeBatch, 100);
-    };
-    const queueActivity = (activity: FloatingTradeAmount) => {
-      pendingActivityAmounts.push(activity);
-      if (tradeBatchTimer === undefined) tradeBatchTimer = window.setTimeout(flushTradeBatch, 100);
-    };
-    const refreshSnapshot = async () => {
-      const settings = marketDataService.loadSettings();
-      if (!settings.restUrl) return;
-      try {
-        const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
-        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=' + encodeURIComponent(timeframe), baseUrl);
-        const response = await fetch(url.toString());
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || payload.message || 'Token snapshot refresh failed.');
-        if (cancelled) return;
-        const snapshot = payload as TokenDataSnapshot;
-        tradeCandleEngineRef.current.addTrades(snapshot.trades?.recent || []);
-        setMarketDataSnapshot((previous) => {
-          const current = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-          const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
-          for (const trade of [...(snapshot.trades?.recent || []), ...(current.trades?.recent || [])]) {
-            recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
-          }
-          return {
-            ...snapshot,
-            trades: {
-              recent: [...recentById.values()]
-                .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
-                .slice(0, 200),
-            },
-          };
-        });
-        if (Array.isArray(snapshot.chart?.points)) {
-          setChartSeriesByTimeframe((previous) => ({
-            ...previous,
-            [snapshot.chart.timeframe || timeframe]: snapshot.chart.points,
-          }));
-        }
-        setMarketDataLoading(false);
-        setChartHistoryLoading(false);
-      } catch (error) {
-        if (!cancelled) {
-          setMarketDataLoading(false);
-          setChartHistoryLoading(false);
-          setMarketDataStreamError(error instanceof Error ? error.message : 'Could not restore the latest token snapshot.');
-        }
-      }
-    };
-    let recoveryPromise: Promise<void> | null = null;
-    const recoverMissedTrades = (): Promise<void> => {
-      if (recoveryPromise) return recoveryPromise;
-      if (recoveryDisabled || Date.now() < recoveryRetryAfter) return Promise.resolve();
-      recoveryPromise = (async () => {
-        const settings = marketDataService.loadSettings();
-        if (!settings.restUrl) return;
-        let recoveryCursor = lastTradeCursorRef.current;
-        let pageCount = 0;
-        try {
-          while (!cancelled && pageCount < 100) {
-            const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
-            const url = new URL(
-              'api/v1/tokens/' + encodeURIComponent(mint) + '/trades/missed?after=' + recoveryCursor + '&limit=500',
-              baseUrl,
-            );
-            const response = await fetch(url.toString());
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok) {
-              const recoveryError = new Error(payload.error || payload.message || 'Missed-trade recovery failed (HTTP ' + response.status + ').');
-              (recoveryError as Error & { status?: number }).status = response.status;
-              throw recoveryError;
-            }
-            if (cancelled) return;
-            if (payload.cursor_reset === true) {
-              // The backend's per-token cache expired. Restart from its retained
-              // trade history and move the local cursor back to the new epoch.
-              lastTradeCursorRef.current = Math.min(
-                lastTradeCursorRef.current,
-                Math.max(0, Number(payload.head_cursor) || 0),
-              );
-              void refreshSnapshot();
-              recoveryCursor = 0;
-            }
-            const recovered = Array.isArray(payload.trades) ? payload.trades : [];
-            if (recovered.length > 0) {
-              tradeCandleEngineRef.current.addTrades(recovered as ConfirmedTrade[]);
-              setMarketDataSnapshot((previous) => {
-                const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-                const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
-                for (const trade of [...recovered, ...(base.trades?.recent || [])]) {
-                  recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
-                }
-                return {
-                  ...base,
-                  trades: {
-                    recent: [...recentById.values()]
-                      .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
-                      .slice(0, 200),
-                  },
-                };
-              });
-            }
-            const nextCursor = Number(payload.next_cursor);
-            if (Number.isFinite(nextCursor) && nextCursor >= recoveryCursor) {
-              recoveryCursor = nextCursor;
-            }
-            pageCount += 1;
-            if (payload.has_more !== true || recovered.length === 0) break;
-          }
-          recoveryFailureCount = 0;
-          recoveryRetryAfter = 0;
-          lastTradeCursorRef.current = Math.max(lastTradeCursorRef.current, recoveryCursor);
-          if (pageCount >= 100) {
-            setMarketDataStreamError('Trade recovery reached its page safety limit. Reopen this token to continue recovery.');
-          }
-        } catch (error) {
-          if (!cancelled) {
-            const status = Number((error as Error & { status?: number })?.status || 0);
-            if (status === 404) {
-              // Stop retrying a route that the deployed API does not expose.
-              recoveryDisabled = true;
-            } else {
-              recoveryFailureCount += 1;
-              const backoffMs = Math.min(60000, 1000 * (2 ** Math.min(recoveryFailureCount - 1, 6)));
-              recoveryRetryAfter = Date.now() + backoffMs;
-            }
-            setMarketDataStreamError(error instanceof Error ? error.message : 'Could not recover missed confirmed trades.');
-          }
-        }
-      })().finally(() => {
-        recoveryPromise = null;
-      });
-      return recoveryPromise;
-    };
-    let hasConnectedBefore = false;
-    const scheduleReconnect = () => {
-      if (cancelled || retryTimer !== undefined) return;
-      const delay = retryDelay;
-      retryDelay = Math.min(retryDelay * 2, 30000);
-      retryTimer = window.setTimeout(() => { retryTimer = undefined; void connect(); }, delay);
-    };
-    connect = async () => {
-      const settings = marketDataService.loadSettings();
-      if (!settings.restUrl || !settings.wsUrl) {
-        setMarketDataStreamConnected(false);
-        setMarketDataStreamError('Market Data WebSocket is not configured.');
-        return;
-      }
-      try {
-        socket = await marketDataService.connectWebSocket(settings);
-        if (cancelled) { socket.close(); return; }
-        marketDataSocketRef.current = socket;
-        retryDelay = 1000;
-        setMarketDataStreamConnected(true);
-        setMarketDataStreamError('');
-        if (hasConnectedBefore) {
-          // Rebuild the live overlay from the refreshed REST baseline, then
-          // replay every confirmed trade after the durable per-mint cursor.
-          tradeCandleEngineRef.current.reset();
-          void refreshSnapshot();
-        }
-        hasConnectedBefore = true;
-        socket.send(JSON.stringify({
-          command: 'subscribe',
-          mint,
-          topics: ['token.market', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
-          timeframe,
-        }));
-        // Subscribe first, then backfill from the durable cursor. Overlap is
-        // safe because CandleEngine deduplicates signature:event_index.
-        void recoverMissedTrades();
-        socket.addEventListener('message', (messageEvent) => {
-          let message: any;
-          try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
-          if (message.mint && message.mint !== mint) return;
-          if (message.event === 'resync_required') {
-            setMarketDataStreamError('Recovering confirmed trades after a stream gap…');
-            void recoverMissedTrades();
-            socket?.send(JSON.stringify({ command: 'request_snapshot', timeframe }));
-            return;
-          }
-          if (message.event === 'snapshot_started') {
-            setMarketDataLoading(true);
-            setMarketDataStreamError('');
-            // A socket snapshot refreshes live metadata, not historical chart
-            // ownership. Keep the REST baseline and accumulated confirmed trades.
-            setMarketDataSnapshot((previous) => previous?.mint === mint
-              ? previous
-              : emptyTokenSnapshot(mint, String(message.timeframe || timeframe)));
-            return;
-          }
-          if (message.event === 'snapshot_section') {
-            const sectionTopic = String(message.topic || '');
-            const section = message.data && typeof message.data === 'object' ? message.data : {};
-            if (sectionTopic === 'token.trades' && Array.isArray(section.recent)) {
-              tradeCandleEngineRef.current.addTrades(section.recent as ConfirmedTrade[]);
-            }
-            setMarketDataSnapshot((previous) => {
-              const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-              if (sectionTopic === 'token.market') {
-                if (section.price_usd != null || section.market_cap_usd != null || section.price_sol != null) {
-                  lastPrimaryMarketUpdateAtRef.current = Date.now();
-                }
-                return { ...base, market: { ...base.market, ...section } };
-              }
-              if (sectionTopic === 'token.identity') return { ...base, identity: { ...base.identity, ...section } };
-              if (sectionTopic === 'token.info') return { ...base, info: { ...base.info, ...section } };
-              if (sectionTopic === 'token.holders') return { ...base, holders: { ...base.holders, ...section } };
-              if (sectionTopic === 'token.trades') {
-                const recentById = new Map<string, TokenDataSnapshot['trades']['recent'][number]>();
-                for (const trade of [...(section.recent || []), ...(base.trades?.recent || [])]) {
-                  recentById.set(trade.signature + ':' + Number(trade.event_index || 0), trade);
-                }
-                return {
-                  ...base,
-                  trades: {
-                    ...base.trades,
-                    ...section,
-                    recent: [...recentById.values()]
-                      .sort((a, b) => Number(b.timestamp_ms) - Number(a.timestamp_ms))
-                      .slice(0, 200),
-                  },
-                };
-              }
-              return base;
-            });
-            return;
-          }
-          if (
-            message.event === 'chart_history_started' ||
-            message.event === 'chart_history_chunk' ||
-            message.event === 'chart_history_completed'
-          ) {
-            // Historical candles come from REST. Ignore socket chart-history
-            // payloads so they cannot clear or replace the REST baseline.
-            return;
-          }
-          if (message.event === 'snapshot_completed') {
-            setMarketDataLoading(false);
-            setMarketDataStreamError('');
-            return;
-          }
-          if (message.event === 'snapshot_error') {
-            setMarketDataLoading(false);
-            setChartHistoryLoading(false);
-            setMarketDataStreamError(String(message.message || 'Token snapshot could not be loaded.'));
-            return;
-          }
-          if (message.event === 'error') {
-            setMarketDataStreamError(String(message.message || message.code || 'Market Data stream reported an error.'));
-            return;
-          }
-          const data = message.data && typeof message.data === 'object' ? message.data : {};
-          const topic = String(message.topic || '');
-          if (topic === 'token.market') {
-            const patch = data.market && typeof data.market === 'object' ? data.market : data;
-            if (patch.price_usd != null || patch.market_cap_usd != null || patch.price_sol != null) {
-              lastPrimaryMarketUpdateAtRef.current = Date.now();
-            }
-            setMarketDataSnapshot((previous) => { const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint); return { ...base, market: { ...base.market, ...patch } }; });
-          } else if (topic === 'token.chart') {
-            // The REST response is the sole historical candle baseline.
-            // Live chart updates are driven only by confirmed token.trades events.
-            return;
-          } else if (topic === 'token.trades') {
-            const trade = data.trade || data;
-            const liveCursor = Number(trade.cursor);
-            if (Number.isFinite(liveCursor) && liveCursor > 0) {
-              lastTradeCursorRef.current = Math.max(lastTradeCursorRef.current, liveCursor);
-            }
-            queueTrade(trade as ConfirmedTrade);
-          } else if (topic === 'token.holders') {
-            const holders = data.holders && typeof data.holders === 'object' ? data.holders : data;
-            setMarketDataSnapshot((previous) => { const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint); return { ...base, holders: { ...base.holders, ...holders } }; });
-          } else if (topic === 'token.info' || topic === 'token.creator') {
-            setMarketDataSnapshot((previous) => {
-              const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-              return {
-                ...base,
-                identity: { ...base.identity, ...(data.identity || {}), ...(topic === 'token.creator' ? { creator_address: data.creator_address || data.address } : {}) },
-                info: { ...base.info, ...(data.info || {}) },
-              };
-            });
-          } else if (topic === 'token.activity') {
-            const side = String(data.side || data.type || '').toLowerCase();
-            const hasUsdAmount = data.volume_usd != null && Number(data.volume_usd) > 0;
-            const amount = Number(hasUsdAmount ? data.volume_usd : (data.amount_sol ?? data.amount ?? data.volume_sol ?? 0));
-            if ((side === 'buy' || side === 'sell') && amount > 0) {
-              const id = String(data.signature ? data.signature + ':' + Number(data.event_index || 0) : message.sequence || (String(message.timestamp_ms || Date.now()) + ':' + Math.random().toString(36).slice(2)));
-              // Schedule each label at least 320ms after the previous one starts.
-              // At the current upward speed this keeps roughly 27px of vertical
-              // clearance even when several swaps arrive in the same instant.
-              const now = Date.now();
-              const startAt = Math.max(now, nextFloatingAnimationAtRef.current);
-              const delayMs = startAt - now;
-              nextFloatingAnimationAtRef.current = startAt + 320;
-              queueActivity({
-                id,
-                amount,
-                side: side as 'buy' | 'sell',
-                unit: hasUsdAmount ? 'USD' as const : 'SOL' as const,
-                delayMs,
-              });
-            }
-          }
-        });
-        socket.addEventListener('close', () => {
-          if (!cancelled && marketDataSocketRef.current === socket) {
-            marketDataSocketRef.current = null;
-            setMarketDataStreamConnected(false);
-            setMarketDataStreamError('Market Data stream disconnected. Reconnecting…');
-            scheduleReconnect();
-          }
-        });
-        socket.addEventListener('error', () => {
-          if (!cancelled) {
-            setMarketDataStreamConnected(false);
-            setMarketDataStreamError('Market Data stream connection error.');
-          }
-        });
-      } catch (error) {
-        if (!cancelled) {
-          setMarketDataStreamConnected(false);
-          setMarketDataStreamError((error instanceof Error ? error.message : 'Could not connect to Market Data stream.') + ' Reconnecting…');
-          // Keep the detail page useful if the WebSocket is temporarily unavailable.
-          void refreshSnapshot();
-          scheduleReconnect();
-        }
-      }
-    };
-    void connect();
-    return () => {
-      cancelled = true;
-      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
-      if (tradeBatchTimer !== undefined) window.clearTimeout(tradeBatchTimer);
-      pendingLiveTrades = [];
-      pendingActivityAmounts = [];
-      if (socket) socket.close();
-      if (marketDataSocketRef.current === socket) marketDataSocketRef.current = null;
-      setMarketDataStreamConnected(false);
-    };
   }, [activeToken?.mint]);
 
   // Keep connection and loading failures visible until the user dismisses them.
@@ -554,47 +96,157 @@ export const TokenDetailPage: React.FC = () => {
     }
   }, [marketDataError, marketDataStreamError]);
 
-  // The trading engine is an independent backup source for the market panel.
-  // It never feeds CandleEngine: only confirmed token.trades events may move charts.
+  // NodeX sniper engine is the single live source for market cap and confirmed trades.
+  // Market ticks update the market panel only; confirmed trades alone feed CandleEngine.
   useEffect(() => {
     const mint = activeToken?.mint;
     if (!mint) return;
 
-    return wsService.subscribe((event) => {
-      if (!['market_tick', 'market_price_update', 'token_market_update'].includes(event.event_type)) return;
+    let currentSolUsd = 0;
+    setMarketDataLoading(true);
+    setChartHistoryLoading(timeframe !== '1S' && timeframe !== '5S' && timeframe !== '10S');
+    setMarketDataError('');
+    setMarketDataStreamError('');
+
+    const serverTimeframe: Record<string, '1m' | '5m' | '15m' | '30m' | '1h' | '24h'> = {
+      '1M': '1m',
+      '5M': '5m',
+      '15M': '15m',
+      '30M': '30m',
+      '1H': '1h',
+      '24H': '24h',
+    };
+    const requestedTimeframe = serverTimeframe[timeframe];
+    wsService.subscribeToken(mint, requestedTimeframe || '5m');
+    if (requestedTimeframe) wsService.setChartTimeframe(mint, requestedTimeframe);
+
+    const unsubscribeStatus = wsService.onStatusChange((status) => {
+      const connected = status === 'connected';
+      setMarketDataStreamConnected(connected);
+      if (!connected) setMarketDataStreamError('NodeX sniper engine stream is disconnected.');
+      else setMarketDataStreamError('');
+    });
+
+    const unsubscribeEvents = wsService.subscribe((event) => {
       const data = event.data && typeof event.data === 'object' ? event.data : {};
       const eventMint = String(data.mint_address || data.token_mint || data.base_mint || event.token_mint || '');
-      if (eventMint !== mint) return;
+      if (eventMint && eventMint !== mint) return;
 
-      // Prefer the dedicated Market Data stream whenever it has delivered a
-      // real quote recently. The engine is a fallback, not a competing writer.
-      if (Date.now() - lastPrimaryMarketUpdateAtRef.current < 12_000) return;
-
-      const patch: Record<string, number> = {};
-      const priceUsd = Number(data.price_usd);
-      const priceSol = Number(data.price_sol);
-      const marketCapUsd = Number(data.market_cap_usd);
-      const marketCapSol = Number(data.market_cap_sol);
-      const solPriceUsd = Number(data.sol_price_usd);
-      if (Number.isFinite(priceUsd) && priceUsd > 0) patch.price_usd = priceUsd;
-      if (Number.isFinite(priceSol) && priceSol > 0) patch.price_sol = priceSol;
-      if (Number.isFinite(marketCapUsd) && marketCapUsd > 0) {
-        patch.market_cap_usd = marketCapUsd;
-      } else if (
-        Number.isFinite(marketCapSol) && marketCapSol > 0 &&
-        Number.isFinite(solPriceUsd) && solPriceUsd > 0 &&
-        String(data.sol_price_status || '').toLowerCase() === 'live'
-      ) {
-        patch.market_cap_usd = marketCapSol * solPriceUsd;
+      if (event.event_type === 'market_tick' || event.event_type === 'market_price_update' || event.event_type === 'token_market_update') {
+        if (eventMint !== mint) return;
+        const solUsd = Number(data.sol_price_usd);
+        if (Number.isFinite(solUsd) && solUsd > 0 && String(data.sol_price_status || '').toLowerCase() === 'live') {
+          currentSolUsd = solUsd;
+        }
+        const patch: Record<string, number> = {};
+        const priceUsd = Number(data.price_usd);
+        const priceSol = Number(data.price_sol);
+        const marketCapUsd = Number(data.market_cap_usd);
+        const marketCapSol = Number(data.market_cap_sol);
+        const change1m = Number(data.price_change_1m_pct);
+        const change5m = Number(data.price_change_5m_pct);
+        if (Number.isFinite(priceUsd) && priceUsd > 0) patch.price_usd = priceUsd;
+        else if (Number.isFinite(priceSol) && priceSol > 0 && currentSolUsd > 0) patch.price_usd = priceSol * currentSolUsd;
+        if (Number.isFinite(priceSol) && priceSol > 0) patch.price_sol = priceSol;
+        if (Number.isFinite(marketCapUsd) && marketCapUsd > 0) patch.market_cap_usd = marketCapUsd;
+        else if (Number.isFinite(marketCapSol) && marketCapSol > 0 && currentSolUsd > 0) patch.market_cap_usd = marketCapSol * currentSolUsd;
+        if (Number.isFinite(change1m)) patch.change_1m_pct = change1m;
+        if (Number.isFinite(change5m)) patch.change_5m_pct = change5m;
+        if (Object.keys(patch).length > 0) {
+          setMarketDataSnapshot((previous) => {
+            const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+            return { ...base, market: { ...base.market, ...patch } };
+          });
+        }
+        setMarketDataLoading(false);
+        return;
       }
-      if (!Object.keys(patch).length) return;
 
-      setMarketDataSnapshot((previous) => {
-        const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
-        return { ...base, market: { ...base.market, ...patch } };
-      });
+      if (event.event_type === 'confirmed_trade_update') {
+        if (eventMint !== mint) return;
+        const priceSol = Number(data.price_sol);
+        const suppliedPriceUsd = Number(data.price_usd);
+        const priceUsd = Number.isFinite(suppliedPriceUsd) && suppliedPriceUsd > 0
+          ? suppliedPriceUsd
+          : Number.isFinite(priceSol) && priceSol > 0 && currentSolUsd > 0
+            ? priceSol * currentSolUsd
+            : 0;
+        if (!(priceUsd > 0)) return;
+        const trade: ConfirmedTrade = {
+          signature: String(data.signature || ''),
+          event_index: Number(data.event_index || 0),
+          side: String(data.side || ''),
+          price_usd: priceUsd,
+          volume_usd: Number(data.volume_sol || 0) * currentSolUsd,
+          timestamp_ms: Number(data.timestamp_ms || 0),
+        };
+        if (!trade.signature || !tradeCandleEngineRef.current.addTrade(trade)) return;
+        setMarketDataSnapshot((previous) => {
+          const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+          const recent = [...(base.trades?.recent || []), {
+            signature: trade.signature,
+            event_index: trade.event_index,
+            side: String(data.side || ''),
+            price_usd: priceUsd,
+            volume_usd: trade.volume_usd,
+            token_amount: Number(data.token_amount_raw || 0) / Math.pow(10, Number(data.token_decimals ?? 6)),
+            timestamp_ms: trade.timestamp_ms,
+          }].slice(-200);
+          return { ...base, trades: { recent } };
+        });
+        return;
+      }
+
+      if (event.event_type === 'token_detail_snapshot') {
+        const snapshot = data.snapshot;
+        if (snapshot && typeof snapshot === 'object') {
+          setMarketDataSnapshot({ ...(snapshot as TokenDataSnapshot), mint });
+        }
+        setMarketDataLoading(false);
+        return;
+      }
+
+      if (event.event_type === 'chart_history_snapshot') {
+        if (eventMint !== mint) return;
+        const backendTimeframe = String(data.timeframe || '');
+        const uiTimeframe = backendTimeframe.toUpperCase();
+        if (uiTimeframe !== timeframe || !Array.isArray(data.candles)) return;
+        const points: TokenChartPoint[] = data.candles.map((candle: any) => ({
+          timestamp_ms: Number(candle.open_time_ms),
+          open: Number(candle.open),
+          high: Number(candle.high),
+          low: Number(candle.low),
+          close: Number(candle.close),
+          volume: Number(candle.volume_sol || 0) * currentSolUsd,
+        })).filter((point: TokenChartPoint) =>
+          Number.isFinite(point.timestamp_ms) && point.timestamp_ms > 0 &&
+          Number.isFinite(point.open) && Number.isFinite(point.high) &&
+          Number.isFinite(point.low) && Number.isFinite(point.close) &&
+          point.open > 0 && point.high > 0 && point.low > 0 && point.close > 0
+        );
+        setChartSeriesByTimeframe((previous) => ({ ...previous, [timeframe]: points }));
+        setChartHistoryLoading(false);
+        setMarketDataLoading(false);
+        return;
+      }
+
+      if (event.event_type === 'command_rejected') {
+        const command = String(data.command || '');
+        if (command === 'subscribe_token' || command === 'set_chart_timeframe') {
+          setMarketDataStreamError(String(data.reason || 'NodeX engine rejected the token chart subscription.'));
+          setChartHistoryLoading(false);
+          setMarketDataLoading(false);
+        }
+      }
     });
-  }, [activeToken?.mint]);
+
+    return () => {
+      unsubscribeEvents();
+      unsubscribeStatus();
+      wsService.unsubscribeToken(mint);
+    };
+  }, [activeToken?.mint, timeframe]);
+
 
   if (!activeToken) return null;
   const activePosition = positions.find((position) => position.mint === activeToken.mint && position.status === 'OPEN');
