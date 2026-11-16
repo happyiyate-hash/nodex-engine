@@ -76,8 +76,6 @@ export const TokenDetailPage: React.FC = () => {
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
   const marketDataSocketRef = useRef<WebSocket | null>(null);
-  const timeframeRef = useRef(timeframe);
-  timeframeRef.current = timeframe;
   const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(false);
   const [marketDataError, setMarketDataError] = useState('');
@@ -140,6 +138,31 @@ export const TokenDetailPage: React.FC = () => {
     if (!mint) return;
     let cancelled = false;
     let socket: WebSocket | null = null;
+    let retryTimer: number | undefined;
+    let retryDelay = 1000;
+    const refreshSnapshot = async () => {
+      const settings = marketDataService.loadSettings();
+      if (!settings.restUrl) return;
+      try {
+        const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
+        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=1M', baseUrl);
+        const response = await fetch(url.toString());
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || payload.message || 'Token snapshot refresh failed.');
+        if (cancelled) return;
+        const snapshot = payload as TokenDataSnapshot;
+        setMarketDataSnapshot(snapshot);
+        if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
+      } catch (error) {
+        if (!cancelled) setMarketDataStreamError(error instanceof Error ? error.message : 'Could not restore the latest token snapshot.');
+      }
+    };
+    const scheduleReconnect = () => {
+      if (cancelled || retryTimer !== undefined) return;
+      const delay = retryDelay;
+      retryDelay = Math.min(retryDelay * 2, 30000);
+      retryTimer = window.setTimeout(() => { retryTimer = undefined; void connect(); }, delay);
+    };
     const connect = async () => {
       const settings = marketDataService.loadSettings();
       if (!settings.restUrl || !settings.wsUrl) {
@@ -151,8 +174,10 @@ export const TokenDetailPage: React.FC = () => {
         socket = await marketDataService.connectWebSocket(settings);
         if (cancelled) { socket.close(); return; }
         marketDataSocketRef.current = socket;
+        retryDelay = 1000;
         setMarketDataStreamConnected(true);
         setMarketDataStreamError('');
+        void refreshSnapshot();
         socket.send(JSON.stringify({
           command: 'subscribe',
           mint,
@@ -162,7 +187,8 @@ export const TokenDetailPage: React.FC = () => {
           let message: any;
           try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
           if (message.event === 'resync_required') {
-            setMarketDataStreamError('Market Data stream requested a refresh. Reopen this token to resync.');
+            setMarketDataStreamError('Restoring the latest market snapshot after a stream gap…');
+            void refreshSnapshot();
             return;
           }
           if (message.event === 'error') {
@@ -210,15 +236,17 @@ export const TokenDetailPage: React.FC = () => {
             const hasUsdAmount = data.volume_usd != null && Number(data.volume_usd) > 0;
             const amount = Number(hasUsdAmount ? data.volume_usd : (data.amount_sol ?? data.amount ?? data.volume_sol ?? 0));
             if ((side === 'buy' || side === 'sell') && amount > 0) {
-              const id = String(data.signature || message.sequence || (String(message.timestamp_ms || Date.now()) + ':' + Math.random().toString(36).slice(2)));
+              const id = String(data.signature ? data.signature + ':' + Number(data.event_index || 0) : message.sequence || (String(message.timestamp_ms || Date.now()) + ':' + Math.random().toString(36).slice(2)));
               setFloatingAmounts((current) => [...current, { id, createdAt: Date.now(), amount, side: side as 'buy' | 'sell', unit: hasUsdAmount ? 'USD' as const : 'SOL' as const }].slice(-30));
             }
           }
         });
         socket.addEventListener('close', () => {
-          if (!cancelled) {
+          if (!cancelled && marketDataSocketRef.current === socket) {
+            marketDataSocketRef.current = null;
             setMarketDataStreamConnected(false);
-            setMarketDataStreamError('Market Data stream disconnected.');
+            setMarketDataStreamError('Market Data stream disconnected. Reconnecting…');
+            scheduleReconnect();
           }
         });
         socket.addEventListener('error', () => {
@@ -230,13 +258,15 @@ export const TokenDetailPage: React.FC = () => {
       } catch (error) {
         if (!cancelled) {
           setMarketDataStreamConnected(false);
-          setMarketDataStreamError(error instanceof Error ? error.message : 'Could not connect to Market Data stream.');
+          setMarketDataStreamError((error instanceof Error ? error.message : 'Could not connect to Market Data stream.') + ' Reconnecting…');
+          scheduleReconnect();
         }
       }
     };
     void connect();
     return () => {
       cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       if (socket) socket.close();
       if (marketDataSocketRef.current === socket) marketDataSocketRef.current = null;
       setMarketDataStreamConnected(false);
