@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 type TokenChartPoint = { timestamp_ms: number; open: number; high: number; low: number; close: number; volume: number };
-type FloatingTradeAmount = { id: string; amount: number; side: 'buy' | 'sell'; unit: 'USD' | 'SOL' };
+type FloatingTradeAmount = { id: string; amount: number; side: 'buy' | 'sell'; unit: 'USD' | 'SOL'; delayMs: number };
 const chartIntervalMs: Record<string, number> = { '1S': 1000, '5S': 5000, '10S': 10000, '1M': 60000, '5M': 300000, '15M': 900000, '30M': 1800000, '1H': 3600000, '24H': 86400000 };
 function aggregateChartPoints(points: TokenChartPoint[], timeframe: string): TokenChartPoint[] {
   const interval = chartIntervalMs[timeframe] || 60000;
@@ -63,6 +63,7 @@ export const TokenDetailPage: React.FC = () => {
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
   const [floatingAmounts, setFloatingAmounts] = useState<FloatingTradeAmount[]>([]);
+  const nextFloatingAnimationAtRef = useRef(0);
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
@@ -240,7 +241,20 @@ export const TokenDetailPage: React.FC = () => {
             const amount = Number(hasUsdAmount ? data.volume_usd : (data.amount_sol ?? data.amount ?? data.volume_sol ?? 0));
             if ((side === 'buy' || side === 'sell') && amount > 0) {
               const id = String(data.signature ? data.signature + ':' + Number(data.event_index || 0) : message.sequence || (String(message.timestamp_ms || Date.now()) + ':' + Math.random().toString(36).slice(2)));
-              setFloatingAmounts((current) => [...current, { id, amount, side: side as 'buy' | 'sell', unit: hasUsdAmount ? 'USD' as const : 'SOL' as const }]);
+              // Schedule each label at least 320ms after the previous one starts.
+              // At the current upward speed this keeps roughly 27px of vertical
+              // clearance even when several swaps arrive in the same instant.
+              const now = Date.now();
+              const startAt = Math.max(now, nextFloatingAnimationAtRef.current);
+              const delayMs = startAt - now;
+              nextFloatingAnimationAtRef.current = startAt + 320;
+              setFloatingAmounts((current) => [...current, {
+                id,
+                amount,
+                side: side as 'buy' | 'sell',
+                unit: hasUsdAmount ? 'USD' as const : 'SOL' as const,
+                delayMs,
+              }]);
             }
           }
         });
@@ -599,8 +613,8 @@ export const TokenDetailPage: React.FC = () => {
                   style={{
                     left: '10px',
                     animation: item.side === 'buy'
-                      ? 'nodex-money-flow 3.4s linear forwards'
-                      : 'nodex-money-flow-sell 3.4s linear forwards',
+                      ? `nodex-money-flow 3.4s linear ${item.delayMs}ms both`
+                      : `nodex-money-flow-sell 3.4s linear ${item.delayMs}ms both`,
                   }}
                 >
                   <span className="inline-flex items-center gap-0.5">
