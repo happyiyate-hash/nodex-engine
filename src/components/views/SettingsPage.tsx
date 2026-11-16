@@ -92,9 +92,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   const [marketDataSettings, setMarketDataSettings] = useState<MarketDataConnectionSettings>(() => marketDataService.loadSettings());
   const [marketDataRestUrlDraft, setMarketDataRestUrlDraft] = useState(() => marketDataService.loadSettings().restUrl);
   const [marketDataWsUrlDraft, setMarketDataWsUrlDraft] = useState(() => marketDataService.loadSettings().wsUrl);
-  const [marketDataApiKeyDraft, setMarketDataApiKeyDraft] = useState(() => marketDataService.loadSettings().apiKey);
   const [marketDataSheetOpen, setMarketDataSheetOpen] = useState(false);
-  const [showMarketDataApiKey, setShowMarketDataApiKey] = useState(false);
   const [savingMarketDataConnection, setSavingMarketDataConnection] = useState(false);
   const [marketDataRestOnline, setMarketDataRestOnline] = useState<boolean | null>(null);
   const [marketDataWsOnline, setMarketDataWsOnline] = useState<boolean | null>(null);
@@ -365,11 +363,11 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
   };
 
   const refreshMarketDataStatus = async (connection: MarketDataConnectionSettings = marketDataSettings) => {
-    if (!connection.restUrl || !connection.apiKey) {
+    if (!connection.restUrl) {
       setMarketDataRestOnline(null);
       setMarketDataWsOnline(null);
       setMarketDataProvidersConfigured(null);
-      setMarketDataMessage('Configure the Market Data REST URL and API key to connect this device.');
+      setMarketDataMessage('Configure the Market Data REST URL to connect this device.');
       return;
     }
     setCheckingMarketData(true);
@@ -382,7 +380,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       setMarketDataMessage(
         health.providers_configured
           ? `Market Data service is reachable. ${providers.length} provider status record(s) returned.`
-          : 'Market Data API is reachable and authenticated, but no upstream price provider is configured yet.'
+          : 'Market Data API is reachable, but no upstream price provider is configured yet.'
       );
       marketDataSocketRef.current?.close();
       marketDataSocketRef.current = null;
@@ -418,7 +416,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       setMarketDataProvidersConfigured(Boolean(health.providers_configured));
       setMarketDataMessage(
         health.providers_configured
-          ? `REST authenticated successfully · ${providers.length} provider status record(s).`
+          ? `REST connection successful · ${providers.length} provider status record(s).`
           : 'REST authenticated successfully, but the Token Data backend has no upstream provider configured yet.'
       );
       setMarketDataMessageSuccess(true);
@@ -443,7 +441,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
       });
       marketDataSocketRef.current = socket;
       setMarketDataWsOnline(true);
-      setMarketDataMessage('Authenticated Market Data WebSocket handshake succeeded.');
+      setMarketDataMessage('Market Data WebSocket connected.');
       setMarketDataMessageSuccess(true);
     } catch (error) {
       setMarketDataWsOnline(false);
@@ -471,18 +469,11 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
         const parsedWs = new URL(wsUrl);
         if (parsedWs.protocol !== 'wss:') throw new Error('Market Data WebSocket URL must start with wss://.');
       }
-      const apiKey = cleanHeaderValue(marketDataApiKeyDraft);
-      if (!apiKey) throw new Error('Enter the Market Data API key.');
-      const candidate = marketDataService.normalizeMarketDataSettings({ restUrl, wsUrl, apiKey });
-
-      // Persist the independent Market Data credentials before remote checks.
-      // If authentication fails, Token Details must still use the newly entered key
-      // rather than silently continuing with a stale key from local storage.
+      const candidate = marketDataService.normalizeMarketDataSettings({ restUrl, wsUrl });
       const saved = marketDataService.saveSettings(candidate);
       setMarketDataSettings(saved);
       setMarketDataRestUrlDraft(saved.restUrl);
       setMarketDataWsUrlDraft(saved.wsUrl);
-      setMarketDataApiKeyDraft(saved.apiKey);
 
       const health = await marketDataService.request<MarketDataHealth>('health', saved);
       if (health.status !== 'ok') throw new Error('Market Data REST health check did not return a healthy response.');
@@ -766,7 +757,7 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
           }} className="flex w-full items-center justify-between rounded-lg bg-[#101010] px-3 py-3.5 text-left transition-colors active:bg-white/[0.05]">
             <span className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06]"><PlugZap className="h-4 w-4 text-white/75" /></span>
-              <span><span className="block text-[12px] font-semibold text-white/90">Configuration settings</span><span className="mt-0.5 block text-[10px] text-white/40">Market Data REST URL, WebSocket URL and API key</span></span>
+              <span><span className="block text-[12px] font-semibold text-white/90">Configuration settings</span><span className="mt-0.5 block text-[10px] text-white/40">Market Data REST URL and WebSocket URL</span></span>
             </span>
             <ChevronRight className="h-4 w-4 text-white/40" />
           </button>
@@ -824,28 +815,6 @@ export const SettingsPage: React.FC<{ onSubpageChange?: (isSubpage: boolean) => 
                       autoCorrect="off"
                       spellCheck={false}
                     />
-                  </Field>
-                  <Field label="API key">
-                    <div className="relative">
-                      <input
-                        type={showMarketDataApiKey ? 'text' : 'password'}
-                        value={marketDataApiKeyDraft}
-                        onChange={(event) => setMarketDataApiKeyDraft(event.target.value)}
-                        placeholder="Enter Market Data API key"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        autoComplete="new-password"
-                        className={`pr-11 rounded-lg px-3 py-2.5 text-[12px] ${inputClass}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowMarketDataApiKey((visible) => !visible)}
-                        aria-label={showMarketDataApiKey ? 'Hide API key' : 'Show API key'}
-                        className="absolute inset-y-0 right-1 flex w-9 items-center justify-center rounded-lg text-white/45"
-                      >
-                        {showMarketDataApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
                   </Field>
                   <p className="text-[9px] leading-snug text-white/35">Saved locally on this device. Anyone with access to this browser profile may be able to retrieve the key.</p>
                   {marketDataMessage && (
