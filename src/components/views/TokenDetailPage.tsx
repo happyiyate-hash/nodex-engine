@@ -11,6 +11,33 @@ import {
   ChartCandlestick,
 } from 'lucide-react';
 
+type TokenChartPoint = { timestamp_ms: number; open: number; high: number; low: number; close: number; volume: number };
+type FloatingTradeAmount = { id: string; createdAt: number; amount: number; side: 'buy' | 'sell'; unit: 'USD' | 'SOL' };
+const chartIntervalMs: Record<string, number> = { '1S': 1000, '5S': 5000, '10S': 10000, '1M': 60000, '5M': 300000, '15M': 900000, '30M': 1800000, '1H': 3600000, '24H': 86400000 };
+function aggregateChartPoints(points: TokenChartPoint[], timeframe: string): TokenChartPoint[] {
+  const interval = chartIntervalMs[timeframe] || 60000;
+  const buckets = new Map<number, TokenChartPoint>();
+  for (const point of [...points].sort((a, b) => a.timestamp_ms - b.timestamp_ms)) {
+    const bucket = Math.floor(point.timestamp_ms / interval) * interval;
+    const current = buckets.get(bucket);
+    if (current) { current.high = Math.max(current.high, point.high); current.low = Math.min(current.low, point.low); current.close = point.close; current.volume += point.volume || 0; }
+    else buckets.set(bucket, { ...point, timestamp_ms: bucket });
+  }
+  return [...buckets.values()].slice(-5000);
+}
+function tradesToChartPoints(trades: TokenDataSnapshot['trades']['recent'], timeframe: string): TokenChartPoint[] {
+  const interval = chartIntervalMs[timeframe] || 1000;
+  const buckets = new Map<number, TokenChartPoint>();
+  for (const trade of [...trades].sort((a, b) => a.timestamp_ms - b.timestamp_ms)) {
+    const price = Number(trade.price_usd), timestamp = Number(trade.timestamp_ms);
+    if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(timestamp) || timestamp <= 0) continue;
+    const bucket = Math.floor(timestamp / interval) * interval, volume = Number(trade.volume_usd || 0), current = buckets.get(bucket);
+    if (current) { current.high = Math.max(current.high, price); current.low = Math.min(current.low, price); current.close = price; current.volume += Number.isFinite(volume) && volume > 0 ? volume : 0; }
+    else buckets.set(bucket, { timestamp_ms: bucket, open: price, high: price, low: price, close: price, volume: Number.isFinite(volume) && volume > 0 ? volume : 0 });
+  }
+  return [...buckets.values()].slice(-5000);
+}
+
 interface TokenDataSnapshot {
   mint: string;
   identity: { name?: string | null; symbol?: string | null; logo_url?: string | null; mint_address?: string; creator_address?: string | null; created_at?: string | null };
@@ -35,7 +62,8 @@ export const TokenDetailPage: React.FC = () => {
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
-  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; amount: number; side: 'buy' | 'sell'; unit: 'USD' | 'SOL' }>>([]);
+  const [floatingAmounts, setFloatingAmounts] = useState<FloatingTradeAmount[]>([]);
+  const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -77,6 +105,7 @@ export const TokenDetailPage: React.FC = () => {
       setMarketDataLoading(true);
       setMarketDataError('');
       setMarketDataSnapshot((previous) => previous?.mint === mint ? previous : null);
+      setChartSeriesByTimeframe((previous) => marketDataSnapshot?.mint === mint ? previous : {});
       const settings = marketDataService.loadSettings();
       if (!settings.restUrl) {
         setMarketDataError('Market Data API is not configured. Add its REST URL and API key in Settings.');
@@ -85,11 +114,16 @@ export const TokenDetailPage: React.FC = () => {
       }
       try {
         const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : settings.restUrl + '/';
-        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=' + encodeURIComponent(timeframe), baseUrl);
+        // Fetch a single historical baseline. Timeframe changes are aggregated locally.
+        const url = new URL('api/v1/tokens/' + encodeURIComponent(mint) + '/snapshot?timeframe=1M', baseUrl);
         const response = await fetch(url.toString());
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(typeof payload === 'string' ? payload : (payload.error || payload.message || 'Token snapshot request failed (HTTP ' + response.status + ').'));
-        if (!cancelled) setMarketDataSnapshot(payload as TokenDataSnapshot);
+        if (!cancelled) {
+          const snapshot = payload as TokenDataSnapshot;
+          setMarketDataSnapshot(snapshot);
+          if (Array.isArray(snapshot.chart?.points)) setChartSeriesByTimeframe((previous) => ({ ...previous, [snapshot.chart.timeframe || '1M']: snapshot.chart.points }));
+        }
       } catch (error) {
         if (!cancelled) setMarketDataError(error instanceof Error ? error.message : 'Could not load token market data.');
       } finally {
@@ -98,7 +132,7 @@ export const TokenDetailPage: React.FC = () => {
     };
     void loadSnapshot();
     return () => { cancelled = true; };
-  }, [activeToken?.mint, timeframe]);
+  }, [activeToken?.mint]);
 
   // One public WebSocket session per selected token. The mint and topics are sent in subscribe.
   useEffect(() => {
@@ -124,7 +158,6 @@ export const TokenDetailPage: React.FC = () => {
           mint,
           topics: ['token.market', 'token.chart', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
         }));
-        socket.send(JSON.stringify({ command: 'set_chart_timeframe', timeframe }));
         socket.addEventListener('message', (messageEvent) => {
           let message: any;
           try { message = JSON.parse(String(messageEvent.data)); } catch { return; }
@@ -143,37 +176,25 @@ export const TokenDetailPage: React.FC = () => {
             setMarketDataSnapshot((previous) => previous ? { ...previous, market: { ...previous.market, ...patch } } : previous);
           } else if (topic === 'token.chart') {
             const eventTimeframe = String(data.timeframe || '');
-            if (eventTimeframe && eventTimeframe !== timeframeRef.current) return;
-            if (Array.isArray(data.points)) {
-              const points = data.points.map((point: any) => ({
-                timestamp_ms: Number(point.timestamp_ms),
-                open: Number(point.open),
-                high: Number(point.high),
-                low: Number(point.low),
-                close: Number(point.close),
-                volume: Number(point.volume || 0),
-              })).filter((point: any) => point.timestamp_ms > 0 && point.close > 0);
-              setMarketDataSnapshot((previous) => previous ? {
-                ...previous,
-                chart: { timeframe: eventTimeframe || timeframeRef.current, points },
-              } : previous);
-            } else {
+            if (eventTimeframe && Array.isArray(data.points)) {
+              const points = data.points.map((point: any) => ({ timestamp_ms: Number(point.timestamp_ms), open: Number(point.open), high: Number(point.high), low: Number(point.low), close: Number(point.close), volume: Number(point.volume || 0) })).filter((point: TokenChartPoint) => point.timestamp_ms > 0 && point.close > 0);
+              setChartSeriesByTimeframe((previous) => ({ ...previous, [eventTimeframe]: points.slice(-5000) }));
+            } else if (eventTimeframe) {
               const point = data.point || data.candle || data;
-              const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0);
-              const close = Number(point.close ?? point.price ?? 0);
+              const timestamp = Number(point.timestamp_ms || point.time || message.timestamp_ms || 0), close = Number(point.close ?? point.price ?? 0);
               if (timestamp > 0 && close > 0) {
-                const normalized = { timestamp_ms: timestamp, open: Number(point.open ?? close), high: Number(point.high ?? close), low: Number(point.low ?? close), close, volume: Number(point.volume || 0) };
-                setMarketDataSnapshot((previous) => previous ? {
-                  ...previous,
-                  chart: { ...previous.chart, timeframe: eventTimeframe || previous.chart.timeframe, points: [...previous.chart.points.filter((item) => item.timestamp_ms !== timestamp), normalized].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) },
-                } : previous);
+                const normalized: TokenChartPoint = { timestamp_ms: timestamp, open: Number(point.open ?? close), high: Number(point.high ?? close), low: Number(point.low ?? close), close, volume: Number(point.volume || 0) };
+                setChartSeriesByTimeframe((previous) => {
+                  const current = previous[eventTimeframe] || [];
+                  return { ...previous, [eventTimeframe]: [...current.filter((item) => item.timestamp_ms !== timestamp), normalized].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000) };
+                });
               }
             }
           } else if (topic === 'token.trades') {
             const trade = data.trade || data;
             if (trade.signature) setMarketDataSnapshot((previous) => previous ? {
               ...previous,
-              trades: { recent: [trade, ...previous.trades.recent.filter((item) => item.signature !== trade.signature)].slice(0, 100) },
+              trades: { recent: [trade, ...previous.trades.recent.filter((item) => !(item.signature === trade.signature && Number(item.event_index || 0) === Number(trade.event_index || 0)))].slice(0, 200) },
             } : previous);
           } else if (topic === 'token.holders') {
             const holders = data.holders && typeof data.holders === 'object' ? data.holders : data;
@@ -189,8 +210,8 @@ export const TokenDetailPage: React.FC = () => {
             const hasUsdAmount = data.volume_usd != null && Number(data.volume_usd) > 0;
             const amount = Number(hasUsdAmount ? data.volume_usd : (data.amount_sol ?? data.amount ?? data.volume_sol ?? 0));
             if ((side === 'buy' || side === 'sell') && amount > 0) {
-              const id = Number(message.sequence || message.timestamp_ms || Date.now());
-              setFloatingAmounts((current) => [...current.filter((item) => Date.now() - item.id < 3600), { id, amount, side: side as 'buy' | 'sell', unit: hasUsdAmount ? 'USD' as const : 'SOL' as const }].slice(-12));
+              const id = String(data.signature || message.sequence || (String(message.timestamp_ms || Date.now()) + ':' + Math.random().toString(36).slice(2)));
+              setFloatingAmounts((current) => [...current, { id, createdAt: Date.now(), amount, side: side as 'buy' | 'sell', unit: hasUsdAmount ? 'USD' as const : 'SOL' as const }].slice(-30));
             }
           }
         });
@@ -222,16 +243,12 @@ export const TokenDetailPage: React.FC = () => {
     };
   }, [activeToken?.mint]);
 
-  useEffect(() => {
-    const socket = marketDataSocketRef.current;
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ command: 'set_chart_timeframe', timeframe }));
-    }
-  }, [timeframe]);
-
   if (!activeToken) return null;
   const activePosition = positions.find((position) => position.mint === activeToken.mint && position.status === 'OPEN');
-  const chartHistory: import('../../types').PricePoint[] = (marketDataSnapshot?.chart?.points || []).map((point) => ({
+  const selectedChartPoints = chartSeriesByTimeframe[timeframe] || (timeframe === marketDataSnapshot?.chart?.timeframe ? marketDataSnapshot?.chart?.points || [] : []);
+  const baseChartPoints = chartSeriesByTimeframe['1M'] || (marketDataSnapshot?.chart?.timeframe === '1M' ? marketDataSnapshot?.chart?.points || [] : []);
+  const locallyAggregatedPoints = selectedChartPoints.length > 0 ? selectedChartPoints : (timeframe === '1S' || timeframe === '5S' || timeframe === '10S') ? tradesToChartPoints(marketDataSnapshot?.trades?.recent || [], timeframe) : aggregateChartPoints(baseChartPoints, timeframe);
+  const chartHistory: import('../../types').PricePoint[] = locallyAggregatedPoints.map((point) => ({
     time: Number(point.timestamp_ms),
     price: Number(point.close),
     open: Number(point.open),
@@ -537,6 +554,7 @@ export const TokenDetailPage: React.FC = () => {
               {floatingAmounts.map((item) => (
                 <span
                   key={item.id}
+                  onAnimationEnd={() => setFloatingAmounts((current) => current.filter((entry) => entry.id !== item.id))}
                   className={`absolute bottom-5 whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${
                     item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'
                   }`}
