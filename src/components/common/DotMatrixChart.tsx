@@ -1880,8 +1880,37 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const committed = committedBarsRef.current;
       const latest = seedBars[seedBars.length - 1];
       const lastCommitted = committed[committed.length - 1];
+      const committedByTime = new Map(committed.map((bar) => [bar.time, bar]));
+      const hasHistoricalCorrection =
+        seedBars.some((bar) => {
+          const previous = committedByTime.get(bar.time);
+          return !previous || (
+            bar.time < latest.time &&
+            (bar.open !== previous.open || bar.high !== previous.high ||
+              bar.low !== previous.low || bar.close !== previous.close)
+          );
+        }) ||
+        committed.some((bar) => !seedBars.some((incoming) => incoming.time === bar.time));
 
-      if (!lastCommitted || latest.time > lastCommitted.time) {
+      if (hasHistoricalCorrection) {
+        // A delayed trade may correct a candle behind the active bucket.
+        // Rebuild the ordered history rather than trying to append that older
+        // timestamp through Lightweight Charts' incremental update API.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      } else if (!lastCommitted || latest.time > lastCommitted.time) {
         const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
         for (const bar of nextBars) {
           const nextCandle = { ...bar };
