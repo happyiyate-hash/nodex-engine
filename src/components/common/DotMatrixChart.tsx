@@ -1538,7 +1538,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // 2. Keep the viewport immediately positioned at the latest bar + timed bar commits in Line mode
         const committed = committedBarsRef.current;
         const activeStepMs = Math.max(1_000, stepMsRef.current);
-        const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
         const nowWall = Date.now();
         const isFeedLive =
           nowWall - lastTickWallMsRef.current <= Math.max(activeStepMs * 1.5, 6_000);
