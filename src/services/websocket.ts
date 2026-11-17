@@ -109,6 +109,7 @@ export class NodeXWebSocketService {
   private lastMessageAt=0; private connecting=false;
   private reconnectAttempts=0; private manuallyClosed=false; private seen=new Set<string>();
   private tokenSubscriptions=new Map<string,string>();
+  private tokenUpdateSubscriptions=new Set<string>();
   constructor() {}
   public connect():void {
     this.manuallyClosed=false;
@@ -141,6 +142,9 @@ export class NodeXWebSocketService {
         for (const [mint,timeframe] of this.tokenSubscriptions) {
           this.send({command:'subscribe_token',mint});
           this.send({command:'set_chart_timeframe',mint,timeframe});
+        }
+        for (const mint of this.tokenUpdateSubscriptions) {
+          if (!this.tokenSubscriptions.has(mint)) this.send({command:'subscribe_token',mint});
         }
       };
       socket.onmessage=(message)=>{
@@ -222,6 +226,14 @@ export class NodeXWebSocketService {
       socket.onclose=(event)=>{if(!settled)finish(new Error(`WebSocket closed before connecting (code ${event.code}).`));};
     });
   }
+  public subscribeTokenUpdates(mint:string):void {
+    const normalized=mint.trim();
+    if(!normalized)return;
+    this.tokenUpdateSubscriptions.add(normalized);
+    if(this.ws?.readyState===WebSocket.OPEN&&!this.tokenSubscriptions.has(normalized)){
+      this.send({command:'subscribe_token',mint:normalized});
+    }
+  }
   public subscribeToken(mint:string,timeframe='5m'):void {
     const normalized=mint.trim();
     if(!normalized)return;
@@ -241,6 +253,7 @@ export class NodeXWebSocketService {
     const normalized=mint.trim();
     if(!normalized)return;
     this.tokenSubscriptions.delete(normalized);
+    this.tokenUpdateSubscriptions.delete(normalized);
     if(this.ws?.readyState===WebSocket.OPEN)this.send({command:'unsubscribe_token',mint:normalized});
   }
   public sendCommand(command:'pause'|'resume'|'start'|'status'|'set_mode',mode?:'paper'):boolean {
