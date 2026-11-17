@@ -691,7 +691,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
   const subBarFractionRef = useRef<number>(0);
   // Completed bars preserve the live tip's screen position across appends.
-  const completedBarOffsetRef = useRef<number>(0);
   const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
   const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
   const stepMsRef = useRef<number>(TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H']);
@@ -1538,7 +1537,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             // The fractional offset is what produces the smooth pump.fun-style
             // leftward drift; repeatedly snapping to BASE_RIGHT_OFFSET froze it.
-            const scrollPosition = BASE_RIGHT_OFFSET + completedBarOffsetRef.current + fraction;
             lastAppliedScrollPosRef.current = scrollPosition;
             isApplyingAutoScrollRef.current = true;
             try {
@@ -1720,7 +1718,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     if (needsFullReseed) {
       const cloned = seedBars.map((bar) => ({ ...bar }));
-      completedBarOffsetRef.current = 0;
       // Snap the new interval to its own bounds; never ease from the previous scale.
       latestVisibleBoundsRef.current = null;
       targetYRangeRef.current = null;
@@ -1808,7 +1805,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const corrected = seedBars.map((bar) => ({ ...bar }));
         const previousLatestTime = committed[committed.length - 1]?.time;
         if (previousLatestTime !== undefined) {
-          completedBarOffsetRef.current += corrected.filter((bar) => bar.time > previousLatestTime).length;
         }
         const correctedLatest = corrected[corrected.length - 1];
         if (correctedLatest) {
@@ -1826,7 +1822,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           })));
           if (!isUserPannedRef.current) {
             chart.timeScale().scrollToPosition(
-              BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current,
               false,
             );
           }
@@ -1835,7 +1830,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         }
       } else if (!lastCommitted || latest.time > lastCommitted.time) {
         const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
-        completedBarOffsetRef.current += nextBars.length;
         const newestAppendedBar = nextBars[nextBars.length - 1];
         if (newestAppendedBar) {
           subBarFractionRef.current = chartType === 'line'
@@ -1861,7 +1855,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         if (!isUserPannedRef.current) {
           isApplyingAutoScrollRef.current = true;
           try {
-            const pos = BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current;
             lastAppliedScrollPosRef.current = pos;
             chart.timeScale().scrollToPosition(pos, false);
           } finally {
@@ -1893,7 +1886,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const corrected = seedBars.map((bar) => ({ ...bar }));
         const previousLatestTime = committed[committed.length - 1]?.time;
         if (previousLatestTime !== undefined) {
-          completedBarOffsetRef.current += corrected.filter((bar) => bar.time > previousLatestTime).length;
         }
         const correctedLatest = corrected[corrected.length - 1];
         if (correctedLatest) {
@@ -1910,7 +1902,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           })));
           if (!isUserPannedRef.current) {
             chart.timeScale().scrollToPosition(
-              BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current,
               false,
             );
           }
@@ -1963,7 +1954,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const chart = chartRef.current;
     const targetPos =
       BASE_RIGHT_OFFSET +
-      completedBarOffsetRef.current +
       (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
 
     isUserPannedRef.current = false;
