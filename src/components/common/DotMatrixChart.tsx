@@ -158,13 +158,9813 @@ const formatBucketTime = (timestampMs: number, timeframe: string) => {
 
 const formatPrice = (price: number) => {
   if (!Number.isFinite(price)) return '—';
-  if (price === 0) return '0';
+  if (price === 0) return '$0';
   const abs = Math.abs(price);
-  if (abs < 0.000001) return price.toExponential(2);
-  if (abs < 0.001) return price.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
-  if (abs < 1) return price.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
-  if (abs < 1000) return price.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
-  return price.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  if (abs < 0.000001) return '
+
+const formatMarketCap = (value: number): string => {
+  if (!Number.isFinite(value)) return '—';
+  if (value <= 0) return '$0.00';
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
+  return `$${value.toFixed(2)}`;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16) || 0;
+  const g = parseInt(clean.slice(2, 4), 16) || 0;
+  const b = parseInt(clean.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+};
+
+interface NormalizedBar {
+  time: UTCTimestamp;
+  timestampMs: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface LiveRenderState {
+  displayPrice: number;
+  subBarFraction: number;
+  trendDirection: 'up' | 'down';
+}
+
+/**
+ * Custom TradingView Series Primitive executed inside TradingView's own
+ * synchronized canvas pass:
+ * - Connects the last settled bar cleanly to the continuously gliding live tip
+ *   (with matching area light refraction underneath)
+ * - Draws the horizontal dashed price guide
+ * - Draws the bigger live dot + calm single-pulse filled halo locked strictly at the tip
+ * - Syncs the right-axis live-price pill card to the exact Y coordinate
+ */
+class LiveTipPrimitive implements ISeriesPrimitive<Time> {
+  private attachedParams: SeriesAttachedParameter<Time, SeriesType> | null = null;
+  private readonly mode: 'line' | 'candle';
+  private readonly getChartType: () => 'line' | 'candle';
+  private readonly getColors: () => {
+    line: string;
+    top: string;
+    bottom: string;
+  };
+  private readonly getLiveState: () => LiveRenderState;
+  private readonly onBadgeSync: (
+    price: number | null,
+    yCoord: number | null,
+    plotW: number,
+    plotH: number,
+  ) => void;
+
+  private readonly paneView: IPrimitivePaneView = {
+    zOrder: (): PrimitivePaneViewZOrder => 'top',
+    renderer: (): IPrimitivePaneRenderer => ({
+      draw: (target: CanvasTarget) => this.drawOnPane(target),
+    }),
+  };
+
+  constructor(options: {
+    mode: 'line' | 'candle';
+    getChartType: () => 'line' | 'candle';
+    getColors: () => { line: string; top: string; bottom: string };
+    getLiveState: () => LiveRenderState;
+    onBadgeSync: (
+      price: number | null,
+      yCoord: number | null,
+      plotW: number,
+      plotH: number,
+    ) => void;
+  }) {
+    this.mode = options.mode;
+    this.getChartType = options.getChartType;
+    this.getColors = options.getColors;
+    this.getLiveState = options.getLiveState;
+    this.onBadgeSync = options.onBadgeSync;
+  }
+
+  public attached(param: SeriesAttachedParameter<Time, SeriesType>): void {
+    this.attachedParams = param;
+  }
+
+  public detached(): void {
+    this.attachedParams = null;
+  }
+
+  public requestRedraw(): void {
+    this.attachedParams?.requestUpdate();
+  }
+
+  public paneViews(): readonly IPrimitivePaneView[] {
+    if (this.getChartType() !== this.mode) return [];
+    return [this.paneView];
+  }
+
+  private drawOnPane(target: CanvasTarget): void {
+    const params = this.attachedParams;
+    if (!params || this.getChartType() !== this.mode) return;
+
+    const data = params.series.data();
+    if (!data || data.length === 0) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const last = data[data.length - 1] as unknown as {
+      time: Time;
+      value?: number;
+      close?: number;
+    };
+    const barClose =
+      typeof last.value === 'number'
+        ? last.value
+        : typeof last.close === 'number'
+          ? last.close
+          : null;
+
+    if (barClose === null || !Number.isFinite(barClose)) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const first = data[0] as unknown as {
+      time: Time;
+      value?: number;
+      open?: number;
+      close?: number;
+    };
+    const firstVal =
+      typeof first.value === 'number'
+        ? first.value
+        : typeof first.open === 'number'
+          ? first.open
+          : typeof first.close === 'number'
+            ? first.close
+            : null;
+    const xFirst = params.chart.timeScale().timeToCoordinate(first.time);
+    const yFirst =
+      firstVal !== null && Number.isFinite(firstVal)
+        ? params.series.priceToCoordinate(firstVal)
+        : null;
+
+    const liveState = this.getLiveState();
+    const livePrice =
+      Number.isFinite(liveState.displayPrice) && liveState.displayPrice > 0
+        ? liveState.displayPrice
+        : barClose;
+
+    const yBar = params.series.priceToCoordinate(barClose);
+    const yLive = params.series.priceToCoordinate(livePrice);
+    const xLast = params.chart.timeScale().timeToCoordinate(last.time);
+    const colors = this.getColors();
+
+    target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+      const plotW = mediaSize.width;
+      const plotH = mediaSize.height;
+
+      // In Candle mode, lock guide + card strictly to the rendered candle close
+      // so the candle body, dashed guide, and right-axis card never separate.
+      const displayValue = this.mode === 'candle' ? barClose : livePrice;
+      const guideY =
+        this.mode === 'candle'
+          ? yBar
+          : yLive !== null && Number.isFinite(yLive)
+            ? yLive
+            : yBar;
+      if (guideY === null || !Number.isFinite(guideY)) {
+        this.onBadgeSync(null, null, plotW, plotH);
+        return;
+      }
+
+      // Compute exact continuous live tip X position ahead of the sliding bar
+      let liveX: number | null = xLast;
+      if (
+        this.mode === 'line' &&
+        xLast !== null &&
+        Number.isFinite(xLast)
+      ) {
+        let spacing = params.chart.timeScale().options().barSpacing || 5;
+        if (data.length >= 2) {
+          const prev = data[data.length - 2] as unknown as { time: Time };
+          const xPrev = params.chart.timeScale().timeToCoordinate(prev.time);
+          if (xPrev !== null && Number.isFinite(xPrev) && xLast - xPrev > 0.2) {
+            spacing = xLast - xPrev;
+          }
+        }
+        const frac = Math.max(0, Math.min(0.9999, liveState.subBarFraction));
+        liveX = xLast + frac * spacing;
+      }
+
+      // Sync the right-axis pill card to the exact rendered price & Y coordinate
+      this.onBadgeSync(displayValue, guideY, plotW, plotH);
+
+      ctx.save();
+
+      // Clip inside plot pane bounds (include full right-edge connector stroke)
+      ctx.beginPath();
+      ctx.rect(0, 0, plotW + 1, plotH);
+      ctx.clip();
+
+      // Precompute shared relative area gradient matching TradingView AreaSeries
+      let areaGrad: CanvasGradient | null = null;
+      if (this.mode === 'line') {
+        let minY: number = guideY;
+        if (yBar !== null && Number.isFinite(yBar)) {
+          minY = Math.min(minY, yBar);
+        }
+        if (yFirst !== null && Number.isFinite(yFirst)) {
+          minY = Math.min(minY, yFirst);
+        }
+        const visRange = params.chart.timeScale().getVisibleLogicalRange();
+        const minScanIdx = visRange
+          ? Math.max(0, Math.floor(visRange.from))
+          : Math.max(0, data.length - 120);
+        const maxScanIdx = visRange
+          ? Math.min(data.length - 1, Math.ceil(visRange.to))
+          : data.length - 1;
+        for (let i = minScanIdx; i <= maxScanIdx; i++) {
+          const item = data[i] as unknown as { value?: number };
+          if (typeof item.value === 'number') {
+            const cy = params.series.priceToCoordinate(item.value);
+            if (cy !== null && Number.isFinite(cy) && cy < minY) {
+              minY = cy;
+            }
+          }
+        }
+        const gradTop = Math.max(0, Math.min(minY, plotH - 1));
+        areaGrad = ctx.createLinearGradient(0, gradTop, 0, plotH);
+        areaGrad.addColorStop(0, colors.top);
+        areaGrad.addColorStop(1, colors.bottom);
+      }
+
+      // 0. In Line mode, extend the starting back of the line & shadow continuously
+      // all the way to the left edge (x = 0) when data starts mid-chart.
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xFirst !== null &&
+        yFirst !== null &&
+        Number.isFinite(xFirst) &&
+        Number.isFinite(yFirst) &&
+        xFirst > 0.25
+      ) {
+        const joinX = Math.min(plotW, xFirst + 0.5);
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.lineTo(joinX, plotH);
+        ctx.lineTo(0, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.stroke();
+      }
+
+      // 1. In Line mode, draw the live continuous tail from last settled point -> live tip
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xLast !== null &&
+        yBar !== null &&
+        liveX !== null &&
+        Number.isFinite(xLast) &&
+        Number.isFinite(yBar) &&
+        Number.isFinite(liveX) &&
+        liveX - xLast > 0.15
+      ) {
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.lineTo(liveX, plotH);
+        ctx.lineTo(xLast, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crisp continuous line extension
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.stroke();
+      }
+
+      // Compute centered X for the two directional V chevrons between dot/candle and right axis
+      const tipEdgeX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? liveX + CHART_THEME.liveDot.radius + 4
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? xLast + 5
+            : null;
+      const axisEdgeX = plotW - 4;
+      const showChevrons =
+        tipEdgeX !== null && axisEdgeX - tipEdgeX >= CHART_THEME.directionCard.width + 4;
+      const chevronX = showChevrons && tipEdgeX !== null ? (tipEdgeX + axisEdgeX) / 2 : null;
+
+      // 2. Straight wire connecting ONLY the live dot/candle directly to the right-axis card
+      // (stops strictly between the dot/candle and the card — never stretches backward).
+      const badgeH = CHART_THEME.liveBadge.height;
+      const cardCenterY =
+        Math.max(2, Math.min(plotH - badgeH - 1, guideY - badgeH / 2)) + badgeH / 2;
+      const wireStartX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? Math.max(0, Math.min(plotW, liveX))
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? Math.max(0, Math.min(plotW, xLast + 3))
+            : null;
+
+      if (wireStartX !== null && plotW - wireStartX > 1) {
+        ctx.strokeStyle = hexToRgba(colors.line, 0.8);
+        ctx.lineWidth = 1.25;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (chevronX !== null && chevronX > wireStartX + 4) {
+          const gapHalf = 8;
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(Math.max(wireStartX, chevronX - gapHalf), guideY);
+          ctx.moveTo(Math.min(plotW, chevronX + gapHalf), cardCenterY);
+          ctx.lineTo(plotW, cardCenterY);
+        } else {
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(plotW, cardCenterY);
+        }
+        ctx.stroke();
+      }
+
+      // Prominent live-price guide: a continuous dashed line extending left from the moving axis card.
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(colors.line, 0.92);
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'butt';
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, cardCenterY);
+      ctx.lineTo(plotW, cardCenterY);
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. In Line mode, draw the single calm pulsing filled halo + bigger dot tightly locked at (liveX, guideY)
+      if (
+        this.mode === 'line' &&
+        liveX !== null &&
+        Number.isFinite(liveX) &&
+        liveX >= -24 &&
+        liveX <= plotW + 24
+      ) {
+        const now = performance.now();
+        const period = CHART_THEME.liveDot.haloPeriodMs;
+        const baseR = CHART_THEME.liveDot.radius;
+        const wrapR = CHART_THEME.liveDot.haloRadius;
+        const maxR = CHART_THEME.liveDot.haloMaxRadius;
+
+        // Subtle filled wrap that stays anchored right around the dot
+        ctx.fillStyle = hexToRgba(colors.line, 0.2);
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, wrapR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Single calm expanding & fading filled halo pulse (one pulse per cycle, no stroked rings)
+        const cycle = (now % period) / period;
+        const activeFraction = 0.72;
+        if (cycle < activeFraction) {
+          const t = cycle / activeFraction;
+          const eased = 1 - Math.pow(1 - t, 2.2);
+          const pulseRadius = wrapR + eased * (maxR - wrapR);
+          const fadeIn = t < 0.14 ? t / 0.14 : 1;
+          const fadeOut = Math.pow(1 - t, 1.35);
+          const pulseAlpha = 0.4 * fadeIn * fadeOut;
+
+          ctx.fillStyle = hexToRgba(colors.line, pulseAlpha);
+          ctx.beginPath();
+          ctx.arc(liveX, guideY, pulseRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Bigger crisp live dot tightly fixed to the line's tip
+        ctx.fillStyle = colors.line;
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, baseR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+
+        // Bright center pinpoint
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, 1.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4. Two borderless directional V chevrons centered between dot/candlestick and right-axis card
+      if (showChevrons && chevronX !== null) {
+        const cardX = chevronX;
+        const cardH = CHART_THEME.directionCard.height;
+        const cardY = Math.max(cardH / 2 + 4, Math.min(plotH - cardH / 2 - 4, guideY));
+
+        const isUp = liveState.trendDirection === 'up';
+        const baseColor = isUp
+          ? CHART_THEME.directionCard.upColor
+          : CHART_THEME.directionCard.downColor;
+        const brightColor = isUp
+          ? CHART_THEME.directionCard.upGlow
+          : CHART_THEME.directionCard.downGlow;
+
+        // Two wide sharp V chevrons cycling on/off in opposite phases along travel direction
+        const phase = (performance.now() % CHART_THEME.directionCard.cycleMs) / CHART_THEME.directionCard.cycleMs;
+        // Phase A leads in direction of travel; Phase B is offset by half cycle (off while A is on)
+        const waveA = Math.pow(0.5 + 0.5 * Math.cos(phase * Math.PI * 2), 1.8);
+        const waveB = Math.pow(0.5 + 0.5 * Math.cos((phase + 0.5) * Math.PI * 2), 1.8);
+
+        const topAlpha = isUp ? 0.16 + 0.84 * waveB : 0.16 + 0.84 * waveA;
+        const botAlpha = isUp ? 0.16 + 0.84 * waveA : 0.16 + 0.84 * waveB;
+
+        const wingW = 5.1;
+        const dropH = 3.6;
+        const rowOffset = 3.1;
+
+        const drawChevron = (cy: number, alpha: number) => {
+          const isLit = alpha > 0.55;
+          ctx.save();
+          ctx.lineJoin = 'miter';
+          ctx.miterLimit = 6;
+          ctx.lineCap = 'round';
+          ctx.lineWidth = isLit ? 1.9 : 1.6;
+          ctx.strokeStyle = isLit
+            ? hexToRgba(brightColor, alpha)
+            : hexToRgba(baseColor, alpha);
+          if (isLit) {
+            ctx.shadowColor = baseColor;
+            ctx.shadowBlur = 6;
+          }
+          ctx.beginPath();
+          if (isUp) {
+            ctx.moveTo(cardX - wingW, cy + dropH / 2);
+            ctx.lineTo(cardX, cy - dropH / 2);
+            ctx.lineTo(cardX + wingW, cy + dropH / 2);
+          } else {
+            ctx.moveTo(cardX - wingW, cy - dropH / 2);
+            ctx.lineTo(cardX, cy + dropH / 2);
+            ctx.lineTo(cardX + wingW, cy - dropH / 2);
+          }
+          ctx.stroke();
+          ctx.restore();
+        };
+
+        drawChevron(cardY - rowOffset, topAlpha);
+        drawChevron(cardY + rowOffset, botAlpha);
+      }
+
+      ctx.restore();
+    });
+  }
+}
+
+export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
+  currentPrice,
+  marketCap,
+  entryPrice,
+  priceHistory,
+  isPositive = true,
+  timeframe = '24H',
+  chartType = 'line',
+  onPriceHover,
+  height = 272,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dotCanvasRef = useRef<HTMLCanvasElement>(null);
+  const tvContainerRef = useRef<HTMLDivElement>(null);
+  const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeFadeOverlayRef = useRef<HTMLDivElement>(null);
+  const timeTickCapRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+
+  const mcapScaleRef = useRef<number>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0 && currentPrice > 0
+      ? marketCap / currentPrice
+      : 1,
+  );
+  const hasMarketCapRef = useRef<boolean>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0,
+  );
+  if (marketCap != null && Number.isFinite(marketCap) && marketCap > 0) {
+    hasMarketCapRef.current = true;
+    if (currentPrice > 0 && Number.isFinite(currentPrice)) {
+      mcapScaleRef.current = marketCap / currentPrice;
+    }
+  } else {
+    hasMarketCapRef.current = false;
+    mcapScaleRef.current = 1;
+  }
+
+  const formatDisplayValue = useCallback(
+    (value: number) =>
+      hasMarketCapRef.current
+        ? formatMarketCap(value * mcapScaleRef.current)
+        : formatPrice(value),
+    [],
+  );
+
+  const chartRef = useRef<IChartApi | null>(null);
+  const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const lineTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const candleTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const entryPriceLineRef = useRef<IPriceLine | null>(null);
+
+  // Continuous live-motion refs (60fps smooth price, horizontal scroll, and Y scale)
+  const committedBarsRef = useRef<NormalizedBar[]>([]);
+  const rawTargetPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const subBarFractionRef = useRef<number>(0);
+  const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
+  const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const stepMsRef = useRef<number>(TIMEFRAME_LIVE_STEP_MS[timeframe] || 30_000);
+  const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
+
+  const isUserPannedRef = useRef<boolean>(false);
+  const isPointerInteractingRef = useRef<boolean>(false);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerDraggedRef = useRef<boolean>(false);
+  const wasPannedBeforePointerRef = useRef<boolean>(false);
+  const isApplyingAutoScrollRef = useRef<boolean>(false);
+  const isAutoPositioningRef = useRef<boolean>(true);
+  const lastAppliedScrollPosRef = useRef<number>(BASE_RIGHT_OFFSET);
+
+  const latestVisibleBoundsRef = useRef<{ min: number; max: number } | null>(null);
+  const targetYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+  const animYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+
+  const prevSeedMetaRef = useRef<{
+    key: string;
+    firstTime: number;
+    length: number;
+  } | null>(null);
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isPanned, setIsPanned] = useState(false);
+
+  const { seedBars, resolutionMode, stepMs } = useMemo<{
+    seedBars: NormalizedBar[];
+    resolutionMode: 'live-step' | 'buckets';
+    stepMs: number;
+  }>(() => {
+    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+    const validRaw = (priceHistory || [])
+      .filter(
+        (point) =>
+          Number.isFinite(point.price) &&
+          point.price > 0 &&
+          isUnixTimestampMilliseconds(point.time),
+      )
+      .slice()
+      .sort((a, b) => a.time - b.time);
+
+    if (validRaw.length === 0) {
+      const liveStep = TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000;
+      if (Number.isFinite(currentPrice) && currentPrice > 0) {
+        const nowSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        const nowMs = nowSec * 1000;
+        const stepSec = Math.max(1, Math.floor(liveStep / 1000));
+        return {
+          resolutionMode: chartType === 'line' ? 'live-step' : 'buckets',
+          stepMs: chartType === 'line' ? liveStep : interval,
+          seedBars: [
+            {
+              time: (nowSec - stepSec) as UTCTimestamp,
+              timestampMs: nowMs - stepSec * 1000,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+            {
+              time: nowSec,
+              timestampMs: nowMs,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+          ],
+        };
+      }
+      return {
+        resolutionMode: 'buckets',
+        stepMs: interval,
+        seedBars: [],
+      };
+    }
+
+    const spanMs = validRaw[validRaw.length - 1].time - validRaw[0].time;
+    const useLiveStep = chartType === 'line' && spanMs < interval * 3;
+    const activeStepMs = useLiveStep
+      ? TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000
+      : interval;
+
+    // Anchor live-step buckets to the first point's second so continuous
+    // scrolling starts right from elapsed time 0 without initial phase offset jumps.
+    const originMs = useLiveStep
+      ? Math.floor(validRaw[0].time / 1000) * 1000
+      : 0;
+
+    const buckets = new Map<number, NormalizedBar>();
+    for (const point of validRaw) {
+      const bucketMs = useLiveStep
+        ? originMs + Math.max(0, Math.floor((point.time - originMs) / activeStepMs)) * activeStepMs
+        : Math.floor(point.time / activeStepMs) * activeStepMs;
+      const bucketSec = Math.floor(bucketMs / 1000) as UTCTimestamp;
+      const open =
+        Number.isFinite(point.open) && (point.open as number) > 0
+          ? (point.open as number)
+          : point.price;
+      const high =
+        Number.isFinite(point.high) && (point.high as number) > 0
+          ? (point.high as number)
+          : Math.max(open, point.price);
+      const low =
+        Number.isFinite(point.low) && (point.low as number) > 0
+          ? (point.low as number)
+          : Math.min(open, point.price);
+      const close =
+        Number.isFinite(point.close) && (point.close as number) > 0
+          ? (point.close as number)
+          : point.price;
+
+      const existing = buckets.get(bucketSec);
+      if (!existing) {
+        buckets.set(bucketSec, {
+          time: bucketSec,
+          timestampMs: bucketMs,
+          open,
+          high,
+          low,
+          close,
+        });
+      } else {
+        existing.high = Math.max(existing.high, high);
+        existing.low = Math.min(existing.low, low);
+        existing.close = close;
+      }
+    }
+
+    let ordered = Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+
+    // Ensure a 1-bar line session immediately renders a baseline segment.
+    if (chartType === 'line' && ordered.length === 1) {
+      const only = ordered[0];
+      const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
+      ordered = [
+        {
+          time: (only.time - stepSec) as UTCTimestamp,
+          timestampMs: only.timestampMs - stepSec * 1000,
+          open: only.open,
+          high: only.open,
+          low: only.open,
+          close: only.open,
+        },
+        only,
+      ];
+    }
+
+    if (!useLiveStep && timeframe === '24H' && ordered.length > 24) {
+      const latestMs = ordered[ordered.length - 1].timestampMs;
+      return {
+        resolutionMode: 'buckets',
+        stepMs: activeStepMs,
+        // Keep the full provider-supplied 24-hour window. The viewport is
+        // positioned at the newest edge; do not truncate history to 24 bars.
+        seedBars: ordered
+          .filter((bar) => bar.timestampMs >= latestMs - 24 * 60 * 60_000)
+          .slice(-2000),
+      };
+    }
+
+    return {
+      resolutionMode: useLiveStep ? 'live-step' : 'buckets',
+      stepMs: activeStepMs,
+      seedBars: ordered.slice(-2000),
+    };
+  }, [priceHistory, currentPrice, timeframe, chartType]);
+
+  stepMsRef.current = stepMs;
+  resolutionModeRef.current = resolutionMode;
+
+  const onPriceHoverRef = useRef(onPriceHover);
+  onPriceHoverRef.current = onPriceHover;
+
+  const timeframeRef = useRef(timeframe);
+  timeframeRef.current = timeframe;
+
+  const chartTypeRef = useRef(chartType);
+  chartTypeRef.current = chartType;
+
+  const isPositiveRef = useRef(isPositive);
+  isPositiveRef.current = isPositive;
+
+  // Helper to compute continuous target Y-axis range without any threshold jumps.
+  // Allows price to travel all the way down to the bottom boundary (above the bottom brush)
+  // before shrinking/rescaling while preserving clean top headroom.
+  const computeTargetYRange = useCallback(
+    (rawMin: number, rawMax: number, tf: string) => {
+      // The line chart may smoothly follow the latest quote between trades.
+      // Candlesticks must be scaled only from confirmed-trade OHLC data; a
+      // quote/market-cap refresh is not a trade and must not distort candle
+      // ranges or manufacture wick extremes.
+      const liveVal =
+        chartTypeRef.current === 'line' ? smoothedPriceRef.current : 0;
+      const visMin =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.min(rawMin, liveVal) : rawMin;
+      const visMax =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.max(rawMax, liveVal) : rawMax;
+      const spanRatio = TIMEFRAME_Y_SPAN_RATIO[tf] ?? 0.26;
+      const mid = (visMin + visMax) / 2;
+      const tfMinSpan = Math.max(Math.abs(mid) * spanRatio, 1e-10);
+      const rawSpan = Math.max(0, visMax - visMin);
+
+      const flatBlend = Math.max(0, 1 - rawSpan / (tfMinSpan * 0.4));
+      const bottomFrac = 0.012 + 0.22 * flatBlend;
+      const topFrac = 0.1 + 0.12 * flatBlend;
+      const activeBand = Math.max(0.4, 1 - topFrac - bottomFrac);
+      const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
+
+      // Keep the scale fitted to the actual positive data range; do not force a zero baseline.
+      const minValue = Math.max(visMin * 1e-6, visMin - effectiveSpan * bottomFrac);
+      const maxValue = minValue + effectiveSpan;
+      return { minValue, maxValue };
+    },
+    [],
+  );
+
+  // Draw the pure-black + fading dot-matrix background canvas behind TradingView.
+  const drawDotBackground = useCallback(() => {
+    const canvas = dotCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const hostW = containerRef.current?.clientWidth || containerWidth;
+    if (hostW <= 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, hostW);
+    const h = height;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = CHART_THEME.background;
+    ctx.fillRect(0, 0, w, h);
+
+    if (!CHART_THEME.dots.enabled) return;
+
+    const { spacing, radius, maxOpacity, sheenColor } = CHART_THEME.dots;
+    const smoothstep = (t: number) => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * (3 - 2 * c);
+    };
+    const startOffset = 5;
+    for (let y = startOffset; y < h - startOffset; y += spacing) {
+      const normY = y / h;
+      const fadeY =
+        normY < 0.3
+          ? 0.08 + 0.92 * smoothstep(normY / 0.3)
+          : normY > 0.78
+            ? 0.06 + 0.94 * smoothstep((1 - normY) / 0.22)
+            : 1;
+
+      for (let x = startOffset; x < w - startOffset; x += spacing) {
+        const normX = x / w;
+        const fadeX =
+          normX < 0.24
+            ? 0.08 + 0.92 * smoothstep(normX / 0.24)
+            : normX > 0.68
+              ? 0.06 + 0.94 * smoothstep((1 - normX) / 0.32)
+              : 1;
+
+        const dx = (normX - 0.45) * 1.15;
+        const dy = (normY - 0.5) * 1.15;
+        const dist = Math.min(1, Math.hypot(dx, dy));
+        const sheenBoost = 0.86 + 0.14 * (1 - dist);
+
+        const alpha = Math.max(0, Math.min(0.26, maxOpacity * fadeY * fadeX * sheenBoost));
+        if (alpha <= 0.005) continue;
+
+        // A faint halo softens each pin-sized dot so the grid feels
+        // lightly textured rather than like a row of sharp pixels.
+        ctx.shadowBlur = CHART_THEME.dots.shadowBlur;
+        ctx.shadowColor = CHART_THEME.dots.shadowColor;
+        ctx.fillStyle = `rgba(${sheenColor}, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }, [containerWidth, height]);
+
+  useEffect(() => {
+    drawDotBackground();
+  }, [drawDotBackground]);
+
+  // Browsers may suspend canvas painting while the app is backgrounded.
+  // Refresh rendering and dimensions on resume, but preserve the user's chart
+  // position. A real page remount creates fresh refs and starts at live again.
+  useEffect(() => {
+    let refreshFrame = 0;
+    const refreshAfterResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      window.cancelAnimationFrame(refreshFrame);
+      refreshFrame = window.requestAnimationFrame(() => {
+        drawDotBackground();
+        const host = tvContainerRef.current;
+        const chart = chartRef.current;
+        if (host && chart) {
+          const width = host.clientWidth;
+          const chartHeight = host.clientHeight;
+          if (width > 0 && chartHeight > 0) chart.resize(width, chartHeight);
+        }
+      });
+    };
+
+    document.addEventListener('visibilitychange', refreshAfterResume);
+    window.addEventListener('pageshow', refreshAfterResume);
+    window.addEventListener('focus', refreshAfterResume);
+    return () => {
+      window.cancelAnimationFrame(refreshFrame);
+      document.removeEventListener('visibilitychange', refreshAfterResume);
+      window.removeEventListener('pageshow', refreshAfterResume);
+      window.removeEventListener('focus', refreshAfterResume);
+    };
+  }, [drawDotBackground]);
+
+  // Measure container width with ResizeObserver.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      if (el.clientWidth > 0) setContainerWidth(el.clientWidth);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Synchronously position the right-axis live-price pill card inside the right axis column.
+  const syncBadgeDom = useCallback(
+    (price: number | null, yCoord: number | null, plotW: number, plotH: number) => {
+      const badge = badgeRef.current;
+      const chart = chartRef.current;
+      if (!badge || !chart) return;
+
+      const hostW = tvContainerRef.current?.clientWidth || containerRef.current?.clientWidth || 0;
+      if (price === null || yCoord === null || !Number.isFinite(yCoord) || hostW <= 0 || plotH <= 0) {
+        badge.style.opacity = '0';
+        return;
+      }
+
+      const axisW = Math.max(44, chart.priceScale('right').width() || hostW - plotW || 52);
+      const badgeH = CHART_THEME.liveBadge.height;
+      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - CHART_THEME.liveBadge.rightInset);
+      const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
+
+      badge.style.opacity = '1';
+      badge.style.minWidth = `${badgeMinW}px`;
+      badge.style.height = `${badgeH}px`;
+      badge.style.transform = `translate3d(0, ${badgeY}px, 0)`;
+
+      const formatted = formatDisplayValue(price);
+      if (badge.textContent !== formatted) {
+        badge.textContent = formatted;
+      }
+    },
+    [formatDisplayValue],
+  );
+
+  // Create TradingView Lightweight Chart instance once on mount.
+  useEffect(() => {
+    const host = tvContainerRef.current;
+    if (!host) return;
+
+    const axisFontFamily = "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+    const chart = createChart(host, {
+      autoSize: true,
+      width: Math.max(1, host.clientWidth || 320),
+      height,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: CHART_THEME.axisTextColor,
+        fontFamily: axisFontFamily,
+        fontSize: 12,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        // Fine, low-contrast guides extend left from the right-side price labels.
+        horzLines: {
+          visible: true,
+          color: 'rgba(255,255,255,0.055)',
+          style: LineStyle.Solid,
+        },
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        entireTextOnly: true,
+        minimumWidth: 44,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+      timeScale: {
+        borderVisible: true,
+        borderColor: 'rgba(255,255,255,0.11)',
+        ticksVisible: false,
+        // Timestamp text is drawn by our pre-rendered canvas layer so labels
+        // exist in the right-side lead-in before they enter the visible plot.
+        timeVisible: true,
+        tickMarkFormatter: () => '',
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframeRef.current),
+        rightOffset: BASE_RIGHT_OFFSET,
+        barSpacing: 5,
+        minBarSpacing: 1.5,
+        fixLeftEdge: false,
+        shiftVisibleRangeOnNewBar: false,
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+        horzLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+      },
+      localization: {
+        priceFormatter: formatDisplayValue,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+    });
+
+    // Continuous smooth Y-axis scale provider driven by 60fps interpolated bounds.
+    const smoothAutoscaleProvider = (
+      baseImplementation: () => AutoscaleInfo | null,
+    ): AutoscaleInfo | null => {
+      const res = baseImplementation();
+      if (!res || !res.priceRange) return res;
+
+      const rawMin = res.priceRange.minValue;
+      const rawMax = res.priceRange.maxValue;
+      if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return res;
+
+      latestVisibleBoundsRef.current = { min: rawMin, max: rawMax };
+      const computedTarget = computeTargetYRange(rawMin, rawMax, timeframeRef.current);
+      targetYRangeRef.current = computedTarget;
+
+      if (!animYRangeRef.current) {
+        animYRangeRef.current = { ...computedTarget };
+      }
+
+      return {
+        priceRange: {
+          minValue: animYRangeRef.current.minValue,
+          maxValue: animYRangeRef.current.maxValue,
+        },
+      };
+    };
+
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    const lineSeries = chart.addSeries(AreaSeries, {
+      lineColor,
+      topColor,
+      bottomColor,
+      relativeGradient: true,
+      lineWidth: CHART_THEME.lineWidth,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      crosshairMarkerBackgroundColor: '#FFFFFF',
+      crosshairMarkerBorderColor: lineColor,
+      crosshairMarkerBorderWidth: 1,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'line',
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: CHART_THEME.upColor,
+      downColor: CHART_THEME.downColor,
+      wickUpColor: CHART_THEME.upColor,
+      wickDownColor: CHART_THEME.downColor,
+      borderVisible: false,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'candle',
+    });
+
+    const getPalette = () =>
+      isPositiveRef.current
+        ? {
+            line: CHART_THEME.upColor,
+            top: CHART_THEME.upTopColor,
+            bottom: CHART_THEME.upBottomColor,
+          }
+        : {
+            line: CHART_THEME.downColor,
+            top: CHART_THEME.downTopColor,
+            bottom: CHART_THEME.downBottomColor,
+          };
+
+    const getLiveState = (): LiveRenderState => ({
+      displayPrice: smoothedPriceRef.current,
+      subBarFraction: subBarFractionRef.current,
+      trendDirection: trendDirectionRef.current,
+    });
+
+    const lineTipPrimitive = new LiveTipPrimitive({
+      mode: 'line',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    const candleTipPrimitive = new LiveTipPrimitive({
+      mode: 'candle',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    lineSeries.attachPrimitive(lineTipPrimitive);
+    candleSeries.attachPrimitive(candleTipPrimitive);
+
+    chartRef.current = chart;
+    lineSeriesRef.current = lineSeries;
+    candleSeriesRef.current = candleSeries;
+    lineTipPrimitiveRef.current = lineTipPrimitive;
+    candleTipPrimitiveRef.current = candleTipPrimitive;
+    prevSeedMetaRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    latestVisibleBoundsRef.current = null;
+
+    // Draw timestamp labels ourselves, including logical bars just beyond the
+    // latest data point. The rightOffset leaves room for these labels to exist
+    // before they enter the plot, so they glide in instead of popping into view.
+    const drawTimeLabels = () => {
+      const canvas = timeLabelsCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const axisH = Math.max(19, Math.round(chart.timeScale().height()) || 26);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(axisH * dpr);
+      canvas.style.width = String(width) + 'px';
+      canvas.style.height = String(axisH) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, axisH);
+
+      const range = chart.timeScale().getVisibleLogicalRange();
+      const bars = committedBarsRef.current;
+      if (!range || range.to <= range.from || bars.length === 0) return;
+
+      const priceScaleW = Math.max(0, chart.priceScale('right').width());
+      if (timeFadeOverlayRef.current) {
+        timeFadeOverlayRef.current.style.right = `${priceScaleW}px`;
+        timeFadeOverlayRef.current.style.height = `${axisH}px`;
+      }
+      if (timeTickCapRef.current) {
+        timeTickCapRef.current.style.right = `${priceScaleW}px`;
+        timeTickCapRef.current.style.bottom = `${axisH - 1}px`;
+      }
+      const plotRight = Math.max(0, width - priceScaleW);
+      const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
+      const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
+      // Give timestamps a little more breathing room; actual text width is
+      // checked below as a second guard against collisions on narrow screens.
+      const labelEveryBars = Math.max(1, Math.ceil(112 / spacing));
+      const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
+      // Render beyond the viewport; clipping reveals the labels as they move in.
+      const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
+      const lastLogical = Math.floor(preloadLogicalTo / labelEveryBars) * labelEveryBars;
+      const lastBar = bars[bars.length - 1];
+      const lastIndex = bars.length - 1;
+      const labelCandidates: Array<{ x: number; label: string }> = [];
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, Math.max(0, plotRight - 2), axisH);
+      ctx.clip();
+      ctx.font = "500 12px 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.56)';
+
+      for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x > plotRight + 45) continue;
+        const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
+        labelCandidates.push({ x, label: formatBucketTime(timestampMs, timeframeRef.current) });
+      }
+
+      // Keep a guaranteed visual gap between neighboring labels. The same
+      // accepted center coordinate drives both its text and its pointer tick.
+      let previousRight = Number.NEGATIVE_INFINITY;
+      const labelGap = 18;
+      for (const candidate of labelCandidates) {
+        const labelWidth = ctx.measureText(candidate.label).width;
+        const left = candidate.x - labelWidth / 2;
+        const right = candidate.x + labelWidth / 2;
+        if (left < previousRight + labelGap) continue;
+
+        // Center the crisp vertical pointer tick between the top border and the
+        // timestamp text, leaving clean breathing space on both sides.
+        const tickX = Math.round(candidate.x) + 0.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.34)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(tickX, 3.2);
+        ctx.lineTo(tickX, 7.2);
+        ctx.stroke();
+
+        ctx.fillText(candidate.label, candidate.x, 14);
+        previousRight = right;
+      }
+      ctx.restore();
+    };
+
+    // Replace the chart library's heavier time-axis tick marks with fine hairlines.
+    const drawTimeScaleTicks = () => {
+      const canvas = timeTicksCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const canvasHeight = 5;
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(canvasHeight * dpr);
+      canvas.style.width = String(width) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, canvasHeight);
+
+      const visibleRange = chart.timeScale().getVisibleLogicalRange();
+      if (!visibleRange || visibleRange.to <= visibleRange.from) return;
+
+      const plotRight = width - chart.priceScale('right').width();
+      ctx.strokeStyle = 'rgba(255,255,255,0.36)';
+      ctx.lineWidth = 0.85;
+      ctx.lineCap = 'butt';
+
+      // Five fine tick marks follow the visible time range while it scrolls.
+      for (let index = 0; index <= 4; index += 1) {
+        const logical =
+          visibleRange.from + ((visibleRange.to - visibleRange.from) * index) / 4;
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x < 0 || x > plotRight) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, 0.5);
+        ctx.lineTo(Math.round(x) + 0.5, 3.2);
+        ctx.stroke();
+      }
+    };
+
+    const handleLogicalRange = () => {
+      drawTimeScaleTicks();
+      drawTimeLabels();
+      // Scroll-range notifications can arrive after a programmatic update.
+      // User intent is tracked from the actual pointer/wheel gesture handlers
+      // below, so auto-follow never mistakes its own movement for a user drag.
+      if (isApplyingAutoScrollRef.current) return;
+      setIsPanned(isUserPannedRef.current);
+    };
+
+    const handleCrosshairMove = (
+      param: Parameters<Parameters<IChartApi['subscribeCrosshairMove']>[0]>[0],
+    ) => {
+      if (!param.point || param.time === undefined) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+      const activeSeries =
+        chartTypeRef.current === 'line'
+          ? lineSeriesRef.current
+          : candleSeriesRef.current;
+      if (!activeSeries) return;
+
+      const value = param.seriesData.get(activeSeries) as
+        | { value?: number; close?: number }
+        | undefined;
+      const hoveredPrice =
+        typeof value?.value === 'number'
+          ? value.value
+          : typeof value?.close === 'number'
+            ? value.close
+            : null;
+
+      if (hoveredPrice === null || !Number.isFinite(hoveredPrice)) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+
+      const timeMs =
+        typeof param.time === 'number' ? param.time * 1000 : Date.now();
+      onPriceHoverRef.current?.(
+        hoveredPrice,
+        formatBucketTime(timeMs, timeframeRef.current),
+      );
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      isPointerInteractingRef.current = true;
+      pointerStartRef.current = { x: event.clientX, y: event.clientY };
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = isUserPannedRef.current;
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isPointerInteractingRef.current || !pointerStartRef.current) return;
+      const dx = event.clientX - pointerStartRef.current.x;
+      const dy = event.clientY - pointerStartRef.current.y;
+      if (!pointerDraggedRef.current && Math.hypot(dx, dy) > 4) {
+        pointerDraggedRef.current = true;
+        isUserPannedRef.current = true;
+        setIsPanned(true);
+      }
+    };
+    const handlePointerUp = () => {
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      if (!pointerDraggedRef.current && !wasPannedBeforePointerRef.current) {
+        isUserPannedRef.current = false;
+      }
+      pointerDraggedRef.current = false;
+    };
+    const handleWheel = () => {
+      isUserPannedRef.current = true;
+      setIsPanned(true);
+    };
+
+    host.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    host.addEventListener('pointermove', handlePointerMove, { passive: true });
+    host.addEventListener('pointerup', handlePointerUp, { passive: true });
+    host.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    host.addEventListener('wheel', handleWheel, { passive: true });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+    drawTimeScaleTicks();
+    drawTimeLabels();
+
+    const tickResizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => {
+        drawTimeScaleTicks();
+        drawTimeLabels();
+      });
+    });
+    tickResizeObserver.observe(host);
+
+    // Unified 60fps animation loop:
+    // 1. Velocity-adaptive price smoothing (moves fast on spikes, gently on small ticks)
+    // 2. Continuous backward scrolling at exact 1 bar / stepMs timing (no stop-and-go)
+    // 3. Smooth continuous Y-axis scale easing (no shrink-stop-shrink-stop)
+    let rafId: number | null = null;
+    let prevPerfNow = performance.now();
+
+    const animateFrame = (nowPerf: number) => {
+      const dt = Math.min(0.05, Math.max(0.001, (nowPerf - prevPerfNow) / 1000));
+      prevPerfNow = nowPerf;
+
+      if (
+        typeof document === 'undefined' ||
+        document.visibilityState !== 'hidden'
+      ) {
+        // 1. Smoothly track latest target price & live movement direction
+        const targetP = rawTargetPriceRef.current;
+        if (targetP > 0 && Number.isFinite(targetP)) {
+          if (directionAnchorPriceRef.current <= 0) {
+            directionAnchorPriceRef.current = targetP;
+          } else {
+            const anchorDelta = targetP - directionAnchorPriceRef.current;
+            const eps = directionAnchorPriceRef.current * 0.0008;
+            if (anchorDelta > eps) {
+              trendDirectionRef.current = 'up';
+              directionAnchorPriceRef.current = targetP;
+            } else if (anchorDelta < -eps) {
+              trendDirectionRef.current = 'down';
+              directionAnchorPriceRef.current = targetP;
+            }
+          }
+
+          const curP = smoothedPriceRef.current;
+          if (!(curP > 0 && Number.isFinite(curP))) {
+            smoothedPriceRef.current = targetP;
+          } else {
+            if (targetP > curP * 1.0008) {
+              trendDirectionRef.current = 'up';
+            } else if (targetP < curP * 0.9992) {
+              trendDirectionRef.current = 'down';
+            }
+            const diff = targetP - curP;
+            const priceRate = 9.5;
+            const blend = 1 - Math.exp(-priceRate * dt);
+            smoothedPriceRef.current =
+              Math.abs(diff) <= targetP * 1e-7 ? targetP : curP + diff * blend;
+          }
+        }
+
+        const displayP =
+          smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
+
+        // 2. Keep the viewport pinned to the newest actual data point.
+        // Do not synthesize clock-driven bars or scroll through elapsed time.
+        const committed = committedBarsRef.current;
+        let committedNewBar = false;
+        if (chartTypeRef.current === 'line' && committed.length > 0 && displayP > 0) {
+          const last = committed[committed.length - 1];
+          // A quote may smoothly update the live tip, but it stays on the
+          // current real data timestamp. A new horizontal bar is created
+          // only when an actual market-data tick adds a newer bucket.
+          last.close = displayP;
+          last.high = Math.max(last.high, displayP);
+          last.low = Math.min(last.low, displayP);
+          lineSeries.update({ time: last.time, value: displayP });
+          subBarFractionRef.current = 0;
+
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
+          subBarFractionRef.current = 0;
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        }
+        // 3. Smooth Y-axis scale easing without sudden step jumps
+        if (latestVisibleBoundsRef.current) {
+          const nextTarget = computeTargetYRange(
+            latestVisibleBoundsRef.current.min,
+            latestVisibleBoundsRef.current.max,
+            timeframeRef.current,
+          );
+          targetYRangeRef.current = nextTarget;
+
+          if (!animYRangeRef.current) {
+            animYRangeRef.current = { ...nextTarget };
+          } else {
+            const anim = animYRangeRef.current;
+            const scaleRate = 5.5;
+            const scaleBlend = 1 - Math.exp(-scaleRate * dt);
+            const prevMin = anim.minValue;
+            const prevMax = anim.maxValue;
+
+            anim.minValue += (nextTarget.minValue - anim.minValue) * scaleBlend;
+            anim.maxValue += (nextTarget.maxValue - anim.maxValue) * scaleBlend;
+
+            // Keep live dot cleanly inside visible band even on huge rapid spikes,
+            // allowing downward moves to reach right down to the bottom boundary first.
+            if (displayP > 0 && Number.isFinite(displayP)) {
+              const curSpan = Math.max(1e-10, anim.maxValue - anim.minValue);
+              if (displayP > anim.maxValue - curSpan * 0.06) {
+                anim.maxValue = displayP + curSpan * 0.06;
+              }
+              if (displayP < anim.minValue + curSpan * 0.018) {
+                anim.minValue = Math.max(0, displayP - curSpan * 0.018);
+              }
+            }
+
+            const span = Math.max(1e-10, anim.maxValue - anim.minValue);
+            const scaleChanged =
+              Math.abs(anim.minValue - prevMin) / span > 1e-4 ||
+              Math.abs(anim.maxValue - prevMax) / span > 1e-4;
+
+            if (scaleChanged && !committedNewBar && committed.length > 0) {
+              const lastBar = committed[committed.length - 1];
+              if (chartTypeRef.current === 'line') {
+                lineSeries.update({ time: lastBar.time, value: lastBar.close });
+              } else {
+                candleSeries.update({
+                  time: lastBar.time,
+                  open: lastBar.open,
+                  high: lastBar.high,
+                  low: lastBar.low,
+                  close: lastBar.close,
+                });
+              }
+            }
+          }
+        }
+
+        // Keep custom timestamps locked to the same 60fps horizontal motion.
+        drawTimeLabels();
+
+        // Keep halo & live tail synced at 60fps
+        if (chartTypeRef.current === 'line') {
+          lineTipPrimitive.requestRedraw();
+        } else {
+          candleTipPrimitive.requestRedraw();
+        }
+      }
+
+      rafId = window.requestAnimationFrame(animateFrame);
+    };
+
+    rafId = window.requestAnimationFrame(animateFrame);
+
+    let disposed = false;
+    document.fonts?.ready?.then(() => {
+      if (!disposed) {
+        chart.applyOptions({ layout: { fontFamily: axisFontFamily } });
+      }
+    });
+
+    return () => {
+      disposed = true;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      tickResizeObserver.disconnect();
+      host.removeEventListener('pointerdown', handlePointerDown);
+      host.removeEventListener('pointermove', handlePointerMove);
+      host.removeEventListener('pointerup', handlePointerUp);
+      host.removeEventListener('pointercancel', handlePointerUp);
+      host.removeEventListener('wheel', handleWheel);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRange);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      lineSeries.detachPrimitive(lineTipPrimitive);
+      candleSeries.detachPrimitive(candleTipPrimitive);
+      lineTipPrimitiveRef.current = null;
+      candleTipPrimitiveRef.current = null;
+      entryPriceLineRef.current = null;
+      lineSeriesRef.current = null;
+      candleSeriesRef.current = null;
+      chartRef.current = null;
+      prevSeedMetaRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      latestVisibleBoundsRef.current = null;
+      chart.remove();
+    };
+  }, [computeTargetYRange, height, syncBadgeDom]);
+
+  // Reset user pan state and re-enable autoScale when timeframe or chart mode switches.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    isUserPannedRef.current = false;
+    lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+    setIsPanned(false);
+    // Reset old interval bounds so the next interval cannot inherit its scale.
+    latestVisibleBoundsRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    chart.applyOptions({
+      timeScale: {
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
+      },
+    });
+    chart.priceScale('right').applyOptions({ autoScale: true });
+  }, [timeframe, chartType]);
+
+  // Keep line/candle colors, area refraction gradient & active series visibility synced.
+  useEffect(() => {
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    lineSeriesRef.current?.applyOptions({
+      lineColor,
+      topColor,
+      bottomColor,
+      crosshairMarkerBorderColor: lineColor,
+      visible: chartType === 'line',
+    });
+    candleSeriesRef.current?.applyOptions({
+      visible: chartType === 'candle',
+    });
+  }, [isPositive, chartType]);
+
+  // Sync incoming prices & handle initial seeding / timeframe switches cleanly.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const lineSeries = lineSeriesRef.current;
+    const candleSeries = candleSeriesRef.current;
+    if (!chart || !lineSeries || !candleSeries) return;
+
+    if (Number.isFinite(currentPrice) && currentPrice > 0) {
+      rawTargetPriceRef.current = currentPrice;
+    }
+
+    const firstTime = seedBars[0]?.time ?? 0;
+    const seedKey = `${timeframe}:${chartType}:${resolutionMode}`;
+    const prev = prevSeedMetaRef.current;
+
+    const firstTimeMovedUnexpectedly =
+      prev !== null &&
+      prev.firstTime !== firstTime &&
+      (firstTime < prev.firstTime || seedBars.length < 2000);
+
+    const needsFullReseed =
+      prev === null ||
+      prev.key !== seedKey ||
+      firstTimeMovedUnexpectedly ||
+      Math.abs(seedBars.length - prev.length) > 4;
+
+    if (needsFullReseed) {
+      const cloned = seedBars.map((bar) => ({ ...bar }));
+      // Snap the new interval to its own bounds; never ease from the previous scale.
+      latestVisibleBoundsRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      committedBarsRef.current = cloned;
+      isUserPannedRef.current = false;
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = false;
+      setIsPanned(false);
+
+      const lineData: AreaData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        value: bar.close,
+      }));
+      const candleData: CandlestickData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      }));
+
+      isApplyingAutoScrollRef.current = true;
+      try {
+        lineSeries.setData(lineData);
+        candleSeries.setData(candleData);
+
+        if (cloned.length > 0) {
+          const lastBar = cloned[cloned.length - 1];
+          if (!(smoothedPriceRef.current > 0)) {
+            smoothedPriceRef.current =
+              currentPrice > 0 ? currentPrice : lastBar.close;
+          }
+          const activeStepMs = Math.max(1_000, stepMsRef.current);
+          subBarFractionRef.current =
+            chartType === 'line'
+              ? Math.max(0, Math.min(0.9999, (Date.now() - lastBar.timestampMs) / activeStepMs))
+              : 0;
+
+          isUserPannedRef.current = false;
+          const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
+          lastAppliedScrollPosRef.current = pos;
+          isAutoPositioningRef.current = true;
+          chart.timeScale().scrollToPosition(pos, false);
+          setIsPanned(false);
+        }
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+
+      prevSeedMetaRef.current =
+        seedBars.length > 0
+          ? { key: seedKey, firstTime, length: seedBars.length }
+          : null;
+      return;
+    }
+
+    // Apply new local OHLC buckets to both chart modes. The horizontal
+    // timeline advances only when actual data adds a newer bucket.
+    if (seedBars.length > 0) {
+      const committed = committedBarsRef.current;
+      const latest = seedBars[seedBars.length - 1];
+      const lastCommitted = committed[committed.length - 1];
+      const committedByTime = new Map(committed.map((bar) => [bar.time, bar]));
+      const incomingTimes = new Set(seedBars.map((bar) => bar.time));
+      const hasHistoricalCorrection =
+        seedBars.some((bar) => {
+          const previous = committedByTime.get(bar.time);
+          return (!previous && bar.time < latest.time) || (
+            previous !== undefined &&
+            bar.time < latest.time &&
+            (bar.open !== previous.open || bar.high !== previous.high ||
+              bar.low !== previous.low || bar.close !== previous.close)
+          );
+        }) ||
+        committed.some((bar) => !incomingTimes.has(bar.time));
+
+      if (hasHistoricalCorrection) {
+        // A delayed trade may correct a candle behind the active bucket.
+        // Rebuild the ordered history rather than trying to append that older
+        // timestamp through Lightweight Charts' incremental update API.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      } else if (!lastCommitted || latest.time > lastCommitted.time) {
+        const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
+        for (const bar of nextBars) {
+          const nextCandle = { ...bar };
+          committed.push(nextCandle);
+          lineSeries.update({ time: nextCandle.time, value: nextCandle.close });
+          candleSeries.update({
+            time: nextCandle.time,
+            open: nextCandle.open,
+            high: nextCandle.high,
+            low: nextCandle.low,
+            close: nextCandle.close,
+          });
+        }
+        if (committed.length > 2000) {
+          committed.splice(0, committed.length - 2000);
+        }
+        if (!isUserPannedRef.current) {
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else if (latest.time === lastCommitted.time) {
+        const changed =
+          latest.open !== lastCommitted.open ||
+          latest.high !== lastCommitted.high ||
+          latest.low !== lastCommitted.low ||
+          latest.close !== lastCommitted.close;
+        if (changed) {
+          const updated = { ...latest };
+          committed[committed.length - 1] = updated;
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lineSeries.update({ time: updated.time, value: updated.close });
+            candleSeries.update({
+              time: updated.time,
+              open: updated.open,
+              high: updated.high,
+              low: updated.low,
+              close: updated.close,
+            });
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else {
+        // A corrected/rewound history window cannot be appended incrementally.
+        // Re-seed both series in chronological order and return the viewport
+        // to the latest candle rather than drawing backward.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      }
+    }
+
+    prevSeedMetaRef.current = {
+      key: seedKey,
+      firstTime,
+      length: seedBars.length,
+    };
+  }, [seedBars, resolutionMode, timeframe, chartType, currentPrice]);
+
+  // Render optional entry price line on the active series.
+  useEffect(() => {
+    const activeSeries =
+      chartType === 'line' ? lineSeriesRef.current : candleSeriesRef.current;
+    if (!activeSeries) return;
+
+    if (entryPriceLineRef.current) {
+      try {
+        lineSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      try {
+        candleSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      entryPriceLineRef.current = null;
+    }
+
+    if (entryPrice != null && Number.isFinite(entryPrice) && entryPrice > 0) {
+      entryPriceLineRef.current = activeSeries.createPriceLine({
+        price: entryPrice,
+        color: CHART_THEME.entryLineColor,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'ENTRY',
+      });
+    }
+  }, [entryPrice, chartType]);
+
+  const resetView = () => {
+    const chart = chartRef.current;
+    const targetPos =
+      BASE_RIGHT_OFFSET +
+      (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
+
+    isUserPannedRef.current = false;
+    isPointerInteractingRef.current = false;
+    pointerStartRef.current = null;
+    pointerDraggedRef.current = false;
+    wasPannedBeforePointerRef.current = false;
+    isAutoPositioningRef.current = false;
+    lastAppliedScrollPosRef.current = targetPos;
+
+    if (chart) {
+      chart.priceScale('right').applyOptions({ autoScale: true });
+      // Snap to the exact live position in one action; the animation loop
+      // then maintains that position without requiring repeated button taps.
+      isApplyingAutoScrollRef.current = true;
+      try {
+        chart.timeScale().scrollToPosition(targetPos, false);
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+    }
+
+    setIsPanned(false);
+    onPriceHover?.(null, null);
+  };
+
+  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ height, touchAction: 'pan-y' }}
+      className="relative w-full min-w-0 max-w-full select-none overflow-hidden bg-[#000000]"
+      onDoubleClick={resetView}
+    >
+      {/* Layer 1: Pure black + small, tight, subtle fading dot-matrix grid */}
+      <canvas
+        ref={dotCanvasRef}
+        style={{ width: '100%', height }}
+        className="pointer-events-none absolute inset-0 block max-w-full"
+      />
+
+      {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
+      <div
+        ref={tvContainerRef}
+        style={{
+          position: 'absolute',
+          top: 34,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: 'calc(100% - 34px)',
+          // Fade the chart itself into view over the first ~12% of its width.
+          // This is a real alpha mask, not a dark overlay or rectangular brush.
+          maskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+        }}
+        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
+          with chart coordinates so they emerge continuously from the right. */}
+      <canvas
+        ref={timeLabelsCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[26px] w-full"
+      />
+      {/* Layer 2.5: Soft smoke-like edge brushes. Darkest only at the outer
+          upper/lower corners, feathering gently inward without a hard dark band. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[26px] z-[4] overflow-hidden"
+      >
+        <div
+          className="absolute inset-y-0 right-0 w-[88px]"
+          style={{
+            background:
+              'radial-gradient(ellipse 100% 58% at 100% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 100% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2.55: Short fade at the plot/time-axis boundary. New timestamps
+          emerge from the right edge instead of popping into view; price labels stay clear. */}
+      <div
+        ref={timeFadeOverlayRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[26px] w-[30px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
+        }}
+      />
+      <div
+        ref={timeTickCapRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
+        style={{
+          background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
+        }}
+      />
+
+      {/* Layer 2.6: Very light top-edge seam blend. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[2] overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-10"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.045) 0%, rgba(0,0,0,0.025) 55%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 3: Right-axis live-price pill card with clean crisp typography */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[3] overflow-hidden">
+        <div
+          ref={badgeRef}
+          style={{
+            right: CHART_THEME.liveBadge.rightInset,
+            top: 0,
+            opacity: 0,
+            backgroundColor: badgeBg,
+            color: CHART_THEME.liveBadge.textColor,
+            fontFamily: "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif",
+          }}
+          className="absolute flex items-center justify-center whitespace-nowrap rounded-[7px] px-1.5 text-[12.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
+        />
+      </div>
+
+      {/* Empty state */}
+      {seedBars.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center font-mono text-[11px] text-white/40">
+          Chart data unavailable
+        </div>
+      )}
+
+      {/* Compact return-to-live card; only shown while the user is browsing history. */}
+      {isPanned && (
+        <button
+          type="button"
+          onClick={resetView}
+          className="absolute bottom-7 right-[66px] z-[5] inline-flex h-[27px] items-center gap-1.5 rounded-[5px] border border-[#4BCB79]/55 bg-gradient-to-r from-[#10251A]/95 via-[#0B1B13]/95 to-[#101A14]/95 px-2.5 text-[10px] font-medium tracking-[0.01em] text-[#B9F2CD] shadow-[0_2px_10px_rgba(30,180,91,0.10)] transition-colors hover:border-[#65E895]/75 hover:text-white active:scale-[0.98]"
+        >
+          <ChevronsRight className="h-[13px] w-[13px] shrink-0 text-[#70E99A]" strokeWidth={2.1} />
+          <span className="whitespace-nowrap">Go back to live</span>
+        </button>
+      )}
+    </div>
+  );
+};
+ + price.toExponential(2);
+  if (abs < 0.001) return '
+
+const formatMarketCap = (value: number): string => {
+  if (!Number.isFinite(value)) return '—';
+  if (value <= 0) return '$0.00';
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
+  return `$${value.toFixed(2)}`;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16) || 0;
+  const g = parseInt(clean.slice(2, 4), 16) || 0;
+  const b = parseInt(clean.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+};
+
+interface NormalizedBar {
+  time: UTCTimestamp;
+  timestampMs: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface LiveRenderState {
+  displayPrice: number;
+  subBarFraction: number;
+  trendDirection: 'up' | 'down';
+}
+
+/**
+ * Custom TradingView Series Primitive executed inside TradingView's own
+ * synchronized canvas pass:
+ * - Connects the last settled bar cleanly to the continuously gliding live tip
+ *   (with matching area light refraction underneath)
+ * - Draws the horizontal dashed price guide
+ * - Draws the bigger live dot + calm single-pulse filled halo locked strictly at the tip
+ * - Syncs the right-axis live-price pill card to the exact Y coordinate
+ */
+class LiveTipPrimitive implements ISeriesPrimitive<Time> {
+  private attachedParams: SeriesAttachedParameter<Time, SeriesType> | null = null;
+  private readonly mode: 'line' | 'candle';
+  private readonly getChartType: () => 'line' | 'candle';
+  private readonly getColors: () => {
+    line: string;
+    top: string;
+    bottom: string;
+  };
+  private readonly getLiveState: () => LiveRenderState;
+  private readonly onBadgeSync: (
+    price: number | null,
+    yCoord: number | null,
+    plotW: number,
+    plotH: number,
+  ) => void;
+
+  private readonly paneView: IPrimitivePaneView = {
+    zOrder: (): PrimitivePaneViewZOrder => 'top',
+    renderer: (): IPrimitivePaneRenderer => ({
+      draw: (target: CanvasTarget) => this.drawOnPane(target),
+    }),
+  };
+
+  constructor(options: {
+    mode: 'line' | 'candle';
+    getChartType: () => 'line' | 'candle';
+    getColors: () => { line: string; top: string; bottom: string };
+    getLiveState: () => LiveRenderState;
+    onBadgeSync: (
+      price: number | null,
+      yCoord: number | null,
+      plotW: number,
+      plotH: number,
+    ) => void;
+  }) {
+    this.mode = options.mode;
+    this.getChartType = options.getChartType;
+    this.getColors = options.getColors;
+    this.getLiveState = options.getLiveState;
+    this.onBadgeSync = options.onBadgeSync;
+  }
+
+  public attached(param: SeriesAttachedParameter<Time, SeriesType>): void {
+    this.attachedParams = param;
+  }
+
+  public detached(): void {
+    this.attachedParams = null;
+  }
+
+  public requestRedraw(): void {
+    this.attachedParams?.requestUpdate();
+  }
+
+  public paneViews(): readonly IPrimitivePaneView[] {
+    if (this.getChartType() !== this.mode) return [];
+    return [this.paneView];
+  }
+
+  private drawOnPane(target: CanvasTarget): void {
+    const params = this.attachedParams;
+    if (!params || this.getChartType() !== this.mode) return;
+
+    const data = params.series.data();
+    if (!data || data.length === 0) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const last = data[data.length - 1] as unknown as {
+      time: Time;
+      value?: number;
+      close?: number;
+    };
+    const barClose =
+      typeof last.value === 'number'
+        ? last.value
+        : typeof last.close === 'number'
+          ? last.close
+          : null;
+
+    if (barClose === null || !Number.isFinite(barClose)) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const first = data[0] as unknown as {
+      time: Time;
+      value?: number;
+      open?: number;
+      close?: number;
+    };
+    const firstVal =
+      typeof first.value === 'number'
+        ? first.value
+        : typeof first.open === 'number'
+          ? first.open
+          : typeof first.close === 'number'
+            ? first.close
+            : null;
+    const xFirst = params.chart.timeScale().timeToCoordinate(first.time);
+    const yFirst =
+      firstVal !== null && Number.isFinite(firstVal)
+        ? params.series.priceToCoordinate(firstVal)
+        : null;
+
+    const liveState = this.getLiveState();
+    const livePrice =
+      Number.isFinite(liveState.displayPrice) && liveState.displayPrice > 0
+        ? liveState.displayPrice
+        : barClose;
+
+    const yBar = params.series.priceToCoordinate(barClose);
+    const yLive = params.series.priceToCoordinate(livePrice);
+    const xLast = params.chart.timeScale().timeToCoordinate(last.time);
+    const colors = this.getColors();
+
+    target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+      const plotW = mediaSize.width;
+      const plotH = mediaSize.height;
+
+      // In Candle mode, lock guide + card strictly to the rendered candle close
+      // so the candle body, dashed guide, and right-axis card never separate.
+      const displayValue = this.mode === 'candle' ? barClose : livePrice;
+      const guideY =
+        this.mode === 'candle'
+          ? yBar
+          : yLive !== null && Number.isFinite(yLive)
+            ? yLive
+            : yBar;
+      if (guideY === null || !Number.isFinite(guideY)) {
+        this.onBadgeSync(null, null, plotW, plotH);
+        return;
+      }
+
+      // Compute exact continuous live tip X position ahead of the sliding bar
+      let liveX: number | null = xLast;
+      if (
+        this.mode === 'line' &&
+        xLast !== null &&
+        Number.isFinite(xLast)
+      ) {
+        let spacing = params.chart.timeScale().options().barSpacing || 5;
+        if (data.length >= 2) {
+          const prev = data[data.length - 2] as unknown as { time: Time };
+          const xPrev = params.chart.timeScale().timeToCoordinate(prev.time);
+          if (xPrev !== null && Number.isFinite(xPrev) && xLast - xPrev > 0.2) {
+            spacing = xLast - xPrev;
+          }
+        }
+        const frac = Math.max(0, Math.min(0.9999, liveState.subBarFraction));
+        liveX = xLast + frac * spacing;
+      }
+
+      // Sync the right-axis pill card to the exact rendered price & Y coordinate
+      this.onBadgeSync(displayValue, guideY, plotW, plotH);
+
+      ctx.save();
+
+      // Clip inside plot pane bounds (include full right-edge connector stroke)
+      ctx.beginPath();
+      ctx.rect(0, 0, plotW + 1, plotH);
+      ctx.clip();
+
+      // Precompute shared relative area gradient matching TradingView AreaSeries
+      let areaGrad: CanvasGradient | null = null;
+      if (this.mode === 'line') {
+        let minY: number = guideY;
+        if (yBar !== null && Number.isFinite(yBar)) {
+          minY = Math.min(minY, yBar);
+        }
+        if (yFirst !== null && Number.isFinite(yFirst)) {
+          minY = Math.min(minY, yFirst);
+        }
+        const visRange = params.chart.timeScale().getVisibleLogicalRange();
+        const minScanIdx = visRange
+          ? Math.max(0, Math.floor(visRange.from))
+          : Math.max(0, data.length - 120);
+        const maxScanIdx = visRange
+          ? Math.min(data.length - 1, Math.ceil(visRange.to))
+          : data.length - 1;
+        for (let i = minScanIdx; i <= maxScanIdx; i++) {
+          const item = data[i] as unknown as { value?: number };
+          if (typeof item.value === 'number') {
+            const cy = params.series.priceToCoordinate(item.value);
+            if (cy !== null && Number.isFinite(cy) && cy < minY) {
+              minY = cy;
+            }
+          }
+        }
+        const gradTop = Math.max(0, Math.min(minY, plotH - 1));
+        areaGrad = ctx.createLinearGradient(0, gradTop, 0, plotH);
+        areaGrad.addColorStop(0, colors.top);
+        areaGrad.addColorStop(1, colors.bottom);
+      }
+
+      // 0. In Line mode, extend the starting back of the line & shadow continuously
+      // all the way to the left edge (x = 0) when data starts mid-chart.
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xFirst !== null &&
+        yFirst !== null &&
+        Number.isFinite(xFirst) &&
+        Number.isFinite(yFirst) &&
+        xFirst > 0.25
+      ) {
+        const joinX = Math.min(plotW, xFirst + 0.5);
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.lineTo(joinX, plotH);
+        ctx.lineTo(0, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.stroke();
+      }
+
+      // 1. In Line mode, draw the live continuous tail from last settled point -> live tip
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xLast !== null &&
+        yBar !== null &&
+        liveX !== null &&
+        Number.isFinite(xLast) &&
+        Number.isFinite(yBar) &&
+        Number.isFinite(liveX) &&
+        liveX - xLast > 0.15
+      ) {
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.lineTo(liveX, plotH);
+        ctx.lineTo(xLast, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crisp continuous line extension
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.stroke();
+      }
+
+      // Compute centered X for the two directional V chevrons between dot/candle and right axis
+      const tipEdgeX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? liveX + CHART_THEME.liveDot.radius + 4
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? xLast + 5
+            : null;
+      const axisEdgeX = plotW - 4;
+      const showChevrons =
+        tipEdgeX !== null && axisEdgeX - tipEdgeX >= CHART_THEME.directionCard.width + 4;
+      const chevronX = showChevrons && tipEdgeX !== null ? (tipEdgeX + axisEdgeX) / 2 : null;
+
+      // 2. Straight wire connecting ONLY the live dot/candle directly to the right-axis card
+      // (stops strictly between the dot/candle and the card — never stretches backward).
+      const badgeH = CHART_THEME.liveBadge.height;
+      const cardCenterY =
+        Math.max(2, Math.min(plotH - badgeH - 1, guideY - badgeH / 2)) + badgeH / 2;
+      const wireStartX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? Math.max(0, Math.min(plotW, liveX))
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? Math.max(0, Math.min(plotW, xLast + 3))
+            : null;
+
+      if (wireStartX !== null && plotW - wireStartX > 1) {
+        ctx.strokeStyle = hexToRgba(colors.line, 0.8);
+        ctx.lineWidth = 1.25;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (chevronX !== null && chevronX > wireStartX + 4) {
+          const gapHalf = 8;
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(Math.max(wireStartX, chevronX - gapHalf), guideY);
+          ctx.moveTo(Math.min(plotW, chevronX + gapHalf), cardCenterY);
+          ctx.lineTo(plotW, cardCenterY);
+        } else {
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(plotW, cardCenterY);
+        }
+        ctx.stroke();
+      }
+
+      // Prominent live-price guide: a continuous dashed line extending left from the moving axis card.
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(colors.line, 0.92);
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'butt';
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, cardCenterY);
+      ctx.lineTo(plotW, cardCenterY);
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. In Line mode, draw the single calm pulsing filled halo + bigger dot tightly locked at (liveX, guideY)
+      if (
+        this.mode === 'line' &&
+        liveX !== null &&
+        Number.isFinite(liveX) &&
+        liveX >= -24 &&
+        liveX <= plotW + 24
+      ) {
+        const now = performance.now();
+        const period = CHART_THEME.liveDot.haloPeriodMs;
+        const baseR = CHART_THEME.liveDot.radius;
+        const wrapR = CHART_THEME.liveDot.haloRadius;
+        const maxR = CHART_THEME.liveDot.haloMaxRadius;
+
+        // Subtle filled wrap that stays anchored right around the dot
+        ctx.fillStyle = hexToRgba(colors.line, 0.2);
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, wrapR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Single calm expanding & fading filled halo pulse (one pulse per cycle, no stroked rings)
+        const cycle = (now % period) / period;
+        const activeFraction = 0.72;
+        if (cycle < activeFraction) {
+          const t = cycle / activeFraction;
+          const eased = 1 - Math.pow(1 - t, 2.2);
+          const pulseRadius = wrapR + eased * (maxR - wrapR);
+          const fadeIn = t < 0.14 ? t / 0.14 : 1;
+          const fadeOut = Math.pow(1 - t, 1.35);
+          const pulseAlpha = 0.4 * fadeIn * fadeOut;
+
+          ctx.fillStyle = hexToRgba(colors.line, pulseAlpha);
+          ctx.beginPath();
+          ctx.arc(liveX, guideY, pulseRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Bigger crisp live dot tightly fixed to the line's tip
+        ctx.fillStyle = colors.line;
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, baseR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+
+        // Bright center pinpoint
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, 1.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4. Two borderless directional V chevrons centered between dot/candlestick and right-axis card
+      if (showChevrons && chevronX !== null) {
+        const cardX = chevronX;
+        const cardH = CHART_THEME.directionCard.height;
+        const cardY = Math.max(cardH / 2 + 4, Math.min(plotH - cardH / 2 - 4, guideY));
+
+        const isUp = liveState.trendDirection === 'up';
+        const baseColor = isUp
+          ? CHART_THEME.directionCard.upColor
+          : CHART_THEME.directionCard.downColor;
+        const brightColor = isUp
+          ? CHART_THEME.directionCard.upGlow
+          : CHART_THEME.directionCard.downGlow;
+
+        // Two wide sharp V chevrons cycling on/off in opposite phases along travel direction
+        const phase = (performance.now() % CHART_THEME.directionCard.cycleMs) / CHART_THEME.directionCard.cycleMs;
+        // Phase A leads in direction of travel; Phase B is offset by half cycle (off while A is on)
+        const waveA = Math.pow(0.5 + 0.5 * Math.cos(phase * Math.PI * 2), 1.8);
+        const waveB = Math.pow(0.5 + 0.5 * Math.cos((phase + 0.5) * Math.PI * 2), 1.8);
+
+        const topAlpha = isUp ? 0.16 + 0.84 * waveB : 0.16 + 0.84 * waveA;
+        const botAlpha = isUp ? 0.16 + 0.84 * waveA : 0.16 + 0.84 * waveB;
+
+        const wingW = 5.1;
+        const dropH = 3.6;
+        const rowOffset = 3.1;
+
+        const drawChevron = (cy: number, alpha: number) => {
+          const isLit = alpha > 0.55;
+          ctx.save();
+          ctx.lineJoin = 'miter';
+          ctx.miterLimit = 6;
+          ctx.lineCap = 'round';
+          ctx.lineWidth = isLit ? 1.9 : 1.6;
+          ctx.strokeStyle = isLit
+            ? hexToRgba(brightColor, alpha)
+            : hexToRgba(baseColor, alpha);
+          if (isLit) {
+            ctx.shadowColor = baseColor;
+            ctx.shadowBlur = 6;
+          }
+          ctx.beginPath();
+          if (isUp) {
+            ctx.moveTo(cardX - wingW, cy + dropH / 2);
+            ctx.lineTo(cardX, cy - dropH / 2);
+            ctx.lineTo(cardX + wingW, cy + dropH / 2);
+          } else {
+            ctx.moveTo(cardX - wingW, cy - dropH / 2);
+            ctx.lineTo(cardX, cy + dropH / 2);
+            ctx.lineTo(cardX + wingW, cy - dropH / 2);
+          }
+          ctx.stroke();
+          ctx.restore();
+        };
+
+        drawChevron(cardY - rowOffset, topAlpha);
+        drawChevron(cardY + rowOffset, botAlpha);
+      }
+
+      ctx.restore();
+    });
+  }
+}
+
+export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
+  currentPrice,
+  marketCap,
+  entryPrice,
+  priceHistory,
+  isPositive = true,
+  timeframe = '24H',
+  chartType = 'line',
+  onPriceHover,
+  height = 272,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dotCanvasRef = useRef<HTMLCanvasElement>(null);
+  const tvContainerRef = useRef<HTMLDivElement>(null);
+  const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeFadeOverlayRef = useRef<HTMLDivElement>(null);
+  const timeTickCapRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+
+  const mcapScaleRef = useRef<number>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0 && currentPrice > 0
+      ? marketCap / currentPrice
+      : 1,
+  );
+  const hasMarketCapRef = useRef<boolean>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0,
+  );
+  if (marketCap != null && Number.isFinite(marketCap) && marketCap > 0) {
+    hasMarketCapRef.current = true;
+    if (currentPrice > 0 && Number.isFinite(currentPrice)) {
+      mcapScaleRef.current = marketCap / currentPrice;
+    }
+  } else {
+    hasMarketCapRef.current = false;
+    mcapScaleRef.current = 1;
+  }
+
+  const formatDisplayValue = useCallback(
+    (value: number) =>
+      hasMarketCapRef.current
+        ? formatMarketCap(value * mcapScaleRef.current)
+        : formatPrice(value),
+    [],
+  );
+
+  const chartRef = useRef<IChartApi | null>(null);
+  const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const lineTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const candleTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const entryPriceLineRef = useRef<IPriceLine | null>(null);
+
+  // Continuous live-motion refs (60fps smooth price, horizontal scroll, and Y scale)
+  const committedBarsRef = useRef<NormalizedBar[]>([]);
+  const rawTargetPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const subBarFractionRef = useRef<number>(0);
+  const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
+  const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const stepMsRef = useRef<number>(TIMEFRAME_LIVE_STEP_MS[timeframe] || 30_000);
+  const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
+
+  const isUserPannedRef = useRef<boolean>(false);
+  const isPointerInteractingRef = useRef<boolean>(false);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerDraggedRef = useRef<boolean>(false);
+  const wasPannedBeforePointerRef = useRef<boolean>(false);
+  const isApplyingAutoScrollRef = useRef<boolean>(false);
+  const isAutoPositioningRef = useRef<boolean>(true);
+  const lastAppliedScrollPosRef = useRef<number>(BASE_RIGHT_OFFSET);
+
+  const latestVisibleBoundsRef = useRef<{ min: number; max: number } | null>(null);
+  const targetYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+  const animYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+
+  const prevSeedMetaRef = useRef<{
+    key: string;
+    firstTime: number;
+    length: number;
+  } | null>(null);
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isPanned, setIsPanned] = useState(false);
+
+  const { seedBars, resolutionMode, stepMs } = useMemo<{
+    seedBars: NormalizedBar[];
+    resolutionMode: 'live-step' | 'buckets';
+    stepMs: number;
+  }>(() => {
+    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+    const validRaw = (priceHistory || [])
+      .filter(
+        (point) =>
+          Number.isFinite(point.price) &&
+          point.price > 0 &&
+          isUnixTimestampMilliseconds(point.time),
+      )
+      .slice()
+      .sort((a, b) => a.time - b.time);
+
+    if (validRaw.length === 0) {
+      const liveStep = TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000;
+      if (Number.isFinite(currentPrice) && currentPrice > 0) {
+        const nowSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        const nowMs = nowSec * 1000;
+        const stepSec = Math.max(1, Math.floor(liveStep / 1000));
+        return {
+          resolutionMode: chartType === 'line' ? 'live-step' : 'buckets',
+          stepMs: chartType === 'line' ? liveStep : interval,
+          seedBars: [
+            {
+              time: (nowSec - stepSec) as UTCTimestamp,
+              timestampMs: nowMs - stepSec * 1000,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+            {
+              time: nowSec,
+              timestampMs: nowMs,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+          ],
+        };
+      }
+      return {
+        resolutionMode: 'buckets',
+        stepMs: interval,
+        seedBars: [],
+      };
+    }
+
+    const spanMs = validRaw[validRaw.length - 1].time - validRaw[0].time;
+    const useLiveStep = chartType === 'line' && spanMs < interval * 3;
+    const activeStepMs = useLiveStep
+      ? TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000
+      : interval;
+
+    // Anchor live-step buckets to the first point's second so continuous
+    // scrolling starts right from elapsed time 0 without initial phase offset jumps.
+    const originMs = useLiveStep
+      ? Math.floor(validRaw[0].time / 1000) * 1000
+      : 0;
+
+    const buckets = new Map<number, NormalizedBar>();
+    for (const point of validRaw) {
+      const bucketMs = useLiveStep
+        ? originMs + Math.max(0, Math.floor((point.time - originMs) / activeStepMs)) * activeStepMs
+        : Math.floor(point.time / activeStepMs) * activeStepMs;
+      const bucketSec = Math.floor(bucketMs / 1000) as UTCTimestamp;
+      const open =
+        Number.isFinite(point.open) && (point.open as number) > 0
+          ? (point.open as number)
+          : point.price;
+      const high =
+        Number.isFinite(point.high) && (point.high as number) > 0
+          ? (point.high as number)
+          : Math.max(open, point.price);
+      const low =
+        Number.isFinite(point.low) && (point.low as number) > 0
+          ? (point.low as number)
+          : Math.min(open, point.price);
+      const close =
+        Number.isFinite(point.close) && (point.close as number) > 0
+          ? (point.close as number)
+          : point.price;
+
+      const existing = buckets.get(bucketSec);
+      if (!existing) {
+        buckets.set(bucketSec, {
+          time: bucketSec,
+          timestampMs: bucketMs,
+          open,
+          high,
+          low,
+          close,
+        });
+      } else {
+        existing.high = Math.max(existing.high, high);
+        existing.low = Math.min(existing.low, low);
+        existing.close = close;
+      }
+    }
+
+    let ordered = Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+
+    // Ensure a 1-bar line session immediately renders a baseline segment.
+    if (chartType === 'line' && ordered.length === 1) {
+      const only = ordered[0];
+      const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
+      ordered = [
+        {
+          time: (only.time - stepSec) as UTCTimestamp,
+          timestampMs: only.timestampMs - stepSec * 1000,
+          open: only.open,
+          high: only.open,
+          low: only.open,
+          close: only.open,
+        },
+        only,
+      ];
+    }
+
+    if (!useLiveStep && timeframe === '24H' && ordered.length > 24) {
+      const latestMs = ordered[ordered.length - 1].timestampMs;
+      return {
+        resolutionMode: 'buckets',
+        stepMs: activeStepMs,
+        // Keep the full provider-supplied 24-hour window. The viewport is
+        // positioned at the newest edge; do not truncate history to 24 bars.
+        seedBars: ordered
+          .filter((bar) => bar.timestampMs >= latestMs - 24 * 60 * 60_000)
+          .slice(-2000),
+      };
+    }
+
+    return {
+      resolutionMode: useLiveStep ? 'live-step' : 'buckets',
+      stepMs: activeStepMs,
+      seedBars: ordered.slice(-2000),
+    };
+  }, [priceHistory, currentPrice, timeframe, chartType]);
+
+  stepMsRef.current = stepMs;
+  resolutionModeRef.current = resolutionMode;
+
+  const onPriceHoverRef = useRef(onPriceHover);
+  onPriceHoverRef.current = onPriceHover;
+
+  const timeframeRef = useRef(timeframe);
+  timeframeRef.current = timeframe;
+
+  const chartTypeRef = useRef(chartType);
+  chartTypeRef.current = chartType;
+
+  const isPositiveRef = useRef(isPositive);
+  isPositiveRef.current = isPositive;
+
+  // Helper to compute continuous target Y-axis range without any threshold jumps.
+  // Allows price to travel all the way down to the bottom boundary (above the bottom brush)
+  // before shrinking/rescaling while preserving clean top headroom.
+  const computeTargetYRange = useCallback(
+    (rawMin: number, rawMax: number, tf: string) => {
+      // The line chart may smoothly follow the latest quote between trades.
+      // Candlesticks must be scaled only from confirmed-trade OHLC data; a
+      // quote/market-cap refresh is not a trade and must not distort candle
+      // ranges or manufacture wick extremes.
+      const liveVal =
+        chartTypeRef.current === 'line' ? smoothedPriceRef.current : 0;
+      const visMin =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.min(rawMin, liveVal) : rawMin;
+      const visMax =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.max(rawMax, liveVal) : rawMax;
+      const spanRatio = TIMEFRAME_Y_SPAN_RATIO[tf] ?? 0.26;
+      const mid = (visMin + visMax) / 2;
+      const tfMinSpan = Math.max(Math.abs(mid) * spanRatio, 1e-10);
+      const rawSpan = Math.max(0, visMax - visMin);
+
+      const flatBlend = Math.max(0, 1 - rawSpan / (tfMinSpan * 0.4));
+      const bottomFrac = 0.012 + 0.22 * flatBlend;
+      const topFrac = 0.1 + 0.12 * flatBlend;
+      const activeBand = Math.max(0.4, 1 - topFrac - bottomFrac);
+      const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
+
+      // Keep the scale fitted to the actual positive data range; do not force a zero baseline.
+      const minValue = Math.max(visMin * 1e-6, visMin - effectiveSpan * bottomFrac);
+      const maxValue = minValue + effectiveSpan;
+      return { minValue, maxValue };
+    },
+    [],
+  );
+
+  // Draw the pure-black + fading dot-matrix background canvas behind TradingView.
+  const drawDotBackground = useCallback(() => {
+    const canvas = dotCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const hostW = containerRef.current?.clientWidth || containerWidth;
+    if (hostW <= 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, hostW);
+    const h = height;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = CHART_THEME.background;
+    ctx.fillRect(0, 0, w, h);
+
+    if (!CHART_THEME.dots.enabled) return;
+
+    const { spacing, radius, maxOpacity, sheenColor } = CHART_THEME.dots;
+    const smoothstep = (t: number) => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * (3 - 2 * c);
+    };
+    const startOffset = 5;
+    for (let y = startOffset; y < h - startOffset; y += spacing) {
+      const normY = y / h;
+      const fadeY =
+        normY < 0.3
+          ? 0.08 + 0.92 * smoothstep(normY / 0.3)
+          : normY > 0.78
+            ? 0.06 + 0.94 * smoothstep((1 - normY) / 0.22)
+            : 1;
+
+      for (let x = startOffset; x < w - startOffset; x += spacing) {
+        const normX = x / w;
+        const fadeX =
+          normX < 0.24
+            ? 0.08 + 0.92 * smoothstep(normX / 0.24)
+            : normX > 0.68
+              ? 0.06 + 0.94 * smoothstep((1 - normX) / 0.32)
+              : 1;
+
+        const dx = (normX - 0.45) * 1.15;
+        const dy = (normY - 0.5) * 1.15;
+        const dist = Math.min(1, Math.hypot(dx, dy));
+        const sheenBoost = 0.86 + 0.14 * (1 - dist);
+
+        const alpha = Math.max(0, Math.min(0.26, maxOpacity * fadeY * fadeX * sheenBoost));
+        if (alpha <= 0.005) continue;
+
+        // A faint halo softens each pin-sized dot so the grid feels
+        // lightly textured rather than like a row of sharp pixels.
+        ctx.shadowBlur = CHART_THEME.dots.shadowBlur;
+        ctx.shadowColor = CHART_THEME.dots.shadowColor;
+        ctx.fillStyle = `rgba(${sheenColor}, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }, [containerWidth, height]);
+
+  useEffect(() => {
+    drawDotBackground();
+  }, [drawDotBackground]);
+
+  // Browsers may suspend canvas painting while the app is backgrounded.
+  // Refresh rendering and dimensions on resume, but preserve the user's chart
+  // position. A real page remount creates fresh refs and starts at live again.
+  useEffect(() => {
+    let refreshFrame = 0;
+    const refreshAfterResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      window.cancelAnimationFrame(refreshFrame);
+      refreshFrame = window.requestAnimationFrame(() => {
+        drawDotBackground();
+        const host = tvContainerRef.current;
+        const chart = chartRef.current;
+        if (host && chart) {
+          const width = host.clientWidth;
+          const chartHeight = host.clientHeight;
+          if (width > 0 && chartHeight > 0) chart.resize(width, chartHeight);
+        }
+      });
+    };
+
+    document.addEventListener('visibilitychange', refreshAfterResume);
+    window.addEventListener('pageshow', refreshAfterResume);
+    window.addEventListener('focus', refreshAfterResume);
+    return () => {
+      window.cancelAnimationFrame(refreshFrame);
+      document.removeEventListener('visibilitychange', refreshAfterResume);
+      window.removeEventListener('pageshow', refreshAfterResume);
+      window.removeEventListener('focus', refreshAfterResume);
+    };
+  }, [drawDotBackground]);
+
+  // Measure container width with ResizeObserver.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      if (el.clientWidth > 0) setContainerWidth(el.clientWidth);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Synchronously position the right-axis live-price pill card inside the right axis column.
+  const syncBadgeDom = useCallback(
+    (price: number | null, yCoord: number | null, plotW: number, plotH: number) => {
+      const badge = badgeRef.current;
+      const chart = chartRef.current;
+      if (!badge || !chart) return;
+
+      const hostW = tvContainerRef.current?.clientWidth || containerRef.current?.clientWidth || 0;
+      if (price === null || yCoord === null || !Number.isFinite(yCoord) || hostW <= 0 || plotH <= 0) {
+        badge.style.opacity = '0';
+        return;
+      }
+
+      const axisW = Math.max(44, chart.priceScale('right').width() || hostW - plotW || 52);
+      const badgeH = CHART_THEME.liveBadge.height;
+      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - CHART_THEME.liveBadge.rightInset);
+      const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
+
+      badge.style.opacity = '1';
+      badge.style.minWidth = `${badgeMinW}px`;
+      badge.style.height = `${badgeH}px`;
+      badge.style.transform = `translate3d(0, ${badgeY}px, 0)`;
+
+      const formatted = formatDisplayValue(price);
+      if (badge.textContent !== formatted) {
+        badge.textContent = formatted;
+      }
+    },
+    [formatDisplayValue],
+  );
+
+  // Create TradingView Lightweight Chart instance once on mount.
+  useEffect(() => {
+    const host = tvContainerRef.current;
+    if (!host) return;
+
+    const axisFontFamily = "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+    const chart = createChart(host, {
+      autoSize: true,
+      width: Math.max(1, host.clientWidth || 320),
+      height,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: CHART_THEME.axisTextColor,
+        fontFamily: axisFontFamily,
+        fontSize: 12,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        // Fine, low-contrast guides extend left from the right-side price labels.
+        horzLines: {
+          visible: true,
+          color: 'rgba(255,255,255,0.055)',
+          style: LineStyle.Solid,
+        },
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        entireTextOnly: true,
+        minimumWidth: 44,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+      timeScale: {
+        borderVisible: true,
+        borderColor: 'rgba(255,255,255,0.11)',
+        ticksVisible: false,
+        // Timestamp text is drawn by our pre-rendered canvas layer so labels
+        // exist in the right-side lead-in before they enter the visible plot.
+        timeVisible: true,
+        tickMarkFormatter: () => '',
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframeRef.current),
+        rightOffset: BASE_RIGHT_OFFSET,
+        barSpacing: 5,
+        minBarSpacing: 1.5,
+        fixLeftEdge: false,
+        shiftVisibleRangeOnNewBar: false,
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+        horzLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+      },
+      localization: {
+        priceFormatter: formatDisplayValue,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+    });
+
+    // Continuous smooth Y-axis scale provider driven by 60fps interpolated bounds.
+    const smoothAutoscaleProvider = (
+      baseImplementation: () => AutoscaleInfo | null,
+    ): AutoscaleInfo | null => {
+      const res = baseImplementation();
+      if (!res || !res.priceRange) return res;
+
+      const rawMin = res.priceRange.minValue;
+      const rawMax = res.priceRange.maxValue;
+      if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return res;
+
+      latestVisibleBoundsRef.current = { min: rawMin, max: rawMax };
+      const computedTarget = computeTargetYRange(rawMin, rawMax, timeframeRef.current);
+      targetYRangeRef.current = computedTarget;
+
+      if (!animYRangeRef.current) {
+        animYRangeRef.current = { ...computedTarget };
+      }
+
+      return {
+        priceRange: {
+          minValue: animYRangeRef.current.minValue,
+          maxValue: animYRangeRef.current.maxValue,
+        },
+      };
+    };
+
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    const lineSeries = chart.addSeries(AreaSeries, {
+      lineColor,
+      topColor,
+      bottomColor,
+      relativeGradient: true,
+      lineWidth: CHART_THEME.lineWidth,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      crosshairMarkerBackgroundColor: '#FFFFFF',
+      crosshairMarkerBorderColor: lineColor,
+      crosshairMarkerBorderWidth: 1,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'line',
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: CHART_THEME.upColor,
+      downColor: CHART_THEME.downColor,
+      wickUpColor: CHART_THEME.upColor,
+      wickDownColor: CHART_THEME.downColor,
+      borderVisible: false,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'candle',
+    });
+
+    const getPalette = () =>
+      isPositiveRef.current
+        ? {
+            line: CHART_THEME.upColor,
+            top: CHART_THEME.upTopColor,
+            bottom: CHART_THEME.upBottomColor,
+          }
+        : {
+            line: CHART_THEME.downColor,
+            top: CHART_THEME.downTopColor,
+            bottom: CHART_THEME.downBottomColor,
+          };
+
+    const getLiveState = (): LiveRenderState => ({
+      displayPrice: smoothedPriceRef.current,
+      subBarFraction: subBarFractionRef.current,
+      trendDirection: trendDirectionRef.current,
+    });
+
+    const lineTipPrimitive = new LiveTipPrimitive({
+      mode: 'line',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    const candleTipPrimitive = new LiveTipPrimitive({
+      mode: 'candle',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    lineSeries.attachPrimitive(lineTipPrimitive);
+    candleSeries.attachPrimitive(candleTipPrimitive);
+
+    chartRef.current = chart;
+    lineSeriesRef.current = lineSeries;
+    candleSeriesRef.current = candleSeries;
+    lineTipPrimitiveRef.current = lineTipPrimitive;
+    candleTipPrimitiveRef.current = candleTipPrimitive;
+    prevSeedMetaRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    latestVisibleBoundsRef.current = null;
+
+    // Draw timestamp labels ourselves, including logical bars just beyond the
+    // latest data point. The rightOffset leaves room for these labels to exist
+    // before they enter the plot, so they glide in instead of popping into view.
+    const drawTimeLabels = () => {
+      const canvas = timeLabelsCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const axisH = Math.max(19, Math.round(chart.timeScale().height()) || 26);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(axisH * dpr);
+      canvas.style.width = String(width) + 'px';
+      canvas.style.height = String(axisH) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, axisH);
+
+      const range = chart.timeScale().getVisibleLogicalRange();
+      const bars = committedBarsRef.current;
+      if (!range || range.to <= range.from || bars.length === 0) return;
+
+      const priceScaleW = Math.max(0, chart.priceScale('right').width());
+      if (timeFadeOverlayRef.current) {
+        timeFadeOverlayRef.current.style.right = `${priceScaleW}px`;
+        timeFadeOverlayRef.current.style.height = `${axisH}px`;
+      }
+      if (timeTickCapRef.current) {
+        timeTickCapRef.current.style.right = `${priceScaleW}px`;
+        timeTickCapRef.current.style.bottom = `${axisH - 1}px`;
+      }
+      const plotRight = Math.max(0, width - priceScaleW);
+      const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
+      const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
+      // Give timestamps a little more breathing room; actual text width is
+      // checked below as a second guard against collisions on narrow screens.
+      const labelEveryBars = Math.max(1, Math.ceil(112 / spacing));
+      const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
+      // Render beyond the viewport; clipping reveals the labels as they move in.
+      const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
+      const lastLogical = Math.floor(preloadLogicalTo / labelEveryBars) * labelEveryBars;
+      const lastBar = bars[bars.length - 1];
+      const lastIndex = bars.length - 1;
+      const labelCandidates: Array<{ x: number; label: string }> = [];
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, Math.max(0, plotRight - 2), axisH);
+      ctx.clip();
+      ctx.font = "500 12px 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.56)';
+
+      for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x > plotRight + 45) continue;
+        const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
+        labelCandidates.push({ x, label: formatBucketTime(timestampMs, timeframeRef.current) });
+      }
+
+      // Keep a guaranteed visual gap between neighboring labels. The same
+      // accepted center coordinate drives both its text and its pointer tick.
+      let previousRight = Number.NEGATIVE_INFINITY;
+      const labelGap = 18;
+      for (const candidate of labelCandidates) {
+        const labelWidth = ctx.measureText(candidate.label).width;
+        const left = candidate.x - labelWidth / 2;
+        const right = candidate.x + labelWidth / 2;
+        if (left < previousRight + labelGap) continue;
+
+        // Center the crisp vertical pointer tick between the top border and the
+        // timestamp text, leaving clean breathing space on both sides.
+        const tickX = Math.round(candidate.x) + 0.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.34)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(tickX, 3.2);
+        ctx.lineTo(tickX, 7.2);
+        ctx.stroke();
+
+        ctx.fillText(candidate.label, candidate.x, 14);
+        previousRight = right;
+      }
+      ctx.restore();
+    };
+
+    // Replace the chart library's heavier time-axis tick marks with fine hairlines.
+    const drawTimeScaleTicks = () => {
+      const canvas = timeTicksCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const canvasHeight = 5;
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(canvasHeight * dpr);
+      canvas.style.width = String(width) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, canvasHeight);
+
+      const visibleRange = chart.timeScale().getVisibleLogicalRange();
+      if (!visibleRange || visibleRange.to <= visibleRange.from) return;
+
+      const plotRight = width - chart.priceScale('right').width();
+      ctx.strokeStyle = 'rgba(255,255,255,0.36)';
+      ctx.lineWidth = 0.85;
+      ctx.lineCap = 'butt';
+
+      // Five fine tick marks follow the visible time range while it scrolls.
+      for (let index = 0; index <= 4; index += 1) {
+        const logical =
+          visibleRange.from + ((visibleRange.to - visibleRange.from) * index) / 4;
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x < 0 || x > plotRight) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, 0.5);
+        ctx.lineTo(Math.round(x) + 0.5, 3.2);
+        ctx.stroke();
+      }
+    };
+
+    const handleLogicalRange = () => {
+      drawTimeScaleTicks();
+      drawTimeLabels();
+      // Scroll-range notifications can arrive after a programmatic update.
+      // User intent is tracked from the actual pointer/wheel gesture handlers
+      // below, so auto-follow never mistakes its own movement for a user drag.
+      if (isApplyingAutoScrollRef.current) return;
+      setIsPanned(isUserPannedRef.current);
+    };
+
+    const handleCrosshairMove = (
+      param: Parameters<Parameters<IChartApi['subscribeCrosshairMove']>[0]>[0],
+    ) => {
+      if (!param.point || param.time === undefined) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+      const activeSeries =
+        chartTypeRef.current === 'line'
+          ? lineSeriesRef.current
+          : candleSeriesRef.current;
+      if (!activeSeries) return;
+
+      const value = param.seriesData.get(activeSeries) as
+        | { value?: number; close?: number }
+        | undefined;
+      const hoveredPrice =
+        typeof value?.value === 'number'
+          ? value.value
+          : typeof value?.close === 'number'
+            ? value.close
+            : null;
+
+      if (hoveredPrice === null || !Number.isFinite(hoveredPrice)) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+
+      const timeMs =
+        typeof param.time === 'number' ? param.time * 1000 : Date.now();
+      onPriceHoverRef.current?.(
+        hoveredPrice,
+        formatBucketTime(timeMs, timeframeRef.current),
+      );
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      isPointerInteractingRef.current = true;
+      pointerStartRef.current = { x: event.clientX, y: event.clientY };
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = isUserPannedRef.current;
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isPointerInteractingRef.current || !pointerStartRef.current) return;
+      const dx = event.clientX - pointerStartRef.current.x;
+      const dy = event.clientY - pointerStartRef.current.y;
+      if (!pointerDraggedRef.current && Math.hypot(dx, dy) > 4) {
+        pointerDraggedRef.current = true;
+        isUserPannedRef.current = true;
+        setIsPanned(true);
+      }
+    };
+    const handlePointerUp = () => {
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      if (!pointerDraggedRef.current && !wasPannedBeforePointerRef.current) {
+        isUserPannedRef.current = false;
+      }
+      pointerDraggedRef.current = false;
+    };
+    const handleWheel = () => {
+      isUserPannedRef.current = true;
+      setIsPanned(true);
+    };
+
+    host.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    host.addEventListener('pointermove', handlePointerMove, { passive: true });
+    host.addEventListener('pointerup', handlePointerUp, { passive: true });
+    host.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    host.addEventListener('wheel', handleWheel, { passive: true });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+    drawTimeScaleTicks();
+    drawTimeLabels();
+
+    const tickResizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => {
+        drawTimeScaleTicks();
+        drawTimeLabels();
+      });
+    });
+    tickResizeObserver.observe(host);
+
+    // Unified 60fps animation loop:
+    // 1. Velocity-adaptive price smoothing (moves fast on spikes, gently on small ticks)
+    // 2. Continuous backward scrolling at exact 1 bar / stepMs timing (no stop-and-go)
+    // 3. Smooth continuous Y-axis scale easing (no shrink-stop-shrink-stop)
+    let rafId: number | null = null;
+    let prevPerfNow = performance.now();
+
+    const animateFrame = (nowPerf: number) => {
+      const dt = Math.min(0.05, Math.max(0.001, (nowPerf - prevPerfNow) / 1000));
+      prevPerfNow = nowPerf;
+
+      if (
+        typeof document === 'undefined' ||
+        document.visibilityState !== 'hidden'
+      ) {
+        // 1. Smoothly track latest target price & live movement direction
+        const targetP = rawTargetPriceRef.current;
+        if (targetP > 0 && Number.isFinite(targetP)) {
+          if (directionAnchorPriceRef.current <= 0) {
+            directionAnchorPriceRef.current = targetP;
+          } else {
+            const anchorDelta = targetP - directionAnchorPriceRef.current;
+            const eps = directionAnchorPriceRef.current * 0.0008;
+            if (anchorDelta > eps) {
+              trendDirectionRef.current = 'up';
+              directionAnchorPriceRef.current = targetP;
+            } else if (anchorDelta < -eps) {
+              trendDirectionRef.current = 'down';
+              directionAnchorPriceRef.current = targetP;
+            }
+          }
+
+          const curP = smoothedPriceRef.current;
+          if (!(curP > 0 && Number.isFinite(curP))) {
+            smoothedPriceRef.current = targetP;
+          } else {
+            if (targetP > curP * 1.0008) {
+              trendDirectionRef.current = 'up';
+            } else if (targetP < curP * 0.9992) {
+              trendDirectionRef.current = 'down';
+            }
+            const diff = targetP - curP;
+            const priceRate = 9.5;
+            const blend = 1 - Math.exp(-priceRate * dt);
+            smoothedPriceRef.current =
+              Math.abs(diff) <= targetP * 1e-7 ? targetP : curP + diff * blend;
+          }
+        }
+
+        const displayP =
+          smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
+
+        // 2. Keep the viewport pinned to the newest actual data point.
+        // Do not synthesize clock-driven bars or scroll through elapsed time.
+        const committed = committedBarsRef.current;
+        let committedNewBar = false;
+        if (chartTypeRef.current === 'line' && committed.length > 0 && displayP > 0) {
+          const last = committed[committed.length - 1];
+          // A quote may smoothly update the live tip, but it stays on the
+          // current real data timestamp. A new horizontal bar is created
+          // only when an actual market-data tick adds a newer bucket.
+          last.close = displayP;
+          last.high = Math.max(last.high, displayP);
+          last.low = Math.min(last.low, displayP);
+          lineSeries.update({ time: last.time, value: displayP });
+          subBarFractionRef.current = 0;
+
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
+          subBarFractionRef.current = 0;
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        }
+        // 3. Smooth Y-axis scale easing without sudden step jumps
+        if (latestVisibleBoundsRef.current) {
+          const nextTarget = computeTargetYRange(
+            latestVisibleBoundsRef.current.min,
+            latestVisibleBoundsRef.current.max,
+            timeframeRef.current,
+          );
+          targetYRangeRef.current = nextTarget;
+
+          if (!animYRangeRef.current) {
+            animYRangeRef.current = { ...nextTarget };
+          } else {
+            const anim = animYRangeRef.current;
+            const scaleRate = 5.5;
+            const scaleBlend = 1 - Math.exp(-scaleRate * dt);
+            const prevMin = anim.minValue;
+            const prevMax = anim.maxValue;
+
+            anim.minValue += (nextTarget.minValue - anim.minValue) * scaleBlend;
+            anim.maxValue += (nextTarget.maxValue - anim.maxValue) * scaleBlend;
+
+            // Keep live dot cleanly inside visible band even on huge rapid spikes,
+            // allowing downward moves to reach right down to the bottom boundary first.
+            if (displayP > 0 && Number.isFinite(displayP)) {
+              const curSpan = Math.max(1e-10, anim.maxValue - anim.minValue);
+              if (displayP > anim.maxValue - curSpan * 0.06) {
+                anim.maxValue = displayP + curSpan * 0.06;
+              }
+              if (displayP < anim.minValue + curSpan * 0.018) {
+                anim.minValue = Math.max(0, displayP - curSpan * 0.018);
+              }
+            }
+
+            const span = Math.max(1e-10, anim.maxValue - anim.minValue);
+            const scaleChanged =
+              Math.abs(anim.minValue - prevMin) / span > 1e-4 ||
+              Math.abs(anim.maxValue - prevMax) / span > 1e-4;
+
+            if (scaleChanged && !committedNewBar && committed.length > 0) {
+              const lastBar = committed[committed.length - 1];
+              if (chartTypeRef.current === 'line') {
+                lineSeries.update({ time: lastBar.time, value: lastBar.close });
+              } else {
+                candleSeries.update({
+                  time: lastBar.time,
+                  open: lastBar.open,
+                  high: lastBar.high,
+                  low: lastBar.low,
+                  close: lastBar.close,
+                });
+              }
+            }
+          }
+        }
+
+        // Keep custom timestamps locked to the same 60fps horizontal motion.
+        drawTimeLabels();
+
+        // Keep halo & live tail synced at 60fps
+        if (chartTypeRef.current === 'line') {
+          lineTipPrimitive.requestRedraw();
+        } else {
+          candleTipPrimitive.requestRedraw();
+        }
+      }
+
+      rafId = window.requestAnimationFrame(animateFrame);
+    };
+
+    rafId = window.requestAnimationFrame(animateFrame);
+
+    let disposed = false;
+    document.fonts?.ready?.then(() => {
+      if (!disposed) {
+        chart.applyOptions({ layout: { fontFamily: axisFontFamily } });
+      }
+    });
+
+    return () => {
+      disposed = true;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      tickResizeObserver.disconnect();
+      host.removeEventListener('pointerdown', handlePointerDown);
+      host.removeEventListener('pointermove', handlePointerMove);
+      host.removeEventListener('pointerup', handlePointerUp);
+      host.removeEventListener('pointercancel', handlePointerUp);
+      host.removeEventListener('wheel', handleWheel);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRange);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      lineSeries.detachPrimitive(lineTipPrimitive);
+      candleSeries.detachPrimitive(candleTipPrimitive);
+      lineTipPrimitiveRef.current = null;
+      candleTipPrimitiveRef.current = null;
+      entryPriceLineRef.current = null;
+      lineSeriesRef.current = null;
+      candleSeriesRef.current = null;
+      chartRef.current = null;
+      prevSeedMetaRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      latestVisibleBoundsRef.current = null;
+      chart.remove();
+    };
+  }, [computeTargetYRange, height, syncBadgeDom]);
+
+  // Reset user pan state and re-enable autoScale when timeframe or chart mode switches.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    isUserPannedRef.current = false;
+    lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+    setIsPanned(false);
+    // Reset old interval bounds so the next interval cannot inherit its scale.
+    latestVisibleBoundsRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    chart.applyOptions({
+      timeScale: {
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
+      },
+    });
+    chart.priceScale('right').applyOptions({ autoScale: true });
+  }, [timeframe, chartType]);
+
+  // Keep line/candle colors, area refraction gradient & active series visibility synced.
+  useEffect(() => {
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    lineSeriesRef.current?.applyOptions({
+      lineColor,
+      topColor,
+      bottomColor,
+      crosshairMarkerBorderColor: lineColor,
+      visible: chartType === 'line',
+    });
+    candleSeriesRef.current?.applyOptions({
+      visible: chartType === 'candle',
+    });
+  }, [isPositive, chartType]);
+
+  // Sync incoming prices & handle initial seeding / timeframe switches cleanly.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const lineSeries = lineSeriesRef.current;
+    const candleSeries = candleSeriesRef.current;
+    if (!chart || !lineSeries || !candleSeries) return;
+
+    if (Number.isFinite(currentPrice) && currentPrice > 0) {
+      rawTargetPriceRef.current = currentPrice;
+    }
+
+    const firstTime = seedBars[0]?.time ?? 0;
+    const seedKey = `${timeframe}:${chartType}:${resolutionMode}`;
+    const prev = prevSeedMetaRef.current;
+
+    const firstTimeMovedUnexpectedly =
+      prev !== null &&
+      prev.firstTime !== firstTime &&
+      (firstTime < prev.firstTime || seedBars.length < 2000);
+
+    const needsFullReseed =
+      prev === null ||
+      prev.key !== seedKey ||
+      firstTimeMovedUnexpectedly ||
+      Math.abs(seedBars.length - prev.length) > 4;
+
+    if (needsFullReseed) {
+      const cloned = seedBars.map((bar) => ({ ...bar }));
+      // Snap the new interval to its own bounds; never ease from the previous scale.
+      latestVisibleBoundsRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      committedBarsRef.current = cloned;
+      isUserPannedRef.current = false;
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = false;
+      setIsPanned(false);
+
+      const lineData: AreaData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        value: bar.close,
+      }));
+      const candleData: CandlestickData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      }));
+
+      isApplyingAutoScrollRef.current = true;
+      try {
+        lineSeries.setData(lineData);
+        candleSeries.setData(candleData);
+
+        if (cloned.length > 0) {
+          const lastBar = cloned[cloned.length - 1];
+          if (!(smoothedPriceRef.current > 0)) {
+            smoothedPriceRef.current =
+              currentPrice > 0 ? currentPrice : lastBar.close;
+          }
+          const activeStepMs = Math.max(1_000, stepMsRef.current);
+          subBarFractionRef.current =
+            chartType === 'line'
+              ? Math.max(0, Math.min(0.9999, (Date.now() - lastBar.timestampMs) / activeStepMs))
+              : 0;
+
+          isUserPannedRef.current = false;
+          const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
+          lastAppliedScrollPosRef.current = pos;
+          isAutoPositioningRef.current = true;
+          chart.timeScale().scrollToPosition(pos, false);
+          setIsPanned(false);
+        }
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+
+      prevSeedMetaRef.current =
+        seedBars.length > 0
+          ? { key: seedKey, firstTime, length: seedBars.length }
+          : null;
+      return;
+    }
+
+    // Apply new local OHLC buckets to both chart modes. The horizontal
+    // timeline advances only when actual data adds a newer bucket.
+    if (seedBars.length > 0) {
+      const committed = committedBarsRef.current;
+      const latest = seedBars[seedBars.length - 1];
+      const lastCommitted = committed[committed.length - 1];
+      const committedByTime = new Map(committed.map((bar) => [bar.time, bar]));
+      const incomingTimes = new Set(seedBars.map((bar) => bar.time));
+      const hasHistoricalCorrection =
+        seedBars.some((bar) => {
+          const previous = committedByTime.get(bar.time);
+          return (!previous && bar.time < latest.time) || (
+            previous !== undefined &&
+            bar.time < latest.time &&
+            (bar.open !== previous.open || bar.high !== previous.high ||
+              bar.low !== previous.low || bar.close !== previous.close)
+          );
+        }) ||
+        committed.some((bar) => !incomingTimes.has(bar.time));
+
+      if (hasHistoricalCorrection) {
+        // A delayed trade may correct a candle behind the active bucket.
+        // Rebuild the ordered history rather than trying to append that older
+        // timestamp through Lightweight Charts' incremental update API.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      } else if (!lastCommitted || latest.time > lastCommitted.time) {
+        const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
+        for (const bar of nextBars) {
+          const nextCandle = { ...bar };
+          committed.push(nextCandle);
+          lineSeries.update({ time: nextCandle.time, value: nextCandle.close });
+          candleSeries.update({
+            time: nextCandle.time,
+            open: nextCandle.open,
+            high: nextCandle.high,
+            low: nextCandle.low,
+            close: nextCandle.close,
+          });
+        }
+        if (committed.length > 2000) {
+          committed.splice(0, committed.length - 2000);
+        }
+        if (!isUserPannedRef.current) {
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else if (latest.time === lastCommitted.time) {
+        const changed =
+          latest.open !== lastCommitted.open ||
+          latest.high !== lastCommitted.high ||
+          latest.low !== lastCommitted.low ||
+          latest.close !== lastCommitted.close;
+        if (changed) {
+          const updated = { ...latest };
+          committed[committed.length - 1] = updated;
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lineSeries.update({ time: updated.time, value: updated.close });
+            candleSeries.update({
+              time: updated.time,
+              open: updated.open,
+              high: updated.high,
+              low: updated.low,
+              close: updated.close,
+            });
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else {
+        // A corrected/rewound history window cannot be appended incrementally.
+        // Re-seed both series in chronological order and return the viewport
+        // to the latest candle rather than drawing backward.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      }
+    }
+
+    prevSeedMetaRef.current = {
+      key: seedKey,
+      firstTime,
+      length: seedBars.length,
+    };
+  }, [seedBars, resolutionMode, timeframe, chartType, currentPrice]);
+
+  // Render optional entry price line on the active series.
+  useEffect(() => {
+    const activeSeries =
+      chartType === 'line' ? lineSeriesRef.current : candleSeriesRef.current;
+    if (!activeSeries) return;
+
+    if (entryPriceLineRef.current) {
+      try {
+        lineSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      try {
+        candleSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      entryPriceLineRef.current = null;
+    }
+
+    if (entryPrice != null && Number.isFinite(entryPrice) && entryPrice > 0) {
+      entryPriceLineRef.current = activeSeries.createPriceLine({
+        price: entryPrice,
+        color: CHART_THEME.entryLineColor,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'ENTRY',
+      });
+    }
+  }, [entryPrice, chartType]);
+
+  const resetView = () => {
+    const chart = chartRef.current;
+    const targetPos =
+      BASE_RIGHT_OFFSET +
+      (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
+
+    isUserPannedRef.current = false;
+    isPointerInteractingRef.current = false;
+    pointerStartRef.current = null;
+    pointerDraggedRef.current = false;
+    wasPannedBeforePointerRef.current = false;
+    isAutoPositioningRef.current = false;
+    lastAppliedScrollPosRef.current = targetPos;
+
+    if (chart) {
+      chart.priceScale('right').applyOptions({ autoScale: true });
+      // Snap to the exact live position in one action; the animation loop
+      // then maintains that position without requiring repeated button taps.
+      isApplyingAutoScrollRef.current = true;
+      try {
+        chart.timeScale().scrollToPosition(targetPos, false);
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+    }
+
+    setIsPanned(false);
+    onPriceHover?.(null, null);
+  };
+
+  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ height, touchAction: 'pan-y' }}
+      className="relative w-full min-w-0 max-w-full select-none overflow-hidden bg-[#000000]"
+      onDoubleClick={resetView}
+    >
+      {/* Layer 1: Pure black + small, tight, subtle fading dot-matrix grid */}
+      <canvas
+        ref={dotCanvasRef}
+        style={{ width: '100%', height }}
+        className="pointer-events-none absolute inset-0 block max-w-full"
+      />
+
+      {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
+      <div
+        ref={tvContainerRef}
+        style={{
+          position: 'absolute',
+          top: 34,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: 'calc(100% - 34px)',
+          // Fade the chart itself into view over the first ~12% of its width.
+          // This is a real alpha mask, not a dark overlay or rectangular brush.
+          maskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+        }}
+        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
+          with chart coordinates so they emerge continuously from the right. */}
+      <canvas
+        ref={timeLabelsCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[26px] w-full"
+      />
+      {/* Layer 2.5: Soft smoke-like edge brushes. Darkest only at the outer
+          upper/lower corners, feathering gently inward without a hard dark band. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[26px] z-[4] overflow-hidden"
+      >
+        <div
+          className="absolute inset-y-0 right-0 w-[88px]"
+          style={{
+            background:
+              'radial-gradient(ellipse 100% 58% at 100% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 100% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2.55: Short fade at the plot/time-axis boundary. New timestamps
+          emerge from the right edge instead of popping into view; price labels stay clear. */}
+      <div
+        ref={timeFadeOverlayRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[26px] w-[30px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
+        }}
+      />
+      <div
+        ref={timeTickCapRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
+        style={{
+          background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
+        }}
+      />
+
+      {/* Layer 2.6: Very light top-edge seam blend. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[2] overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-10"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.045) 0%, rgba(0,0,0,0.025) 55%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 3: Right-axis live-price pill card with clean crisp typography */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[3] overflow-hidden">
+        <div
+          ref={badgeRef}
+          style={{
+            right: CHART_THEME.liveBadge.rightInset,
+            top: 0,
+            opacity: 0,
+            backgroundColor: badgeBg,
+            color: CHART_THEME.liveBadge.textColor,
+            fontFamily: "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif",
+          }}
+          className="absolute flex items-center justify-center whitespace-nowrap rounded-[7px] px-1.5 text-[12.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
+        />
+      </div>
+
+      {/* Empty state */}
+      {seedBars.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center font-mono text-[11px] text-white/40">
+          Chart data unavailable
+        </div>
+      )}
+
+      {/* Compact return-to-live card; only shown while the user is browsing history. */}
+      {isPanned && (
+        <button
+          type="button"
+          onClick={resetView}
+          className="absolute bottom-7 right-[66px] z-[5] inline-flex h-[27px] items-center gap-1.5 rounded-[5px] border border-[#4BCB79]/55 bg-gradient-to-r from-[#10251A]/95 via-[#0B1B13]/95 to-[#101A14]/95 px-2.5 text-[10px] font-medium tracking-[0.01em] text-[#B9F2CD] shadow-[0_2px_10px_rgba(30,180,91,0.10)] transition-colors hover:border-[#65E895]/75 hover:text-white active:scale-[0.98]"
+        >
+          <ChevronsRight className="h-[13px] w-[13px] shrink-0 text-[#70E99A]" strokeWidth={2.1} />
+          <span className="whitespace-nowrap">Go back to live</span>
+        </button>
+      )}
+    </div>
+  );
+};
+ + price.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+  if (abs < 1) return '
+
+const formatMarketCap = (value: number): string => {
+  if (!Number.isFinite(value)) return '—';
+  if (value <= 0) return '$0.00';
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
+  return `$${value.toFixed(2)}`;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16) || 0;
+  const g = parseInt(clean.slice(2, 4), 16) || 0;
+  const b = parseInt(clean.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+};
+
+interface NormalizedBar {
+  time: UTCTimestamp;
+  timestampMs: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface LiveRenderState {
+  displayPrice: number;
+  subBarFraction: number;
+  trendDirection: 'up' | 'down';
+}
+
+/**
+ * Custom TradingView Series Primitive executed inside TradingView's own
+ * synchronized canvas pass:
+ * - Connects the last settled bar cleanly to the continuously gliding live tip
+ *   (with matching area light refraction underneath)
+ * - Draws the horizontal dashed price guide
+ * - Draws the bigger live dot + calm single-pulse filled halo locked strictly at the tip
+ * - Syncs the right-axis live-price pill card to the exact Y coordinate
+ */
+class LiveTipPrimitive implements ISeriesPrimitive<Time> {
+  private attachedParams: SeriesAttachedParameter<Time, SeriesType> | null = null;
+  private readonly mode: 'line' | 'candle';
+  private readonly getChartType: () => 'line' | 'candle';
+  private readonly getColors: () => {
+    line: string;
+    top: string;
+    bottom: string;
+  };
+  private readonly getLiveState: () => LiveRenderState;
+  private readonly onBadgeSync: (
+    price: number | null,
+    yCoord: number | null,
+    plotW: number,
+    plotH: number,
+  ) => void;
+
+  private readonly paneView: IPrimitivePaneView = {
+    zOrder: (): PrimitivePaneViewZOrder => 'top',
+    renderer: (): IPrimitivePaneRenderer => ({
+      draw: (target: CanvasTarget) => this.drawOnPane(target),
+    }),
+  };
+
+  constructor(options: {
+    mode: 'line' | 'candle';
+    getChartType: () => 'line' | 'candle';
+    getColors: () => { line: string; top: string; bottom: string };
+    getLiveState: () => LiveRenderState;
+    onBadgeSync: (
+      price: number | null,
+      yCoord: number | null,
+      plotW: number,
+      plotH: number,
+    ) => void;
+  }) {
+    this.mode = options.mode;
+    this.getChartType = options.getChartType;
+    this.getColors = options.getColors;
+    this.getLiveState = options.getLiveState;
+    this.onBadgeSync = options.onBadgeSync;
+  }
+
+  public attached(param: SeriesAttachedParameter<Time, SeriesType>): void {
+    this.attachedParams = param;
+  }
+
+  public detached(): void {
+    this.attachedParams = null;
+  }
+
+  public requestRedraw(): void {
+    this.attachedParams?.requestUpdate();
+  }
+
+  public paneViews(): readonly IPrimitivePaneView[] {
+    if (this.getChartType() !== this.mode) return [];
+    return [this.paneView];
+  }
+
+  private drawOnPane(target: CanvasTarget): void {
+    const params = this.attachedParams;
+    if (!params || this.getChartType() !== this.mode) return;
+
+    const data = params.series.data();
+    if (!data || data.length === 0) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const last = data[data.length - 1] as unknown as {
+      time: Time;
+      value?: number;
+      close?: number;
+    };
+    const barClose =
+      typeof last.value === 'number'
+        ? last.value
+        : typeof last.close === 'number'
+          ? last.close
+          : null;
+
+    if (barClose === null || !Number.isFinite(barClose)) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const first = data[0] as unknown as {
+      time: Time;
+      value?: number;
+      open?: number;
+      close?: number;
+    };
+    const firstVal =
+      typeof first.value === 'number'
+        ? first.value
+        : typeof first.open === 'number'
+          ? first.open
+          : typeof first.close === 'number'
+            ? first.close
+            : null;
+    const xFirst = params.chart.timeScale().timeToCoordinate(first.time);
+    const yFirst =
+      firstVal !== null && Number.isFinite(firstVal)
+        ? params.series.priceToCoordinate(firstVal)
+        : null;
+
+    const liveState = this.getLiveState();
+    const livePrice =
+      Number.isFinite(liveState.displayPrice) && liveState.displayPrice > 0
+        ? liveState.displayPrice
+        : barClose;
+
+    const yBar = params.series.priceToCoordinate(barClose);
+    const yLive = params.series.priceToCoordinate(livePrice);
+    const xLast = params.chart.timeScale().timeToCoordinate(last.time);
+    const colors = this.getColors();
+
+    target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+      const plotW = mediaSize.width;
+      const plotH = mediaSize.height;
+
+      // In Candle mode, lock guide + card strictly to the rendered candle close
+      // so the candle body, dashed guide, and right-axis card never separate.
+      const displayValue = this.mode === 'candle' ? barClose : livePrice;
+      const guideY =
+        this.mode === 'candle'
+          ? yBar
+          : yLive !== null && Number.isFinite(yLive)
+            ? yLive
+            : yBar;
+      if (guideY === null || !Number.isFinite(guideY)) {
+        this.onBadgeSync(null, null, plotW, plotH);
+        return;
+      }
+
+      // Compute exact continuous live tip X position ahead of the sliding bar
+      let liveX: number | null = xLast;
+      if (
+        this.mode === 'line' &&
+        xLast !== null &&
+        Number.isFinite(xLast)
+      ) {
+        let spacing = params.chart.timeScale().options().barSpacing || 5;
+        if (data.length >= 2) {
+          const prev = data[data.length - 2] as unknown as { time: Time };
+          const xPrev = params.chart.timeScale().timeToCoordinate(prev.time);
+          if (xPrev !== null && Number.isFinite(xPrev) && xLast - xPrev > 0.2) {
+            spacing = xLast - xPrev;
+          }
+        }
+        const frac = Math.max(0, Math.min(0.9999, liveState.subBarFraction));
+        liveX = xLast + frac * spacing;
+      }
+
+      // Sync the right-axis pill card to the exact rendered price & Y coordinate
+      this.onBadgeSync(displayValue, guideY, plotW, plotH);
+
+      ctx.save();
+
+      // Clip inside plot pane bounds (include full right-edge connector stroke)
+      ctx.beginPath();
+      ctx.rect(0, 0, plotW + 1, plotH);
+      ctx.clip();
+
+      // Precompute shared relative area gradient matching TradingView AreaSeries
+      let areaGrad: CanvasGradient | null = null;
+      if (this.mode === 'line') {
+        let minY: number = guideY;
+        if (yBar !== null && Number.isFinite(yBar)) {
+          minY = Math.min(minY, yBar);
+        }
+        if (yFirst !== null && Number.isFinite(yFirst)) {
+          minY = Math.min(minY, yFirst);
+        }
+        const visRange = params.chart.timeScale().getVisibleLogicalRange();
+        const minScanIdx = visRange
+          ? Math.max(0, Math.floor(visRange.from))
+          : Math.max(0, data.length - 120);
+        const maxScanIdx = visRange
+          ? Math.min(data.length - 1, Math.ceil(visRange.to))
+          : data.length - 1;
+        for (let i = minScanIdx; i <= maxScanIdx; i++) {
+          const item = data[i] as unknown as { value?: number };
+          if (typeof item.value === 'number') {
+            const cy = params.series.priceToCoordinate(item.value);
+            if (cy !== null && Number.isFinite(cy) && cy < minY) {
+              minY = cy;
+            }
+          }
+        }
+        const gradTop = Math.max(0, Math.min(minY, plotH - 1));
+        areaGrad = ctx.createLinearGradient(0, gradTop, 0, plotH);
+        areaGrad.addColorStop(0, colors.top);
+        areaGrad.addColorStop(1, colors.bottom);
+      }
+
+      // 0. In Line mode, extend the starting back of the line & shadow continuously
+      // all the way to the left edge (x = 0) when data starts mid-chart.
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xFirst !== null &&
+        yFirst !== null &&
+        Number.isFinite(xFirst) &&
+        Number.isFinite(yFirst) &&
+        xFirst > 0.25
+      ) {
+        const joinX = Math.min(plotW, xFirst + 0.5);
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.lineTo(joinX, plotH);
+        ctx.lineTo(0, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.stroke();
+      }
+
+      // 1. In Line mode, draw the live continuous tail from last settled point -> live tip
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xLast !== null &&
+        yBar !== null &&
+        liveX !== null &&
+        Number.isFinite(xLast) &&
+        Number.isFinite(yBar) &&
+        Number.isFinite(liveX) &&
+        liveX - xLast > 0.15
+      ) {
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.lineTo(liveX, plotH);
+        ctx.lineTo(xLast, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crisp continuous line extension
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.stroke();
+      }
+
+      // Compute centered X for the two directional V chevrons between dot/candle and right axis
+      const tipEdgeX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? liveX + CHART_THEME.liveDot.radius + 4
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? xLast + 5
+            : null;
+      const axisEdgeX = plotW - 4;
+      const showChevrons =
+        tipEdgeX !== null && axisEdgeX - tipEdgeX >= CHART_THEME.directionCard.width + 4;
+      const chevronX = showChevrons && tipEdgeX !== null ? (tipEdgeX + axisEdgeX) / 2 : null;
+
+      // 2. Straight wire connecting ONLY the live dot/candle directly to the right-axis card
+      // (stops strictly between the dot/candle and the card — never stretches backward).
+      const badgeH = CHART_THEME.liveBadge.height;
+      const cardCenterY =
+        Math.max(2, Math.min(plotH - badgeH - 1, guideY - badgeH / 2)) + badgeH / 2;
+      const wireStartX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? Math.max(0, Math.min(plotW, liveX))
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? Math.max(0, Math.min(plotW, xLast + 3))
+            : null;
+
+      if (wireStartX !== null && plotW - wireStartX > 1) {
+        ctx.strokeStyle = hexToRgba(colors.line, 0.8);
+        ctx.lineWidth = 1.25;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (chevronX !== null && chevronX > wireStartX + 4) {
+          const gapHalf = 8;
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(Math.max(wireStartX, chevronX - gapHalf), guideY);
+          ctx.moveTo(Math.min(plotW, chevronX + gapHalf), cardCenterY);
+          ctx.lineTo(plotW, cardCenterY);
+        } else {
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(plotW, cardCenterY);
+        }
+        ctx.stroke();
+      }
+
+      // Prominent live-price guide: a continuous dashed line extending left from the moving axis card.
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(colors.line, 0.92);
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'butt';
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, cardCenterY);
+      ctx.lineTo(plotW, cardCenterY);
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. In Line mode, draw the single calm pulsing filled halo + bigger dot tightly locked at (liveX, guideY)
+      if (
+        this.mode === 'line' &&
+        liveX !== null &&
+        Number.isFinite(liveX) &&
+        liveX >= -24 &&
+        liveX <= plotW + 24
+      ) {
+        const now = performance.now();
+        const period = CHART_THEME.liveDot.haloPeriodMs;
+        const baseR = CHART_THEME.liveDot.radius;
+        const wrapR = CHART_THEME.liveDot.haloRadius;
+        const maxR = CHART_THEME.liveDot.haloMaxRadius;
+
+        // Subtle filled wrap that stays anchored right around the dot
+        ctx.fillStyle = hexToRgba(colors.line, 0.2);
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, wrapR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Single calm expanding & fading filled halo pulse (one pulse per cycle, no stroked rings)
+        const cycle = (now % period) / period;
+        const activeFraction = 0.72;
+        if (cycle < activeFraction) {
+          const t = cycle / activeFraction;
+          const eased = 1 - Math.pow(1 - t, 2.2);
+          const pulseRadius = wrapR + eased * (maxR - wrapR);
+          const fadeIn = t < 0.14 ? t / 0.14 : 1;
+          const fadeOut = Math.pow(1 - t, 1.35);
+          const pulseAlpha = 0.4 * fadeIn * fadeOut;
+
+          ctx.fillStyle = hexToRgba(colors.line, pulseAlpha);
+          ctx.beginPath();
+          ctx.arc(liveX, guideY, pulseRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Bigger crisp live dot tightly fixed to the line's tip
+        ctx.fillStyle = colors.line;
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, baseR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+
+        // Bright center pinpoint
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, 1.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4. Two borderless directional V chevrons centered between dot/candlestick and right-axis card
+      if (showChevrons && chevronX !== null) {
+        const cardX = chevronX;
+        const cardH = CHART_THEME.directionCard.height;
+        const cardY = Math.max(cardH / 2 + 4, Math.min(plotH - cardH / 2 - 4, guideY));
+
+        const isUp = liveState.trendDirection === 'up';
+        const baseColor = isUp
+          ? CHART_THEME.directionCard.upColor
+          : CHART_THEME.directionCard.downColor;
+        const brightColor = isUp
+          ? CHART_THEME.directionCard.upGlow
+          : CHART_THEME.directionCard.downGlow;
+
+        // Two wide sharp V chevrons cycling on/off in opposite phases along travel direction
+        const phase = (performance.now() % CHART_THEME.directionCard.cycleMs) / CHART_THEME.directionCard.cycleMs;
+        // Phase A leads in direction of travel; Phase B is offset by half cycle (off while A is on)
+        const waveA = Math.pow(0.5 + 0.5 * Math.cos(phase * Math.PI * 2), 1.8);
+        const waveB = Math.pow(0.5 + 0.5 * Math.cos((phase + 0.5) * Math.PI * 2), 1.8);
+
+        const topAlpha = isUp ? 0.16 + 0.84 * waveB : 0.16 + 0.84 * waveA;
+        const botAlpha = isUp ? 0.16 + 0.84 * waveA : 0.16 + 0.84 * waveB;
+
+        const wingW = 5.1;
+        const dropH = 3.6;
+        const rowOffset = 3.1;
+
+        const drawChevron = (cy: number, alpha: number) => {
+          const isLit = alpha > 0.55;
+          ctx.save();
+          ctx.lineJoin = 'miter';
+          ctx.miterLimit = 6;
+          ctx.lineCap = 'round';
+          ctx.lineWidth = isLit ? 1.9 : 1.6;
+          ctx.strokeStyle = isLit
+            ? hexToRgba(brightColor, alpha)
+            : hexToRgba(baseColor, alpha);
+          if (isLit) {
+            ctx.shadowColor = baseColor;
+            ctx.shadowBlur = 6;
+          }
+          ctx.beginPath();
+          if (isUp) {
+            ctx.moveTo(cardX - wingW, cy + dropH / 2);
+            ctx.lineTo(cardX, cy - dropH / 2);
+            ctx.lineTo(cardX + wingW, cy + dropH / 2);
+          } else {
+            ctx.moveTo(cardX - wingW, cy - dropH / 2);
+            ctx.lineTo(cardX, cy + dropH / 2);
+            ctx.lineTo(cardX + wingW, cy - dropH / 2);
+          }
+          ctx.stroke();
+          ctx.restore();
+        };
+
+        drawChevron(cardY - rowOffset, topAlpha);
+        drawChevron(cardY + rowOffset, botAlpha);
+      }
+
+      ctx.restore();
+    });
+  }
+}
+
+export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
+  currentPrice,
+  marketCap,
+  entryPrice,
+  priceHistory,
+  isPositive = true,
+  timeframe = '24H',
+  chartType = 'line',
+  onPriceHover,
+  height = 272,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dotCanvasRef = useRef<HTMLCanvasElement>(null);
+  const tvContainerRef = useRef<HTMLDivElement>(null);
+  const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeFadeOverlayRef = useRef<HTMLDivElement>(null);
+  const timeTickCapRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+
+  const mcapScaleRef = useRef<number>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0 && currentPrice > 0
+      ? marketCap / currentPrice
+      : 1,
+  );
+  const hasMarketCapRef = useRef<boolean>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0,
+  );
+  if (marketCap != null && Number.isFinite(marketCap) && marketCap > 0) {
+    hasMarketCapRef.current = true;
+    if (currentPrice > 0 && Number.isFinite(currentPrice)) {
+      mcapScaleRef.current = marketCap / currentPrice;
+    }
+  } else {
+    hasMarketCapRef.current = false;
+    mcapScaleRef.current = 1;
+  }
+
+  const formatDisplayValue = useCallback(
+    (value: number) =>
+      hasMarketCapRef.current
+        ? formatMarketCap(value * mcapScaleRef.current)
+        : formatPrice(value),
+    [],
+  );
+
+  const chartRef = useRef<IChartApi | null>(null);
+  const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const lineTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const candleTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const entryPriceLineRef = useRef<IPriceLine | null>(null);
+
+  // Continuous live-motion refs (60fps smooth price, horizontal scroll, and Y scale)
+  const committedBarsRef = useRef<NormalizedBar[]>([]);
+  const rawTargetPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const subBarFractionRef = useRef<number>(0);
+  const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
+  const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const stepMsRef = useRef<number>(TIMEFRAME_LIVE_STEP_MS[timeframe] || 30_000);
+  const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
+
+  const isUserPannedRef = useRef<boolean>(false);
+  const isPointerInteractingRef = useRef<boolean>(false);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerDraggedRef = useRef<boolean>(false);
+  const wasPannedBeforePointerRef = useRef<boolean>(false);
+  const isApplyingAutoScrollRef = useRef<boolean>(false);
+  const isAutoPositioningRef = useRef<boolean>(true);
+  const lastAppliedScrollPosRef = useRef<number>(BASE_RIGHT_OFFSET);
+
+  const latestVisibleBoundsRef = useRef<{ min: number; max: number } | null>(null);
+  const targetYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+  const animYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+
+  const prevSeedMetaRef = useRef<{
+    key: string;
+    firstTime: number;
+    length: number;
+  } | null>(null);
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isPanned, setIsPanned] = useState(false);
+
+  const { seedBars, resolutionMode, stepMs } = useMemo<{
+    seedBars: NormalizedBar[];
+    resolutionMode: 'live-step' | 'buckets';
+    stepMs: number;
+  }>(() => {
+    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+    const validRaw = (priceHistory || [])
+      .filter(
+        (point) =>
+          Number.isFinite(point.price) &&
+          point.price > 0 &&
+          isUnixTimestampMilliseconds(point.time),
+      )
+      .slice()
+      .sort((a, b) => a.time - b.time);
+
+    if (validRaw.length === 0) {
+      const liveStep = TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000;
+      if (Number.isFinite(currentPrice) && currentPrice > 0) {
+        const nowSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        const nowMs = nowSec * 1000;
+        const stepSec = Math.max(1, Math.floor(liveStep / 1000));
+        return {
+          resolutionMode: chartType === 'line' ? 'live-step' : 'buckets',
+          stepMs: chartType === 'line' ? liveStep : interval,
+          seedBars: [
+            {
+              time: (nowSec - stepSec) as UTCTimestamp,
+              timestampMs: nowMs - stepSec * 1000,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+            {
+              time: nowSec,
+              timestampMs: nowMs,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+          ],
+        };
+      }
+      return {
+        resolutionMode: 'buckets',
+        stepMs: interval,
+        seedBars: [],
+      };
+    }
+
+    const spanMs = validRaw[validRaw.length - 1].time - validRaw[0].time;
+    const useLiveStep = chartType === 'line' && spanMs < interval * 3;
+    const activeStepMs = useLiveStep
+      ? TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000
+      : interval;
+
+    // Anchor live-step buckets to the first point's second so continuous
+    // scrolling starts right from elapsed time 0 without initial phase offset jumps.
+    const originMs = useLiveStep
+      ? Math.floor(validRaw[0].time / 1000) * 1000
+      : 0;
+
+    const buckets = new Map<number, NormalizedBar>();
+    for (const point of validRaw) {
+      const bucketMs = useLiveStep
+        ? originMs + Math.max(0, Math.floor((point.time - originMs) / activeStepMs)) * activeStepMs
+        : Math.floor(point.time / activeStepMs) * activeStepMs;
+      const bucketSec = Math.floor(bucketMs / 1000) as UTCTimestamp;
+      const open =
+        Number.isFinite(point.open) && (point.open as number) > 0
+          ? (point.open as number)
+          : point.price;
+      const high =
+        Number.isFinite(point.high) && (point.high as number) > 0
+          ? (point.high as number)
+          : Math.max(open, point.price);
+      const low =
+        Number.isFinite(point.low) && (point.low as number) > 0
+          ? (point.low as number)
+          : Math.min(open, point.price);
+      const close =
+        Number.isFinite(point.close) && (point.close as number) > 0
+          ? (point.close as number)
+          : point.price;
+
+      const existing = buckets.get(bucketSec);
+      if (!existing) {
+        buckets.set(bucketSec, {
+          time: bucketSec,
+          timestampMs: bucketMs,
+          open,
+          high,
+          low,
+          close,
+        });
+      } else {
+        existing.high = Math.max(existing.high, high);
+        existing.low = Math.min(existing.low, low);
+        existing.close = close;
+      }
+    }
+
+    let ordered = Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+
+    // Ensure a 1-bar line session immediately renders a baseline segment.
+    if (chartType === 'line' && ordered.length === 1) {
+      const only = ordered[0];
+      const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
+      ordered = [
+        {
+          time: (only.time - stepSec) as UTCTimestamp,
+          timestampMs: only.timestampMs - stepSec * 1000,
+          open: only.open,
+          high: only.open,
+          low: only.open,
+          close: only.open,
+        },
+        only,
+      ];
+    }
+
+    if (!useLiveStep && timeframe === '24H' && ordered.length > 24) {
+      const latestMs = ordered[ordered.length - 1].timestampMs;
+      return {
+        resolutionMode: 'buckets',
+        stepMs: activeStepMs,
+        // Keep the full provider-supplied 24-hour window. The viewport is
+        // positioned at the newest edge; do not truncate history to 24 bars.
+        seedBars: ordered
+          .filter((bar) => bar.timestampMs >= latestMs - 24 * 60 * 60_000)
+          .slice(-2000),
+      };
+    }
+
+    return {
+      resolutionMode: useLiveStep ? 'live-step' : 'buckets',
+      stepMs: activeStepMs,
+      seedBars: ordered.slice(-2000),
+    };
+  }, [priceHistory, currentPrice, timeframe, chartType]);
+
+  stepMsRef.current = stepMs;
+  resolutionModeRef.current = resolutionMode;
+
+  const onPriceHoverRef = useRef(onPriceHover);
+  onPriceHoverRef.current = onPriceHover;
+
+  const timeframeRef = useRef(timeframe);
+  timeframeRef.current = timeframe;
+
+  const chartTypeRef = useRef(chartType);
+  chartTypeRef.current = chartType;
+
+  const isPositiveRef = useRef(isPositive);
+  isPositiveRef.current = isPositive;
+
+  // Helper to compute continuous target Y-axis range without any threshold jumps.
+  // Allows price to travel all the way down to the bottom boundary (above the bottom brush)
+  // before shrinking/rescaling while preserving clean top headroom.
+  const computeTargetYRange = useCallback(
+    (rawMin: number, rawMax: number, tf: string) => {
+      // The line chart may smoothly follow the latest quote between trades.
+      // Candlesticks must be scaled only from confirmed-trade OHLC data; a
+      // quote/market-cap refresh is not a trade and must not distort candle
+      // ranges or manufacture wick extremes.
+      const liveVal =
+        chartTypeRef.current === 'line' ? smoothedPriceRef.current : 0;
+      const visMin =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.min(rawMin, liveVal) : rawMin;
+      const visMax =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.max(rawMax, liveVal) : rawMax;
+      const spanRatio = TIMEFRAME_Y_SPAN_RATIO[tf] ?? 0.26;
+      const mid = (visMin + visMax) / 2;
+      const tfMinSpan = Math.max(Math.abs(mid) * spanRatio, 1e-10);
+      const rawSpan = Math.max(0, visMax - visMin);
+
+      const flatBlend = Math.max(0, 1 - rawSpan / (tfMinSpan * 0.4));
+      const bottomFrac = 0.012 + 0.22 * flatBlend;
+      const topFrac = 0.1 + 0.12 * flatBlend;
+      const activeBand = Math.max(0.4, 1 - topFrac - bottomFrac);
+      const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
+
+      // Keep the scale fitted to the actual positive data range; do not force a zero baseline.
+      const minValue = Math.max(visMin * 1e-6, visMin - effectiveSpan * bottomFrac);
+      const maxValue = minValue + effectiveSpan;
+      return { minValue, maxValue };
+    },
+    [],
+  );
+
+  // Draw the pure-black + fading dot-matrix background canvas behind TradingView.
+  const drawDotBackground = useCallback(() => {
+    const canvas = dotCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const hostW = containerRef.current?.clientWidth || containerWidth;
+    if (hostW <= 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, hostW);
+    const h = height;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = CHART_THEME.background;
+    ctx.fillRect(0, 0, w, h);
+
+    if (!CHART_THEME.dots.enabled) return;
+
+    const { spacing, radius, maxOpacity, sheenColor } = CHART_THEME.dots;
+    const smoothstep = (t: number) => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * (3 - 2 * c);
+    };
+    const startOffset = 5;
+    for (let y = startOffset; y < h - startOffset; y += spacing) {
+      const normY = y / h;
+      const fadeY =
+        normY < 0.3
+          ? 0.08 + 0.92 * smoothstep(normY / 0.3)
+          : normY > 0.78
+            ? 0.06 + 0.94 * smoothstep((1 - normY) / 0.22)
+            : 1;
+
+      for (let x = startOffset; x < w - startOffset; x += spacing) {
+        const normX = x / w;
+        const fadeX =
+          normX < 0.24
+            ? 0.08 + 0.92 * smoothstep(normX / 0.24)
+            : normX > 0.68
+              ? 0.06 + 0.94 * smoothstep((1 - normX) / 0.32)
+              : 1;
+
+        const dx = (normX - 0.45) * 1.15;
+        const dy = (normY - 0.5) * 1.15;
+        const dist = Math.min(1, Math.hypot(dx, dy));
+        const sheenBoost = 0.86 + 0.14 * (1 - dist);
+
+        const alpha = Math.max(0, Math.min(0.26, maxOpacity * fadeY * fadeX * sheenBoost));
+        if (alpha <= 0.005) continue;
+
+        // A faint halo softens each pin-sized dot so the grid feels
+        // lightly textured rather than like a row of sharp pixels.
+        ctx.shadowBlur = CHART_THEME.dots.shadowBlur;
+        ctx.shadowColor = CHART_THEME.dots.shadowColor;
+        ctx.fillStyle = `rgba(${sheenColor}, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }, [containerWidth, height]);
+
+  useEffect(() => {
+    drawDotBackground();
+  }, [drawDotBackground]);
+
+  // Browsers may suspend canvas painting while the app is backgrounded.
+  // Refresh rendering and dimensions on resume, but preserve the user's chart
+  // position. A real page remount creates fresh refs and starts at live again.
+  useEffect(() => {
+    let refreshFrame = 0;
+    const refreshAfterResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      window.cancelAnimationFrame(refreshFrame);
+      refreshFrame = window.requestAnimationFrame(() => {
+        drawDotBackground();
+        const host = tvContainerRef.current;
+        const chart = chartRef.current;
+        if (host && chart) {
+          const width = host.clientWidth;
+          const chartHeight = host.clientHeight;
+          if (width > 0 && chartHeight > 0) chart.resize(width, chartHeight);
+        }
+      });
+    };
+
+    document.addEventListener('visibilitychange', refreshAfterResume);
+    window.addEventListener('pageshow', refreshAfterResume);
+    window.addEventListener('focus', refreshAfterResume);
+    return () => {
+      window.cancelAnimationFrame(refreshFrame);
+      document.removeEventListener('visibilitychange', refreshAfterResume);
+      window.removeEventListener('pageshow', refreshAfterResume);
+      window.removeEventListener('focus', refreshAfterResume);
+    };
+  }, [drawDotBackground]);
+
+  // Measure container width with ResizeObserver.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      if (el.clientWidth > 0) setContainerWidth(el.clientWidth);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Synchronously position the right-axis live-price pill card inside the right axis column.
+  const syncBadgeDom = useCallback(
+    (price: number | null, yCoord: number | null, plotW: number, plotH: number) => {
+      const badge = badgeRef.current;
+      const chart = chartRef.current;
+      if (!badge || !chart) return;
+
+      const hostW = tvContainerRef.current?.clientWidth || containerRef.current?.clientWidth || 0;
+      if (price === null || yCoord === null || !Number.isFinite(yCoord) || hostW <= 0 || plotH <= 0) {
+        badge.style.opacity = '0';
+        return;
+      }
+
+      const axisW = Math.max(44, chart.priceScale('right').width() || hostW - plotW || 52);
+      const badgeH = CHART_THEME.liveBadge.height;
+      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - CHART_THEME.liveBadge.rightInset);
+      const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
+
+      badge.style.opacity = '1';
+      badge.style.minWidth = `${badgeMinW}px`;
+      badge.style.height = `${badgeH}px`;
+      badge.style.transform = `translate3d(0, ${badgeY}px, 0)`;
+
+      const formatted = formatDisplayValue(price);
+      if (badge.textContent !== formatted) {
+        badge.textContent = formatted;
+      }
+    },
+    [formatDisplayValue],
+  );
+
+  // Create TradingView Lightweight Chart instance once on mount.
+  useEffect(() => {
+    const host = tvContainerRef.current;
+    if (!host) return;
+
+    const axisFontFamily = "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+    const chart = createChart(host, {
+      autoSize: true,
+      width: Math.max(1, host.clientWidth || 320),
+      height,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: CHART_THEME.axisTextColor,
+        fontFamily: axisFontFamily,
+        fontSize: 12,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        // Fine, low-contrast guides extend left from the right-side price labels.
+        horzLines: {
+          visible: true,
+          color: 'rgba(255,255,255,0.055)',
+          style: LineStyle.Solid,
+        },
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        entireTextOnly: true,
+        minimumWidth: 44,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+      timeScale: {
+        borderVisible: true,
+        borderColor: 'rgba(255,255,255,0.11)',
+        ticksVisible: false,
+        // Timestamp text is drawn by our pre-rendered canvas layer so labels
+        // exist in the right-side lead-in before they enter the visible plot.
+        timeVisible: true,
+        tickMarkFormatter: () => '',
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframeRef.current),
+        rightOffset: BASE_RIGHT_OFFSET,
+        barSpacing: 5,
+        minBarSpacing: 1.5,
+        fixLeftEdge: false,
+        shiftVisibleRangeOnNewBar: false,
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+        horzLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+      },
+      localization: {
+        priceFormatter: formatDisplayValue,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+    });
+
+    // Continuous smooth Y-axis scale provider driven by 60fps interpolated bounds.
+    const smoothAutoscaleProvider = (
+      baseImplementation: () => AutoscaleInfo | null,
+    ): AutoscaleInfo | null => {
+      const res = baseImplementation();
+      if (!res || !res.priceRange) return res;
+
+      const rawMin = res.priceRange.minValue;
+      const rawMax = res.priceRange.maxValue;
+      if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return res;
+
+      latestVisibleBoundsRef.current = { min: rawMin, max: rawMax };
+      const computedTarget = computeTargetYRange(rawMin, rawMax, timeframeRef.current);
+      targetYRangeRef.current = computedTarget;
+
+      if (!animYRangeRef.current) {
+        animYRangeRef.current = { ...computedTarget };
+      }
+
+      return {
+        priceRange: {
+          minValue: animYRangeRef.current.minValue,
+          maxValue: animYRangeRef.current.maxValue,
+        },
+      };
+    };
+
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    const lineSeries = chart.addSeries(AreaSeries, {
+      lineColor,
+      topColor,
+      bottomColor,
+      relativeGradient: true,
+      lineWidth: CHART_THEME.lineWidth,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      crosshairMarkerBackgroundColor: '#FFFFFF',
+      crosshairMarkerBorderColor: lineColor,
+      crosshairMarkerBorderWidth: 1,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'line',
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: CHART_THEME.upColor,
+      downColor: CHART_THEME.downColor,
+      wickUpColor: CHART_THEME.upColor,
+      wickDownColor: CHART_THEME.downColor,
+      borderVisible: false,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'candle',
+    });
+
+    const getPalette = () =>
+      isPositiveRef.current
+        ? {
+            line: CHART_THEME.upColor,
+            top: CHART_THEME.upTopColor,
+            bottom: CHART_THEME.upBottomColor,
+          }
+        : {
+            line: CHART_THEME.downColor,
+            top: CHART_THEME.downTopColor,
+            bottom: CHART_THEME.downBottomColor,
+          };
+
+    const getLiveState = (): LiveRenderState => ({
+      displayPrice: smoothedPriceRef.current,
+      subBarFraction: subBarFractionRef.current,
+      trendDirection: trendDirectionRef.current,
+    });
+
+    const lineTipPrimitive = new LiveTipPrimitive({
+      mode: 'line',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    const candleTipPrimitive = new LiveTipPrimitive({
+      mode: 'candle',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    lineSeries.attachPrimitive(lineTipPrimitive);
+    candleSeries.attachPrimitive(candleTipPrimitive);
+
+    chartRef.current = chart;
+    lineSeriesRef.current = lineSeries;
+    candleSeriesRef.current = candleSeries;
+    lineTipPrimitiveRef.current = lineTipPrimitive;
+    candleTipPrimitiveRef.current = candleTipPrimitive;
+    prevSeedMetaRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    latestVisibleBoundsRef.current = null;
+
+    // Draw timestamp labels ourselves, including logical bars just beyond the
+    // latest data point. The rightOffset leaves room for these labels to exist
+    // before they enter the plot, so they glide in instead of popping into view.
+    const drawTimeLabels = () => {
+      const canvas = timeLabelsCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const axisH = Math.max(19, Math.round(chart.timeScale().height()) || 26);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(axisH * dpr);
+      canvas.style.width = String(width) + 'px';
+      canvas.style.height = String(axisH) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, axisH);
+
+      const range = chart.timeScale().getVisibleLogicalRange();
+      const bars = committedBarsRef.current;
+      if (!range || range.to <= range.from || bars.length === 0) return;
+
+      const priceScaleW = Math.max(0, chart.priceScale('right').width());
+      if (timeFadeOverlayRef.current) {
+        timeFadeOverlayRef.current.style.right = `${priceScaleW}px`;
+        timeFadeOverlayRef.current.style.height = `${axisH}px`;
+      }
+      if (timeTickCapRef.current) {
+        timeTickCapRef.current.style.right = `${priceScaleW}px`;
+        timeTickCapRef.current.style.bottom = `${axisH - 1}px`;
+      }
+      const plotRight = Math.max(0, width - priceScaleW);
+      const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
+      const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
+      // Give timestamps a little more breathing room; actual text width is
+      // checked below as a second guard against collisions on narrow screens.
+      const labelEveryBars = Math.max(1, Math.ceil(112 / spacing));
+      const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
+      // Render beyond the viewport; clipping reveals the labels as they move in.
+      const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
+      const lastLogical = Math.floor(preloadLogicalTo / labelEveryBars) * labelEveryBars;
+      const lastBar = bars[bars.length - 1];
+      const lastIndex = bars.length - 1;
+      const labelCandidates: Array<{ x: number; label: string }> = [];
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, Math.max(0, plotRight - 2), axisH);
+      ctx.clip();
+      ctx.font = "500 12px 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.56)';
+
+      for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x > plotRight + 45) continue;
+        const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
+        labelCandidates.push({ x, label: formatBucketTime(timestampMs, timeframeRef.current) });
+      }
+
+      // Keep a guaranteed visual gap between neighboring labels. The same
+      // accepted center coordinate drives both its text and its pointer tick.
+      let previousRight = Number.NEGATIVE_INFINITY;
+      const labelGap = 18;
+      for (const candidate of labelCandidates) {
+        const labelWidth = ctx.measureText(candidate.label).width;
+        const left = candidate.x - labelWidth / 2;
+        const right = candidate.x + labelWidth / 2;
+        if (left < previousRight + labelGap) continue;
+
+        // Center the crisp vertical pointer tick between the top border and the
+        // timestamp text, leaving clean breathing space on both sides.
+        const tickX = Math.round(candidate.x) + 0.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.34)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(tickX, 3.2);
+        ctx.lineTo(tickX, 7.2);
+        ctx.stroke();
+
+        ctx.fillText(candidate.label, candidate.x, 14);
+        previousRight = right;
+      }
+      ctx.restore();
+    };
+
+    // Replace the chart library's heavier time-axis tick marks with fine hairlines.
+    const drawTimeScaleTicks = () => {
+      const canvas = timeTicksCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const canvasHeight = 5;
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(canvasHeight * dpr);
+      canvas.style.width = String(width) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, canvasHeight);
+
+      const visibleRange = chart.timeScale().getVisibleLogicalRange();
+      if (!visibleRange || visibleRange.to <= visibleRange.from) return;
+
+      const plotRight = width - chart.priceScale('right').width();
+      ctx.strokeStyle = 'rgba(255,255,255,0.36)';
+      ctx.lineWidth = 0.85;
+      ctx.lineCap = 'butt';
+
+      // Five fine tick marks follow the visible time range while it scrolls.
+      for (let index = 0; index <= 4; index += 1) {
+        const logical =
+          visibleRange.from + ((visibleRange.to - visibleRange.from) * index) / 4;
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x < 0 || x > plotRight) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, 0.5);
+        ctx.lineTo(Math.round(x) + 0.5, 3.2);
+        ctx.stroke();
+      }
+    };
+
+    const handleLogicalRange = () => {
+      drawTimeScaleTicks();
+      drawTimeLabels();
+      // Scroll-range notifications can arrive after a programmatic update.
+      // User intent is tracked from the actual pointer/wheel gesture handlers
+      // below, so auto-follow never mistakes its own movement for a user drag.
+      if (isApplyingAutoScrollRef.current) return;
+      setIsPanned(isUserPannedRef.current);
+    };
+
+    const handleCrosshairMove = (
+      param: Parameters<Parameters<IChartApi['subscribeCrosshairMove']>[0]>[0],
+    ) => {
+      if (!param.point || param.time === undefined) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+      const activeSeries =
+        chartTypeRef.current === 'line'
+          ? lineSeriesRef.current
+          : candleSeriesRef.current;
+      if (!activeSeries) return;
+
+      const value = param.seriesData.get(activeSeries) as
+        | { value?: number; close?: number }
+        | undefined;
+      const hoveredPrice =
+        typeof value?.value === 'number'
+          ? value.value
+          : typeof value?.close === 'number'
+            ? value.close
+            : null;
+
+      if (hoveredPrice === null || !Number.isFinite(hoveredPrice)) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+
+      const timeMs =
+        typeof param.time === 'number' ? param.time * 1000 : Date.now();
+      onPriceHoverRef.current?.(
+        hoveredPrice,
+        formatBucketTime(timeMs, timeframeRef.current),
+      );
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      isPointerInteractingRef.current = true;
+      pointerStartRef.current = { x: event.clientX, y: event.clientY };
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = isUserPannedRef.current;
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isPointerInteractingRef.current || !pointerStartRef.current) return;
+      const dx = event.clientX - pointerStartRef.current.x;
+      const dy = event.clientY - pointerStartRef.current.y;
+      if (!pointerDraggedRef.current && Math.hypot(dx, dy) > 4) {
+        pointerDraggedRef.current = true;
+        isUserPannedRef.current = true;
+        setIsPanned(true);
+      }
+    };
+    const handlePointerUp = () => {
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      if (!pointerDraggedRef.current && !wasPannedBeforePointerRef.current) {
+        isUserPannedRef.current = false;
+      }
+      pointerDraggedRef.current = false;
+    };
+    const handleWheel = () => {
+      isUserPannedRef.current = true;
+      setIsPanned(true);
+    };
+
+    host.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    host.addEventListener('pointermove', handlePointerMove, { passive: true });
+    host.addEventListener('pointerup', handlePointerUp, { passive: true });
+    host.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    host.addEventListener('wheel', handleWheel, { passive: true });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+    drawTimeScaleTicks();
+    drawTimeLabels();
+
+    const tickResizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => {
+        drawTimeScaleTicks();
+        drawTimeLabels();
+      });
+    });
+    tickResizeObserver.observe(host);
+
+    // Unified 60fps animation loop:
+    // 1. Velocity-adaptive price smoothing (moves fast on spikes, gently on small ticks)
+    // 2. Continuous backward scrolling at exact 1 bar / stepMs timing (no stop-and-go)
+    // 3. Smooth continuous Y-axis scale easing (no shrink-stop-shrink-stop)
+    let rafId: number | null = null;
+    let prevPerfNow = performance.now();
+
+    const animateFrame = (nowPerf: number) => {
+      const dt = Math.min(0.05, Math.max(0.001, (nowPerf - prevPerfNow) / 1000));
+      prevPerfNow = nowPerf;
+
+      if (
+        typeof document === 'undefined' ||
+        document.visibilityState !== 'hidden'
+      ) {
+        // 1. Smoothly track latest target price & live movement direction
+        const targetP = rawTargetPriceRef.current;
+        if (targetP > 0 && Number.isFinite(targetP)) {
+          if (directionAnchorPriceRef.current <= 0) {
+            directionAnchorPriceRef.current = targetP;
+          } else {
+            const anchorDelta = targetP - directionAnchorPriceRef.current;
+            const eps = directionAnchorPriceRef.current * 0.0008;
+            if (anchorDelta > eps) {
+              trendDirectionRef.current = 'up';
+              directionAnchorPriceRef.current = targetP;
+            } else if (anchorDelta < -eps) {
+              trendDirectionRef.current = 'down';
+              directionAnchorPriceRef.current = targetP;
+            }
+          }
+
+          const curP = smoothedPriceRef.current;
+          if (!(curP > 0 && Number.isFinite(curP))) {
+            smoothedPriceRef.current = targetP;
+          } else {
+            if (targetP > curP * 1.0008) {
+              trendDirectionRef.current = 'up';
+            } else if (targetP < curP * 0.9992) {
+              trendDirectionRef.current = 'down';
+            }
+            const diff = targetP - curP;
+            const priceRate = 9.5;
+            const blend = 1 - Math.exp(-priceRate * dt);
+            smoothedPriceRef.current =
+              Math.abs(diff) <= targetP * 1e-7 ? targetP : curP + diff * blend;
+          }
+        }
+
+        const displayP =
+          smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
+
+        // 2. Keep the viewport pinned to the newest actual data point.
+        // Do not synthesize clock-driven bars or scroll through elapsed time.
+        const committed = committedBarsRef.current;
+        let committedNewBar = false;
+        if (chartTypeRef.current === 'line' && committed.length > 0 && displayP > 0) {
+          const last = committed[committed.length - 1];
+          // A quote may smoothly update the live tip, but it stays on the
+          // current real data timestamp. A new horizontal bar is created
+          // only when an actual market-data tick adds a newer bucket.
+          last.close = displayP;
+          last.high = Math.max(last.high, displayP);
+          last.low = Math.min(last.low, displayP);
+          lineSeries.update({ time: last.time, value: displayP });
+          subBarFractionRef.current = 0;
+
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
+          subBarFractionRef.current = 0;
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        }
+        // 3. Smooth Y-axis scale easing without sudden step jumps
+        if (latestVisibleBoundsRef.current) {
+          const nextTarget = computeTargetYRange(
+            latestVisibleBoundsRef.current.min,
+            latestVisibleBoundsRef.current.max,
+            timeframeRef.current,
+          );
+          targetYRangeRef.current = nextTarget;
+
+          if (!animYRangeRef.current) {
+            animYRangeRef.current = { ...nextTarget };
+          } else {
+            const anim = animYRangeRef.current;
+            const scaleRate = 5.5;
+            const scaleBlend = 1 - Math.exp(-scaleRate * dt);
+            const prevMin = anim.minValue;
+            const prevMax = anim.maxValue;
+
+            anim.minValue += (nextTarget.minValue - anim.minValue) * scaleBlend;
+            anim.maxValue += (nextTarget.maxValue - anim.maxValue) * scaleBlend;
+
+            // Keep live dot cleanly inside visible band even on huge rapid spikes,
+            // allowing downward moves to reach right down to the bottom boundary first.
+            if (displayP > 0 && Number.isFinite(displayP)) {
+              const curSpan = Math.max(1e-10, anim.maxValue - anim.minValue);
+              if (displayP > anim.maxValue - curSpan * 0.06) {
+                anim.maxValue = displayP + curSpan * 0.06;
+              }
+              if (displayP < anim.minValue + curSpan * 0.018) {
+                anim.minValue = Math.max(0, displayP - curSpan * 0.018);
+              }
+            }
+
+            const span = Math.max(1e-10, anim.maxValue - anim.minValue);
+            const scaleChanged =
+              Math.abs(anim.minValue - prevMin) / span > 1e-4 ||
+              Math.abs(anim.maxValue - prevMax) / span > 1e-4;
+
+            if (scaleChanged && !committedNewBar && committed.length > 0) {
+              const lastBar = committed[committed.length - 1];
+              if (chartTypeRef.current === 'line') {
+                lineSeries.update({ time: lastBar.time, value: lastBar.close });
+              } else {
+                candleSeries.update({
+                  time: lastBar.time,
+                  open: lastBar.open,
+                  high: lastBar.high,
+                  low: lastBar.low,
+                  close: lastBar.close,
+                });
+              }
+            }
+          }
+        }
+
+        // Keep custom timestamps locked to the same 60fps horizontal motion.
+        drawTimeLabels();
+
+        // Keep halo & live tail synced at 60fps
+        if (chartTypeRef.current === 'line') {
+          lineTipPrimitive.requestRedraw();
+        } else {
+          candleTipPrimitive.requestRedraw();
+        }
+      }
+
+      rafId = window.requestAnimationFrame(animateFrame);
+    };
+
+    rafId = window.requestAnimationFrame(animateFrame);
+
+    let disposed = false;
+    document.fonts?.ready?.then(() => {
+      if (!disposed) {
+        chart.applyOptions({ layout: { fontFamily: axisFontFamily } });
+      }
+    });
+
+    return () => {
+      disposed = true;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      tickResizeObserver.disconnect();
+      host.removeEventListener('pointerdown', handlePointerDown);
+      host.removeEventListener('pointermove', handlePointerMove);
+      host.removeEventListener('pointerup', handlePointerUp);
+      host.removeEventListener('pointercancel', handlePointerUp);
+      host.removeEventListener('wheel', handleWheel);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRange);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      lineSeries.detachPrimitive(lineTipPrimitive);
+      candleSeries.detachPrimitive(candleTipPrimitive);
+      lineTipPrimitiveRef.current = null;
+      candleTipPrimitiveRef.current = null;
+      entryPriceLineRef.current = null;
+      lineSeriesRef.current = null;
+      candleSeriesRef.current = null;
+      chartRef.current = null;
+      prevSeedMetaRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      latestVisibleBoundsRef.current = null;
+      chart.remove();
+    };
+  }, [computeTargetYRange, height, syncBadgeDom]);
+
+  // Reset user pan state and re-enable autoScale when timeframe or chart mode switches.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    isUserPannedRef.current = false;
+    lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+    setIsPanned(false);
+    // Reset old interval bounds so the next interval cannot inherit its scale.
+    latestVisibleBoundsRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    chart.applyOptions({
+      timeScale: {
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
+      },
+    });
+    chart.priceScale('right').applyOptions({ autoScale: true });
+  }, [timeframe, chartType]);
+
+  // Keep line/candle colors, area refraction gradient & active series visibility synced.
+  useEffect(() => {
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    lineSeriesRef.current?.applyOptions({
+      lineColor,
+      topColor,
+      bottomColor,
+      crosshairMarkerBorderColor: lineColor,
+      visible: chartType === 'line',
+    });
+    candleSeriesRef.current?.applyOptions({
+      visible: chartType === 'candle',
+    });
+  }, [isPositive, chartType]);
+
+  // Sync incoming prices & handle initial seeding / timeframe switches cleanly.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const lineSeries = lineSeriesRef.current;
+    const candleSeries = candleSeriesRef.current;
+    if (!chart || !lineSeries || !candleSeries) return;
+
+    if (Number.isFinite(currentPrice) && currentPrice > 0) {
+      rawTargetPriceRef.current = currentPrice;
+    }
+
+    const firstTime = seedBars[0]?.time ?? 0;
+    const seedKey = `${timeframe}:${chartType}:${resolutionMode}`;
+    const prev = prevSeedMetaRef.current;
+
+    const firstTimeMovedUnexpectedly =
+      prev !== null &&
+      prev.firstTime !== firstTime &&
+      (firstTime < prev.firstTime || seedBars.length < 2000);
+
+    const needsFullReseed =
+      prev === null ||
+      prev.key !== seedKey ||
+      firstTimeMovedUnexpectedly ||
+      Math.abs(seedBars.length - prev.length) > 4;
+
+    if (needsFullReseed) {
+      const cloned = seedBars.map((bar) => ({ ...bar }));
+      // Snap the new interval to its own bounds; never ease from the previous scale.
+      latestVisibleBoundsRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      committedBarsRef.current = cloned;
+      isUserPannedRef.current = false;
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = false;
+      setIsPanned(false);
+
+      const lineData: AreaData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        value: bar.close,
+      }));
+      const candleData: CandlestickData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      }));
+
+      isApplyingAutoScrollRef.current = true;
+      try {
+        lineSeries.setData(lineData);
+        candleSeries.setData(candleData);
+
+        if (cloned.length > 0) {
+          const lastBar = cloned[cloned.length - 1];
+          if (!(smoothedPriceRef.current > 0)) {
+            smoothedPriceRef.current =
+              currentPrice > 0 ? currentPrice : lastBar.close;
+          }
+          const activeStepMs = Math.max(1_000, stepMsRef.current);
+          subBarFractionRef.current =
+            chartType === 'line'
+              ? Math.max(0, Math.min(0.9999, (Date.now() - lastBar.timestampMs) / activeStepMs))
+              : 0;
+
+          isUserPannedRef.current = false;
+          const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
+          lastAppliedScrollPosRef.current = pos;
+          isAutoPositioningRef.current = true;
+          chart.timeScale().scrollToPosition(pos, false);
+          setIsPanned(false);
+        }
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+
+      prevSeedMetaRef.current =
+        seedBars.length > 0
+          ? { key: seedKey, firstTime, length: seedBars.length }
+          : null;
+      return;
+    }
+
+    // Apply new local OHLC buckets to both chart modes. The horizontal
+    // timeline advances only when actual data adds a newer bucket.
+    if (seedBars.length > 0) {
+      const committed = committedBarsRef.current;
+      const latest = seedBars[seedBars.length - 1];
+      const lastCommitted = committed[committed.length - 1];
+      const committedByTime = new Map(committed.map((bar) => [bar.time, bar]));
+      const incomingTimes = new Set(seedBars.map((bar) => bar.time));
+      const hasHistoricalCorrection =
+        seedBars.some((bar) => {
+          const previous = committedByTime.get(bar.time);
+          return (!previous && bar.time < latest.time) || (
+            previous !== undefined &&
+            bar.time < latest.time &&
+            (bar.open !== previous.open || bar.high !== previous.high ||
+              bar.low !== previous.low || bar.close !== previous.close)
+          );
+        }) ||
+        committed.some((bar) => !incomingTimes.has(bar.time));
+
+      if (hasHistoricalCorrection) {
+        // A delayed trade may correct a candle behind the active bucket.
+        // Rebuild the ordered history rather than trying to append that older
+        // timestamp through Lightweight Charts' incremental update API.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      } else if (!lastCommitted || latest.time > lastCommitted.time) {
+        const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
+        for (const bar of nextBars) {
+          const nextCandle = { ...bar };
+          committed.push(nextCandle);
+          lineSeries.update({ time: nextCandle.time, value: nextCandle.close });
+          candleSeries.update({
+            time: nextCandle.time,
+            open: nextCandle.open,
+            high: nextCandle.high,
+            low: nextCandle.low,
+            close: nextCandle.close,
+          });
+        }
+        if (committed.length > 2000) {
+          committed.splice(0, committed.length - 2000);
+        }
+        if (!isUserPannedRef.current) {
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else if (latest.time === lastCommitted.time) {
+        const changed =
+          latest.open !== lastCommitted.open ||
+          latest.high !== lastCommitted.high ||
+          latest.low !== lastCommitted.low ||
+          latest.close !== lastCommitted.close;
+        if (changed) {
+          const updated = { ...latest };
+          committed[committed.length - 1] = updated;
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lineSeries.update({ time: updated.time, value: updated.close });
+            candleSeries.update({
+              time: updated.time,
+              open: updated.open,
+              high: updated.high,
+              low: updated.low,
+              close: updated.close,
+            });
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else {
+        // A corrected/rewound history window cannot be appended incrementally.
+        // Re-seed both series in chronological order and return the viewport
+        // to the latest candle rather than drawing backward.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      }
+    }
+
+    prevSeedMetaRef.current = {
+      key: seedKey,
+      firstTime,
+      length: seedBars.length,
+    };
+  }, [seedBars, resolutionMode, timeframe, chartType, currentPrice]);
+
+  // Render optional entry price line on the active series.
+  useEffect(() => {
+    const activeSeries =
+      chartType === 'line' ? lineSeriesRef.current : candleSeriesRef.current;
+    if (!activeSeries) return;
+
+    if (entryPriceLineRef.current) {
+      try {
+        lineSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      try {
+        candleSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      entryPriceLineRef.current = null;
+    }
+
+    if (entryPrice != null && Number.isFinite(entryPrice) && entryPrice > 0) {
+      entryPriceLineRef.current = activeSeries.createPriceLine({
+        price: entryPrice,
+        color: CHART_THEME.entryLineColor,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'ENTRY',
+      });
+    }
+  }, [entryPrice, chartType]);
+
+  const resetView = () => {
+    const chart = chartRef.current;
+    const targetPos =
+      BASE_RIGHT_OFFSET +
+      (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
+
+    isUserPannedRef.current = false;
+    isPointerInteractingRef.current = false;
+    pointerStartRef.current = null;
+    pointerDraggedRef.current = false;
+    wasPannedBeforePointerRef.current = false;
+    isAutoPositioningRef.current = false;
+    lastAppliedScrollPosRef.current = targetPos;
+
+    if (chart) {
+      chart.priceScale('right').applyOptions({ autoScale: true });
+      // Snap to the exact live position in one action; the animation loop
+      // then maintains that position without requiring repeated button taps.
+      isApplyingAutoScrollRef.current = true;
+      try {
+        chart.timeScale().scrollToPosition(targetPos, false);
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+    }
+
+    setIsPanned(false);
+    onPriceHover?.(null, null);
+  };
+
+  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ height, touchAction: 'pan-y' }}
+      className="relative w-full min-w-0 max-w-full select-none overflow-hidden bg-[#000000]"
+      onDoubleClick={resetView}
+    >
+      {/* Layer 1: Pure black + small, tight, subtle fading dot-matrix grid */}
+      <canvas
+        ref={dotCanvasRef}
+        style={{ width: '100%', height }}
+        className="pointer-events-none absolute inset-0 block max-w-full"
+      />
+
+      {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
+      <div
+        ref={tvContainerRef}
+        style={{
+          position: 'absolute',
+          top: 34,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: 'calc(100% - 34px)',
+          // Fade the chart itself into view over the first ~12% of its width.
+          // This is a real alpha mask, not a dark overlay or rectangular brush.
+          maskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+        }}
+        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
+          with chart coordinates so they emerge continuously from the right. */}
+      <canvas
+        ref={timeLabelsCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[26px] w-full"
+      />
+      {/* Layer 2.5: Soft smoke-like edge brushes. Darkest only at the outer
+          upper/lower corners, feathering gently inward without a hard dark band. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[26px] z-[4] overflow-hidden"
+      >
+        <div
+          className="absolute inset-y-0 right-0 w-[88px]"
+          style={{
+            background:
+              'radial-gradient(ellipse 100% 58% at 100% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 100% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2.55: Short fade at the plot/time-axis boundary. New timestamps
+          emerge from the right edge instead of popping into view; price labels stay clear. */}
+      <div
+        ref={timeFadeOverlayRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[26px] w-[30px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
+        }}
+      />
+      <div
+        ref={timeTickCapRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
+        style={{
+          background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
+        }}
+      />
+
+      {/* Layer 2.6: Very light top-edge seam blend. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[2] overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-10"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.045) 0%, rgba(0,0,0,0.025) 55%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 3: Right-axis live-price pill card with clean crisp typography */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[3] overflow-hidden">
+        <div
+          ref={badgeRef}
+          style={{
+            right: CHART_THEME.liveBadge.rightInset,
+            top: 0,
+            opacity: 0,
+            backgroundColor: badgeBg,
+            color: CHART_THEME.liveBadge.textColor,
+            fontFamily: "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif",
+          }}
+          className="absolute flex items-center justify-center whitespace-nowrap rounded-[7px] px-1.5 text-[12.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
+        />
+      </div>
+
+      {/* Empty state */}
+      {seedBars.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center font-mono text-[11px] text-white/40">
+          Chart data unavailable
+        </div>
+      )}
+
+      {/* Compact return-to-live card; only shown while the user is browsing history. */}
+      {isPanned && (
+        <button
+          type="button"
+          onClick={resetView}
+          className="absolute bottom-7 right-[66px] z-[5] inline-flex h-[27px] items-center gap-1.5 rounded-[5px] border border-[#4BCB79]/55 bg-gradient-to-r from-[#10251A]/95 via-[#0B1B13]/95 to-[#101A14]/95 px-2.5 text-[10px] font-medium tracking-[0.01em] text-[#B9F2CD] shadow-[0_2px_10px_rgba(30,180,91,0.10)] transition-colors hover:border-[#65E895]/75 hover:text-white active:scale-[0.98]"
+        >
+          <ChevronsRight className="h-[13px] w-[13px] shrink-0 text-[#70E99A]" strokeWidth={2.1} />
+          <span className="whitespace-nowrap">Go back to live</span>
+        </button>
+      )}
+    </div>
+  );
+};
+ + price.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+  if (abs < 1000) return '
+
+const formatMarketCap = (value: number): string => {
+  if (!Number.isFinite(value)) return '—';
+  if (value <= 0) return '$0.00';
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
+  return `$${value.toFixed(2)}`;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16) || 0;
+  const g = parseInt(clean.slice(2, 4), 16) || 0;
+  const b = parseInt(clean.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+};
+
+interface NormalizedBar {
+  time: UTCTimestamp;
+  timestampMs: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface LiveRenderState {
+  displayPrice: number;
+  subBarFraction: number;
+  trendDirection: 'up' | 'down';
+}
+
+/**
+ * Custom TradingView Series Primitive executed inside TradingView's own
+ * synchronized canvas pass:
+ * - Connects the last settled bar cleanly to the continuously gliding live tip
+ *   (with matching area light refraction underneath)
+ * - Draws the horizontal dashed price guide
+ * - Draws the bigger live dot + calm single-pulse filled halo locked strictly at the tip
+ * - Syncs the right-axis live-price pill card to the exact Y coordinate
+ */
+class LiveTipPrimitive implements ISeriesPrimitive<Time> {
+  private attachedParams: SeriesAttachedParameter<Time, SeriesType> | null = null;
+  private readonly mode: 'line' | 'candle';
+  private readonly getChartType: () => 'line' | 'candle';
+  private readonly getColors: () => {
+    line: string;
+    top: string;
+    bottom: string;
+  };
+  private readonly getLiveState: () => LiveRenderState;
+  private readonly onBadgeSync: (
+    price: number | null,
+    yCoord: number | null,
+    plotW: number,
+    plotH: number,
+  ) => void;
+
+  private readonly paneView: IPrimitivePaneView = {
+    zOrder: (): PrimitivePaneViewZOrder => 'top',
+    renderer: (): IPrimitivePaneRenderer => ({
+      draw: (target: CanvasTarget) => this.drawOnPane(target),
+    }),
+  };
+
+  constructor(options: {
+    mode: 'line' | 'candle';
+    getChartType: () => 'line' | 'candle';
+    getColors: () => { line: string; top: string; bottom: string };
+    getLiveState: () => LiveRenderState;
+    onBadgeSync: (
+      price: number | null,
+      yCoord: number | null,
+      plotW: number,
+      plotH: number,
+    ) => void;
+  }) {
+    this.mode = options.mode;
+    this.getChartType = options.getChartType;
+    this.getColors = options.getColors;
+    this.getLiveState = options.getLiveState;
+    this.onBadgeSync = options.onBadgeSync;
+  }
+
+  public attached(param: SeriesAttachedParameter<Time, SeriesType>): void {
+    this.attachedParams = param;
+  }
+
+  public detached(): void {
+    this.attachedParams = null;
+  }
+
+  public requestRedraw(): void {
+    this.attachedParams?.requestUpdate();
+  }
+
+  public paneViews(): readonly IPrimitivePaneView[] {
+    if (this.getChartType() !== this.mode) return [];
+    return [this.paneView];
+  }
+
+  private drawOnPane(target: CanvasTarget): void {
+    const params = this.attachedParams;
+    if (!params || this.getChartType() !== this.mode) return;
+
+    const data = params.series.data();
+    if (!data || data.length === 0) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const last = data[data.length - 1] as unknown as {
+      time: Time;
+      value?: number;
+      close?: number;
+    };
+    const barClose =
+      typeof last.value === 'number'
+        ? last.value
+        : typeof last.close === 'number'
+          ? last.close
+          : null;
+
+    if (barClose === null || !Number.isFinite(barClose)) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const first = data[0] as unknown as {
+      time: Time;
+      value?: number;
+      open?: number;
+      close?: number;
+    };
+    const firstVal =
+      typeof first.value === 'number'
+        ? first.value
+        : typeof first.open === 'number'
+          ? first.open
+          : typeof first.close === 'number'
+            ? first.close
+            : null;
+    const xFirst = params.chart.timeScale().timeToCoordinate(first.time);
+    const yFirst =
+      firstVal !== null && Number.isFinite(firstVal)
+        ? params.series.priceToCoordinate(firstVal)
+        : null;
+
+    const liveState = this.getLiveState();
+    const livePrice =
+      Number.isFinite(liveState.displayPrice) && liveState.displayPrice > 0
+        ? liveState.displayPrice
+        : barClose;
+
+    const yBar = params.series.priceToCoordinate(barClose);
+    const yLive = params.series.priceToCoordinate(livePrice);
+    const xLast = params.chart.timeScale().timeToCoordinate(last.time);
+    const colors = this.getColors();
+
+    target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+      const plotW = mediaSize.width;
+      const plotH = mediaSize.height;
+
+      // In Candle mode, lock guide + card strictly to the rendered candle close
+      // so the candle body, dashed guide, and right-axis card never separate.
+      const displayValue = this.mode === 'candle' ? barClose : livePrice;
+      const guideY =
+        this.mode === 'candle'
+          ? yBar
+          : yLive !== null && Number.isFinite(yLive)
+            ? yLive
+            : yBar;
+      if (guideY === null || !Number.isFinite(guideY)) {
+        this.onBadgeSync(null, null, plotW, plotH);
+        return;
+      }
+
+      // Compute exact continuous live tip X position ahead of the sliding bar
+      let liveX: number | null = xLast;
+      if (
+        this.mode === 'line' &&
+        xLast !== null &&
+        Number.isFinite(xLast)
+      ) {
+        let spacing = params.chart.timeScale().options().barSpacing || 5;
+        if (data.length >= 2) {
+          const prev = data[data.length - 2] as unknown as { time: Time };
+          const xPrev = params.chart.timeScale().timeToCoordinate(prev.time);
+          if (xPrev !== null && Number.isFinite(xPrev) && xLast - xPrev > 0.2) {
+            spacing = xLast - xPrev;
+          }
+        }
+        const frac = Math.max(0, Math.min(0.9999, liveState.subBarFraction));
+        liveX = xLast + frac * spacing;
+      }
+
+      // Sync the right-axis pill card to the exact rendered price & Y coordinate
+      this.onBadgeSync(displayValue, guideY, plotW, plotH);
+
+      ctx.save();
+
+      // Clip inside plot pane bounds (include full right-edge connector stroke)
+      ctx.beginPath();
+      ctx.rect(0, 0, plotW + 1, plotH);
+      ctx.clip();
+
+      // Precompute shared relative area gradient matching TradingView AreaSeries
+      let areaGrad: CanvasGradient | null = null;
+      if (this.mode === 'line') {
+        let minY: number = guideY;
+        if (yBar !== null && Number.isFinite(yBar)) {
+          minY = Math.min(minY, yBar);
+        }
+        if (yFirst !== null && Number.isFinite(yFirst)) {
+          minY = Math.min(minY, yFirst);
+        }
+        const visRange = params.chart.timeScale().getVisibleLogicalRange();
+        const minScanIdx = visRange
+          ? Math.max(0, Math.floor(visRange.from))
+          : Math.max(0, data.length - 120);
+        const maxScanIdx = visRange
+          ? Math.min(data.length - 1, Math.ceil(visRange.to))
+          : data.length - 1;
+        for (let i = minScanIdx; i <= maxScanIdx; i++) {
+          const item = data[i] as unknown as { value?: number };
+          if (typeof item.value === 'number') {
+            const cy = params.series.priceToCoordinate(item.value);
+            if (cy !== null && Number.isFinite(cy) && cy < minY) {
+              minY = cy;
+            }
+          }
+        }
+        const gradTop = Math.max(0, Math.min(minY, plotH - 1));
+        areaGrad = ctx.createLinearGradient(0, gradTop, 0, plotH);
+        areaGrad.addColorStop(0, colors.top);
+        areaGrad.addColorStop(1, colors.bottom);
+      }
+
+      // 0. In Line mode, extend the starting back of the line & shadow continuously
+      // all the way to the left edge (x = 0) when data starts mid-chart.
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xFirst !== null &&
+        yFirst !== null &&
+        Number.isFinite(xFirst) &&
+        Number.isFinite(yFirst) &&
+        xFirst > 0.25
+      ) {
+        const joinX = Math.min(plotW, xFirst + 0.5);
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.lineTo(joinX, plotH);
+        ctx.lineTo(0, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.stroke();
+      }
+
+      // 1. In Line mode, draw the live continuous tail from last settled point -> live tip
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xLast !== null &&
+        yBar !== null &&
+        liveX !== null &&
+        Number.isFinite(xLast) &&
+        Number.isFinite(yBar) &&
+        Number.isFinite(liveX) &&
+        liveX - xLast > 0.15
+      ) {
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.lineTo(liveX, plotH);
+        ctx.lineTo(xLast, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crisp continuous line extension
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.stroke();
+      }
+
+      // Compute centered X for the two directional V chevrons between dot/candle and right axis
+      const tipEdgeX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? liveX + CHART_THEME.liveDot.radius + 4
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? xLast + 5
+            : null;
+      const axisEdgeX = plotW - 4;
+      const showChevrons =
+        tipEdgeX !== null && axisEdgeX - tipEdgeX >= CHART_THEME.directionCard.width + 4;
+      const chevronX = showChevrons && tipEdgeX !== null ? (tipEdgeX + axisEdgeX) / 2 : null;
+
+      // 2. Straight wire connecting ONLY the live dot/candle directly to the right-axis card
+      // (stops strictly between the dot/candle and the card — never stretches backward).
+      const badgeH = CHART_THEME.liveBadge.height;
+      const cardCenterY =
+        Math.max(2, Math.min(plotH - badgeH - 1, guideY - badgeH / 2)) + badgeH / 2;
+      const wireStartX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? Math.max(0, Math.min(plotW, liveX))
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? Math.max(0, Math.min(plotW, xLast + 3))
+            : null;
+
+      if (wireStartX !== null && plotW - wireStartX > 1) {
+        ctx.strokeStyle = hexToRgba(colors.line, 0.8);
+        ctx.lineWidth = 1.25;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (chevronX !== null && chevronX > wireStartX + 4) {
+          const gapHalf = 8;
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(Math.max(wireStartX, chevronX - gapHalf), guideY);
+          ctx.moveTo(Math.min(plotW, chevronX + gapHalf), cardCenterY);
+          ctx.lineTo(plotW, cardCenterY);
+        } else {
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(plotW, cardCenterY);
+        }
+        ctx.stroke();
+      }
+
+      // Prominent live-price guide: a continuous dashed line extending left from the moving axis card.
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(colors.line, 0.92);
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'butt';
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, cardCenterY);
+      ctx.lineTo(plotW, cardCenterY);
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. In Line mode, draw the single calm pulsing filled halo + bigger dot tightly locked at (liveX, guideY)
+      if (
+        this.mode === 'line' &&
+        liveX !== null &&
+        Number.isFinite(liveX) &&
+        liveX >= -24 &&
+        liveX <= plotW + 24
+      ) {
+        const now = performance.now();
+        const period = CHART_THEME.liveDot.haloPeriodMs;
+        const baseR = CHART_THEME.liveDot.radius;
+        const wrapR = CHART_THEME.liveDot.haloRadius;
+        const maxR = CHART_THEME.liveDot.haloMaxRadius;
+
+        // Subtle filled wrap that stays anchored right around the dot
+        ctx.fillStyle = hexToRgba(colors.line, 0.2);
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, wrapR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Single calm expanding & fading filled halo pulse (one pulse per cycle, no stroked rings)
+        const cycle = (now % period) / period;
+        const activeFraction = 0.72;
+        if (cycle < activeFraction) {
+          const t = cycle / activeFraction;
+          const eased = 1 - Math.pow(1 - t, 2.2);
+          const pulseRadius = wrapR + eased * (maxR - wrapR);
+          const fadeIn = t < 0.14 ? t / 0.14 : 1;
+          const fadeOut = Math.pow(1 - t, 1.35);
+          const pulseAlpha = 0.4 * fadeIn * fadeOut;
+
+          ctx.fillStyle = hexToRgba(colors.line, pulseAlpha);
+          ctx.beginPath();
+          ctx.arc(liveX, guideY, pulseRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Bigger crisp live dot tightly fixed to the line's tip
+        ctx.fillStyle = colors.line;
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, baseR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+
+        // Bright center pinpoint
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, 1.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4. Two borderless directional V chevrons centered between dot/candlestick and right-axis card
+      if (showChevrons && chevronX !== null) {
+        const cardX = chevronX;
+        const cardH = CHART_THEME.directionCard.height;
+        const cardY = Math.max(cardH / 2 + 4, Math.min(plotH - cardH / 2 - 4, guideY));
+
+        const isUp = liveState.trendDirection === 'up';
+        const baseColor = isUp
+          ? CHART_THEME.directionCard.upColor
+          : CHART_THEME.directionCard.downColor;
+        const brightColor = isUp
+          ? CHART_THEME.directionCard.upGlow
+          : CHART_THEME.directionCard.downGlow;
+
+        // Two wide sharp V chevrons cycling on/off in opposite phases along travel direction
+        const phase = (performance.now() % CHART_THEME.directionCard.cycleMs) / CHART_THEME.directionCard.cycleMs;
+        // Phase A leads in direction of travel; Phase B is offset by half cycle (off while A is on)
+        const waveA = Math.pow(0.5 + 0.5 * Math.cos(phase * Math.PI * 2), 1.8);
+        const waveB = Math.pow(0.5 + 0.5 * Math.cos((phase + 0.5) * Math.PI * 2), 1.8);
+
+        const topAlpha = isUp ? 0.16 + 0.84 * waveB : 0.16 + 0.84 * waveA;
+        const botAlpha = isUp ? 0.16 + 0.84 * waveA : 0.16 + 0.84 * waveB;
+
+        const wingW = 5.1;
+        const dropH = 3.6;
+        const rowOffset = 3.1;
+
+        const drawChevron = (cy: number, alpha: number) => {
+          const isLit = alpha > 0.55;
+          ctx.save();
+          ctx.lineJoin = 'miter';
+          ctx.miterLimit = 6;
+          ctx.lineCap = 'round';
+          ctx.lineWidth = isLit ? 1.9 : 1.6;
+          ctx.strokeStyle = isLit
+            ? hexToRgba(brightColor, alpha)
+            : hexToRgba(baseColor, alpha);
+          if (isLit) {
+            ctx.shadowColor = baseColor;
+            ctx.shadowBlur = 6;
+          }
+          ctx.beginPath();
+          if (isUp) {
+            ctx.moveTo(cardX - wingW, cy + dropH / 2);
+            ctx.lineTo(cardX, cy - dropH / 2);
+            ctx.lineTo(cardX + wingW, cy + dropH / 2);
+          } else {
+            ctx.moveTo(cardX - wingW, cy - dropH / 2);
+            ctx.lineTo(cardX, cy + dropH / 2);
+            ctx.lineTo(cardX + wingW, cy - dropH / 2);
+          }
+          ctx.stroke();
+          ctx.restore();
+        };
+
+        drawChevron(cardY - rowOffset, topAlpha);
+        drawChevron(cardY + rowOffset, botAlpha);
+      }
+
+      ctx.restore();
+    });
+  }
+}
+
+export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
+  currentPrice,
+  marketCap,
+  entryPrice,
+  priceHistory,
+  isPositive = true,
+  timeframe = '24H',
+  chartType = 'line',
+  onPriceHover,
+  height = 272,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dotCanvasRef = useRef<HTMLCanvasElement>(null);
+  const tvContainerRef = useRef<HTMLDivElement>(null);
+  const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeFadeOverlayRef = useRef<HTMLDivElement>(null);
+  const timeTickCapRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+
+  const mcapScaleRef = useRef<number>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0 && currentPrice > 0
+      ? marketCap / currentPrice
+      : 1,
+  );
+  const hasMarketCapRef = useRef<boolean>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0,
+  );
+  if (marketCap != null && Number.isFinite(marketCap) && marketCap > 0) {
+    hasMarketCapRef.current = true;
+    if (currentPrice > 0 && Number.isFinite(currentPrice)) {
+      mcapScaleRef.current = marketCap / currentPrice;
+    }
+  } else {
+    hasMarketCapRef.current = false;
+    mcapScaleRef.current = 1;
+  }
+
+  const formatDisplayValue = useCallback(
+    (value: number) =>
+      hasMarketCapRef.current
+        ? formatMarketCap(value * mcapScaleRef.current)
+        : formatPrice(value),
+    [],
+  );
+
+  const chartRef = useRef<IChartApi | null>(null);
+  const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const lineTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const candleTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const entryPriceLineRef = useRef<IPriceLine | null>(null);
+
+  // Continuous live-motion refs (60fps smooth price, horizontal scroll, and Y scale)
+  const committedBarsRef = useRef<NormalizedBar[]>([]);
+  const rawTargetPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const subBarFractionRef = useRef<number>(0);
+  const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
+  const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const stepMsRef = useRef<number>(TIMEFRAME_LIVE_STEP_MS[timeframe] || 30_000);
+  const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
+
+  const isUserPannedRef = useRef<boolean>(false);
+  const isPointerInteractingRef = useRef<boolean>(false);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerDraggedRef = useRef<boolean>(false);
+  const wasPannedBeforePointerRef = useRef<boolean>(false);
+  const isApplyingAutoScrollRef = useRef<boolean>(false);
+  const isAutoPositioningRef = useRef<boolean>(true);
+  const lastAppliedScrollPosRef = useRef<number>(BASE_RIGHT_OFFSET);
+
+  const latestVisibleBoundsRef = useRef<{ min: number; max: number } | null>(null);
+  const targetYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+  const animYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+
+  const prevSeedMetaRef = useRef<{
+    key: string;
+    firstTime: number;
+    length: number;
+  } | null>(null);
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isPanned, setIsPanned] = useState(false);
+
+  const { seedBars, resolutionMode, stepMs } = useMemo<{
+    seedBars: NormalizedBar[];
+    resolutionMode: 'live-step' | 'buckets';
+    stepMs: number;
+  }>(() => {
+    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+    const validRaw = (priceHistory || [])
+      .filter(
+        (point) =>
+          Number.isFinite(point.price) &&
+          point.price > 0 &&
+          isUnixTimestampMilliseconds(point.time),
+      )
+      .slice()
+      .sort((a, b) => a.time - b.time);
+
+    if (validRaw.length === 0) {
+      const liveStep = TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000;
+      if (Number.isFinite(currentPrice) && currentPrice > 0) {
+        const nowSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        const nowMs = nowSec * 1000;
+        const stepSec = Math.max(1, Math.floor(liveStep / 1000));
+        return {
+          resolutionMode: chartType === 'line' ? 'live-step' : 'buckets',
+          stepMs: chartType === 'line' ? liveStep : interval,
+          seedBars: [
+            {
+              time: (nowSec - stepSec) as UTCTimestamp,
+              timestampMs: nowMs - stepSec * 1000,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+            {
+              time: nowSec,
+              timestampMs: nowMs,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+          ],
+        };
+      }
+      return {
+        resolutionMode: 'buckets',
+        stepMs: interval,
+        seedBars: [],
+      };
+    }
+
+    const spanMs = validRaw[validRaw.length - 1].time - validRaw[0].time;
+    const useLiveStep = chartType === 'line' && spanMs < interval * 3;
+    const activeStepMs = useLiveStep
+      ? TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000
+      : interval;
+
+    // Anchor live-step buckets to the first point's second so continuous
+    // scrolling starts right from elapsed time 0 without initial phase offset jumps.
+    const originMs = useLiveStep
+      ? Math.floor(validRaw[0].time / 1000) * 1000
+      : 0;
+
+    const buckets = new Map<number, NormalizedBar>();
+    for (const point of validRaw) {
+      const bucketMs = useLiveStep
+        ? originMs + Math.max(0, Math.floor((point.time - originMs) / activeStepMs)) * activeStepMs
+        : Math.floor(point.time / activeStepMs) * activeStepMs;
+      const bucketSec = Math.floor(bucketMs / 1000) as UTCTimestamp;
+      const open =
+        Number.isFinite(point.open) && (point.open as number) > 0
+          ? (point.open as number)
+          : point.price;
+      const high =
+        Number.isFinite(point.high) && (point.high as number) > 0
+          ? (point.high as number)
+          : Math.max(open, point.price);
+      const low =
+        Number.isFinite(point.low) && (point.low as number) > 0
+          ? (point.low as number)
+          : Math.min(open, point.price);
+      const close =
+        Number.isFinite(point.close) && (point.close as number) > 0
+          ? (point.close as number)
+          : point.price;
+
+      const existing = buckets.get(bucketSec);
+      if (!existing) {
+        buckets.set(bucketSec, {
+          time: bucketSec,
+          timestampMs: bucketMs,
+          open,
+          high,
+          low,
+          close,
+        });
+      } else {
+        existing.high = Math.max(existing.high, high);
+        existing.low = Math.min(existing.low, low);
+        existing.close = close;
+      }
+    }
+
+    let ordered = Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+
+    // Ensure a 1-bar line session immediately renders a baseline segment.
+    if (chartType === 'line' && ordered.length === 1) {
+      const only = ordered[0];
+      const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
+      ordered = [
+        {
+          time: (only.time - stepSec) as UTCTimestamp,
+          timestampMs: only.timestampMs - stepSec * 1000,
+          open: only.open,
+          high: only.open,
+          low: only.open,
+          close: only.open,
+        },
+        only,
+      ];
+    }
+
+    if (!useLiveStep && timeframe === '24H' && ordered.length > 24) {
+      const latestMs = ordered[ordered.length - 1].timestampMs;
+      return {
+        resolutionMode: 'buckets',
+        stepMs: activeStepMs,
+        // Keep the full provider-supplied 24-hour window. The viewport is
+        // positioned at the newest edge; do not truncate history to 24 bars.
+        seedBars: ordered
+          .filter((bar) => bar.timestampMs >= latestMs - 24 * 60 * 60_000)
+          .slice(-2000),
+      };
+    }
+
+    return {
+      resolutionMode: useLiveStep ? 'live-step' : 'buckets',
+      stepMs: activeStepMs,
+      seedBars: ordered.slice(-2000),
+    };
+  }, [priceHistory, currentPrice, timeframe, chartType]);
+
+  stepMsRef.current = stepMs;
+  resolutionModeRef.current = resolutionMode;
+
+  const onPriceHoverRef = useRef(onPriceHover);
+  onPriceHoverRef.current = onPriceHover;
+
+  const timeframeRef = useRef(timeframe);
+  timeframeRef.current = timeframe;
+
+  const chartTypeRef = useRef(chartType);
+  chartTypeRef.current = chartType;
+
+  const isPositiveRef = useRef(isPositive);
+  isPositiveRef.current = isPositive;
+
+  // Helper to compute continuous target Y-axis range without any threshold jumps.
+  // Allows price to travel all the way down to the bottom boundary (above the bottom brush)
+  // before shrinking/rescaling while preserving clean top headroom.
+  const computeTargetYRange = useCallback(
+    (rawMin: number, rawMax: number, tf: string) => {
+      // The line chart may smoothly follow the latest quote between trades.
+      // Candlesticks must be scaled only from confirmed-trade OHLC data; a
+      // quote/market-cap refresh is not a trade and must not distort candle
+      // ranges or manufacture wick extremes.
+      const liveVal =
+        chartTypeRef.current === 'line' ? smoothedPriceRef.current : 0;
+      const visMin =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.min(rawMin, liveVal) : rawMin;
+      const visMax =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.max(rawMax, liveVal) : rawMax;
+      const spanRatio = TIMEFRAME_Y_SPAN_RATIO[tf] ?? 0.26;
+      const mid = (visMin + visMax) / 2;
+      const tfMinSpan = Math.max(Math.abs(mid) * spanRatio, 1e-10);
+      const rawSpan = Math.max(0, visMax - visMin);
+
+      const flatBlend = Math.max(0, 1 - rawSpan / (tfMinSpan * 0.4));
+      const bottomFrac = 0.012 + 0.22 * flatBlend;
+      const topFrac = 0.1 + 0.12 * flatBlend;
+      const activeBand = Math.max(0.4, 1 - topFrac - bottomFrac);
+      const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
+
+      // Keep the scale fitted to the actual positive data range; do not force a zero baseline.
+      const minValue = Math.max(visMin * 1e-6, visMin - effectiveSpan * bottomFrac);
+      const maxValue = minValue + effectiveSpan;
+      return { minValue, maxValue };
+    },
+    [],
+  );
+
+  // Draw the pure-black + fading dot-matrix background canvas behind TradingView.
+  const drawDotBackground = useCallback(() => {
+    const canvas = dotCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const hostW = containerRef.current?.clientWidth || containerWidth;
+    if (hostW <= 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, hostW);
+    const h = height;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = CHART_THEME.background;
+    ctx.fillRect(0, 0, w, h);
+
+    if (!CHART_THEME.dots.enabled) return;
+
+    const { spacing, radius, maxOpacity, sheenColor } = CHART_THEME.dots;
+    const smoothstep = (t: number) => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * (3 - 2 * c);
+    };
+    const startOffset = 5;
+    for (let y = startOffset; y < h - startOffset; y += spacing) {
+      const normY = y / h;
+      const fadeY =
+        normY < 0.3
+          ? 0.08 + 0.92 * smoothstep(normY / 0.3)
+          : normY > 0.78
+            ? 0.06 + 0.94 * smoothstep((1 - normY) / 0.22)
+            : 1;
+
+      for (let x = startOffset; x < w - startOffset; x += spacing) {
+        const normX = x / w;
+        const fadeX =
+          normX < 0.24
+            ? 0.08 + 0.92 * smoothstep(normX / 0.24)
+            : normX > 0.68
+              ? 0.06 + 0.94 * smoothstep((1 - normX) / 0.32)
+              : 1;
+
+        const dx = (normX - 0.45) * 1.15;
+        const dy = (normY - 0.5) * 1.15;
+        const dist = Math.min(1, Math.hypot(dx, dy));
+        const sheenBoost = 0.86 + 0.14 * (1 - dist);
+
+        const alpha = Math.max(0, Math.min(0.26, maxOpacity * fadeY * fadeX * sheenBoost));
+        if (alpha <= 0.005) continue;
+
+        // A faint halo softens each pin-sized dot so the grid feels
+        // lightly textured rather than like a row of sharp pixels.
+        ctx.shadowBlur = CHART_THEME.dots.shadowBlur;
+        ctx.shadowColor = CHART_THEME.dots.shadowColor;
+        ctx.fillStyle = `rgba(${sheenColor}, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }, [containerWidth, height]);
+
+  useEffect(() => {
+    drawDotBackground();
+  }, [drawDotBackground]);
+
+  // Browsers may suspend canvas painting while the app is backgrounded.
+  // Refresh rendering and dimensions on resume, but preserve the user's chart
+  // position. A real page remount creates fresh refs and starts at live again.
+  useEffect(() => {
+    let refreshFrame = 0;
+    const refreshAfterResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      window.cancelAnimationFrame(refreshFrame);
+      refreshFrame = window.requestAnimationFrame(() => {
+        drawDotBackground();
+        const host = tvContainerRef.current;
+        const chart = chartRef.current;
+        if (host && chart) {
+          const width = host.clientWidth;
+          const chartHeight = host.clientHeight;
+          if (width > 0 && chartHeight > 0) chart.resize(width, chartHeight);
+        }
+      });
+    };
+
+    document.addEventListener('visibilitychange', refreshAfterResume);
+    window.addEventListener('pageshow', refreshAfterResume);
+    window.addEventListener('focus', refreshAfterResume);
+    return () => {
+      window.cancelAnimationFrame(refreshFrame);
+      document.removeEventListener('visibilitychange', refreshAfterResume);
+      window.removeEventListener('pageshow', refreshAfterResume);
+      window.removeEventListener('focus', refreshAfterResume);
+    };
+  }, [drawDotBackground]);
+
+  // Measure container width with ResizeObserver.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      if (el.clientWidth > 0) setContainerWidth(el.clientWidth);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Synchronously position the right-axis live-price pill card inside the right axis column.
+  const syncBadgeDom = useCallback(
+    (price: number | null, yCoord: number | null, plotW: number, plotH: number) => {
+      const badge = badgeRef.current;
+      const chart = chartRef.current;
+      if (!badge || !chart) return;
+
+      const hostW = tvContainerRef.current?.clientWidth || containerRef.current?.clientWidth || 0;
+      if (price === null || yCoord === null || !Number.isFinite(yCoord) || hostW <= 0 || plotH <= 0) {
+        badge.style.opacity = '0';
+        return;
+      }
+
+      const axisW = Math.max(44, chart.priceScale('right').width() || hostW - plotW || 52);
+      const badgeH = CHART_THEME.liveBadge.height;
+      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - CHART_THEME.liveBadge.rightInset);
+      const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
+
+      badge.style.opacity = '1';
+      badge.style.minWidth = `${badgeMinW}px`;
+      badge.style.height = `${badgeH}px`;
+      badge.style.transform = `translate3d(0, ${badgeY}px, 0)`;
+
+      const formatted = formatDisplayValue(price);
+      if (badge.textContent !== formatted) {
+        badge.textContent = formatted;
+      }
+    },
+    [formatDisplayValue],
+  );
+
+  // Create TradingView Lightweight Chart instance once on mount.
+  useEffect(() => {
+    const host = tvContainerRef.current;
+    if (!host) return;
+
+    const axisFontFamily = "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+    const chart = createChart(host, {
+      autoSize: true,
+      width: Math.max(1, host.clientWidth || 320),
+      height,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: CHART_THEME.axisTextColor,
+        fontFamily: axisFontFamily,
+        fontSize: 12,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        // Fine, low-contrast guides extend left from the right-side price labels.
+        horzLines: {
+          visible: true,
+          color: 'rgba(255,255,255,0.055)',
+          style: LineStyle.Solid,
+        },
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        entireTextOnly: true,
+        minimumWidth: 44,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+      timeScale: {
+        borderVisible: true,
+        borderColor: 'rgba(255,255,255,0.11)',
+        ticksVisible: false,
+        // Timestamp text is drawn by our pre-rendered canvas layer so labels
+        // exist in the right-side lead-in before they enter the visible plot.
+        timeVisible: true,
+        tickMarkFormatter: () => '',
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframeRef.current),
+        rightOffset: BASE_RIGHT_OFFSET,
+        barSpacing: 5,
+        minBarSpacing: 1.5,
+        fixLeftEdge: false,
+        shiftVisibleRangeOnNewBar: false,
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+        horzLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+      },
+      localization: {
+        priceFormatter: formatDisplayValue,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+    });
+
+    // Continuous smooth Y-axis scale provider driven by 60fps interpolated bounds.
+    const smoothAutoscaleProvider = (
+      baseImplementation: () => AutoscaleInfo | null,
+    ): AutoscaleInfo | null => {
+      const res = baseImplementation();
+      if (!res || !res.priceRange) return res;
+
+      const rawMin = res.priceRange.minValue;
+      const rawMax = res.priceRange.maxValue;
+      if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return res;
+
+      latestVisibleBoundsRef.current = { min: rawMin, max: rawMax };
+      const computedTarget = computeTargetYRange(rawMin, rawMax, timeframeRef.current);
+      targetYRangeRef.current = computedTarget;
+
+      if (!animYRangeRef.current) {
+        animYRangeRef.current = { ...computedTarget };
+      }
+
+      return {
+        priceRange: {
+          minValue: animYRangeRef.current.minValue,
+          maxValue: animYRangeRef.current.maxValue,
+        },
+      };
+    };
+
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    const lineSeries = chart.addSeries(AreaSeries, {
+      lineColor,
+      topColor,
+      bottomColor,
+      relativeGradient: true,
+      lineWidth: CHART_THEME.lineWidth,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      crosshairMarkerBackgroundColor: '#FFFFFF',
+      crosshairMarkerBorderColor: lineColor,
+      crosshairMarkerBorderWidth: 1,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'line',
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: CHART_THEME.upColor,
+      downColor: CHART_THEME.downColor,
+      wickUpColor: CHART_THEME.upColor,
+      wickDownColor: CHART_THEME.downColor,
+      borderVisible: false,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'candle',
+    });
+
+    const getPalette = () =>
+      isPositiveRef.current
+        ? {
+            line: CHART_THEME.upColor,
+            top: CHART_THEME.upTopColor,
+            bottom: CHART_THEME.upBottomColor,
+          }
+        : {
+            line: CHART_THEME.downColor,
+            top: CHART_THEME.downTopColor,
+            bottom: CHART_THEME.downBottomColor,
+          };
+
+    const getLiveState = (): LiveRenderState => ({
+      displayPrice: smoothedPriceRef.current,
+      subBarFraction: subBarFractionRef.current,
+      trendDirection: trendDirectionRef.current,
+    });
+
+    const lineTipPrimitive = new LiveTipPrimitive({
+      mode: 'line',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    const candleTipPrimitive = new LiveTipPrimitive({
+      mode: 'candle',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    lineSeries.attachPrimitive(lineTipPrimitive);
+    candleSeries.attachPrimitive(candleTipPrimitive);
+
+    chartRef.current = chart;
+    lineSeriesRef.current = lineSeries;
+    candleSeriesRef.current = candleSeries;
+    lineTipPrimitiveRef.current = lineTipPrimitive;
+    candleTipPrimitiveRef.current = candleTipPrimitive;
+    prevSeedMetaRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    latestVisibleBoundsRef.current = null;
+
+    // Draw timestamp labels ourselves, including logical bars just beyond the
+    // latest data point. The rightOffset leaves room for these labels to exist
+    // before they enter the plot, so they glide in instead of popping into view.
+    const drawTimeLabels = () => {
+      const canvas = timeLabelsCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const axisH = Math.max(19, Math.round(chart.timeScale().height()) || 26);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(axisH * dpr);
+      canvas.style.width = String(width) + 'px';
+      canvas.style.height = String(axisH) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, axisH);
+
+      const range = chart.timeScale().getVisibleLogicalRange();
+      const bars = committedBarsRef.current;
+      if (!range || range.to <= range.from || bars.length === 0) return;
+
+      const priceScaleW = Math.max(0, chart.priceScale('right').width());
+      if (timeFadeOverlayRef.current) {
+        timeFadeOverlayRef.current.style.right = `${priceScaleW}px`;
+        timeFadeOverlayRef.current.style.height = `${axisH}px`;
+      }
+      if (timeTickCapRef.current) {
+        timeTickCapRef.current.style.right = `${priceScaleW}px`;
+        timeTickCapRef.current.style.bottom = `${axisH - 1}px`;
+      }
+      const plotRight = Math.max(0, width - priceScaleW);
+      const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
+      const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
+      // Give timestamps a little more breathing room; actual text width is
+      // checked below as a second guard against collisions on narrow screens.
+      const labelEveryBars = Math.max(1, Math.ceil(112 / spacing));
+      const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
+      // Render beyond the viewport; clipping reveals the labels as they move in.
+      const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
+      const lastLogical = Math.floor(preloadLogicalTo / labelEveryBars) * labelEveryBars;
+      const lastBar = bars[bars.length - 1];
+      const lastIndex = bars.length - 1;
+      const labelCandidates: Array<{ x: number; label: string }> = [];
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, Math.max(0, plotRight - 2), axisH);
+      ctx.clip();
+      ctx.font = "500 12px 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.56)';
+
+      for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x > plotRight + 45) continue;
+        const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
+        labelCandidates.push({ x, label: formatBucketTime(timestampMs, timeframeRef.current) });
+      }
+
+      // Keep a guaranteed visual gap between neighboring labels. The same
+      // accepted center coordinate drives both its text and its pointer tick.
+      let previousRight = Number.NEGATIVE_INFINITY;
+      const labelGap = 18;
+      for (const candidate of labelCandidates) {
+        const labelWidth = ctx.measureText(candidate.label).width;
+        const left = candidate.x - labelWidth / 2;
+        const right = candidate.x + labelWidth / 2;
+        if (left < previousRight + labelGap) continue;
+
+        // Center the crisp vertical pointer tick between the top border and the
+        // timestamp text, leaving clean breathing space on both sides.
+        const tickX = Math.round(candidate.x) + 0.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.34)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(tickX, 3.2);
+        ctx.lineTo(tickX, 7.2);
+        ctx.stroke();
+
+        ctx.fillText(candidate.label, candidate.x, 14);
+        previousRight = right;
+      }
+      ctx.restore();
+    };
+
+    // Replace the chart library's heavier time-axis tick marks with fine hairlines.
+    const drawTimeScaleTicks = () => {
+      const canvas = timeTicksCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const canvasHeight = 5;
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(canvasHeight * dpr);
+      canvas.style.width = String(width) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, canvasHeight);
+
+      const visibleRange = chart.timeScale().getVisibleLogicalRange();
+      if (!visibleRange || visibleRange.to <= visibleRange.from) return;
+
+      const plotRight = width - chart.priceScale('right').width();
+      ctx.strokeStyle = 'rgba(255,255,255,0.36)';
+      ctx.lineWidth = 0.85;
+      ctx.lineCap = 'butt';
+
+      // Five fine tick marks follow the visible time range while it scrolls.
+      for (let index = 0; index <= 4; index += 1) {
+        const logical =
+          visibleRange.from + ((visibleRange.to - visibleRange.from) * index) / 4;
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x < 0 || x > plotRight) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, 0.5);
+        ctx.lineTo(Math.round(x) + 0.5, 3.2);
+        ctx.stroke();
+      }
+    };
+
+    const handleLogicalRange = () => {
+      drawTimeScaleTicks();
+      drawTimeLabels();
+      // Scroll-range notifications can arrive after a programmatic update.
+      // User intent is tracked from the actual pointer/wheel gesture handlers
+      // below, so auto-follow never mistakes its own movement for a user drag.
+      if (isApplyingAutoScrollRef.current) return;
+      setIsPanned(isUserPannedRef.current);
+    };
+
+    const handleCrosshairMove = (
+      param: Parameters<Parameters<IChartApi['subscribeCrosshairMove']>[0]>[0],
+    ) => {
+      if (!param.point || param.time === undefined) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+      const activeSeries =
+        chartTypeRef.current === 'line'
+          ? lineSeriesRef.current
+          : candleSeriesRef.current;
+      if (!activeSeries) return;
+
+      const value = param.seriesData.get(activeSeries) as
+        | { value?: number; close?: number }
+        | undefined;
+      const hoveredPrice =
+        typeof value?.value === 'number'
+          ? value.value
+          : typeof value?.close === 'number'
+            ? value.close
+            : null;
+
+      if (hoveredPrice === null || !Number.isFinite(hoveredPrice)) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+
+      const timeMs =
+        typeof param.time === 'number' ? param.time * 1000 : Date.now();
+      onPriceHoverRef.current?.(
+        hoveredPrice,
+        formatBucketTime(timeMs, timeframeRef.current),
+      );
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      isPointerInteractingRef.current = true;
+      pointerStartRef.current = { x: event.clientX, y: event.clientY };
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = isUserPannedRef.current;
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isPointerInteractingRef.current || !pointerStartRef.current) return;
+      const dx = event.clientX - pointerStartRef.current.x;
+      const dy = event.clientY - pointerStartRef.current.y;
+      if (!pointerDraggedRef.current && Math.hypot(dx, dy) > 4) {
+        pointerDraggedRef.current = true;
+        isUserPannedRef.current = true;
+        setIsPanned(true);
+      }
+    };
+    const handlePointerUp = () => {
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      if (!pointerDraggedRef.current && !wasPannedBeforePointerRef.current) {
+        isUserPannedRef.current = false;
+      }
+      pointerDraggedRef.current = false;
+    };
+    const handleWheel = () => {
+      isUserPannedRef.current = true;
+      setIsPanned(true);
+    };
+
+    host.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    host.addEventListener('pointermove', handlePointerMove, { passive: true });
+    host.addEventListener('pointerup', handlePointerUp, { passive: true });
+    host.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    host.addEventListener('wheel', handleWheel, { passive: true });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+    drawTimeScaleTicks();
+    drawTimeLabels();
+
+    const tickResizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => {
+        drawTimeScaleTicks();
+        drawTimeLabels();
+      });
+    });
+    tickResizeObserver.observe(host);
+
+    // Unified 60fps animation loop:
+    // 1. Velocity-adaptive price smoothing (moves fast on spikes, gently on small ticks)
+    // 2. Continuous backward scrolling at exact 1 bar / stepMs timing (no stop-and-go)
+    // 3. Smooth continuous Y-axis scale easing (no shrink-stop-shrink-stop)
+    let rafId: number | null = null;
+    let prevPerfNow = performance.now();
+
+    const animateFrame = (nowPerf: number) => {
+      const dt = Math.min(0.05, Math.max(0.001, (nowPerf - prevPerfNow) / 1000));
+      prevPerfNow = nowPerf;
+
+      if (
+        typeof document === 'undefined' ||
+        document.visibilityState !== 'hidden'
+      ) {
+        // 1. Smoothly track latest target price & live movement direction
+        const targetP = rawTargetPriceRef.current;
+        if (targetP > 0 && Number.isFinite(targetP)) {
+          if (directionAnchorPriceRef.current <= 0) {
+            directionAnchorPriceRef.current = targetP;
+          } else {
+            const anchorDelta = targetP - directionAnchorPriceRef.current;
+            const eps = directionAnchorPriceRef.current * 0.0008;
+            if (anchorDelta > eps) {
+              trendDirectionRef.current = 'up';
+              directionAnchorPriceRef.current = targetP;
+            } else if (anchorDelta < -eps) {
+              trendDirectionRef.current = 'down';
+              directionAnchorPriceRef.current = targetP;
+            }
+          }
+
+          const curP = smoothedPriceRef.current;
+          if (!(curP > 0 && Number.isFinite(curP))) {
+            smoothedPriceRef.current = targetP;
+          } else {
+            if (targetP > curP * 1.0008) {
+              trendDirectionRef.current = 'up';
+            } else if (targetP < curP * 0.9992) {
+              trendDirectionRef.current = 'down';
+            }
+            const diff = targetP - curP;
+            const priceRate = 9.5;
+            const blend = 1 - Math.exp(-priceRate * dt);
+            smoothedPriceRef.current =
+              Math.abs(diff) <= targetP * 1e-7 ? targetP : curP + diff * blend;
+          }
+        }
+
+        const displayP =
+          smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
+
+        // 2. Keep the viewport pinned to the newest actual data point.
+        // Do not synthesize clock-driven bars or scroll through elapsed time.
+        const committed = committedBarsRef.current;
+        let committedNewBar = false;
+        if (chartTypeRef.current === 'line' && committed.length > 0 && displayP > 0) {
+          const last = committed[committed.length - 1];
+          // A quote may smoothly update the live tip, but it stays on the
+          // current real data timestamp. A new horizontal bar is created
+          // only when an actual market-data tick adds a newer bucket.
+          last.close = displayP;
+          last.high = Math.max(last.high, displayP);
+          last.low = Math.min(last.low, displayP);
+          lineSeries.update({ time: last.time, value: displayP });
+          subBarFractionRef.current = 0;
+
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
+          subBarFractionRef.current = 0;
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        }
+        // 3. Smooth Y-axis scale easing without sudden step jumps
+        if (latestVisibleBoundsRef.current) {
+          const nextTarget = computeTargetYRange(
+            latestVisibleBoundsRef.current.min,
+            latestVisibleBoundsRef.current.max,
+            timeframeRef.current,
+          );
+          targetYRangeRef.current = nextTarget;
+
+          if (!animYRangeRef.current) {
+            animYRangeRef.current = { ...nextTarget };
+          } else {
+            const anim = animYRangeRef.current;
+            const scaleRate = 5.5;
+            const scaleBlend = 1 - Math.exp(-scaleRate * dt);
+            const prevMin = anim.minValue;
+            const prevMax = anim.maxValue;
+
+            anim.minValue += (nextTarget.minValue - anim.minValue) * scaleBlend;
+            anim.maxValue += (nextTarget.maxValue - anim.maxValue) * scaleBlend;
+
+            // Keep live dot cleanly inside visible band even on huge rapid spikes,
+            // allowing downward moves to reach right down to the bottom boundary first.
+            if (displayP > 0 && Number.isFinite(displayP)) {
+              const curSpan = Math.max(1e-10, anim.maxValue - anim.minValue);
+              if (displayP > anim.maxValue - curSpan * 0.06) {
+                anim.maxValue = displayP + curSpan * 0.06;
+              }
+              if (displayP < anim.minValue + curSpan * 0.018) {
+                anim.minValue = Math.max(0, displayP - curSpan * 0.018);
+              }
+            }
+
+            const span = Math.max(1e-10, anim.maxValue - anim.minValue);
+            const scaleChanged =
+              Math.abs(anim.minValue - prevMin) / span > 1e-4 ||
+              Math.abs(anim.maxValue - prevMax) / span > 1e-4;
+
+            if (scaleChanged && !committedNewBar && committed.length > 0) {
+              const lastBar = committed[committed.length - 1];
+              if (chartTypeRef.current === 'line') {
+                lineSeries.update({ time: lastBar.time, value: lastBar.close });
+              } else {
+                candleSeries.update({
+                  time: lastBar.time,
+                  open: lastBar.open,
+                  high: lastBar.high,
+                  low: lastBar.low,
+                  close: lastBar.close,
+                });
+              }
+            }
+          }
+        }
+
+        // Keep custom timestamps locked to the same 60fps horizontal motion.
+        drawTimeLabels();
+
+        // Keep halo & live tail synced at 60fps
+        if (chartTypeRef.current === 'line') {
+          lineTipPrimitive.requestRedraw();
+        } else {
+          candleTipPrimitive.requestRedraw();
+        }
+      }
+
+      rafId = window.requestAnimationFrame(animateFrame);
+    };
+
+    rafId = window.requestAnimationFrame(animateFrame);
+
+    let disposed = false;
+    document.fonts?.ready?.then(() => {
+      if (!disposed) {
+        chart.applyOptions({ layout: { fontFamily: axisFontFamily } });
+      }
+    });
+
+    return () => {
+      disposed = true;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      tickResizeObserver.disconnect();
+      host.removeEventListener('pointerdown', handlePointerDown);
+      host.removeEventListener('pointermove', handlePointerMove);
+      host.removeEventListener('pointerup', handlePointerUp);
+      host.removeEventListener('pointercancel', handlePointerUp);
+      host.removeEventListener('wheel', handleWheel);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRange);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      lineSeries.detachPrimitive(lineTipPrimitive);
+      candleSeries.detachPrimitive(candleTipPrimitive);
+      lineTipPrimitiveRef.current = null;
+      candleTipPrimitiveRef.current = null;
+      entryPriceLineRef.current = null;
+      lineSeriesRef.current = null;
+      candleSeriesRef.current = null;
+      chartRef.current = null;
+      prevSeedMetaRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      latestVisibleBoundsRef.current = null;
+      chart.remove();
+    };
+  }, [computeTargetYRange, height, syncBadgeDom]);
+
+  // Reset user pan state and re-enable autoScale when timeframe or chart mode switches.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    isUserPannedRef.current = false;
+    lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+    setIsPanned(false);
+    // Reset old interval bounds so the next interval cannot inherit its scale.
+    latestVisibleBoundsRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    chart.applyOptions({
+      timeScale: {
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
+      },
+    });
+    chart.priceScale('right').applyOptions({ autoScale: true });
+  }, [timeframe, chartType]);
+
+  // Keep line/candle colors, area refraction gradient & active series visibility synced.
+  useEffect(() => {
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    lineSeriesRef.current?.applyOptions({
+      lineColor,
+      topColor,
+      bottomColor,
+      crosshairMarkerBorderColor: lineColor,
+      visible: chartType === 'line',
+    });
+    candleSeriesRef.current?.applyOptions({
+      visible: chartType === 'candle',
+    });
+  }, [isPositive, chartType]);
+
+  // Sync incoming prices & handle initial seeding / timeframe switches cleanly.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const lineSeries = lineSeriesRef.current;
+    const candleSeries = candleSeriesRef.current;
+    if (!chart || !lineSeries || !candleSeries) return;
+
+    if (Number.isFinite(currentPrice) && currentPrice > 0) {
+      rawTargetPriceRef.current = currentPrice;
+    }
+
+    const firstTime = seedBars[0]?.time ?? 0;
+    const seedKey = `${timeframe}:${chartType}:${resolutionMode}`;
+    const prev = prevSeedMetaRef.current;
+
+    const firstTimeMovedUnexpectedly =
+      prev !== null &&
+      prev.firstTime !== firstTime &&
+      (firstTime < prev.firstTime || seedBars.length < 2000);
+
+    const needsFullReseed =
+      prev === null ||
+      prev.key !== seedKey ||
+      firstTimeMovedUnexpectedly ||
+      Math.abs(seedBars.length - prev.length) > 4;
+
+    if (needsFullReseed) {
+      const cloned = seedBars.map((bar) => ({ ...bar }));
+      // Snap the new interval to its own bounds; never ease from the previous scale.
+      latestVisibleBoundsRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      committedBarsRef.current = cloned;
+      isUserPannedRef.current = false;
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = false;
+      setIsPanned(false);
+
+      const lineData: AreaData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        value: bar.close,
+      }));
+      const candleData: CandlestickData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      }));
+
+      isApplyingAutoScrollRef.current = true;
+      try {
+        lineSeries.setData(lineData);
+        candleSeries.setData(candleData);
+
+        if (cloned.length > 0) {
+          const lastBar = cloned[cloned.length - 1];
+          if (!(smoothedPriceRef.current > 0)) {
+            smoothedPriceRef.current =
+              currentPrice > 0 ? currentPrice : lastBar.close;
+          }
+          const activeStepMs = Math.max(1_000, stepMsRef.current);
+          subBarFractionRef.current =
+            chartType === 'line'
+              ? Math.max(0, Math.min(0.9999, (Date.now() - lastBar.timestampMs) / activeStepMs))
+              : 0;
+
+          isUserPannedRef.current = false;
+          const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
+          lastAppliedScrollPosRef.current = pos;
+          isAutoPositioningRef.current = true;
+          chart.timeScale().scrollToPosition(pos, false);
+          setIsPanned(false);
+        }
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+
+      prevSeedMetaRef.current =
+        seedBars.length > 0
+          ? { key: seedKey, firstTime, length: seedBars.length }
+          : null;
+      return;
+    }
+
+    // Apply new local OHLC buckets to both chart modes. The horizontal
+    // timeline advances only when actual data adds a newer bucket.
+    if (seedBars.length > 0) {
+      const committed = committedBarsRef.current;
+      const latest = seedBars[seedBars.length - 1];
+      const lastCommitted = committed[committed.length - 1];
+      const committedByTime = new Map(committed.map((bar) => [bar.time, bar]));
+      const incomingTimes = new Set(seedBars.map((bar) => bar.time));
+      const hasHistoricalCorrection =
+        seedBars.some((bar) => {
+          const previous = committedByTime.get(bar.time);
+          return (!previous && bar.time < latest.time) || (
+            previous !== undefined &&
+            bar.time < latest.time &&
+            (bar.open !== previous.open || bar.high !== previous.high ||
+              bar.low !== previous.low || bar.close !== previous.close)
+          );
+        }) ||
+        committed.some((bar) => !incomingTimes.has(bar.time));
+
+      if (hasHistoricalCorrection) {
+        // A delayed trade may correct a candle behind the active bucket.
+        // Rebuild the ordered history rather than trying to append that older
+        // timestamp through Lightweight Charts' incremental update API.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      } else if (!lastCommitted || latest.time > lastCommitted.time) {
+        const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
+        for (const bar of nextBars) {
+          const nextCandle = { ...bar };
+          committed.push(nextCandle);
+          lineSeries.update({ time: nextCandle.time, value: nextCandle.close });
+          candleSeries.update({
+            time: nextCandle.time,
+            open: nextCandle.open,
+            high: nextCandle.high,
+            low: nextCandle.low,
+            close: nextCandle.close,
+          });
+        }
+        if (committed.length > 2000) {
+          committed.splice(0, committed.length - 2000);
+        }
+        if (!isUserPannedRef.current) {
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else if (latest.time === lastCommitted.time) {
+        const changed =
+          latest.open !== lastCommitted.open ||
+          latest.high !== lastCommitted.high ||
+          latest.low !== lastCommitted.low ||
+          latest.close !== lastCommitted.close;
+        if (changed) {
+          const updated = { ...latest };
+          committed[committed.length - 1] = updated;
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lineSeries.update({ time: updated.time, value: updated.close });
+            candleSeries.update({
+              time: updated.time,
+              open: updated.open,
+              high: updated.high,
+              low: updated.low,
+              close: updated.close,
+            });
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else {
+        // A corrected/rewound history window cannot be appended incrementally.
+        // Re-seed both series in chronological order and return the viewport
+        // to the latest candle rather than drawing backward.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      }
+    }
+
+    prevSeedMetaRef.current = {
+      key: seedKey,
+      firstTime,
+      length: seedBars.length,
+    };
+  }, [seedBars, resolutionMode, timeframe, chartType, currentPrice]);
+
+  // Render optional entry price line on the active series.
+  useEffect(() => {
+    const activeSeries =
+      chartType === 'line' ? lineSeriesRef.current : candleSeriesRef.current;
+    if (!activeSeries) return;
+
+    if (entryPriceLineRef.current) {
+      try {
+        lineSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      try {
+        candleSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      entryPriceLineRef.current = null;
+    }
+
+    if (entryPrice != null && Number.isFinite(entryPrice) && entryPrice > 0) {
+      entryPriceLineRef.current = activeSeries.createPriceLine({
+        price: entryPrice,
+        color: CHART_THEME.entryLineColor,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'ENTRY',
+      });
+    }
+  }, [entryPrice, chartType]);
+
+  const resetView = () => {
+    const chart = chartRef.current;
+    const targetPos =
+      BASE_RIGHT_OFFSET +
+      (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
+
+    isUserPannedRef.current = false;
+    isPointerInteractingRef.current = false;
+    pointerStartRef.current = null;
+    pointerDraggedRef.current = false;
+    wasPannedBeforePointerRef.current = false;
+    isAutoPositioningRef.current = false;
+    lastAppliedScrollPosRef.current = targetPos;
+
+    if (chart) {
+      chart.priceScale('right').applyOptions({ autoScale: true });
+      // Snap to the exact live position in one action; the animation loop
+      // then maintains that position without requiring repeated button taps.
+      isApplyingAutoScrollRef.current = true;
+      try {
+        chart.timeScale().scrollToPosition(targetPos, false);
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+    }
+
+    setIsPanned(false);
+    onPriceHover?.(null, null);
+  };
+
+  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ height, touchAction: 'pan-y' }}
+      className="relative w-full min-w-0 max-w-full select-none overflow-hidden bg-[#000000]"
+      onDoubleClick={resetView}
+    >
+      {/* Layer 1: Pure black + small, tight, subtle fading dot-matrix grid */}
+      <canvas
+        ref={dotCanvasRef}
+        style={{ width: '100%', height }}
+        className="pointer-events-none absolute inset-0 block max-w-full"
+      />
+
+      {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
+      <div
+        ref={tvContainerRef}
+        style={{
+          position: 'absolute',
+          top: 34,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: 'calc(100% - 34px)',
+          // Fade the chart itself into view over the first ~12% of its width.
+          // This is a real alpha mask, not a dark overlay or rectangular brush.
+          maskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+        }}
+        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
+          with chart coordinates so they emerge continuously from the right. */}
+      <canvas
+        ref={timeLabelsCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[26px] w-full"
+      />
+      {/* Layer 2.5: Soft smoke-like edge brushes. Darkest only at the outer
+          upper/lower corners, feathering gently inward without a hard dark band. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[26px] z-[4] overflow-hidden"
+      >
+        <div
+          className="absolute inset-y-0 right-0 w-[88px]"
+          style={{
+            background:
+              'radial-gradient(ellipse 100% 58% at 100% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 100% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2.55: Short fade at the plot/time-axis boundary. New timestamps
+          emerge from the right edge instead of popping into view; price labels stay clear. */}
+      <div
+        ref={timeFadeOverlayRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[26px] w-[30px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
+        }}
+      />
+      <div
+        ref={timeTickCapRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
+        style={{
+          background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
+        }}
+      />
+
+      {/* Layer 2.6: Very light top-edge seam blend. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[2] overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-10"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.045) 0%, rgba(0,0,0,0.025) 55%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 3: Right-axis live-price pill card with clean crisp typography */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[3] overflow-hidden">
+        <div
+          ref={badgeRef}
+          style={{
+            right: CHART_THEME.liveBadge.rightInset,
+            top: 0,
+            opacity: 0,
+            backgroundColor: badgeBg,
+            color: CHART_THEME.liveBadge.textColor,
+            fontFamily: "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif",
+          }}
+          className="absolute flex items-center justify-center whitespace-nowrap rounded-[7px] px-1.5 text-[12.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
+        />
+      </div>
+
+      {/* Empty state */}
+      {seedBars.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center font-mono text-[11px] text-white/40">
+          Chart data unavailable
+        </div>
+      )}
+
+      {/* Compact return-to-live card; only shown while the user is browsing history. */}
+      {isPanned && (
+        <button
+          type="button"
+          onClick={resetView}
+          className="absolute bottom-7 right-[66px] z-[5] inline-flex h-[27px] items-center gap-1.5 rounded-[5px] border border-[#4BCB79]/55 bg-gradient-to-r from-[#10251A]/95 via-[#0B1B13]/95 to-[#101A14]/95 px-2.5 text-[10px] font-medium tracking-[0.01em] text-[#B9F2CD] shadow-[0_2px_10px_rgba(30,180,91,0.10)] transition-colors hover:border-[#65E895]/75 hover:text-white active:scale-[0.98]"
+        >
+          <ChevronsRight className="h-[13px] w-[13px] shrink-0 text-[#70E99A]" strokeWidth={2.1} />
+          <span className="whitespace-nowrap">Go back to live</span>
+        </button>
+      )}
+    </div>
+  );
+};
+ + price.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+  return '
+
+const formatMarketCap = (value: number): string => {
+  if (!Number.isFinite(value)) return '—';
+  if (value <= 0) return '$0.00';
+  if (value >= 1_000_000_000) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
+  return `$${value.toFixed(2)}`;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16) || 0;
+  const g = parseInt(clean.slice(2, 4), 16) || 0;
+  const b = parseInt(clean.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+};
+
+interface NormalizedBar {
+  time: UTCTimestamp;
+  timestampMs: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface LiveRenderState {
+  displayPrice: number;
+  subBarFraction: number;
+  trendDirection: 'up' | 'down';
+}
+
+/**
+ * Custom TradingView Series Primitive executed inside TradingView's own
+ * synchronized canvas pass:
+ * - Connects the last settled bar cleanly to the continuously gliding live tip
+ *   (with matching area light refraction underneath)
+ * - Draws the horizontal dashed price guide
+ * - Draws the bigger live dot + calm single-pulse filled halo locked strictly at the tip
+ * - Syncs the right-axis live-price pill card to the exact Y coordinate
+ */
+class LiveTipPrimitive implements ISeriesPrimitive<Time> {
+  private attachedParams: SeriesAttachedParameter<Time, SeriesType> | null = null;
+  private readonly mode: 'line' | 'candle';
+  private readonly getChartType: () => 'line' | 'candle';
+  private readonly getColors: () => {
+    line: string;
+    top: string;
+    bottom: string;
+  };
+  private readonly getLiveState: () => LiveRenderState;
+  private readonly onBadgeSync: (
+    price: number | null,
+    yCoord: number | null,
+    plotW: number,
+    plotH: number,
+  ) => void;
+
+  private readonly paneView: IPrimitivePaneView = {
+    zOrder: (): PrimitivePaneViewZOrder => 'top',
+    renderer: (): IPrimitivePaneRenderer => ({
+      draw: (target: CanvasTarget) => this.drawOnPane(target),
+    }),
+  };
+
+  constructor(options: {
+    mode: 'line' | 'candle';
+    getChartType: () => 'line' | 'candle';
+    getColors: () => { line: string; top: string; bottom: string };
+    getLiveState: () => LiveRenderState;
+    onBadgeSync: (
+      price: number | null,
+      yCoord: number | null,
+      plotW: number,
+      plotH: number,
+    ) => void;
+  }) {
+    this.mode = options.mode;
+    this.getChartType = options.getChartType;
+    this.getColors = options.getColors;
+    this.getLiveState = options.getLiveState;
+    this.onBadgeSync = options.onBadgeSync;
+  }
+
+  public attached(param: SeriesAttachedParameter<Time, SeriesType>): void {
+    this.attachedParams = param;
+  }
+
+  public detached(): void {
+    this.attachedParams = null;
+  }
+
+  public requestRedraw(): void {
+    this.attachedParams?.requestUpdate();
+  }
+
+  public paneViews(): readonly IPrimitivePaneView[] {
+    if (this.getChartType() !== this.mode) return [];
+    return [this.paneView];
+  }
+
+  private drawOnPane(target: CanvasTarget): void {
+    const params = this.attachedParams;
+    if (!params || this.getChartType() !== this.mode) return;
+
+    const data = params.series.data();
+    if (!data || data.length === 0) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const last = data[data.length - 1] as unknown as {
+      time: Time;
+      value?: number;
+      close?: number;
+    };
+    const barClose =
+      typeof last.value === 'number'
+        ? last.value
+        : typeof last.close === 'number'
+          ? last.close
+          : null;
+
+    if (barClose === null || !Number.isFinite(barClose)) {
+      this.onBadgeSync(null, null, 0, 0);
+      return;
+    }
+
+    const first = data[0] as unknown as {
+      time: Time;
+      value?: number;
+      open?: number;
+      close?: number;
+    };
+    const firstVal =
+      typeof first.value === 'number'
+        ? first.value
+        : typeof first.open === 'number'
+          ? first.open
+          : typeof first.close === 'number'
+            ? first.close
+            : null;
+    const xFirst = params.chart.timeScale().timeToCoordinate(first.time);
+    const yFirst =
+      firstVal !== null && Number.isFinite(firstVal)
+        ? params.series.priceToCoordinate(firstVal)
+        : null;
+
+    const liveState = this.getLiveState();
+    const livePrice =
+      Number.isFinite(liveState.displayPrice) && liveState.displayPrice > 0
+        ? liveState.displayPrice
+        : barClose;
+
+    const yBar = params.series.priceToCoordinate(barClose);
+    const yLive = params.series.priceToCoordinate(livePrice);
+    const xLast = params.chart.timeScale().timeToCoordinate(last.time);
+    const colors = this.getColors();
+
+    target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
+      const plotW = mediaSize.width;
+      const plotH = mediaSize.height;
+
+      // In Candle mode, lock guide + card strictly to the rendered candle close
+      // so the candle body, dashed guide, and right-axis card never separate.
+      const displayValue = this.mode === 'candle' ? barClose : livePrice;
+      const guideY =
+        this.mode === 'candle'
+          ? yBar
+          : yLive !== null && Number.isFinite(yLive)
+            ? yLive
+            : yBar;
+      if (guideY === null || !Number.isFinite(guideY)) {
+        this.onBadgeSync(null, null, plotW, plotH);
+        return;
+      }
+
+      // Compute exact continuous live tip X position ahead of the sliding bar
+      let liveX: number | null = xLast;
+      if (
+        this.mode === 'line' &&
+        xLast !== null &&
+        Number.isFinite(xLast)
+      ) {
+        let spacing = params.chart.timeScale().options().barSpacing || 5;
+        if (data.length >= 2) {
+          const prev = data[data.length - 2] as unknown as { time: Time };
+          const xPrev = params.chart.timeScale().timeToCoordinate(prev.time);
+          if (xPrev !== null && Number.isFinite(xPrev) && xLast - xPrev > 0.2) {
+            spacing = xLast - xPrev;
+          }
+        }
+        const frac = Math.max(0, Math.min(0.9999, liveState.subBarFraction));
+        liveX = xLast + frac * spacing;
+      }
+
+      // Sync the right-axis pill card to the exact rendered price & Y coordinate
+      this.onBadgeSync(displayValue, guideY, plotW, plotH);
+
+      ctx.save();
+
+      // Clip inside plot pane bounds (include full right-edge connector stroke)
+      ctx.beginPath();
+      ctx.rect(0, 0, plotW + 1, plotH);
+      ctx.clip();
+
+      // Precompute shared relative area gradient matching TradingView AreaSeries
+      let areaGrad: CanvasGradient | null = null;
+      if (this.mode === 'line') {
+        let minY: number = guideY;
+        if (yBar !== null && Number.isFinite(yBar)) {
+          minY = Math.min(minY, yBar);
+        }
+        if (yFirst !== null && Number.isFinite(yFirst)) {
+          minY = Math.min(minY, yFirst);
+        }
+        const visRange = params.chart.timeScale().getVisibleLogicalRange();
+        const minScanIdx = visRange
+          ? Math.max(0, Math.floor(visRange.from))
+          : Math.max(0, data.length - 120);
+        const maxScanIdx = visRange
+          ? Math.min(data.length - 1, Math.ceil(visRange.to))
+          : data.length - 1;
+        for (let i = minScanIdx; i <= maxScanIdx; i++) {
+          const item = data[i] as unknown as { value?: number };
+          if (typeof item.value === 'number') {
+            const cy = params.series.priceToCoordinate(item.value);
+            if (cy !== null && Number.isFinite(cy) && cy < minY) {
+              minY = cy;
+            }
+          }
+        }
+        const gradTop = Math.max(0, Math.min(minY, plotH - 1));
+        areaGrad = ctx.createLinearGradient(0, gradTop, 0, plotH);
+        areaGrad.addColorStop(0, colors.top);
+        areaGrad.addColorStop(1, colors.bottom);
+      }
+
+      // 0. In Line mode, extend the starting back of the line & shadow continuously
+      // all the way to the left edge (x = 0) when data starts mid-chart.
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xFirst !== null &&
+        yFirst !== null &&
+        Number.isFinite(xFirst) &&
+        Number.isFinite(yFirst) &&
+        xFirst > 0.25
+      ) {
+        const joinX = Math.min(plotW, xFirst + 0.5);
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.lineTo(joinX, plotH);
+        ctx.lineTo(0, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, yFirst);
+        ctx.lineTo(joinX, yFirst);
+        ctx.stroke();
+      }
+
+      // 1. In Line mode, draw the live continuous tail from last settled point -> live tip
+      if (
+        this.mode === 'line' &&
+        areaGrad &&
+        xLast !== null &&
+        yBar !== null &&
+        liveX !== null &&
+        Number.isFinite(xLast) &&
+        Number.isFinite(yBar) &&
+        Number.isFinite(liveX) &&
+        liveX - xLast > 0.15
+      ) {
+        ctx.fillStyle = areaGrad;
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.lineTo(liveX, plotH);
+        ctx.lineTo(xLast, plotH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Crisp continuous line extension
+        ctx.strokeStyle = colors.line;
+        ctx.lineWidth = CHART_THEME.lineWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(xLast, yBar);
+        ctx.lineTo(liveX, guideY);
+        ctx.stroke();
+      }
+
+      // Compute centered X for the two directional V chevrons between dot/candle and right axis
+      const tipEdgeX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? liveX + CHART_THEME.liveDot.radius + 4
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? xLast + 5
+            : null;
+      const axisEdgeX = plotW - 4;
+      const showChevrons =
+        tipEdgeX !== null && axisEdgeX - tipEdgeX >= CHART_THEME.directionCard.width + 4;
+      const chevronX = showChevrons && tipEdgeX !== null ? (tipEdgeX + axisEdgeX) / 2 : null;
+
+      // 2. Straight wire connecting ONLY the live dot/candle directly to the right-axis card
+      // (stops strictly between the dot/candle and the card — never stretches backward).
+      const badgeH = CHART_THEME.liveBadge.height;
+      const cardCenterY =
+        Math.max(2, Math.min(plotH - badgeH - 1, guideY - badgeH / 2)) + badgeH / 2;
+      const wireStartX =
+        this.mode === 'line'
+          ? liveX !== null && Number.isFinite(liveX)
+            ? Math.max(0, Math.min(plotW, liveX))
+            : null
+          : xLast !== null && Number.isFinite(xLast)
+            ? Math.max(0, Math.min(plotW, xLast + 3))
+            : null;
+
+      if (wireStartX !== null && plotW - wireStartX > 1) {
+        ctx.strokeStyle = hexToRgba(colors.line, 0.8);
+        ctx.lineWidth = 1.25;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (chevronX !== null && chevronX > wireStartX + 4) {
+          const gapHalf = 8;
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(Math.max(wireStartX, chevronX - gapHalf), guideY);
+          ctx.moveTo(Math.min(plotW, chevronX + gapHalf), cardCenterY);
+          ctx.lineTo(plotW, cardCenterY);
+        } else {
+          ctx.moveTo(wireStartX, guideY);
+          ctx.lineTo(plotW, cardCenterY);
+        }
+        ctx.stroke();
+      }
+
+      // Prominent live-price guide: a continuous dashed line extending left from the moving axis card.
+      ctx.save();
+      ctx.strokeStyle = hexToRgba(colors.line, 0.92);
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'butt';
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, cardCenterY);
+      ctx.lineTo(plotW, cardCenterY);
+      ctx.stroke();
+      ctx.restore();
+
+      // 3. In Line mode, draw the single calm pulsing filled halo + bigger dot tightly locked at (liveX, guideY)
+      if (
+        this.mode === 'line' &&
+        liveX !== null &&
+        Number.isFinite(liveX) &&
+        liveX >= -24 &&
+        liveX <= plotW + 24
+      ) {
+        const now = performance.now();
+        const period = CHART_THEME.liveDot.haloPeriodMs;
+        const baseR = CHART_THEME.liveDot.radius;
+        const wrapR = CHART_THEME.liveDot.haloRadius;
+        const maxR = CHART_THEME.liveDot.haloMaxRadius;
+
+        // Subtle filled wrap that stays anchored right around the dot
+        ctx.fillStyle = hexToRgba(colors.line, 0.2);
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, wrapR, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Single calm expanding & fading filled halo pulse (one pulse per cycle, no stroked rings)
+        const cycle = (now % period) / period;
+        const activeFraction = 0.72;
+        if (cycle < activeFraction) {
+          const t = cycle / activeFraction;
+          const eased = 1 - Math.pow(1 - t, 2.2);
+          const pulseRadius = wrapR + eased * (maxR - wrapR);
+          const fadeIn = t < 0.14 ? t / 0.14 : 1;
+          const fadeOut = Math.pow(1 - t, 1.35);
+          const pulseAlpha = 0.4 * fadeIn * fadeOut;
+
+          ctx.fillStyle = hexToRgba(colors.line, pulseAlpha);
+          ctx.beginPath();
+          ctx.arc(liveX, guideY, pulseRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Bigger crisp live dot tightly fixed to the line's tip
+        ctx.fillStyle = colors.line;
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, baseR, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+
+        // Bright center pinpoint
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(liveX, guideY, 1.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4. Two borderless directional V chevrons centered between dot/candlestick and right-axis card
+      if (showChevrons && chevronX !== null) {
+        const cardX = chevronX;
+        const cardH = CHART_THEME.directionCard.height;
+        const cardY = Math.max(cardH / 2 + 4, Math.min(plotH - cardH / 2 - 4, guideY));
+
+        const isUp = liveState.trendDirection === 'up';
+        const baseColor = isUp
+          ? CHART_THEME.directionCard.upColor
+          : CHART_THEME.directionCard.downColor;
+        const brightColor = isUp
+          ? CHART_THEME.directionCard.upGlow
+          : CHART_THEME.directionCard.downGlow;
+
+        // Two wide sharp V chevrons cycling on/off in opposite phases along travel direction
+        const phase = (performance.now() % CHART_THEME.directionCard.cycleMs) / CHART_THEME.directionCard.cycleMs;
+        // Phase A leads in direction of travel; Phase B is offset by half cycle (off while A is on)
+        const waveA = Math.pow(0.5 + 0.5 * Math.cos(phase * Math.PI * 2), 1.8);
+        const waveB = Math.pow(0.5 + 0.5 * Math.cos((phase + 0.5) * Math.PI * 2), 1.8);
+
+        const topAlpha = isUp ? 0.16 + 0.84 * waveB : 0.16 + 0.84 * waveA;
+        const botAlpha = isUp ? 0.16 + 0.84 * waveA : 0.16 + 0.84 * waveB;
+
+        const wingW = 5.1;
+        const dropH = 3.6;
+        const rowOffset = 3.1;
+
+        const drawChevron = (cy: number, alpha: number) => {
+          const isLit = alpha > 0.55;
+          ctx.save();
+          ctx.lineJoin = 'miter';
+          ctx.miterLimit = 6;
+          ctx.lineCap = 'round';
+          ctx.lineWidth = isLit ? 1.9 : 1.6;
+          ctx.strokeStyle = isLit
+            ? hexToRgba(brightColor, alpha)
+            : hexToRgba(baseColor, alpha);
+          if (isLit) {
+            ctx.shadowColor = baseColor;
+            ctx.shadowBlur = 6;
+          }
+          ctx.beginPath();
+          if (isUp) {
+            ctx.moveTo(cardX - wingW, cy + dropH / 2);
+            ctx.lineTo(cardX, cy - dropH / 2);
+            ctx.lineTo(cardX + wingW, cy + dropH / 2);
+          } else {
+            ctx.moveTo(cardX - wingW, cy - dropH / 2);
+            ctx.lineTo(cardX, cy + dropH / 2);
+            ctx.lineTo(cardX + wingW, cy - dropH / 2);
+          }
+          ctx.stroke();
+          ctx.restore();
+        };
+
+        drawChevron(cardY - rowOffset, topAlpha);
+        drawChevron(cardY + rowOffset, botAlpha);
+      }
+
+      ctx.restore();
+    });
+  }
+}
+
+export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
+  currentPrice,
+  marketCap,
+  entryPrice,
+  priceHistory,
+  isPositive = true,
+  timeframe = '24H',
+  chartType = 'line',
+  onPriceHover,
+  height = 272,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dotCanvasRef = useRef<HTMLCanvasElement>(null);
+  const tvContainerRef = useRef<HTMLDivElement>(null);
+  const timeTicksCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeLabelsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const timeFadeOverlayRef = useRef<HTMLDivElement>(null);
+  const timeTickCapRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLDivElement>(null);
+
+  const mcapScaleRef = useRef<number>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0 && currentPrice > 0
+      ? marketCap / currentPrice
+      : 1,
+  );
+  const hasMarketCapRef = useRef<boolean>(
+    marketCap != null && Number.isFinite(marketCap) && marketCap > 0,
+  );
+  if (marketCap != null && Number.isFinite(marketCap) && marketCap > 0) {
+    hasMarketCapRef.current = true;
+    if (currentPrice > 0 && Number.isFinite(currentPrice)) {
+      mcapScaleRef.current = marketCap / currentPrice;
+    }
+  } else {
+    hasMarketCapRef.current = false;
+    mcapScaleRef.current = 1;
+  }
+
+  const formatDisplayValue = useCallback(
+    (value: number) =>
+      hasMarketCapRef.current
+        ? formatMarketCap(value * mcapScaleRef.current)
+        : formatPrice(value),
+    [],
+  );
+
+  const chartRef = useRef<IChartApi | null>(null);
+  const lineSeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const lineTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const candleTipPrimitiveRef = useRef<LiveTipPrimitive | null>(null);
+  const entryPriceLineRef = useRef<IPriceLine | null>(null);
+
+  // Continuous live-motion refs (60fps smooth price, horizontal scroll, and Y scale)
+  const committedBarsRef = useRef<NormalizedBar[]>([]);
+  const rawTargetPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const subBarFractionRef = useRef<number>(0);
+  const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
+  const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
+  const stepMsRef = useRef<number>(TIMEFRAME_LIVE_STEP_MS[timeframe] || 30_000);
+  const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
+
+  const isUserPannedRef = useRef<boolean>(false);
+  const isPointerInteractingRef = useRef<boolean>(false);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerDraggedRef = useRef<boolean>(false);
+  const wasPannedBeforePointerRef = useRef<boolean>(false);
+  const isApplyingAutoScrollRef = useRef<boolean>(false);
+  const isAutoPositioningRef = useRef<boolean>(true);
+  const lastAppliedScrollPosRef = useRef<number>(BASE_RIGHT_OFFSET);
+
+  const latestVisibleBoundsRef = useRef<{ min: number; max: number } | null>(null);
+  const targetYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+  const animYRangeRef = useRef<{ minValue: number; maxValue: number } | null>(null);
+
+  const prevSeedMetaRef = useRef<{
+    key: string;
+    firstTime: number;
+    length: number;
+  } | null>(null);
+
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [isPanned, setIsPanned] = useState(false);
+
+  const { seedBars, resolutionMode, stepMs } = useMemo<{
+    seedBars: NormalizedBar[];
+    resolutionMode: 'live-step' | 'buckets';
+    stepMs: number;
+  }>(() => {
+    const interval = TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H'];
+    const validRaw = (priceHistory || [])
+      .filter(
+        (point) =>
+          Number.isFinite(point.price) &&
+          point.price > 0 &&
+          isUnixTimestampMilliseconds(point.time),
+      )
+      .slice()
+      .sort((a, b) => a.time - b.time);
+
+    if (validRaw.length === 0) {
+      const liveStep = TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000;
+      if (Number.isFinite(currentPrice) && currentPrice > 0) {
+        const nowSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
+        const nowMs = nowSec * 1000;
+        const stepSec = Math.max(1, Math.floor(liveStep / 1000));
+        return {
+          resolutionMode: chartType === 'line' ? 'live-step' : 'buckets',
+          stepMs: chartType === 'line' ? liveStep : interval,
+          seedBars: [
+            {
+              time: (nowSec - stepSec) as UTCTimestamp,
+              timestampMs: nowMs - stepSec * 1000,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+            {
+              time: nowSec,
+              timestampMs: nowMs,
+              open: currentPrice,
+              high: currentPrice,
+              low: currentPrice,
+              close: currentPrice,
+            },
+          ],
+        };
+      }
+      return {
+        resolutionMode: 'buckets',
+        stepMs: interval,
+        seedBars: [],
+      };
+    }
+
+    const spanMs = validRaw[validRaw.length - 1].time - validRaw[0].time;
+    const useLiveStep = chartType === 'line' && spanMs < interval * 3;
+    const activeStepMs = useLiveStep
+      ? TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000
+      : interval;
+
+    // Anchor live-step buckets to the first point's second so continuous
+    // scrolling starts right from elapsed time 0 without initial phase offset jumps.
+    const originMs = useLiveStep
+      ? Math.floor(validRaw[0].time / 1000) * 1000
+      : 0;
+
+    const buckets = new Map<number, NormalizedBar>();
+    for (const point of validRaw) {
+      const bucketMs = useLiveStep
+        ? originMs + Math.max(0, Math.floor((point.time - originMs) / activeStepMs)) * activeStepMs
+        : Math.floor(point.time / activeStepMs) * activeStepMs;
+      const bucketSec = Math.floor(bucketMs / 1000) as UTCTimestamp;
+      const open =
+        Number.isFinite(point.open) && (point.open as number) > 0
+          ? (point.open as number)
+          : point.price;
+      const high =
+        Number.isFinite(point.high) && (point.high as number) > 0
+          ? (point.high as number)
+          : Math.max(open, point.price);
+      const low =
+        Number.isFinite(point.low) && (point.low as number) > 0
+          ? (point.low as number)
+          : Math.min(open, point.price);
+      const close =
+        Number.isFinite(point.close) && (point.close as number) > 0
+          ? (point.close as number)
+          : point.price;
+
+      const existing = buckets.get(bucketSec);
+      if (!existing) {
+        buckets.set(bucketSec, {
+          time: bucketSec,
+          timestampMs: bucketMs,
+          open,
+          high,
+          low,
+          close,
+        });
+      } else {
+        existing.high = Math.max(existing.high, high);
+        existing.low = Math.min(existing.low, low);
+        existing.close = close;
+      }
+    }
+
+    let ordered = Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+
+    // Ensure a 1-bar line session immediately renders a baseline segment.
+    if (chartType === 'line' && ordered.length === 1) {
+      const only = ordered[0];
+      const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
+      ordered = [
+        {
+          time: (only.time - stepSec) as UTCTimestamp,
+          timestampMs: only.timestampMs - stepSec * 1000,
+          open: only.open,
+          high: only.open,
+          low: only.open,
+          close: only.open,
+        },
+        only,
+      ];
+    }
+
+    if (!useLiveStep && timeframe === '24H' && ordered.length > 24) {
+      const latestMs = ordered[ordered.length - 1].timestampMs;
+      return {
+        resolutionMode: 'buckets',
+        stepMs: activeStepMs,
+        // Keep the full provider-supplied 24-hour window. The viewport is
+        // positioned at the newest edge; do not truncate history to 24 bars.
+        seedBars: ordered
+          .filter((bar) => bar.timestampMs >= latestMs - 24 * 60 * 60_000)
+          .slice(-2000),
+      };
+    }
+
+    return {
+      resolutionMode: useLiveStep ? 'live-step' : 'buckets',
+      stepMs: activeStepMs,
+      seedBars: ordered.slice(-2000),
+    };
+  }, [priceHistory, currentPrice, timeframe, chartType]);
+
+  stepMsRef.current = stepMs;
+  resolutionModeRef.current = resolutionMode;
+
+  const onPriceHoverRef = useRef(onPriceHover);
+  onPriceHoverRef.current = onPriceHover;
+
+  const timeframeRef = useRef(timeframe);
+  timeframeRef.current = timeframe;
+
+  const chartTypeRef = useRef(chartType);
+  chartTypeRef.current = chartType;
+
+  const isPositiveRef = useRef(isPositive);
+  isPositiveRef.current = isPositive;
+
+  // Helper to compute continuous target Y-axis range without any threshold jumps.
+  // Allows price to travel all the way down to the bottom boundary (above the bottom brush)
+  // before shrinking/rescaling while preserving clean top headroom.
+  const computeTargetYRange = useCallback(
+    (rawMin: number, rawMax: number, tf: string) => {
+      // The line chart may smoothly follow the latest quote between trades.
+      // Candlesticks must be scaled only from confirmed-trade OHLC data; a
+      // quote/market-cap refresh is not a trade and must not distort candle
+      // ranges or manufacture wick extremes.
+      const liveVal =
+        chartTypeRef.current === 'line' ? smoothedPriceRef.current : 0;
+      const visMin =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.min(rawMin, liveVal) : rawMin;
+      const visMax =
+        liveVal > 0 && Number.isFinite(liveVal) ? Math.max(rawMax, liveVal) : rawMax;
+      const spanRatio = TIMEFRAME_Y_SPAN_RATIO[tf] ?? 0.26;
+      const mid = (visMin + visMax) / 2;
+      const tfMinSpan = Math.max(Math.abs(mid) * spanRatio, 1e-10);
+      const rawSpan = Math.max(0, visMax - visMin);
+
+      const flatBlend = Math.max(0, 1 - rawSpan / (tfMinSpan * 0.4));
+      const bottomFrac = 0.012 + 0.22 * flatBlend;
+      const topFrac = 0.1 + 0.12 * flatBlend;
+      const activeBand = Math.max(0.4, 1 - topFrac - bottomFrac);
+      const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
+
+      // Keep the scale fitted to the actual positive data range; do not force a zero baseline.
+      const minValue = Math.max(visMin * 1e-6, visMin - effectiveSpan * bottomFrac);
+      const maxValue = minValue + effectiveSpan;
+      return { minValue, maxValue };
+    },
+    [],
+  );
+
+  // Draw the pure-black + fading dot-matrix background canvas behind TradingView.
+  const drawDotBackground = useCallback(() => {
+    const canvas = dotCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const hostW = containerRef.current?.clientWidth || containerWidth;
+    if (hostW <= 0) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, hostW);
+    const h = height;
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    ctx.fillStyle = CHART_THEME.background;
+    ctx.fillRect(0, 0, w, h);
+
+    if (!CHART_THEME.dots.enabled) return;
+
+    const { spacing, radius, maxOpacity, sheenColor } = CHART_THEME.dots;
+    const smoothstep = (t: number) => {
+      const c = Math.max(0, Math.min(1, t));
+      return c * c * (3 - 2 * c);
+    };
+    const startOffset = 5;
+    for (let y = startOffset; y < h - startOffset; y += spacing) {
+      const normY = y / h;
+      const fadeY =
+        normY < 0.3
+          ? 0.08 + 0.92 * smoothstep(normY / 0.3)
+          : normY > 0.78
+            ? 0.06 + 0.94 * smoothstep((1 - normY) / 0.22)
+            : 1;
+
+      for (let x = startOffset; x < w - startOffset; x += spacing) {
+        const normX = x / w;
+        const fadeX =
+          normX < 0.24
+            ? 0.08 + 0.92 * smoothstep(normX / 0.24)
+            : normX > 0.68
+              ? 0.06 + 0.94 * smoothstep((1 - normX) / 0.32)
+              : 1;
+
+        const dx = (normX - 0.45) * 1.15;
+        const dy = (normY - 0.5) * 1.15;
+        const dist = Math.min(1, Math.hypot(dx, dy));
+        const sheenBoost = 0.86 + 0.14 * (1 - dist);
+
+        const alpha = Math.max(0, Math.min(0.26, maxOpacity * fadeY * fadeX * sheenBoost));
+        if (alpha <= 0.005) continue;
+
+        // A faint halo softens each pin-sized dot so the grid feels
+        // lightly textured rather than like a row of sharp pixels.
+        ctx.shadowBlur = CHART_THEME.dots.shadowBlur;
+        ctx.shadowColor = CHART_THEME.dots.shadowColor;
+        ctx.fillStyle = `rgba(${sheenColor}, ${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }, [containerWidth, height]);
+
+  useEffect(() => {
+    drawDotBackground();
+  }, [drawDotBackground]);
+
+  // Browsers may suspend canvas painting while the app is backgrounded.
+  // Refresh rendering and dimensions on resume, but preserve the user's chart
+  // position. A real page remount creates fresh refs and starts at live again.
+  useEffect(() => {
+    let refreshFrame = 0;
+    const refreshAfterResume = () => {
+      if (document.visibilityState === 'hidden') return;
+      window.cancelAnimationFrame(refreshFrame);
+      refreshFrame = window.requestAnimationFrame(() => {
+        drawDotBackground();
+        const host = tvContainerRef.current;
+        const chart = chartRef.current;
+        if (host && chart) {
+          const width = host.clientWidth;
+          const chartHeight = host.clientHeight;
+          if (width > 0 && chartHeight > 0) chart.resize(width, chartHeight);
+        }
+      });
+    };
+
+    document.addEventListener('visibilitychange', refreshAfterResume);
+    window.addEventListener('pageshow', refreshAfterResume);
+    window.addEventListener('focus', refreshAfterResume);
+    return () => {
+      window.cancelAnimationFrame(refreshFrame);
+      document.removeEventListener('visibilitychange', refreshAfterResume);
+      window.removeEventListener('pageshow', refreshAfterResume);
+      window.removeEventListener('focus', refreshAfterResume);
+    };
+  }, [drawDotBackground]);
+
+  // Measure container width with ResizeObserver.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      if (el.clientWidth > 0) setContainerWidth(el.clientWidth);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Synchronously position the right-axis live-price pill card inside the right axis column.
+  const syncBadgeDom = useCallback(
+    (price: number | null, yCoord: number | null, plotW: number, plotH: number) => {
+      const badge = badgeRef.current;
+      const chart = chartRef.current;
+      if (!badge || !chart) return;
+
+      const hostW = tvContainerRef.current?.clientWidth || containerRef.current?.clientWidth || 0;
+      if (price === null || yCoord === null || !Number.isFinite(yCoord) || hostW <= 0 || plotH <= 0) {
+        badge.style.opacity = '0';
+        return;
+      }
+
+      const axisW = Math.max(44, chart.priceScale('right').width() || hostW - plotW || 52);
+      const badgeH = CHART_THEME.liveBadge.height;
+      const badgeMinW = Math.max(CHART_THEME.liveBadge.minWidth, axisW - CHART_THEME.liveBadge.rightInset);
+      const badgeY = Math.max(2, Math.min(plotH - badgeH - 1, yCoord - badgeH / 2));
+
+      badge.style.opacity = '1';
+      badge.style.minWidth = `${badgeMinW}px`;
+      badge.style.height = `${badgeH}px`;
+      badge.style.transform = `translate3d(0, ${badgeY}px, 0)`;
+
+      const formatted = formatDisplayValue(price);
+      if (badge.textContent !== formatted) {
+        badge.textContent = formatted;
+      }
+    },
+    [formatDisplayValue],
+  );
+
+  // Create TradingView Lightweight Chart instance once on mount.
+  useEffect(() => {
+    const host = tvContainerRef.current;
+    if (!host) return;
+
+    const axisFontFamily = "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+    const chart = createChart(host, {
+      autoSize: true,
+      width: Math.max(1, host.clientWidth || 320),
+      height,
+      layout: {
+        background: { type: ColorType.Solid, color: 'transparent' },
+        textColor: CHART_THEME.axisTextColor,
+        fontFamily: axisFontFamily,
+        fontSize: 12,
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { visible: false },
+        // Fine, low-contrast guides extend left from the right-side price labels.
+        horzLines: {
+          visible: true,
+          color: 'rgba(255,255,255,0.055)',
+          style: LineStyle.Solid,
+        },
+      },
+      rightPriceScale: {
+        borderVisible: false,
+        entireTextOnly: true,
+        minimumWidth: 44,
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+      timeScale: {
+        borderVisible: true,
+        borderColor: 'rgba(255,255,255,0.11)',
+        ticksVisible: false,
+        // Timestamp text is drawn by our pre-rendered canvas layer so labels
+        // exist in the right-side lead-in before they enter the visible plot.
+        timeVisible: true,
+        tickMarkFormatter: () => '',
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframeRef.current),
+        rightOffset: BASE_RIGHT_OFFSET,
+        barSpacing: 5,
+        minBarSpacing: 1.5,
+        fixLeftEdge: false,
+        shiftVisibleRangeOnNewBar: false,
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+        horzLine: {
+          color: CHART_THEME.crosshairColor,
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: CHART_THEME.crosshairLabelBg,
+        },
+      },
+      localization: {
+        priceFormatter: formatDisplayValue,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
+    });
+
+    // Continuous smooth Y-axis scale provider driven by 60fps interpolated bounds.
+    const smoothAutoscaleProvider = (
+      baseImplementation: () => AutoscaleInfo | null,
+    ): AutoscaleInfo | null => {
+      const res = baseImplementation();
+      if (!res || !res.priceRange) return res;
+
+      const rawMin = res.priceRange.minValue;
+      const rawMax = res.priceRange.maxValue;
+      if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return res;
+
+      latestVisibleBoundsRef.current = { min: rawMin, max: rawMax };
+      const computedTarget = computeTargetYRange(rawMin, rawMax, timeframeRef.current);
+      targetYRangeRef.current = computedTarget;
+
+      if (!animYRangeRef.current) {
+        animYRangeRef.current = { ...computedTarget };
+      }
+
+      return {
+        priceRange: {
+          minValue: animYRangeRef.current.minValue,
+          maxValue: animYRangeRef.current.maxValue,
+        },
+      };
+    };
+
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    const lineSeries = chart.addSeries(AreaSeries, {
+      lineColor,
+      topColor,
+      bottomColor,
+      relativeGradient: true,
+      lineWidth: CHART_THEME.lineWidth,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      crosshairMarkerRadius: 4,
+      crosshairMarkerBackgroundColor: '#FFFFFF',
+      crosshairMarkerBorderColor: lineColor,
+      crosshairMarkerBorderWidth: 1,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'line',
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: CHART_THEME.upColor,
+      downColor: CHART_THEME.downColor,
+      wickUpColor: CHART_THEME.upColor,
+      wickDownColor: CHART_THEME.downColor,
+      borderVisible: false,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      autoscaleInfoProvider: smoothAutoscaleProvider,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.000000001,
+        formatter: formatDisplayValue,
+      },
+      visible: chartTypeRef.current === 'candle',
+    });
+
+    const getPalette = () =>
+      isPositiveRef.current
+        ? {
+            line: CHART_THEME.upColor,
+            top: CHART_THEME.upTopColor,
+            bottom: CHART_THEME.upBottomColor,
+          }
+        : {
+            line: CHART_THEME.downColor,
+            top: CHART_THEME.downTopColor,
+            bottom: CHART_THEME.downBottomColor,
+          };
+
+    const getLiveState = (): LiveRenderState => ({
+      displayPrice: smoothedPriceRef.current,
+      subBarFraction: subBarFractionRef.current,
+      trendDirection: trendDirectionRef.current,
+    });
+
+    const lineTipPrimitive = new LiveTipPrimitive({
+      mode: 'line',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    const candleTipPrimitive = new LiveTipPrimitive({
+      mode: 'candle',
+      getChartType: () => chartTypeRef.current,
+      getColors: getPalette,
+      getLiveState,
+      onBadgeSync: syncBadgeDom,
+    });
+    lineSeries.attachPrimitive(lineTipPrimitive);
+    candleSeries.attachPrimitive(candleTipPrimitive);
+
+    chartRef.current = chart;
+    lineSeriesRef.current = lineSeries;
+    candleSeriesRef.current = candleSeries;
+    lineTipPrimitiveRef.current = lineTipPrimitive;
+    candleTipPrimitiveRef.current = candleTipPrimitive;
+    prevSeedMetaRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    latestVisibleBoundsRef.current = null;
+
+    // Draw timestamp labels ourselves, including logical bars just beyond the
+    // latest data point. The rightOffset leaves room for these labels to exist
+    // before they enter the plot, so they glide in instead of popping into view.
+    const drawTimeLabels = () => {
+      const canvas = timeLabelsCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const axisH = Math.max(19, Math.round(chart.timeScale().height()) || 26);
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(axisH * dpr);
+      canvas.style.width = String(width) + 'px';
+      canvas.style.height = String(axisH) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, axisH);
+
+      const range = chart.timeScale().getVisibleLogicalRange();
+      const bars = committedBarsRef.current;
+      if (!range || range.to <= range.from || bars.length === 0) return;
+
+      const priceScaleW = Math.max(0, chart.priceScale('right').width());
+      if (timeFadeOverlayRef.current) {
+        timeFadeOverlayRef.current.style.right = `${priceScaleW}px`;
+        timeFadeOverlayRef.current.style.height = `${axisH}px`;
+      }
+      if (timeTickCapRef.current) {
+        timeTickCapRef.current.style.right = `${priceScaleW}px`;
+        timeTickCapRef.current.style.bottom = `${axisH - 1}px`;
+      }
+      const plotRight = Math.max(0, width - priceScaleW);
+      const spacing = Math.max(1, chart.timeScale().options().barSpacing || 5);
+      const secondsPerBar = Math.max(1, Math.floor(stepMsRef.current / 1000));
+      // Give timestamps a little more breathing room; actual text width is
+      // checked below as a second guard against collisions on narrow screens.
+      const labelEveryBars = Math.max(1, Math.ceil(112 / spacing));
+      const firstLogical = Math.ceil(range.from / labelEveryBars) * labelEveryBars;
+      // Render beyond the viewport; clipping reveals the labels as they move in.
+      const preloadLogicalTo = range.to + Math.ceil(50 / spacing);
+      const lastLogical = Math.floor(preloadLogicalTo / labelEveryBars) * labelEveryBars;
+      const lastBar = bars[bars.length - 1];
+      const lastIndex = bars.length - 1;
+      const labelCandidates: Array<{ x: number; label: string }> = [];
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, Math.max(0, plotRight - 2), axisH);
+      ctx.clip();
+      ctx.font = "500 12px 'Barlow', -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.56)';
+
+      for (let logical = firstLogical; logical <= lastLogical; logical += labelEveryBars) {
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x > plotRight + 45) continue;
+        const timestampMs = lastBar.timestampMs + (logical - lastIndex) * secondsPerBar * 1000;
+        labelCandidates.push({ x, label: formatBucketTime(timestampMs, timeframeRef.current) });
+      }
+
+      // Keep a guaranteed visual gap between neighboring labels. The same
+      // accepted center coordinate drives both its text and its pointer tick.
+      let previousRight = Number.NEGATIVE_INFINITY;
+      const labelGap = 18;
+      for (const candidate of labelCandidates) {
+        const labelWidth = ctx.measureText(candidate.label).width;
+        const left = candidate.x - labelWidth / 2;
+        const right = candidate.x + labelWidth / 2;
+        if (left < previousRight + labelGap) continue;
+
+        // Center the crisp vertical pointer tick between the top border and the
+        // timestamp text, leaving clean breathing space on both sides.
+        const tickX = Math.round(candidate.x) + 0.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.34)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(tickX, 3.2);
+        ctx.lineTo(tickX, 7.2);
+        ctx.stroke();
+
+        ctx.fillText(candidate.label, candidate.x, 14);
+        previousRight = right;
+      }
+      ctx.restore();
+    };
+
+    // Replace the chart library's heavier time-axis tick marks with fine hairlines.
+    const drawTimeScaleTicks = () => {
+      const canvas = timeTicksCanvasRef.current;
+      if (!canvas) return;
+
+      const width = host.clientWidth;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const canvasHeight = 5;
+      if (width <= 0) return;
+
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(canvasHeight * dpr);
+      canvas.style.width = String(width) + 'px';
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, canvasHeight);
+
+      const visibleRange = chart.timeScale().getVisibleLogicalRange();
+      if (!visibleRange || visibleRange.to <= visibleRange.from) return;
+
+      const plotRight = width - chart.priceScale('right').width();
+      ctx.strokeStyle = 'rgba(255,255,255,0.36)';
+      ctx.lineWidth = 0.85;
+      ctx.lineCap = 'butt';
+
+      // Five fine tick marks follow the visible time range while it scrolls.
+      for (let index = 0; index <= 4; index += 1) {
+        const logical =
+          visibleRange.from + ((visibleRange.to - visibleRange.from) * index) / 4;
+        const x = chart.timeScale().logicalToCoordinate(logical as never);
+        if (x === null || !Number.isFinite(x) || x < 0 || x > plotRight) continue;
+
+        ctx.beginPath();
+        ctx.moveTo(Math.round(x) + 0.5, 0.5);
+        ctx.lineTo(Math.round(x) + 0.5, 3.2);
+        ctx.stroke();
+      }
+    };
+
+    const handleLogicalRange = () => {
+      drawTimeScaleTicks();
+      drawTimeLabels();
+      // Scroll-range notifications can arrive after a programmatic update.
+      // User intent is tracked from the actual pointer/wheel gesture handlers
+      // below, so auto-follow never mistakes its own movement for a user drag.
+      if (isApplyingAutoScrollRef.current) return;
+      setIsPanned(isUserPannedRef.current);
+    };
+
+    const handleCrosshairMove = (
+      param: Parameters<Parameters<IChartApi['subscribeCrosshairMove']>[0]>[0],
+    ) => {
+      if (!param.point || param.time === undefined) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+      const activeSeries =
+        chartTypeRef.current === 'line'
+          ? lineSeriesRef.current
+          : candleSeriesRef.current;
+      if (!activeSeries) return;
+
+      const value = param.seriesData.get(activeSeries) as
+        | { value?: number; close?: number }
+        | undefined;
+      const hoveredPrice =
+        typeof value?.value === 'number'
+          ? value.value
+          : typeof value?.close === 'number'
+            ? value.close
+            : null;
+
+      if (hoveredPrice === null || !Number.isFinite(hoveredPrice)) {
+        onPriceHoverRef.current?.(null, null);
+        return;
+      }
+
+      const timeMs =
+        typeof param.time === 'number' ? param.time * 1000 : Date.now();
+      onPriceHoverRef.current?.(
+        hoveredPrice,
+        formatBucketTime(timeMs, timeframeRef.current),
+      );
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      isPointerInteractingRef.current = true;
+      pointerStartRef.current = { x: event.clientX, y: event.clientY };
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = isUserPannedRef.current;
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!isPointerInteractingRef.current || !pointerStartRef.current) return;
+      const dx = event.clientX - pointerStartRef.current.x;
+      const dy = event.clientY - pointerStartRef.current.y;
+      if (!pointerDraggedRef.current && Math.hypot(dx, dy) > 4) {
+        pointerDraggedRef.current = true;
+        isUserPannedRef.current = true;
+        setIsPanned(true);
+      }
+    };
+    const handlePointerUp = () => {
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      if (!pointerDraggedRef.current && !wasPannedBeforePointerRef.current) {
+        isUserPannedRef.current = false;
+      }
+      pointerDraggedRef.current = false;
+    };
+    const handleWheel = () => {
+      isUserPannedRef.current = true;
+      setIsPanned(true);
+    };
+
+    host.addEventListener('pointerdown', handlePointerDown, { passive: true });
+    host.addEventListener('pointermove', handlePointerMove, { passive: true });
+    host.addEventListener('pointerup', handlePointerUp, { passive: true });
+    host.addEventListener('pointercancel', handlePointerUp, { passive: true });
+    host.addEventListener('wheel', handleWheel, { passive: true });
+
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleLogicalRange);
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+    drawTimeScaleTicks();
+    drawTimeLabels();
+
+    const tickResizeObserver = new ResizeObserver(() => {
+      window.requestAnimationFrame(() => {
+        drawTimeScaleTicks();
+        drawTimeLabels();
+      });
+    });
+    tickResizeObserver.observe(host);
+
+    // Unified 60fps animation loop:
+    // 1. Velocity-adaptive price smoothing (moves fast on spikes, gently on small ticks)
+    // 2. Continuous backward scrolling at exact 1 bar / stepMs timing (no stop-and-go)
+    // 3. Smooth continuous Y-axis scale easing (no shrink-stop-shrink-stop)
+    let rafId: number | null = null;
+    let prevPerfNow = performance.now();
+
+    const animateFrame = (nowPerf: number) => {
+      const dt = Math.min(0.05, Math.max(0.001, (nowPerf - prevPerfNow) / 1000));
+      prevPerfNow = nowPerf;
+
+      if (
+        typeof document === 'undefined' ||
+        document.visibilityState !== 'hidden'
+      ) {
+        // 1. Smoothly track latest target price & live movement direction
+        const targetP = rawTargetPriceRef.current;
+        if (targetP > 0 && Number.isFinite(targetP)) {
+          if (directionAnchorPriceRef.current <= 0) {
+            directionAnchorPriceRef.current = targetP;
+          } else {
+            const anchorDelta = targetP - directionAnchorPriceRef.current;
+            const eps = directionAnchorPriceRef.current * 0.0008;
+            if (anchorDelta > eps) {
+              trendDirectionRef.current = 'up';
+              directionAnchorPriceRef.current = targetP;
+            } else if (anchorDelta < -eps) {
+              trendDirectionRef.current = 'down';
+              directionAnchorPriceRef.current = targetP;
+            }
+          }
+
+          const curP = smoothedPriceRef.current;
+          if (!(curP > 0 && Number.isFinite(curP))) {
+            smoothedPriceRef.current = targetP;
+          } else {
+            if (targetP > curP * 1.0008) {
+              trendDirectionRef.current = 'up';
+            } else if (targetP < curP * 0.9992) {
+              trendDirectionRef.current = 'down';
+            }
+            const diff = targetP - curP;
+            const priceRate = 9.5;
+            const blend = 1 - Math.exp(-priceRate * dt);
+            smoothedPriceRef.current =
+              Math.abs(diff) <= targetP * 1e-7 ? targetP : curP + diff * blend;
+          }
+        }
+
+        const displayP =
+          smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
+
+        // 2. Keep the viewport pinned to the newest actual data point.
+        // Do not synthesize clock-driven bars or scroll through elapsed time.
+        const committed = committedBarsRef.current;
+        let committedNewBar = false;
+        if (chartTypeRef.current === 'line' && committed.length > 0 && displayP > 0) {
+          const last = committed[committed.length - 1];
+          // A quote may smoothly update the live tip, but it stays on the
+          // current real data timestamp. A new horizontal bar is created
+          // only when an actual market-data tick adds a newer bucket.
+          last.close = displayP;
+          last.high = Math.max(last.high, displayP);
+          last.low = Math.min(last.low, displayP);
+          lineSeries.update({ time: last.time, value: displayP });
+          subBarFractionRef.current = 0;
+
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
+          subBarFractionRef.current = 0;
+          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            isApplyingAutoScrollRef.current = true;
+            try {
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            isAutoPositioningRef.current = false;
+          }
+        }
+        // 3. Smooth Y-axis scale easing without sudden step jumps
+        if (latestVisibleBoundsRef.current) {
+          const nextTarget = computeTargetYRange(
+            latestVisibleBoundsRef.current.min,
+            latestVisibleBoundsRef.current.max,
+            timeframeRef.current,
+          );
+          targetYRangeRef.current = nextTarget;
+
+          if (!animYRangeRef.current) {
+            animYRangeRef.current = { ...nextTarget };
+          } else {
+            const anim = animYRangeRef.current;
+            const scaleRate = 5.5;
+            const scaleBlend = 1 - Math.exp(-scaleRate * dt);
+            const prevMin = anim.minValue;
+            const prevMax = anim.maxValue;
+
+            anim.minValue += (nextTarget.minValue - anim.minValue) * scaleBlend;
+            anim.maxValue += (nextTarget.maxValue - anim.maxValue) * scaleBlend;
+
+            // Keep live dot cleanly inside visible band even on huge rapid spikes,
+            // allowing downward moves to reach right down to the bottom boundary first.
+            if (displayP > 0 && Number.isFinite(displayP)) {
+              const curSpan = Math.max(1e-10, anim.maxValue - anim.minValue);
+              if (displayP > anim.maxValue - curSpan * 0.06) {
+                anim.maxValue = displayP + curSpan * 0.06;
+              }
+              if (displayP < anim.minValue + curSpan * 0.018) {
+                anim.minValue = Math.max(0, displayP - curSpan * 0.018);
+              }
+            }
+
+            const span = Math.max(1e-10, anim.maxValue - anim.minValue);
+            const scaleChanged =
+              Math.abs(anim.minValue - prevMin) / span > 1e-4 ||
+              Math.abs(anim.maxValue - prevMax) / span > 1e-4;
+
+            if (scaleChanged && !committedNewBar && committed.length > 0) {
+              const lastBar = committed[committed.length - 1];
+              if (chartTypeRef.current === 'line') {
+                lineSeries.update({ time: lastBar.time, value: lastBar.close });
+              } else {
+                candleSeries.update({
+                  time: lastBar.time,
+                  open: lastBar.open,
+                  high: lastBar.high,
+                  low: lastBar.low,
+                  close: lastBar.close,
+                });
+              }
+            }
+          }
+        }
+
+        // Keep custom timestamps locked to the same 60fps horizontal motion.
+        drawTimeLabels();
+
+        // Keep halo & live tail synced at 60fps
+        if (chartTypeRef.current === 'line') {
+          lineTipPrimitive.requestRedraw();
+        } else {
+          candleTipPrimitive.requestRedraw();
+        }
+      }
+
+      rafId = window.requestAnimationFrame(animateFrame);
+    };
+
+    rafId = window.requestAnimationFrame(animateFrame);
+
+    let disposed = false;
+    document.fonts?.ready?.then(() => {
+      if (!disposed) {
+        chart.applyOptions({ layout: { fontFamily: axisFontFamily } });
+      }
+    });
+
+    return () => {
+      disposed = true;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      tickResizeObserver.disconnect();
+      host.removeEventListener('pointerdown', handlePointerDown);
+      host.removeEventListener('pointermove', handlePointerMove);
+      host.removeEventListener('pointerup', handlePointerUp);
+      host.removeEventListener('pointercancel', handlePointerUp);
+      host.removeEventListener('wheel', handleWheel);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleLogicalRange);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      lineSeries.detachPrimitive(lineTipPrimitive);
+      candleSeries.detachPrimitive(candleTipPrimitive);
+      lineTipPrimitiveRef.current = null;
+      candleTipPrimitiveRef.current = null;
+      entryPriceLineRef.current = null;
+      lineSeriesRef.current = null;
+      candleSeriesRef.current = null;
+      chartRef.current = null;
+      prevSeedMetaRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      latestVisibleBoundsRef.current = null;
+      chart.remove();
+    };
+  }, [computeTargetYRange, height, syncBadgeDom]);
+
+  // Reset user pan state and re-enable autoScale when timeframe or chart mode switches.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    isUserPannedRef.current = false;
+    lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+    setIsPanned(false);
+    // Reset old interval bounds so the next interval cannot inherit its scale.
+    latestVisibleBoundsRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    chart.applyOptions({
+      timeScale: {
+        secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
+      },
+    });
+    chart.priceScale('right').applyOptions({ autoScale: true });
+  }, [timeframe, chartType]);
+
+  // Keep line/candle colors, area refraction gradient & active series visibility synced.
+  useEffect(() => {
+    const lineColor = isPositive ? CHART_THEME.upColor : CHART_THEME.downColor;
+    const topColor = isPositive ? CHART_THEME.upTopColor : CHART_THEME.downTopColor;
+    const bottomColor = isPositive ? CHART_THEME.upBottomColor : CHART_THEME.downBottomColor;
+    lineSeriesRef.current?.applyOptions({
+      lineColor,
+      topColor,
+      bottomColor,
+      crosshairMarkerBorderColor: lineColor,
+      visible: chartType === 'line',
+    });
+    candleSeriesRef.current?.applyOptions({
+      visible: chartType === 'candle',
+    });
+  }, [isPositive, chartType]);
+
+  // Sync incoming prices & handle initial seeding / timeframe switches cleanly.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const lineSeries = lineSeriesRef.current;
+    const candleSeries = candleSeriesRef.current;
+    if (!chart || !lineSeries || !candleSeries) return;
+
+    if (Number.isFinite(currentPrice) && currentPrice > 0) {
+      rawTargetPriceRef.current = currentPrice;
+    }
+
+    const firstTime = seedBars[0]?.time ?? 0;
+    const seedKey = `${timeframe}:${chartType}:${resolutionMode}`;
+    const prev = prevSeedMetaRef.current;
+
+    const firstTimeMovedUnexpectedly =
+      prev !== null &&
+      prev.firstTime !== firstTime &&
+      (firstTime < prev.firstTime || seedBars.length < 2000);
+
+    const needsFullReseed =
+      prev === null ||
+      prev.key !== seedKey ||
+      firstTimeMovedUnexpectedly ||
+      Math.abs(seedBars.length - prev.length) > 4;
+
+    if (needsFullReseed) {
+      const cloned = seedBars.map((bar) => ({ ...bar }));
+      // Snap the new interval to its own bounds; never ease from the previous scale.
+      latestVisibleBoundsRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      committedBarsRef.current = cloned;
+      isUserPannedRef.current = false;
+      isPointerInteractingRef.current = false;
+      pointerStartRef.current = null;
+      pointerDraggedRef.current = false;
+      wasPannedBeforePointerRef.current = false;
+      setIsPanned(false);
+
+      const lineData: AreaData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        value: bar.close,
+      }));
+      const candleData: CandlestickData<UTCTimestamp>[] = cloned.map((bar) => ({
+        time: bar.time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+      }));
+
+      isApplyingAutoScrollRef.current = true;
+      try {
+        lineSeries.setData(lineData);
+        candleSeries.setData(candleData);
+
+        if (cloned.length > 0) {
+          const lastBar = cloned[cloned.length - 1];
+          if (!(smoothedPriceRef.current > 0)) {
+            smoothedPriceRef.current =
+              currentPrice > 0 ? currentPrice : lastBar.close;
+          }
+          const activeStepMs = Math.max(1_000, stepMsRef.current);
+          subBarFractionRef.current =
+            chartType === 'line'
+              ? Math.max(0, Math.min(0.9999, (Date.now() - lastBar.timestampMs) / activeStepMs))
+              : 0;
+
+          isUserPannedRef.current = false;
+          const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
+          lastAppliedScrollPosRef.current = pos;
+          isAutoPositioningRef.current = true;
+          chart.timeScale().scrollToPosition(pos, false);
+          setIsPanned(false);
+        }
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+
+      prevSeedMetaRef.current =
+        seedBars.length > 0
+          ? { key: seedKey, firstTime, length: seedBars.length }
+          : null;
+      return;
+    }
+
+    // Apply new local OHLC buckets to both chart modes. The horizontal
+    // timeline advances only when actual data adds a newer bucket.
+    if (seedBars.length > 0) {
+      const committed = committedBarsRef.current;
+      const latest = seedBars[seedBars.length - 1];
+      const lastCommitted = committed[committed.length - 1];
+      const committedByTime = new Map(committed.map((bar) => [bar.time, bar]));
+      const incomingTimes = new Set(seedBars.map((bar) => bar.time));
+      const hasHistoricalCorrection =
+        seedBars.some((bar) => {
+          const previous = committedByTime.get(bar.time);
+          return (!previous && bar.time < latest.time) || (
+            previous !== undefined &&
+            bar.time < latest.time &&
+            (bar.open !== previous.open || bar.high !== previous.high ||
+              bar.low !== previous.low || bar.close !== previous.close)
+          );
+        }) ||
+        committed.some((bar) => !incomingTimes.has(bar.time));
+
+      if (hasHistoricalCorrection) {
+        // A delayed trade may correct a candle behind the active bucket.
+        // Rebuild the ordered history rather than trying to append that older
+        // timestamp through Lightweight Charts' incremental update API.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      } else if (!lastCommitted || latest.time > lastCommitted.time) {
+        const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
+        for (const bar of nextBars) {
+          const nextCandle = { ...bar };
+          committed.push(nextCandle);
+          lineSeries.update({ time: nextCandle.time, value: nextCandle.close });
+          candleSeries.update({
+            time: nextCandle.time,
+            open: nextCandle.open,
+            high: nextCandle.high,
+            low: nextCandle.low,
+            close: nextCandle.close,
+          });
+        }
+        if (committed.length > 2000) {
+          committed.splice(0, committed.length - 2000);
+        }
+        if (!isUserPannedRef.current) {
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else if (latest.time === lastCommitted.time) {
+        const changed =
+          latest.open !== lastCommitted.open ||
+          latest.high !== lastCommitted.high ||
+          latest.low !== lastCommitted.low ||
+          latest.close !== lastCommitted.close;
+        if (changed) {
+          const updated = { ...latest };
+          committed[committed.length - 1] = updated;
+          isApplyingAutoScrollRef.current = true;
+          try {
+            lineSeries.update({ time: updated.time, value: updated.close });
+            candleSeries.update({
+              time: updated.time,
+              open: updated.open,
+              high: updated.high,
+              low: updated.low,
+              close: updated.close,
+            });
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+      } else {
+        // A corrected/rewound history window cannot be appended incrementally.
+        // Re-seed both series in chronological order and return the viewport
+        // to the latest candle rather than drawing backward.
+        const corrected = seedBars.map((bar) => ({ ...bar }));
+        committedBarsRef.current = corrected;
+        isApplyingAutoScrollRef.current = true;
+        try {
+          lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
+          candleSeries.setData(corrected.map((bar) => ({
+            time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+          })));
+          if (!isUserPannedRef.current) {
+            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+          }
+        } finally {
+          isApplyingAutoScrollRef.current = false;
+        }
+      }
+    }
+
+    prevSeedMetaRef.current = {
+      key: seedKey,
+      firstTime,
+      length: seedBars.length,
+    };
+  }, [seedBars, resolutionMode, timeframe, chartType, currentPrice]);
+
+  // Render optional entry price line on the active series.
+  useEffect(() => {
+    const activeSeries =
+      chartType === 'line' ? lineSeriesRef.current : candleSeriesRef.current;
+    if (!activeSeries) return;
+
+    if (entryPriceLineRef.current) {
+      try {
+        lineSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      try {
+        candleSeriesRef.current?.removePriceLine(entryPriceLineRef.current);
+      } catch {
+        // ignore if already removed from other series
+      }
+      entryPriceLineRef.current = null;
+    }
+
+    if (entryPrice != null && Number.isFinite(entryPrice) && entryPrice > 0) {
+      entryPriceLineRef.current = activeSeries.createPriceLine({
+        price: entryPrice,
+        color: CHART_THEME.entryLineColor,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'ENTRY',
+      });
+    }
+  }, [entryPrice, chartType]);
+
+  const resetView = () => {
+    const chart = chartRef.current;
+    const targetPos =
+      BASE_RIGHT_OFFSET +
+      (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
+
+    isUserPannedRef.current = false;
+    isPointerInteractingRef.current = false;
+    pointerStartRef.current = null;
+    pointerDraggedRef.current = false;
+    wasPannedBeforePointerRef.current = false;
+    isAutoPositioningRef.current = false;
+    lastAppliedScrollPosRef.current = targetPos;
+
+    if (chart) {
+      chart.priceScale('right').applyOptions({ autoScale: true });
+      // Snap to the exact live position in one action; the animation loop
+      // then maintains that position without requiring repeated button taps.
+      isApplyingAutoScrollRef.current = true;
+      try {
+        chart.timeScale().scrollToPosition(targetPos, false);
+      } finally {
+        isApplyingAutoScrollRef.current = false;
+      }
+    }
+
+    setIsPanned(false);
+    onPriceHover?.(null, null);
+  };
+
+  const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ height, touchAction: 'pan-y' }}
+      className="relative w-full min-w-0 max-w-full select-none overflow-hidden bg-[#000000]"
+      onDoubleClick={resetView}
+    >
+      {/* Layer 1: Pure black + small, tight, subtle fading dot-matrix grid */}
+      <canvas
+        ref={dotCanvasRef}
+        style={{ width: '100%', height }}
+        className="pointer-events-none absolute inset-0 block max-w-full"
+      />
+
+      {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-20"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
+      <div
+        ref={tvContainerRef}
+        style={{
+          position: 'absolute',
+          top: 34,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100%',
+          height: 'calc(100% - 34px)',
+          // Fade the chart itself into view over the first ~12% of its width.
+          // This is a real alpha mask, not a dark overlay or rectangular brush.
+          maskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
+        }}
+        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
+          with chart coordinates so they emerge continuously from the right. */}
+      <canvas
+        ref={timeLabelsCanvasRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 left-0 z-[4] block h-[26px] w-full"
+      />
+      {/* Layer 2.5: Soft smoke-like edge brushes. Darkest only at the outer
+          upper/lower corners, feathering gently inward without a hard dark band. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[34px] bottom-[26px] z-[4] overflow-hidden"
+      >
+        <div
+          className="absolute inset-y-0 right-0 w-[88px]"
+          style={{
+            background:
+              'radial-gradient(ellipse 100% 58% at 100% 0%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%), radial-gradient(ellipse 100% 58% at 100% 100%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.052) 42%, rgba(0,0,0,0) 82%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 2.55: Short fade at the plot/time-axis boundary. New timestamps
+          emerge from the right edge instead of popping into view; price labels stay clear. */}
+      <div
+        ref={timeFadeOverlayRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-0 right-[54px] z-[5] h-[26px] w-[30px]"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.52) 48%, #000000 100%)',
+        }}
+      />
+      <div
+        ref={timeTickCapRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-[25px] right-[54px] z-[6] h-px w-[8px]"
+        style={{
+          background: 'linear-gradient(to left, rgba(255,255,255,0.25), rgba(255,255,255,0))',
+        }}
+      />
+
+      {/* Layer 2.6: Very light top-edge seam blend. */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[2] overflow-hidden">
+        <div
+          className="absolute inset-x-0 top-0 h-10"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.045) 0%, rgba(0,0,0,0.025) 55%, rgba(0,0,0,0) 100%)',
+          }}
+        />
+      </div>
+
+      {/* Layer 3: Right-axis live-price pill card with clean crisp typography */}
+      <div className="pointer-events-none absolute inset-x-0 top-[34px] bottom-0 z-[3] overflow-hidden">
+        <div
+          ref={badgeRef}
+          style={{
+            right: CHART_THEME.liveBadge.rightInset,
+            top: 0,
+            opacity: 0,
+            backgroundColor: badgeBg,
+            color: CHART_THEME.liveBadge.textColor,
+            fontFamily: "'Barlow', -apple-system, BlinkMacSystemFont, sans-serif",
+          }}
+          className="absolute flex items-center justify-center whitespace-nowrap rounded-[7px] px-1.5 text-[12.5px] font-semibold tabular-nums leading-none shadow-[0_2px_8px_rgba(0,0,0,0.42)]"
+        />
+      </div>
+
+      {/* Empty state */}
+      {seedBars.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center font-mono text-[11px] text-white/40">
+          Chart data unavailable
+        </div>
+      )}
+
+      {/* Compact return-to-live card; only shown while the user is browsing history. */}
+      {isPanned && (
+        <button
+          type="button"
+          onClick={resetView}
+          className="absolute bottom-7 right-[66px] z-[5] inline-flex h-[27px] items-center gap-1.5 rounded-[5px] border border-[#4BCB79]/55 bg-gradient-to-r from-[#10251A]/95 via-[#0B1B13]/95 to-[#101A14]/95 px-2.5 text-[10px] font-medium tracking-[0.01em] text-[#B9F2CD] shadow-[0_2px_10px_rgba(30,180,91,0.10)] transition-colors hover:border-[#65E895]/75 hover:text-white active:scale-[0.98]"
+        >
+          <ChevronsRight className="h-[13px] w-[13px] shrink-0 text-[#70E99A]" strokeWidth={2.1} />
+          <span className="whitespace-nowrap">Go back to live</span>
+        </button>
+      )}
+    </div>
+  );
+};
+ + price.toLocaleString(undefined, { maximumFractionDigits: 2 });
 };
 
 const formatMarketCap = (value: number): string => {
