@@ -110,6 +110,7 @@ export const TokenDetailPage: React.FC = () => {
   const nextFloatingAnimationAtRef = useRef(0);
   const processedActivityIdsRef = useRef<Set<string>>(new Set());
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
+  const [liveChartTicks, setLiveChartTicks] = useState<Array<{ timestamp_ms: number; value: number; volume: number; source: 'price' | 'marketCap' }>>([]);
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -141,6 +142,7 @@ export const TokenDetailPage: React.FC = () => {
   useEffect(() => {
     setMarketDataSnapshot(null);
     setChartSeriesByTimeframe({});
+    setLiveChartTicks([]);
     setFloatingAmounts([]);
     nextFloatingAnimationAtRef.current = 0;
     processedActivityIdsRef.current.clear();
@@ -375,6 +377,10 @@ export const TokenDetailPage: React.FC = () => {
                 const eventIndex = Number(data.event_index ?? 0);
                 const activityId = signature ? `${signature}:${eventIndex}` : `${event.topic}:${event.sequence ?? data.timestamp_ms ?? ''}`;
                 if (event.event === 'trade_update' && (side === 'buy' || side === 'sell')) {
+                  const tradePrice = Number(data.price_usd);
+                  if (Number.isFinite(tradePrice) && tradePrice > 0) {
+                    setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: tradePrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' }].slice(-1000));
+                  }
                   const liveTrade = {
                     signature,
                     event_index: eventIndex,
@@ -395,6 +401,10 @@ export const TokenDetailPage: React.FC = () => {
                   markSection('trades', true);
                 }
                 if (event.event === 'activity_update' && (side === 'buy' || side === 'sell') && !processedActivityIdsRef.current.has(activityId)) {
+                  const activityPrice = Number(data.price_usd);
+                  if (Number.isFinite(activityPrice) && activityPrice > 0) {
+                    setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: activityPrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' }].slice(-1000));
+                  }
                   processedActivityIdsRef.current.add(activityId);
                   if (processedActivityIdsRef.current.size > 2000) {
                     const recentIds = Array.from(processedActivityIdsRef.current).slice(-1000);
@@ -420,6 +430,10 @@ export const TokenDetailPage: React.FC = () => {
                 return;
               }
               if (event.event === 'market_update' && event.topic === 'token.market') {
+                const tokenPrice = Number(data.price_usd);
+                if (Number.isFinite(tokenPrice) && tokenPrice > 0) {
+                  setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: tokenPrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' }].slice(-1000));
+                }
                 setMarketDataSnapshot((previous) => {
                   const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
                   return {
@@ -516,6 +530,7 @@ export const TokenDetailPage: React.FC = () => {
           if (Number.isFinite(solUsd) && solUsd > 0) marketCap = marketCapSol * solUsd;
         }
         if (marketCap != null) {
+          setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: marketCap, volume: 0, source: 'marketCap' }].slice(-1000));
           setMarketDataSnapshot((previous) => {
             const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
             return { ...base, market: { ...base.market, market_cap_usd: marketCap } };
@@ -556,12 +571,37 @@ export const TokenDetailPage: React.FC = () => {
       : []);
 
   const locallyAggregatedPoints = (() => {
-    const merged = new Map<number, TokenChartPoint>(
-      historicalChartPoints.map((point) => [point.timestamp_ms, point])
-    );
-    return [...merged.values()]
-      .sort((a, b) => a.timestamp_ms - b.timestamp_ms)
-      .slice(-5000);
+    const intervalMs: Record<string, number> = { '1S': 1_000, '5S': 5_000, '10S': 10_000, '1M': 60_000, '5M': 300_000, '15M': 900_000, '30M': 1_800_000, '1H': 3_600_000, '24H': 86_400_000 };
+    const bucketSize = intervalMs[timeframe] || 300_000;
+    const hasHistoricalPrice = historicalChartPoints.length > 0;
+    const hasLivePrice = liveChartTicks.some((tick) => tick.source === 'price');
+    // Never mix token-price candles with market-cap values. Use market cap only
+    // when the provider has supplied no token-price history or live price ticks.
+    const selectedSource: 'price' | 'marketCap' = hasHistoricalPrice || hasLivePrice ? 'price' : 'marketCap';
+    const merged = new Map<number, TokenChartPoint>(historicalChartPoints.map((point) => [point.timestamp_ms, { ...point }]));
+    const ticks = liveChartTicks.filter((tick) => tick.source === selectedSource && Number.isFinite(tick.value) && tick.value > 0).slice().sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+    for (const tick of ticks) {
+      const bucketTime = Math.floor(tick.timestamp_ms / bucketSize) * bucketSize;
+      const existing = merged.get(bucketTime);
+      if (existing) {
+        existing.high = Math.max(existing.high, tick.value);
+        existing.low = Math.min(existing.low, tick.value);
+        existing.close = tick.value;
+        existing.volume += tick.volume;
+        continue;
+      }
+      const orderedSoFar = [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+      const latest = orderedSoFar[orderedSoFar.length - 1];
+      if (latest && bucketTime < latest.timestamp_ms) continue;
+      const open = latest ? latest.close : tick.value;
+      merged.set(bucketTime, { timestamp_ms: bucketTime, open, high: Math.max(open, tick.value), low: Math.min(open, tick.value), close: tick.value, volume: tick.volume });
+    }
+    let ordered = [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000);
+    if (!hasHistoricalPrice && ordered.length === 1) {
+      const point = ordered[0];
+      ordered = [{ ...point, timestamp_ms: point.timestamp_ms - bucketSize }, point];
+    }
+    return ordered;
   })();
   const chartHistory: import('../../types').PricePoint[] = locallyAggregatedPoints.map((point) => ({
     time: Number(point.timestamp_ms),
@@ -578,7 +618,7 @@ export const TokenDetailPage: React.FC = () => {
   const tokenLogoUrl = marketDataSnapshot?.identity?.logo_url || activeToken.logo_url;
   const creatorAddress = marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address || activeToken.creator_wallet || '';
   // Chart price is the last confirmed swap, never an account/market-cap quote.
-  const liveTokenPrice = Number(lastChartPoint?.close ?? 0);
+  const liveTokenPrice = Number(lastChartPoint?.close ?? (liveChartTicks.length ? liveChartTicks[liveChartTicks.length - 1].value : 0));
   const marketCap = marketDataSnapshot?.market?.market_cap_usd ?? null;
   const marketChangePct = marketDataSnapshot?.market?.change_24h_pct ?? null;
   const isPositive = (marketChangePct ?? 0) >= 0;
