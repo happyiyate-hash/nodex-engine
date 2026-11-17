@@ -1855,6 +1855,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           committed.splice(0, committed.length - 2000);
         }
         if (!isUserPannedRef.current) {
+          const pos =
+            BASE_RIGHT_OFFSET + (chartType === 'line' ? subBarFractionRef.current : 0);
           isApplyingAutoScrollRef.current = true;
           try {
             lastAppliedScrollPosRef.current = pos;
@@ -1901,6 +1903,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           })));
           if (!isUserPannedRef.current) {
             chart.timeScale().scrollToPosition(
+              BASE_RIGHT_OFFSET + (chartType === 'line' ? subBarFractionRef.current : 0),
               false,
             );
           }
