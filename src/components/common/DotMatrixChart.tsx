@@ -1495,6 +1495,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           const elapsedMs = Math.max(0, Date.now() - last.timestampMs);
           const fraction = Math.max(0, Math.min(0.9999, elapsedMs / activeStepMs));
           subBarFractionRef.current = fraction;
+          // Keep the line's live dot anchored while its history glides left.
+          // Candles hold the newest candle in one fixed slot between real bars.
+          const scrollPosition =
+            BASE_RIGHT_OFFSET + (chartTypeRef.current === 'line' ? fraction : 0);
 
           if (chartTypeRef.current === 'line' && displayP > 0) {
             // Quote interpolation changes only the live line tip, not the
