@@ -618,12 +618,43 @@ export const TokenDetailPage: React.FC = () => {
     const selectedSource: 'price' | 'marketCap' = useMarketCap ? 'marketCap' : 'price';
     const lastHistoricalPrice = historicalChartPoints.length ? historicalChartPoints[historicalChartPoints.length - 1].close : 0;
     const marketCapScale = useMarketCap && lastHistoricalPrice > 0 ? activeMarketCap / lastHistoricalPrice : 1;
-    const baselinePoints = historicalChartPoints.map((point) => {
-      if (marketCapScale === 1) return { ...point };
-      return { ...point, open: point.open * marketCapScale, high: point.high * marketCapScale, low: point.low * marketCapScale, close: point.close * marketCapScale };
-    });
-    const merged = new Map<number, TokenChartPoint>(baselinePoints.map((point) => [point.timestamp_ms, point]));
-    const ticks = liveChartTicks.filter((tick) => tick.source === selectedSource && Number.isFinite(tick.value) && tick.value > 0).slice().sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+    // Re-bucket the complete cached baseline at the selected timeframe first.
+    // Keeping raw 1-second points beside 1-minute live buckets causes new ticks
+    // to look older than the final baseline point and get discarded.
+    const merged = new Map<number, TokenChartPoint>();
+    const baselinePoints = historicalChartPoints
+      .slice()
+      .sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+    for (const point of baselinePoints) {
+      const bucketTime = Math.floor(point.timestamp_ms / bucketSize) * bucketSize;
+      const scale = marketCapScale;
+      const open = point.open * scale;
+      const high = point.high * scale;
+      const low = point.low * scale;
+      const close = point.close * scale;
+      const existing = merged.get(bucketTime);
+      if (!existing) {
+        merged.set(bucketTime, {
+          timestamp_ms: bucketTime,
+          open,
+          high: Math.max(open, high, close),
+          low: Math.min(open, low, close),
+          close,
+          volume: Number(point.volume || 0),
+        });
+      } else {
+        existing.high = Math.max(existing.high, high, close);
+        existing.low = Math.min(existing.low, low, close);
+        existing.close = close;
+        existing.volume += Number(point.volume || 0);
+      }
+    }
+
+    const ticks = liveChartTicks
+      .filter((tick) => tick.source === selectedSource && Number.isFinite(tick.value) && tick.value > 0)
+      .slice()
+      .sort((a, b) => a.timestamp_ms - b.timestamp_ms);
+    let latestBucketTime = Math.max(...merged.keys(), Number.NEGATIVE_INFINITY);
     for (const tick of ticks) {
       const bucketTime = Math.floor(tick.timestamp_ms / bucketSize) * bucketSize;
       const existing = merged.get(bucketTime);
@@ -634,11 +665,18 @@ export const TokenDetailPage: React.FC = () => {
         existing.volume += tick.volume;
         continue;
       }
-      const orderedSoFar = [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms);
-      const latest = orderedSoFar[orderedSoFar.length - 1];
-      if (latest && bucketTime < latest.timestamp_ms) continue;
+      if (bucketTime < latestBucketTime) continue;
+      const latest = merged.get(latestBucketTime);
       const open = latest ? latest.close : tick.value;
-      merged.set(bucketTime, { timestamp_ms: bucketTime, open, high: Math.max(open, tick.value), low: Math.min(open, tick.value), close: tick.value, volume: tick.volume });
+      merged.set(bucketTime, {
+        timestamp_ms: bucketTime,
+        open,
+        high: Math.max(open, tick.value),
+        low: Math.min(open, tick.value),
+        close: tick.value,
+        volume: tick.volume,
+      });
+      latestBucketTime = bucketTime;
     }
     let ordered = [...merged.values()].sort((a, b) => a.timestamp_ms - b.timestamp_ms).slice(-5000);
     if (!hasHistoricalPrice && ordered.length === 1) {
