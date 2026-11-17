@@ -44,6 +44,7 @@ interface DotMatrixChartProps {
   chartType?: 'line' | 'candle';
   onPriceHover?: (price: number | null, time: string | null) => void;
   height?: number;
+  floatingTrades?: Array<{ id: number; label: string; side: 'buy' | 'sell'; lane: number }>;
 }
 
 type CanvasTarget = Parameters<IPrimitivePaneRenderer['draw']>[0];
@@ -653,6 +654,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   chartType = 'line',
   onPriceHover,
   height = 272,
+  floatingTrades = [],
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const dotCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -914,6 +916,22 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     [],
   );
 
+  // Keep the Y-axis range stable: only retarget when the data range approaches
+  // or crosses the current viewport boundary, not on every small trade update.
+  const updateStableYTarget = useCallback((rawMin: number, rawMax: number, tf: string) => {
+    const current = targetYRangeRef.current ?? animYRangeRef.current;
+    const computed = computeTargetYRange(rawMin, rawMax, tf);
+    if (!current) {
+      targetYRangeRef.current = computed;
+      return computed;
+    }
+    const span = Math.max(1e-10, current.maxValue - current.minValue);
+    const edgeBuffer = span * 0.10;
+    const approachingBoundary = rawMin <= current.minValue + edgeBuffer || rawMax >= current.maxValue - edgeBuffer;
+    if (approachingBoundary) targetYRangeRef.current = computed;
+    return targetYRangeRef.current ?? current;
+  }, [computeTargetYRange]);
+
   // Draw the pure-black + fading dot-matrix background canvas behind TradingView.
   const drawDotBackground = useCallback(() => {
     const canvas = dotCanvasRef.current;
@@ -1149,8 +1167,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return res;
 
       latestVisibleBoundsRef.current = { min: rawMin, max: rawMax };
-      const computedTarget = computeTargetYRange(rawMin, rawMax, timeframeRef.current);
-      targetYRangeRef.current = computedTarget;
+      updateStableYTarget(rawMin, rawMax, timeframeRef.current);
 
       if (!animYRangeRef.current) {
         animYRangeRef.current = { ...computedTarget };
@@ -1652,12 +1669,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
         // 3. Smooth Y-axis scale easing without sudden step jumps
         if (latestVisibleBoundsRef.current) {
-          const nextTarget = computeTargetYRange(
+          const nextTarget = updateStableYTarget(
             latestVisibleBoundsRef.current.min,
             latestVisibleBoundsRef.current.max,
             timeframeRef.current,
           );
-          targetYRangeRef.current = nextTarget;
 
           if (!animYRangeRef.current) {
             animYRangeRef.current = { ...nextTarget };
@@ -1675,10 +1691,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             // allowing downward moves to reach right down to the bottom boundary first.
             if (displayP > 0 && Number.isFinite(displayP)) {
               const curSpan = Math.max(1e-10, anim.maxValue - anim.minValue);
-              if (displayP > anim.maxValue - curSpan * 0.06) {
+              if (displayP > anim.maxValue) {
                 anim.maxValue = displayP + curSpan * 0.06;
               }
-              if (displayP < anim.minValue + curSpan * 0.018) {
+              if (displayP < anim.minValue) {
                 anim.minValue = Math.max(0, displayP - curSpan * 0.018);
               }
             }
@@ -1755,7 +1771,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       latestVisibleBoundsRef.current = null;
       chart.remove();
     };
-  }, [computeTargetYRange, height, syncBadgeDom]);
+  }, [updateStableYTarget, height, syncBadgeDom]);
 
   // Reset user pan state and re-enable autoScale when timeframe or chart mode switches.
   useEffect(() => {
@@ -2002,6 +2018,42 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="pointer-events-none absolute inset-0 block max-w-full"
       />
 
+      {/* Layer 1.25: Live trade amounts sit beneath the chart canvas so the price line
+          and candles always remain visually dominant. */}
+      {floatingTrades.length > 0 && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+          <div
+            className="absolute inset-y-0 left-0 w-1/4"
+            style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0.12) 42%, rgba(0,0,0,0.48) 76%, #000000 100%)' }}
+          />
+          <div
+            className="absolute inset-0 overflow-hidden"
+            style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 24%, black 76%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 24%, black 76%, transparent 100%)' }}
+          >
+            <style>{`
+              @keyframes nodex-money-flow { 0% { transform: translate3d(0,0,0); opacity: 0; } 10% { opacity: .92; } 76% { opacity: .78; } 100% { transform: translate3d(0,-286px,0); opacity: 0; } }
+              @keyframes nodex-money-flow-sell { 0% { transform: translate3d(0,0,0); opacity: 0; } 10%,76% { opacity: 1; } 100% { transform: translate3d(0,-286px,0); opacity: 0; } }
+            `}</style>
+            {floatingTrades.map((trade) => (
+              <span
+                key={trade.id}
+                className={`absolute whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${trade.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'}`}
+                style={{
+                  left: '10px',
+                  bottom: `${20 + trade.lane * 22}px`,
+                  animation: trade.side === 'buy' ? 'nodex-money-flow 3.4s linear forwards' : 'nodex-money-flow-sell 3.4s linear forwards',
+                }}
+              >
+                <span className="inline-flex items-center gap-[6px]">
+                  <span aria-hidden="true" className="text-[11px] font-bold leading-none">{trade.side === 'buy' ? '▲' : '▼'}</span>
+                  {trade.label}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
@@ -2038,7 +2090,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           WebkitMaskImage:
             'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
         }}
-        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
+        className="z-[2] w-full min-w-0 max-w-full overflow-hidden"
       />
       {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
           with chart coordinates so they emerge continuously from the right. */}
@@ -2108,10 +2160,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         />
       </div>
 
-      {/* Empty state */}
+      {/* Neutral no-market-event state: a flat guide, not fabricated price history. */}
       {seedBars.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center font-mono text-[11px] text-white/40">
-          Chart data unavailable
+        <div aria-label="No market event yet" className="pointer-events-none absolute inset-0 z-[4]">
+          <div className="absolute left-3 right-[58px] top-[66%] h-px bg-gradient-to-r from-white/[0.02] via-white/[0.13] to-white/[0.04]" />
         </div>
       )}
 
