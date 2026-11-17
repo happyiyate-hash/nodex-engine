@@ -2028,6 +2028,16 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             className="absolute inset-0 overflow-hidden"
             style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)' }}
           >
+            {/* Brush 2: independent, lighter treatment for the moving amounts.
+                A soft top-left fade and a short, narrow mid-left feather keep the
+                arrows readable without laying a dark strip over the chart. */}
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0 w-[112px]"
+              style={{
+                background:
+                  'radial-gradient(ellipse 112px 92px at 0% 0%, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.17) 43%, rgba(0,0,0,0) 100%), radial-gradient(ellipse 78px 54px at 0% 52%, rgba(0,0,0,0.105) 0%, rgba(0,0,0,0.045) 52%, rgba(0,0,0,0) 100%)',
+              }}
+            />
             <style>{`
               @keyframes nodex-money-flow { 0% { transform: translate3d(0,0,0); opacity: 0; } 10% { opacity: .92; } 76% { opacity: .78; } 100% { transform: translate3d(0, calc(0px - var(--trade-travel)), 0); opacity: 0; } }
               @keyframes nodex-money-flow-sell { 0% { transform: translate3d(0,0,0); opacity: 0; } 10%,76% { opacity: 1; } 100% { transform: translate3d(0, calc(0px - var(--trade-travel)), 0); opacity: 0; } }
@@ -2035,7 +2045,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             {floatingTrades.map((trade) => (
               <span
                 key={trade.id}
-                className={`absolute whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${trade.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'}`}
+                className={`absolute whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] [text-shadow:0_1px_4px_rgba(0,0,0,0.48)] ${trade.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'}`}
                 style={{
                   left: '10px',
                   bottom: '20px',
@@ -2068,13 +2078,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         }}
         className="z-[2] w-full min-w-0 max-w-full overflow-hidden"
       />
-      {/* Soft tint over both the trade layer and chart; darkest at the far-left edge,
-          fading completely by one quarter of the plot. This is translucent, not a mask. */}
+      {/* Brush 1: broad chart-background wash. It covers the chart itself,
+          not just the floating labels, and feathers slowly from the far-left edge. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-[34px] bottom-[26px] z-[3] w-1/4"
+        className="pointer-events-none absolute left-0 top-[34px] bottom-[26px] z-[3] w-[38%]"
         style={{
-          background: 'linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.12) 38%, rgba(0,0,0,0.045) 76%, rgba(0,0,0,0) 100%)',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.135) 0%, rgba(0,0,0,0.112) 18%, rgba(0,0,0,0.078) 42%, rgba(0,0,0,0.035) 72%, rgba(0,0,0,0) 100%)',
         }}
       />
       {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
