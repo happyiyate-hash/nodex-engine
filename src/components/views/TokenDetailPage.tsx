@@ -207,7 +207,6 @@ export const TokenDetailPage: React.FC = () => {
       const side: 'buy' | 'sell' | null = rawSide === 'buy' ? 'buy' : rawSide === 'sell' ? 'sell' : null;
       const volume = numberOrNull(data.volume_usd);
       if (volume !== null && volume > 0 && side !== null) {
-        const id = numberOrNull(data.timestamp_ms) ?? Date.now();
         setFloatingAmounts((previous) => {
           const now = Date.now();
           const active = previous.filter((item) => now - item.createdAt < 3400);
@@ -228,11 +227,6 @@ export const TokenDetailPage: React.FC = () => {
       const data = message.data && typeof message.data === 'object'
         ? message.data as Record<string, any>
         : {};
-
-      if (message.event === 'snapshot_started') {
-        setSectionLoading({ market: true, info: true, holders: true, trades: true, chart: true });
-        return;
-      }
 
       if (message.event === 'snapshot_completed') {
         setSectionLoading({ market: false, info: false, holders: false, trades: false, chart: false });
@@ -409,13 +403,15 @@ export const TokenDetailPage: React.FC = () => {
       } finally {
         if (!disposed) {
           setMarketDataLoading(false);
-          if (settings.wsUrl) openSocket();
-          else if (!settings.restUrl) setMarketDataError('Set the Token Data REST and WebSocket URLs in Settings.');
-          else setMarketDataError((previous) => previous || 'Token Data WebSocket URL is not configured.');
+          if (!settings.wsUrl && !settings.restUrl) setMarketDataError('Set the Token Data REST and WebSocket URLs in Settings.');
+          else if (!settings.wsUrl) setMarketDataError((previous) => previous || 'Token Data WebSocket URL is not configured.');
         }
       }
     };
 
+    // Subscribe immediately: Token Data sends its progressive initial snapshot as
+    // part of the subscribe command, so a slow REST request cannot delay the stream.
+    if (settings.wsUrl) openSocket();
     void loadSnapshotThenSubscribe();
     return () => {
       disposed = true;
@@ -725,24 +721,11 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Confirmed Token Data swap amounts use the existing chart overlay animation. */}
-        <style>{`
-          @keyframes nodex-money-flow {
-            0% { transform: translate3d(0, 0, 0); opacity: 0; }
-            10% { opacity: 0.92; }
-            76% { opacity: 0.78; }
-            100% { transform: translate3d(0, -286px, 0); opacity: 0; }
-          }
-          @keyframes nodex-money-flow-sell {
-            0% { transform: translate3d(0, 0, 0); opacity: 0; }
-            10%, 76% { opacity: 1; }
-            100% { transform: translate3d(0, -286px, 0); opacity: 0; }
-          }
-        `}</style>
         {/* Chart canvas spans edge-to-edge; controls sit beneath its time axis. */}
         <div className="relative z-0 -mx-3 -mt-3 w-[calc(100%+1.5rem)]">
           <DotMatrixChart
             key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
+            floatingTrades={floatingAmounts.map((item) => ({ id: item.id, label: formatUsd(item.amount), side: item.side, lane: item.lane }))}
             currentPrice={liveTokenPrice}
             marketCap={marketCapForChart ?? undefined}
             entryPrice={activePosition ? entryPriceUsd : undefined}
