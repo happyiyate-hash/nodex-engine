@@ -2029,8 +2029,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)' }}
           >
             <style>{`
-              @keyframes nodex-money-flow { 0% { transform: translate3d(0,0,0); opacity: 0; } 10% { opacity: .92; } 76% { opacity: .78; } 100% { transform: translate3d(0, calc(-1 * var(--trade-travel)), 0); opacity: 0; } }
-              @keyframes nodex-money-flow-sell { 0% { transform: translate3d(0,0,0); opacity: 0; } 10%,76% { opacity: 1; } 100% { transform: translate3d(0, calc(-1 * var(--trade-travel)), 0); opacity: 0; } }
+              @keyframes nodex-money-flow { 0% { transform: translate3d(0,0,0); opacity: 0; } 10% { opacity: .92; } 76% { opacity: .78; } 100% { transform: translate3d(0, calc(0px - var(--trade-travel)), 0); opacity: 0; } }
+              @keyframes nodex-money-flow-sell { 0% { transform: translate3d(0,0,0); opacity: 0; } 10%,76% { opacity: 1; } 100% { transform: translate3d(0, calc(0px - var(--trade-travel)), 0); opacity: 0; } }
             `}</style>
             {floatingTrades.map((trade) => (
               <span
