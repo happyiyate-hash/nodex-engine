@@ -774,10 +774,14 @@ export const TokenDetailPage: React.FC = () => {
             </div>
             <div className="shrink-0 text-right leading-none">
               <div className="font-sans text-[14px] font-semibold tabular-nums tracking-tight text-white">
-                {marketCap != null ? formatCompactMarketCap(marketCap) : 'MC unavailable'}
+                {snapshotSections.market === 'loading' || tokenSnapshotLoading
+                  ? <span aria-label="Loading market cap" className="inline-block h-4 w-20 animate-pulse rounded bg-white/[0.08]" />
+                  : marketCap != null ? formatCompactMarketCap(marketCap) : 'MC unavailable'}
               </div>
               <div className={`mt-1 flex items-center justify-end gap-0.5 font-mono text-[10px] font-semibold ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-                <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${Math.abs(Number(marketChangePct)).toFixed(2)}%`}</span>
+                <span>{snapshotSections.market === 'loading' || tokenSnapshotLoading
+                  ? <span aria-label="Loading market change" className="inline-block h-2.5 w-16 animate-pulse rounded bg-white/[0.08]" />
+                  : marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${Math.abs(Number(marketChangePct)).toFixed(2)}%`}</span>
               </div>
             </div>
           </div>
@@ -854,7 +858,9 @@ export const TokenDetailPage: React.FC = () => {
           <div className="shrink-0 -mr-1.5 text-right">
             <p className="pr-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
             <p className="mt-0.5 pr-1.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
-              {formatCompactMarketCap(marketCap)}
+              {snapshotSections.market === 'loading' || tokenSnapshotLoading
+                ? <span aria-label="Loading market cap" className="inline-block h-4 w-20 animate-pulse rounded bg-white/[0.08]" />
+                : formatCompactMarketCap(marketCap)}
             </p>
             <div className="mt-0.5 flex justify-end">
               <span
@@ -880,7 +886,9 @@ export const TokenDetailPage: React.FC = () => {
                     )}
                   </svg>
                 )}
-                <span>{marketChangePct == null ? '—' : `${Math.abs(marketChangePct).toFixed(2)}%`}</span>
+                <span>{snapshotSections.market === 'loading' || tokenSnapshotLoading
+                  ? <span aria-label="Loading market change" className="inline-block h-3 w-12 animate-pulse rounded bg-white/[0.08]" />
+                  : marketChangePct == null ? '—' : `${Math.abs(marketChangePct).toFixed(2)}%`}</span>
               </span>
             </div>
           </div>
