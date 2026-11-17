@@ -579,10 +579,10 @@ export const TokenDetailPage: React.FC = () => {
     const latestMarketCapTick = liveChartTicks.filter((tick) => tick.source === 'marketCap').slice(-1)[0];
     // Prefer a live token-price feed. If no live price has arrived but market cap
     // is streaming, convert the historical baseline to market-cap scale and plot it.
-    const useMarketCap = Boolean(latestMarketCapTick && !latestPriceTick);
+    const useMarketCap = Boolean(latestMarketCapTick && (!latestPriceTick || Date.now() - latestPriceTick.timestamp_ms > 30_000));
     const selectedSource: 'price' | 'marketCap' = useMarketCap ? 'marketCap' : 'price';
     const lastHistoricalPrice = historicalChartPoints.length ? historicalChartPoints[historicalChartPoints.length - 1].close : 0;
-    const marketCapScale = useMarketCap && lastHistoricalPrice > 0 ? latestMarketCapTick.value / lastHistoricalPrice : 1;
+    const marketCapScale = useMarketCap && latestMarketCapTick && lastHistoricalPrice > 0 ? latestMarketCapTick.value / lastHistoricalPrice : 1;
     const baselinePoints = historicalChartPoints.map((point) => {
       if (marketCapScale === 1) return { ...point };
       return { ...point, open: point.open * marketCapScale, high: point.high * marketCapScale, low: point.low * marketCapScale, close: point.close * marketCapScale };
