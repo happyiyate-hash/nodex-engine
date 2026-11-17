@@ -1,7 +1,6 @@
 export interface MarketDataConnectionSettings {
   restUrl: string;
   wsUrl: string;
-  apiKey: string;
 }
 
 export interface MarketDataHealth {
@@ -12,10 +11,6 @@ export interface MarketDataHealth {
 }
 
 const STORAGE_KEY = 'nodex.market-data-connection.v1';
-
-function cleanKey(value: string): string {
-  return value.trim();
-}
 
 export function normalizeMarketDataSettings(value: MarketDataConnectionSettings): MarketDataConnectionSettings {
   const rawRestUrl = value.restUrl.trim();
@@ -29,24 +24,23 @@ export function normalizeMarketDataSettings(value: MarketDataConnectionSettings)
     parsed.hash = '';
     wsUrl = parsed.toString();
   }
-  return { restUrl, wsUrl, apiKey: cleanKey(value.apiKey) };
+  return { restUrl, wsUrl };
 }
 
 export const marketDataService = {
   normalizeMarketDataSettings,
   loadSettings(): MarketDataConnectionSettings {
-    if (typeof window === 'undefined') return { restUrl: '', wsUrl: '', apiKey: '' };
+    if (typeof window === 'undefined') return { restUrl: '', wsUrl: '' };
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return { restUrl: '', wsUrl: '', apiKey: '' };
+      if (!raw) return { restUrl: '', wsUrl: '' };
       const value = JSON.parse(raw) as Partial<MarketDataConnectionSettings>;
       return {
         restUrl: typeof value.restUrl === 'string' ? value.restUrl : '',
         wsUrl: typeof value.wsUrl === 'string' ? value.wsUrl : '',
-        apiKey: typeof value.apiKey === 'string' ? cleanKey(value.apiKey) : '',
       };
     } catch {
-      return { restUrl: '', wsUrl: '', apiKey: '' };
+      return { restUrl: '', wsUrl: '' };
     }
   },
 
@@ -56,22 +50,17 @@ export const marketDataService = {
     return normalized;
   },
 
-  async request<T>(action: 'health' | 'providers' | 'ws-ticket', settings: MarketDataConnectionSettings): Promise<T> {
+  async request<T>(action: 'health' | 'providers', settings: MarketDataConnectionSettings): Promise<T> {
     const routes = {
       health: { path: '/health', method: 'GET' as const },
       providers: { path: '/providers/status', method: 'GET' as const },
-      'ws-ticket': { path: '/api/v1/ws-ticket', method: 'POST' as const },
     };
     const route = routes[action];
     const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : `${settings.restUrl}/`;
     const url = new URL(route.path, baseUrl);
     const response = await fetch(url.toString(), {
       method: route.method,
-      headers: {
-        'x-api-key': cleanKey(settings.apiKey),
-        ...(route.method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
-      },
-      ...(route.method === 'POST' ? { body: '{}' } : {}),
+      headers: {},
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -87,11 +76,7 @@ export const marketDataService = {
   ): Promise<WebSocket> {
     const normalized = normalizeMarketDataSettings(settings);
     if (!normalized.wsUrl) throw new Error('Enter a Market Data WebSocket URL.');
-    const ticketResponse = await this.request<{ ticket: string }>('ws-ticket', normalized);
-    if (!ticketResponse.ticket) throw new Error('Market Data server did not issue a WebSocket ticket.');
-
-    const separator = normalized.wsUrl.includes('?') ? '&' : '?';
-    const socket = new WebSocket(`${normalized.wsUrl}${separator}ticket=${encodeURIComponent(ticketResponse.ticket)}`);
+    const socket = new WebSocket(normalized.wsUrl);
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -106,7 +91,7 @@ export const marketDataService = {
         if (settled) return;
         settled = true;
         window.clearTimeout(timeout);
-        onStatus?.(true, 'Authenticated WebSocket handshake succeeded.');
+        onStatus?.(true, 'Market Data WebSocket connected.');
         resolve();
       };
       socket.onerror = () => {
