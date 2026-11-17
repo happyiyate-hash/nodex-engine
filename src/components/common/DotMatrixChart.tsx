@@ -1551,30 +1551,32 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         ) {
           if (isFeedLive) {
             let last = committed[committed.length - 1];
-            let catchupGuard = 0;
-            while (
-              nowWall - last.timestampMs >= activeStepMs &&
-              catchupGuard < 8
-            ) {
-              const nextMs = last.timestampMs + activeStepMs;
-              const nextSec = (last.time + stepSec) as UTCTimestamp;
+            // Never replay missed intervals from the oldest historical bar.
+            // Jump directly to the current wall-clock bucket and draw the
+            // latest value there, leaving the historical series in place.
+            const currentBucketMs = Math.floor(nowWall / activeStepMs) * activeStepMs;
+            if (currentBucketMs > last.timestampMs) {
+              const nextSec = Math.floor(currentBucketMs / 1000) as UTCTimestamp;
               const nextBar: NormalizedBar = {
                 time: nextSec,
-                timestampMs: nextMs,
-                open: displayP,
-                high: displayP,
-                low: displayP,
+                timestampMs: currentBucketMs,
+                open: last.close,
+                high: Math.max(last.close, displayP),
+                low: Math.min(last.close, displayP),
                 close: displayP,
               };
               committed.push(nextBar);
               if (committed.length > 2000) {
                 committed.splice(0, committed.length - 2000);
               }
-              lineSeries.update({ time: nextSec, value: displayP });
               last = nextBar;
               committedNewBar = true;
-              catchupGuard += 1;
+            } else {
+              last.close = displayP;
+              last.high = Math.max(last.high, displayP);
+              last.low = Math.min(last.low, displayP);
             }
+            lineSeries.update({ time: last.time, value: displayP });
             subBarFractionRef.current = Math.max(
               0,
               Math.min(0.9999, (nowWall - last.timestampMs) / activeStepMs),
