@@ -1167,7 +1167,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return res;
 
       latestVisibleBoundsRef.current = { min: rawMin, max: rawMax };
-      updateStableYTarget(rawMin, rawMax, timeframeRef.current);
+      const computedTarget = updateStableYTarget(rawMin, rawMax, timeframeRef.current);
 
       if (!animYRangeRef.current) {
         animYRangeRef.current = { ...computedTarget };
