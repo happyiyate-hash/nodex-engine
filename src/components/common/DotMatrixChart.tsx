@@ -912,7 +912,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
 
       // Keep the scale fitted to the actual positive data range; do not force a zero baseline.
-      const minValue = Math.max(Number.EPSILON, visMin - effectiveSpan * bottomFrac);
+      const minValue = Math.max(visMin * 1e-6, visMin - effectiveSpan * bottomFrac);
       const maxValue = minValue + effectiveSpan;
       return { minValue, maxValue };
     },
@@ -1803,10 +1803,9 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       return;
     }
 
-    // In Candle mode the backend supplies authoritative OHLC buckets.
-    // Update the existing active bucket in place; append only strictly newer
-    // buckets. Never synthesize a new candle's open from a stale UI price.
-    if (chartType === 'candle' && seedBars.length > 0) {
+    // Apply new local OHLC buckets to both chart modes. The horizontal
+    // timeline advances only when actual data adds a newer bucket.
+    if (seedBars.length > 0) {
       const committed = committedBarsRef.current;
       const latest = seedBars[seedBars.length - 1];
       const lastCommitted = committed[committed.length - 1];
@@ -1847,6 +1846,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         for (const bar of nextBars) {
           const nextCandle = { ...bar };
           committed.push(nextCandle);
+          lineSeries.update({ time: nextCandle.time, value: nextCandle.close });
           candleSeries.update({
             time: nextCandle.time,
             open: nextCandle.open,
@@ -1878,6 +1878,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           committed[committed.length - 1] = updated;
           isApplyingAutoScrollRef.current = true;
           try {
+            lineSeries.update({ time: updated.time, value: updated.close });
             candleSeries.update({
               time: updated.time,
               open: updated.open,
