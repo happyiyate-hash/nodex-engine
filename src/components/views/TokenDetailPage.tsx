@@ -361,6 +361,23 @@ export const TokenDetailPage: React.FC = () => {
                 setMarketDataLoading(false);
                 return;
               }
+              if (event.event === 'market_update' && event.topic === 'token.market') {
+                setMarketDataSnapshot((previous) => {
+                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                  return {
+                    ...base,
+                    market: {
+                      ...base.market,
+                      ...data,
+                      // NodeX's market-cap tick wins; Token Data is its fallback.
+                      market_cap_usd: base.market.market_cap_usd ?? data.market_cap_usd ?? null,
+                    },
+                  };
+                });
+                markSection('market', Object.entries(data).some(([key, value]) => key !== 'market_cap_usd' && value != null));
+                setMarketDataLoading(false);
+                return;
+              }
               if (event.event === 'snapshot_completed') {
                 snapshotCompleted = true;
                 setMarketDataBackendStatus('received');
