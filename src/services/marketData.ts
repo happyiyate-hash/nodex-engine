@@ -60,7 +60,7 @@ export const marketDataService = {
     const url = new URL(route.path, baseUrl);
     const response = await fetch(url.toString(), {
       method: route.method,
-      headers: {},
+      headers: { Accept: 'application/json' },
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -68,6 +68,39 @@ export const marketDataService = {
       throw new Error(message);
     }
     return payload as T;
+  },
+
+  async getTokenSnapshot<T = Record<string, any>>(
+    mint: string,
+    timeframe: string,
+    settings: MarketDataConnectionSettings,
+  ): Promise<T> {
+    if (!settings.restUrl) throw new Error('Market Data REST URL is not configured.');
+    const baseUrl = settings.restUrl.endsWith('/') ? settings.restUrl : `${settings.restUrl}/`;
+    const url = new URL(`/api/v1/tokens/${encodeURIComponent(mint)}/snapshot`, baseUrl);
+    url.searchParams.set('timeframe', timeframe);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = typeof payload?.error === 'string' ? payload.error : `Market Data snapshot failed (HTTP ${response.status}).`;
+        throw new Error(message);
+      }
+      return payload as T;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Market Data snapshot timed out after 20 seconds.');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   },
 
   async connectWebSocket(
