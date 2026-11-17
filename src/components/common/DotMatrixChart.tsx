@@ -1535,7 +1535,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const displayP =
           smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
 
-        // 2. Smooth continuous horizontal backward motion + timed bar commits in Line mode
+        // 2. Keep the viewport immediately positioned at the latest bar + timed bar commits in Line mode
         const committed = committedBarsRef.current;
         const activeStepMs = Math.max(1_000, stepMsRef.current);
         const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
@@ -1585,20 +1585,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             const targetScrollPos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
-            const currentScrollPos = chart.timeScale().scrollPosition();
-            const scrollBlend = 1 - Math.exp(-8 * dt);
-            const nextScrollPos =
-              currentScrollPos + (targetScrollPos - currentScrollPos) * scrollBlend;
-            lastAppliedScrollPosRef.current = nextScrollPos;
+            // Keep the viewport pinned to the newest bar. Do not animate
+            // across historical bars after initial load or timeframe changes.
+            // Price smoothing remains independent and still animates live ticks.
+            lastAppliedScrollPosRef.current = targetScrollPos;
             isApplyingAutoScrollRef.current = true;
             try {
-              chart.timeScale().scrollToPosition(nextScrollPos, false);
+              chart.timeScale().scrollToPosition(targetScrollPos, false);
             } finally {
               isApplyingAutoScrollRef.current = false;
             }
-            if (Math.abs(targetScrollPos - nextScrollPos) < 0.08) {
-              isAutoPositioningRef.current = false;
-            }
+            isAutoPositioningRef.current = false;
           }
         } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
           // Candles are trade-driven only. Do not apply the smoothed quote
@@ -1609,19 +1606,14 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             const targetScrollPos = BASE_RIGHT_OFFSET;
-            const currentScrollPos = chart.timeScale().scrollPosition();
-            const scrollBlend = 1 - Math.exp(-8 * dt);
-            const nextScrollPos =
-              currentScrollPos + (targetScrollPos - currentScrollPos) * scrollBlend;
+            // Candle mode also stays pinned to the newest confirmed trade bar.
             isApplyingAutoScrollRef.current = true;
             try {
-              chart.timeScale().scrollToPosition(nextScrollPos, false);
+              chart.timeScale().scrollToPosition(targetScrollPos, false);
             } finally {
               isApplyingAutoScrollRef.current = false;
             }
-            if (Math.abs(targetScrollPos - nextScrollPos) < 0.08) {
-              isAutoPositioningRef.current = false;
-            }
+            isAutoPositioningRef.current = false;
           }
         }
 
