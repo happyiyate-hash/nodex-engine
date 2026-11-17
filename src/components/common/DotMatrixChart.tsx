@@ -44,7 +44,7 @@ interface DotMatrixChartProps {
   chartType?: 'line' | 'candle';
   onPriceHover?: (price: number | null, time: string | null) => void;
   height?: number;
-  floatingTrades?: Array<{ id: number; label: string; side: 'buy' | 'sell'; lane: number }>;
+  floatingTrades?: Array<{ id: number; label: string; side: 'buy' | 'sell'; delayMs: number }>;
 }
 
 type CanvasTarget = Parameters<IPrimitivePaneRenderer['draw']>[0];
@@ -2003,11 +2003,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   };
 
   const badgeBg = isPositive ? CHART_THEME.upBadgeBg : CHART_THEME.downBadgeBg;
+  // Chart overlay begins at y=0; start 20px above its bottom and finish 34px below its top.
+  const tradeTravel = Math.max(0, height - 54);
 
   return (
     <div
       ref={containerRef}
-      style={{ height, touchAction: 'pan-y' }}
+      style={{ height, touchAction: 'pan-y', ['--trade-travel' as any]: `${tradeTravel}px` }}
       className="relative w-full min-w-0 max-w-full select-none overflow-hidden bg-[#000000]"
       onDoubleClick={resetView}
     >
@@ -2018,17 +2020,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         className="pointer-events-none absolute inset-0 block max-w-full"
       />
 
-      {/* Layer 1.25: Live trade amounts sit beneath the chart canvas so the price line
-          and candles always remain visually dominant. */}
+      {/* Layer 1.25: Floating trade labels stay above the chart so candles and
+          the price line never cover the amounts. All labels share one bottom origin. */}
       {floatingTrades.length > 0 && (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[4] overflow-hidden">
           <div
             className="absolute inset-0 overflow-hidden"
-            style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)' }}
+            style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)' }}
           >
             <style>{`
-              @keyframes nodex-money-flow { 0% { transform: translate3d(0,0,0); opacity: 0; } 10% { opacity: .92; } 76% { opacity: .78; } 100% { transform: translate3d(0,-286px,0); opacity: 0; } }
-              @keyframes nodex-money-flow-sell { 0% { transform: translate3d(0,0,0); opacity: 0; } 10%,76% { opacity: 1; } 100% { transform: translate3d(0,-286px,0); opacity: 0; } }
+              @keyframes nodex-money-flow { 0% { transform: translate3d(0,0,0); opacity: 0; } 10% { opacity: .92; } 76% { opacity: .78; } 100% { transform: translate3d(0, calc(-1 * var(--trade-travel)), 0); opacity: 0; } }
+              @keyframes nodex-money-flow-sell { 0% { transform: translate3d(0,0,0); opacity: 0; } 10%,76% { opacity: 1; } 100% { transform: translate3d(0, calc(-1 * var(--trade-travel)), 0); opacity: 0; } }
             `}</style>
             {floatingTrades.map((trade) => (
               <span
@@ -2036,8 +2038,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
                 className={`absolute whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${trade.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'}`}
                 style={{
                   left: '10px',
-                  bottom: `${24 + trade.lane * 28}px`,
-                  animation: trade.side === 'buy' ? 'nodex-money-flow 3.4s linear forwards' : 'nodex-money-flow-sell 3.4s linear forwards',
+                  bottom: '20px',
+                  animation: trade.side === 'buy'
+                    ? `nodex-money-flow 3.4s linear ${trade.delayMs}ms both`
+                    : `nodex-money-flow-sell 3.4s linear ${trade.delayMs}ms both`,
                 }}
               >
                 <span className="inline-flex items-center gap-[6px]">
