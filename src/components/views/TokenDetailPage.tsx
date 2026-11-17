@@ -162,9 +162,13 @@ export const TokenDetailPage: React.FC = () => {
     setFloatingAmounts([]);
 
     const applyMarket = (data: Record<string, any>) => {
+      const normalized = { ...data };
+      if (normalized.transactions_24h == null && normalized.confirmed_transactions_24h != null) {
+        normalized.transactions_24h = normalized.confirmed_transactions_24h;
+      }
       setMarketMetrics((previous) => {
-        const next = { ...previous, ...data };
-        for (const [key, value] of Object.entries(data)) {
+        const next = { ...previous, ...normalized };
+        for (const [key, value] of Object.entries(normalized)) {
           if (value === null && previous[key] !== undefined && previous[key] !== null) {
             next[key] = previous[key];
           }
