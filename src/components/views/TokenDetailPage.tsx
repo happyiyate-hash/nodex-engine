@@ -5,6 +5,7 @@ import { DotMatrixChart } from '../common/DotMatrixChart';
 import { wsService } from '../../services/websocket';
 import { CandleEngine, type ConfirmedTrade } from '../../services/candleEngine';
 import { apiClient } from '../../services/rest';
+import { marketDataService } from '../../services/marketData';
 import {
   ChevronLeft,
   Copy,
@@ -129,6 +130,12 @@ export const TokenDetailPage: React.FC = () => {
   const [tokenSnapshotLoading, setTokenSnapshotLoading] = useState(true);
   const [tokenSnapshotError, setTokenSnapshotError] = useState('');
   const [sniperSubscriptionStatus, setSniperSubscriptionStatus] = useState<'connecting' | 'connected' | 'rejected' | 'disconnected'>('connecting');
+  const [marketDataBackendStatus, setMarketDataBackendStatus] = useState<'not_configured' | 'connecting' | 'loading' | 'received' | 'failed'>('not_configured');
+  const [marketDataBackendError, setMarketDataBackendError] = useState('');
+  const [marketDataWsStatus, setMarketDataWsStatus] = useState<'connecting' | 'connected' | 'subscribed' | 'disconnected' | 'error'>('disconnected');
+  const [snapshotSections, setSnapshotSections] = useState<Record<string, 'loading' | 'available' | 'unavailable'>>({});
+  const marketDataSocketRef = useRef<WebSocket | null>(null);
+  const marketDataFallbackTimerRef = useRef<number | null>(null);
   const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
   const [marketDataError, setMarketDataError] = useState('');
   const [marketDataStreamConnected, setMarketDataStreamConnected] = useState(false);
@@ -151,6 +158,13 @@ export const TokenDetailPage: React.FC = () => {
     setTokenSnapshotLoading(true);
     setTokenSnapshotError('');
     setSniperSubscriptionStatus('connecting');
+    setMarketDataBackendStatus('connecting');
+    setMarketDataBackendError('');
+    setMarketDataWsStatus('connecting');
+    setSnapshotSections({
+      identity: 'loading', market: 'loading', chart: 'loading',
+      trades: 'loading', holders: 'loading', info: 'loading',
+    });
     setChartHistoryLoading(true);
     setConnectionNotice('');
     setTimeframe('1S');
@@ -192,9 +206,10 @@ export const TokenDetailPage: React.FC = () => {
         return {
           ...normalized,
           market: { ...normalized.market, ...previous.market },
-          trades: {
-            recent: previous.trades?.recent?.length ? previous.trades.recent : normalized.trades.recent,
-          },
+          chart: previous.chart?.points?.length ? previous.chart : normalized.chart,
+          trades: { recent: previous.trades?.recent?.length ? previous.trades.recent : normalized.trades.recent },
+          holders: previous.holders?.largest?.length ? previous.holders : normalized.holders,
+          info: { ...normalized.info, ...previous.info },
         };
       });
       const chartTimeframe = normalized.chart.timeframe.toUpperCase();
@@ -214,6 +229,232 @@ export const TokenDetailPage: React.FC = () => {
       // If the REST dossier is absent and the live subscription is rejected,
       // show a deliberate unavailable state rather than an endless skeleton.
     });
+
+    // The independent Token Data service owns market, chart, trades, holders and token info.
+    // Its progressive WebSocket snapshot is separate from NodeX's sniper subscription above.
+    const tokenDataSettings = marketDataService.normalizeMarketDataSettings(marketDataService.loadSettings());
+    let marketSnapshotStarted = false;
+    let marketSnapshotCompleted = false;
+    let marketFallbackStarted = false;
+
+    const markSection = (section: string, available: boolean) => {
+      setSnapshotSections((previous) => ({ ...previous, [section]: available ? 'available' : 'unavailable' }));
+    };
+
+    const applyMarketDataSnapshot = (raw: Record<string, any>) => {
+      if (cancelled) return;
+      const normalized = normalizeTokenDetailSnapshot(raw, mint);
+      setMarketDataSnapshot((previous) => {
+        if (!previous || previous.mint !== mint) return normalized;
+        return {
+          ...previous,
+          identity: { ...previous.identity, ...normalized.identity },
+          market: { ...previous.market, ...normalized.market },
+          chart: normalized.chart.points.length ? normalized.chart : previous.chart,
+          trades: { recent: normalized.trades.recent.length ? normalized.trades.recent : previous.trades.recent },
+          holders: normalized.holders.largest.length || normalized.holders.total_count != null ? normalized.holders : previous.holders,
+          info: { ...previous.info, ...normalized.info },
+          data_status: { ...previous.data_status, ...normalized.data_status },
+        };
+      });
+      if (normalized.chart.points.length > 0) {
+        setChartSeriesByTimeframe((previous) => ({ ...previous, [normalized.chart.timeframe]: normalized.chart.points }));
+      }
+      const status = raw.data_status && typeof raw.data_status === 'object' ? raw.data_status : {};
+      for (const section of ['identity', 'market', 'chart', 'trades', 'holders', 'info']) {
+        const value = String(status[section] || '');
+        markSection(section, value !== 'unavailable' && value !== 'failed');
+      }
+      setMarketDataBackendStatus('received');
+      setMarketDataBackendError('');
+      if (normalized.chart.points.length > 0 || String(status.chart || '') === 'unavailable') {
+        setChartHistoryLoading(false);
+      }
+    };
+
+    const loadMarketDataRestFallback = async (reason: string) => {
+      if (cancelled || marketFallbackStarted || !tokenDataSettings.restUrl) return;
+      marketFallbackStarted = true;
+      setMarketDataBackendStatus('loading');
+      setMarketDataBackendError(reason);
+      try {
+        const raw = await marketDataService.getTokenSnapshot<Record<string, any>>(mint, timeframe, tokenDataSettings);
+        if (cancelled) return;
+        applyMarketDataSnapshot(raw);
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : String(error);
+        setMarketDataBackendStatus('failed');
+        setMarketDataBackendError(message);
+        setSnapshotSections({
+          identity: 'unavailable', market: 'unavailable', chart: 'unavailable',
+          trades: 'unavailable', holders: 'unavailable', info: 'unavailable',
+        });
+        setChartHistoryLoading(false);
+      }
+    };
+
+    if (!tokenDataSettings.restUrl || !tokenDataSettings.wsUrl) {
+      setMarketDataBackendStatus('not_configured');
+      setMarketDataWsStatus('disconnected');
+      setMarketDataBackendError('Configure the independent Market Data REST and WebSocket URLs in Settings.');
+      setSnapshotSections({
+        identity: 'unavailable', market: 'unavailable', chart: 'unavailable',
+        trades: 'unavailable', holders: 'unavailable', info: 'unavailable',
+      });
+      setChartHistoryLoading(false);
+    } else {
+      void (async () => {
+        try {
+          const socket = await marketDataService.connectWebSocket(tokenDataSettings, (connected, message) => {
+            if (cancelled) return;
+            setMarketDataWsStatus(connected ? 'connected' : 'disconnected');
+            if (!connected && !marketSnapshotCompleted) {
+              void loadMarketDataRestFallback(message || 'Market Data WebSocket disconnected before its snapshot completed.');
+            }
+          });
+          if (cancelled) {
+            socket.close();
+            return;
+          }
+          marketDataSocketRef.current = socket;
+          socket.onmessage = (messageEvent) => {
+            if (cancelled) return;
+            let event: Record<string, any>;
+            try {
+              event = JSON.parse(String(messageEvent.data));
+            } catch {
+              setMarketDataBackendError('Market Data sent an unreadable WebSocket message.');
+              return;
+            }
+            if (event.mint && event.mint !== mint) return;
+            const data = event.data && typeof event.data === 'object' ? event.data : {};
+
+            if (event.event === 'subscribed') {
+              setMarketDataWsStatus('subscribed');
+              return;
+            }
+            if (event.event === 'snapshot_started') {
+              marketSnapshotStarted = true;
+              setMarketDataBackendStatus('loading');
+              setSnapshotSections({
+                identity: 'loading', market: 'loading', chart: 'loading',
+                trades: 'loading', holders: 'loading', info: 'loading',
+              });
+              return;
+            }
+            if (event.event === 'snapshot_section') {
+              const topic = String(event.topic || '');
+              if (topic === 'token.market') {
+                setMarketDataSnapshot((previous) => {
+                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+                  return { ...base, market: { ...base.market, ...data } };
+                });
+                markSection('market', Object.values(data).some((value) => value !== null && value !== undefined));
+              } else if (topic === 'token.identity' || topic === 'token.creator') {
+                setMarketDataSnapshot((previous) => {
+                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+                  return { ...base, identity: { ...base.identity, ...data } };
+                });
+                markSection('identity', Boolean(data.name || data.symbol || data.logo_url || data.creator_address));
+              } else if (topic === 'token.info') {
+                setMarketDataSnapshot((previous) => {
+                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+                  return { ...base, info: { ...base.info, ...data } };
+                });
+                markSection('info', Object.values(data).some((value) => value !== null && value !== undefined));
+              } else if (topic === 'token.holders') {
+                setMarketDataSnapshot((previous) => {
+                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+                  return { ...base, holders: { ...base.holders, ...data, largest: Array.isArray(data.largest) ? data.largest : [] } };
+                });
+                markSection('holders', Boolean(data.total_count != null || data.top_10_ownership_pct != null || data.largest?.length));
+              } else if (topic === 'token.trades') {
+                setMarketDataSnapshot((previous) => {
+                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+                  return { ...base, trades: { recent: Array.isArray(data.recent) ? data.recent : [] } };
+                });
+                markSection('trades', Array.isArray(data.recent) && data.recent.length > 0);
+              }
+              return;
+            }
+            if (event.event === 'chart_history_started') {
+              setChartHistoryLoading(true);
+              setSnapshotSections((previous) => ({ ...previous, chart: 'loading' }));
+              return;
+            }
+            if (event.event === 'chart_history_chunk') {
+              const chartTimeframe = String(data.timeframe || timeframe).toUpperCase();
+              const points: TokenChartPoint[] = (Array.isArray(data.points) ? data.points : []).map((point: Record<string, any>) => ({
+                timestamp_ms: Number(point.timestamp_ms),
+                open: Number(point.open),
+                high: Number(point.high),
+                low: Number(point.low),
+                close: Number(point.close),
+                volume: Number(point.volume || 0),
+              })).filter((point) => Number.isFinite(point.timestamp_ms) && point.timestamp_ms > 0 && point.close > 0);
+              setChartSeriesByTimeframe((previous) => ({
+                ...previous,
+                [chartTimeframe]: [...(previous[chartTimeframe] || []), ...points],
+              }));
+              return;
+            }
+            if (event.event === 'chart_history_completed') {
+              const chartTimeframe = String(data.timeframe || timeframe).toUpperCase();
+              setChartHistoryLoading(false);
+              markSection('chart', data.status === 'available' && Number(data.point_count || 0) > 0);
+              if (chartTimeframe === timeframe.toUpperCase()) setMarketDataLoading(false);
+              return;
+            }
+            if (event.event === 'market_update' && event.topic === 'token.market') {
+              setMarketDataSnapshot((previous) => {
+                const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint);
+                return { ...base, market: { ...base.market, ...data } };
+              });
+              markSection('market', true);
+              return;
+            }
+            if (event.event === 'snapshot_completed') {
+              marketSnapshotCompleted = true;
+              setMarketDataBackendStatus('received');
+              setSnapshotSections((previous) => Object.fromEntries(
+                Object.entries(previous).map(([key, value]) => [key, value === 'loading' ? 'unavailable' : value])
+              ) as Record<string, 'loading' | 'available' | 'unavailable'>);
+              setChartHistoryLoading(false);
+              return;
+            }
+            if (event.event === 'snapshot_error' || event.event === 'error') {
+              const message = String(event.message || event.code || 'Market Data snapshot failed.');
+              setMarketDataBackendError(message);
+              setMarketDataWsStatus('error');
+              void loadMarketDataRestFallback(message);
+              return;
+            }
+            if (event.event === 'resync_required') {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ command: 'request_snapshot', timeframe }));
+              }
+            }
+          };
+          socket.send(JSON.stringify({
+            command: 'subscribe',
+            mint,
+            timeframe,
+            topics: ['token.market', 'token.chart', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
+          }));
+          marketDataFallbackTimerRef.current = window.setTimeout(() => {
+            if (!cancelled && !marketSnapshotStarted) {
+              void loadMarketDataRestFallback('Market Data WebSocket did not start its token snapshot.');
+            }
+          }, 12000);
+        } catch (error) {
+          if (cancelled) return;
+          setMarketDataWsStatus('error');
+          const message = error instanceof Error ? error.message : String(error);
+          void loadMarketDataRestFallback(message);
+        }
+      })();
+    }
 
     const serverTimeframe: Record<string, '1m' | '5m' | '15m' | '30m' | '1h' | '24h'> = {
       '1M': '1m',
@@ -369,6 +610,12 @@ export const TokenDetailPage: React.FC = () => {
 
     return () => {
       cancelled = true;
+      if (marketDataFallbackTimerRef.current !== null) {
+        window.clearTimeout(marketDataFallbackTimerRef.current);
+        marketDataFallbackTimerRef.current = null;
+      }
+      marketDataSocketRef.current?.close();
+      marketDataSocketRef.current = null;
       unsubscribeEvents();
       unsubscribeStatus();
       wsService.unsubscribeToken(mint);
