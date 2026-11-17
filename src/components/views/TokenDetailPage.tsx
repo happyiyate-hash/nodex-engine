@@ -1377,9 +1377,9 @@ export const TokenDetailPage: React.FC = () => {
               <h2 className="text-[16px] font-semibold tracking-tight text-white/95">Recent Trades</h2>
               <p className="mt-1 text-[10px] text-white/40">Latest activity for this token</p>
             </div>
-            <span className={'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/[0.10] px-2 py-1 text-[9px] font-medium tracking-wide ' + (marketDataStreamConnected ? 'text-emerald-300/80' : 'text-white/40')}>
-              <span className={'h-1.5 w-1.5 rounded-full ' + (marketDataStreamConnected ? 'bg-emerald-300/70' : 'bg-white/30')} />
-              {marketDataStreamConnected ? 'LIVE STREAM' : 'SNAPSHOT'}
+            <span className={'inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/[0.10] px-2 py-1 text-[9px] font-medium tracking-wide ' + (marketDataWsStatus === 'subscribed' ? 'text-emerald-300/80' : 'text-white/40')}>
+              <span className={'h-1.5 w-1.5 rounded-full ' + (marketDataWsStatus === 'subscribed' ? 'bg-emerald-300/70' : 'bg-white/30')} />
+              {marketDataWsStatus === 'subscribed' ? 'LIVE MARKET DATA' : marketDataBackendStatus === 'received' ? 'SNAPSHOT' : 'WAITING'}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2.5">
@@ -1399,7 +1399,9 @@ export const TokenDetailPage: React.FC = () => {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[10px]">
               <span className="font-medium text-white/55">Buy / Sell Pressure</span>
-              <span className="font-mono tabular-nums text-white/55">{marketDataSnapshot?.market?.buy_pressure_pct == null ? '—' : Number(marketDataSnapshot.market.buy_pressure_pct).toFixed(1) + '%'} <span className="text-white/25">/</span> {marketDataSnapshot?.market?.buy_pressure_pct == null ? '—' : (100 - Number(marketDataSnapshot.market.buy_pressure_pct)).toFixed(1) + '%'}</span>
+              {snapshotSections.market === 'loading' || tokenSnapshotLoading
+                ? <span aria-label="Loading buy and sell pressure" className="inline-block h-3 w-20 animate-pulse rounded bg-white/[0.08]" />
+                : <span className="font-mono tabular-nums text-white/55">{marketDataSnapshot?.market?.buy_pressure_pct == null ? '—' : Number(marketDataSnapshot.market.buy_pressure_pct).toFixed(1) + '%'} <span className="text-white/25">/</span> {marketDataSnapshot?.market?.buy_pressure_pct == null ? '—' : (100 - Number(marketDataSnapshot.market.buy_pressure_pct)).toFixed(1) + '%'}</span>}
             </div>
             <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/[0.10]">
               <div className="h-full bg-[#6CE094]" style={{ width: marketDataSnapshot?.market?.buy_pressure_pct == null ? '0%' : Math.max(0, Math.min(100, Number(marketDataSnapshot.market.buy_pressure_pct))) + '%' }} />
