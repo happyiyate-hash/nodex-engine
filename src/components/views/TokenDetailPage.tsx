@@ -611,7 +611,6 @@ export const TokenDetailPage: React.FC = () => {
     const intervalMs: Record<string, number> = { '1S': 1_000, '5S': 5_000, '10S': 10_000, '1M': 60_000, '5M': 300_000, '15M': 900_000, '30M': 1_800_000, '1H': 3_600_000, '24H': 86_400_000 };
     const bucketSize = intervalMs[timeframe] || 300_000;
     const hasHistoricalPrice = historicalChartPoints.length > 0;
-    const latestMarketCapTick = liveChartTicks.filter((tick) => tick.source === 'marketCap').slice(-1)[0];
     const activeMarketCap = Number(marketDataSnapshot?.market?.market_cap_usd);
     // Keep one unit per series: fresh market-cap quotes select market-cap mode;
     // after five seconds without a quote, confirmed USD/token trades take over.
