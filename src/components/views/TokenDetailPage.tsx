@@ -223,7 +223,10 @@ export const TokenDetailPage: React.FC = () => {
       }
     }).catch((error) => {
       if (cancelled) return;
-      const message = error instanceof Error ? error.message : String(error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const message = rawMessage.includes('404')
+        ? 'This mint is not registered in the sniper engine snapshot yet. The independent Market Data request continues.'
+        : rawMessage;
       setTokenSnapshotError(message);
       setTokenSnapshotLoading(false);
       // If the REST dossier is absent and the live subscription is rejected,
