@@ -116,9 +116,6 @@ const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
   '24H': 24 * 60 * 60_000,
 };
 
-// Each bar represents the selected timeframe; short history never changes its resolution.
-const TIMEFRAME_LIVE_STEP_MS = TIMEFRAME_INTERVAL_MS;};
-
 // Minimum vertical price span (fraction of price) per timeframe so higher
 // timeframes stay calm while scaling smoothly without discrete step jumps.
 const TIMEFRAME_Y_SPAN_RATIO: Record<string, number> = {
@@ -1710,10 +1707,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const seedKey = `${timeframe}:${chartType}:${resolutionMode}`;
     const prev = prevSeedMetaRef.current;
 
+    // A forward-moving first timestamp is normal as a rolling history window advances.
+    // Only a rewind to older history requires a full reseed.
     const firstTimeMovedUnexpectedly =
-      prev !== null &&
-      prev.firstTime !== firstTime &&
-      (firstTime < prev.firstTime || seedBars.length < 2000);
+      prev !== null && firstTime < prev.firstTime;
 
     const needsFullReseed =
       prev === null ||
@@ -1813,6 +1810,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         if (previousLatestTime !== undefined) {
           completedBarOffsetRef.current += corrected.filter((bar) => bar.time > previousLatestTime).length;
         }
+        const correctedLatest = corrected[corrected.length - 1];
+        if (correctedLatest) {
+          subBarFractionRef.current = chartType === 'line'
+            ? Math.max(0, Math.min(0.9999, (Date.now() - correctedLatest.timestampMs) / Math.max(1_000, stepMsRef.current)))
+            : 0;
+        }
         committedBarsRef.current = corrected;
         renderedCandleRef.current = corrected.length ? { ...corrected[corrected.length - 1] } : null;
         isApplyingAutoScrollRef.current = true;
@@ -1833,6 +1836,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       } else if (!lastCommitted || latest.time > lastCommitted.time) {
         const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
         completedBarOffsetRef.current += nextBars.length;
+        const newestAppendedBar = nextBars[nextBars.length - 1];
+        if (newestAppendedBar) {
+          subBarFractionRef.current = chartType === 'line'
+            ? Math.max(0, Math.min(0.9999, (Date.now() - newestAppendedBar.timestampMs) / Math.max(1_000, stepMsRef.current)))
+            : 0;
+        }
         for (const bar of nextBars) {
           const nextCandle = { ...bar };
           committed.push(nextCandle);
@@ -1852,11 +1861,9 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         if (!isUserPannedRef.current) {
           isApplyingAutoScrollRef.current = true;
           try {
-            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
-            chart.timeScale().scrollToPosition(
-              BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current,
-              false,
-            );
+            const pos = BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current;
+            lastAppliedScrollPosRef.current = pos;
+            chart.timeScale().scrollToPosition(pos, false);
           } finally {
             isApplyingAutoScrollRef.current = false;
           }
@@ -1887,6 +1894,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const previousLatestTime = committed[committed.length - 1]?.time;
         if (previousLatestTime !== undefined) {
           completedBarOffsetRef.current += corrected.filter((bar) => bar.time > previousLatestTime).length;
+        }
+        const correctedLatest = corrected[corrected.length - 1];
+        if (correctedLatest) {
+          subBarFractionRef.current = chartType === 'line'
+            ? Math.max(0, Math.min(0.9999, (Date.now() - correctedLatest.timestampMs) / Math.max(1_000, stepMsRef.current)))
+            : 0;
         }
         committedBarsRef.current = corrected;
         isApplyingAutoScrollRef.current = true;
