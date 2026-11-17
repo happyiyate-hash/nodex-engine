@@ -264,9 +264,16 @@ export const TokenDetailPage: React.FC = () => {
         mergeTokenDataSnapshot(raw);
       } catch {
         if (cancelled) return;
-        // The WebSocket may still deliver the progressive snapshot. Keep its
-        // skeletons alive until that stream completes; never surface transport errors.
-        setMarketDataBackendStatus('loading');
+        // REST is the baseline fallback. If it also fails, finish the skeletons
+        // with clean unavailable states; a later WebSocket section can still fill them.
+        setMarketDataBackendStatus('failed');
+        setSnapshotSections({
+          identity: 'unavailable', market: 'unavailable', chart: 'unavailable',
+          trades: 'unavailable', holders: 'unavailable', info: 'unavailable',
+        });
+        setChartHistoryLoading(false);
+        setTokenSnapshotLoading(false);
+        setMarketDataLoading(false);
       }
     };
 
@@ -446,9 +453,7 @@ export const TokenDetailPage: React.FC = () => {
       const connected = status === 'connected';
       setMarketDataStreamConnected(connected);
       setSniperSubscriptionStatus(connected ? 'connecting' : 'disconnected');
-      if (!connected) {
-        setMarketDataStreamError('');
-      } else setMarketDataStreamError('');
+      setMarketDataStreamError('');
     });
 
     const unsubscribeEvents = wsService.subscribe((event) => {
@@ -472,6 +477,7 @@ export const TokenDetailPage: React.FC = () => {
             const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
             return { ...base, market: { ...base.market, market_cap_usd: marketCap } };
           });
+          setSniperSubscriptionStatus('connected');
           setMarketDataLoading(false);
         }
         return;
@@ -1017,9 +1023,9 @@ export const TokenDetailPage: React.FC = () => {
         <section aria-label="Token information" className="w-full space-y-6 px-3 pb-6 pt-5">
           <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/[0.07] bg-white/[0.018] p-3">
             <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX REST · engine</p>
-              <p className={`mt-1 truncate text-[10px] font-medium ${tokenSnapshotLoading ? 'text-amber-300/80' : tokenSnapshotError ? 'text-red-300/80' : 'text-emerald-300/80'}`}>
-                {tokenSnapshotLoading ? 'Requesting token state…' : tokenSnapshotError ? 'Request failed' : 'Response received'}
+              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX · market-cap stream</p>
+              <p className={`mt-1 truncate text-[10px] font-medium ${sniperSubscriptionStatus === 'connected' ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
+                {sniperSubscriptionStatus === 'connected' ? 'Market cap updating' : 'Waiting for market cap'}
               </p>
             </div>
             <div className="min-w-0">
@@ -1035,9 +1041,9 @@ export const TokenDetailPage: React.FC = () => {
               </p>
             </div>
             <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">Market Data · live stream</p>
-              <p className={`mt-1 truncate text-[10px] font-medium ${marketDataWsStatus === 'subscribed' ? 'text-emerald-300/80' : marketDataWsStatus === 'error' || marketDataWsStatus === 'disconnected' ? 'text-red-300/80' : 'text-amber-300/80'}`}>
-                {marketDataWsStatus === 'connecting' ? 'Connecting…' : marketDataWsStatus === 'connected' ? 'Connected · subscribing' : marketDataWsStatus === 'subscribed' ? 'Subscribed' : marketDataWsStatus === 'error' ? 'Stream error' : 'Disconnected'}
+              <p className="text-[9px] uppercase tracking-wider text-white/35">Market Data · live updates</p>
+              <p className={`mt-1 truncate text-[10px] font-medium ${marketDataWsStatus === 'subscribed' ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
+                {marketDataWsStatus === 'connecting' ? 'Connecting…' : marketDataWsStatus === 'connected' ? 'Connected · subscribing' : marketDataWsStatus === 'subscribed' ? 'Live subscription active' : 'Using REST data'}
               </p>
             </div>
             <div className="col-span-2 grid grid-cols-3 gap-x-2 gap-y-1 border-t border-white/[0.06] pt-2">
@@ -1052,15 +1058,7 @@ export const TokenDetailPage: React.FC = () => {
                 );
               })}
             </div>
-            {tokenSnapshotError && (
-              <p className="col-span-2 break-words text-[10px] leading-relaxed text-red-300/70">NodeX: {tokenSnapshotError}</p>
-            )}
-            {marketDataBackendError && (
-              <p className="col-span-2 break-words text-[10px] leading-relaxed text-amber-200/65">Market Data: {marketDataBackendError}</p>
-            )}
-            {marketDataStreamError && (
-              <p className="col-span-2 break-words text-[10px] leading-relaxed text-amber-200/65">Sniper stream: {marketDataStreamError}</p>
-            )}
+
           </div>
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
