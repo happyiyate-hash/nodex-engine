@@ -92,7 +92,9 @@ export const TokenDetailPage: React.FC = () => {
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
-  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; amount: number; side: 'buy' | 'sell' }>>([]);
+  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; createdAt: number; amount: number; side: 'buy' | 'sell'; lane: number }>>([]);
+  const floatingSequenceRef = useRef(0);
+  const [sectionLoading, setSectionLoading] = useState({ market: true, info: true, holders: true, trades: true, chart: true });
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -145,6 +147,7 @@ export const TokenDetailPage: React.FC = () => {
     const settings = marketDataService.normalizeMarketDataSettings(marketDataService.loadSettings());
 
     setMarketDataLoading(true);
+    setSectionLoading({ market: true, info: true, holders: true, trades: true, chart: true });
     setMarketDataConnected(false);
     setMarketDataError(null);
     setScrubPrice(null);
@@ -205,10 +208,18 @@ export const TokenDetailPage: React.FC = () => {
       const volume = numberOrNull(data.volume_usd);
       if (volume !== null && volume > 0 && side !== null) {
         const id = numberOrNull(data.timestamp_ms) ?? Date.now();
-        setFloatingAmounts((previous) => [
-          ...previous.filter((item) => Date.now() - item.id < 3600),
-          { id, amount: volume, side },
-        ].slice(-12));
+        setFloatingAmounts((previous) => {
+          const now = Date.now();
+          const active = previous.filter((item) => now - item.createdAt < 3400);
+          const nextLane = active.length;
+          return [...active, {
+            id: ++floatingSequenceRef.current,
+            createdAt: now,
+            amount: volume,
+            side,
+            lane: nextLane,
+          }].slice(-12);
+        });
       }
     };
 
@@ -218,14 +229,47 @@ export const TokenDetailPage: React.FC = () => {
         ? message.data as Record<string, any>
         : {};
 
+      if (message.event === 'snapshot_started') {
+        setSectionLoading({ market: true, info: true, holders: true, trades: true, chart: true });
+        return;
+      }
+
+      if (message.event === 'snapshot_completed') {
+        setSectionLoading({ market: false, info: false, holders: false, trades: false, chart: false });
+        return;
+      }
+
       if (message.event === 'snapshot_section') {
-        if (message.topic === 'token.market') applyMarket(data);
-        if (message.topic === 'token.trades' && Array.isArray(data.recent)) {
-          setRecentTrades((previous) => mergeTokenTrades(previous, data.recent as TokenDataTrade[]));
+        if (message.topic === 'token.market') {
+          applyMarket(data);
+          setSectionLoading((previous) => ({ ...previous, market: false }));
         }
-        if (message.topic === 'token.holders') setHoldersSnapshot(data as TokenDataSnapshot['holders']);
-        if (message.topic === 'token.info') setTokenInfo(data as TokenDataSnapshot['info']);
-        if (message.topic === 'token.identity') setTokenIdentity(data as TokenDataSnapshot['identity']);
+        if (message.topic === 'token.trades') {
+          if (Array.isArray(data.recent)) setRecentTrades((previous) => mergeTokenTrades(previous, data.recent as TokenDataTrade[]));
+          setSectionLoading((previous) => ({ ...previous, trades: false }));
+        }
+        if (message.topic === 'token.holders') {
+          setHoldersSnapshot(data as TokenDataSnapshot['holders']);
+          setSectionLoading((previous) => ({ ...previous, holders: false }));
+        }
+        if (message.topic === 'token.info') {
+          setTokenInfo(data as TokenDataSnapshot['info']);
+          setSectionLoading((previous) => ({ ...previous, info: false }));
+        }
+        if (message.topic === 'token.identity') {
+          setTokenIdentity(data as TokenDataSnapshot['identity']);
+          setSectionLoading((previous) => ({ ...previous, info: false }));
+        }
+        return;
+      }
+
+      if (message.event === 'chart_history_started') {
+        setSectionLoading((previous) => ({ ...previous, chart: true }));
+        return;
+      }
+
+      if (message.event === 'chart_history_completed') {
+        setSectionLoading((previous) => ({ ...previous, chart: false }));
         return;
       }
 
@@ -276,6 +320,7 @@ export const TokenDetailPage: React.FC = () => {
       }
 
       if (message.event === 'snapshot_error' || message.event === 'error') {
+        if (message.event === 'snapshot_error') setSectionLoading({ market: false, info: false, holders: false, trades: false, chart: false });
         const detail = String(data.message || data.code || 'Market Data returned an error.');
         if (message.event === 'error') setMarketDataConnected(false);
         setMarketDataError(detail);
@@ -322,6 +367,7 @@ export const TokenDetailPage: React.FC = () => {
         const snapshot = await marketDataService.getTokenSnapshot(settings, mint, '1M');
         if (disposed) return;
         setMarketMetrics(snapshot.market || {});
+        setSectionLoading((previous) => ({ ...previous, market: false, info: false, holders: false, trades: false, chart: false }));
         setSnapshotMarketCap(numberOrNull(snapshot.market?.market_cap_usd));
         setTokenIdentity(snapshot.identity || null);
         setTokenInfo(snapshot.info || null);
@@ -710,51 +756,14 @@ export const TokenDetailPage: React.FC = () => {
               setScrubTime(t);
             }}
           />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-20 overflow-hidden"
-          >
-            {/* A very soft left-edge brush settles the stream against the chart
-                without dimming the clear center or covering the moving amounts. */}
-            <div
-              className="absolute inset-y-0 left-0 w-[112px]"
-              style={{
-                background:
-                  'linear-gradient(to right, rgba(0,0,0,0.17) 0%, rgba(0,0,0,0.11) 34%, rgba(0,0,0,0.045) 68%, rgba(0,0,0,0) 100%)',
-              }}
-            />
-            {/* Keep the middle fully readable; ease each amount in from below
-                and out toward the top across roughly 30% of the chart height. */}
-            <div
-              className="absolute inset-0 overflow-hidden"
-              style={{
-                maskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
-                WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%)',
-              }}
-            >
-              {floatingAmounts.map((item) => (
-                <span
-                  key={item.id}
-                  className={`absolute bottom-5 whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${
-                    item.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'
-                  }`}
-                  style={{
-                    left: '10px',
-                    animation: item.side === 'buy'
-                      ? 'nodex-money-flow 3.4s linear forwards'
-                      : 'nodex-money-flow-sell 3.4s linear forwards',
-                  }}
-                >
-                  <span className="inline-flex items-center gap-0.5">
-                    <span aria-hidden="true" className="text-[11px] font-bold leading-none">
-                      {item.side === 'buy' ? '▲' : '▼'}
-                    </span>
-                    {formatUsd(item.amount)}
-                  </span>
-                </span>
-              ))}
+          {sectionLoading.chart && (
+            <div aria-label="Loading chart history" className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+              <div className="absolute inset-x-0 top-[38%] h-px bg-white/[0.06]" />
+              <div className="absolute inset-x-0 top-[58%] h-px bg-white/[0.07]" />
+              <div className="absolute inset-x-0 top-[78%] h-px bg-white/[0.05]" />
+              <div className="absolute inset-x-3 top-[44%] h-7 animate-pulse rounded-full bg-white/[0.035] blur-md" />
             </div>
-          </div>
+          )}
         </div>
 
         <div className="mt-1 flex h-14 w-full items-center bg-[#000000] font-sans">
@@ -893,7 +902,7 @@ export const TokenDetailPage: React.FC = () => {
             <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
               {[
-                { label: 'Market Cap', value: displayMarketCap === null ? '—' : formatCompactMarketCap(displayMarketCap) },
+                  { label: 'Market Cap', value: displayMarketCap === null ? '—' : formatCompactMarketCap(displayMarketCap) },
                 { label: 'Liquidity', value: formatOptionalUsd(marketMetrics.liquidity_usd) },
                 { label: '24H Volume', value: formatOptionalUsd(marketMetrics.volume_24h_usd) },
                 { label: '24H Transactions', value: numberOrNull(marketMetrics.transactions_24h) === null ? '—' : Number(marketMetrics.transactions_24h).toLocaleString('en-US') },
@@ -902,7 +911,13 @@ export const TokenDetailPage: React.FC = () => {
               ].map((item) => (
                 <div key={item.label} className="min-w-0 space-y-1">
                   <p className="text-[11px] font-normal text-white/40">{item.label}</p>
-                  <p className="truncate font-mono text-[17px] font-medium leading-tight tracking-tight text-white/95">{item.value}</p>
+                  {sectionLoading.market && ['Market Cap', 'Liquidity', '24H Volume', '24H Transactions'].includes(item.label) ? (
+                    <div className="mt-1 h-[18px] w-24 animate-pulse rounded bg-white/[0.09]" />
+                  ) : sectionLoading.info && ['Total Supply', 'Circulating Supply'].includes(item.label) ? (
+                    <div className="mt-1 h-[18px] w-24 animate-pulse rounded bg-white/[0.09]" />
+                  ) : (
+                    <p className="truncate font-mono text-[17px] font-medium leading-tight tracking-tight text-white/95">{item.value}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -913,16 +928,16 @@ export const TokenDetailPage: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Token Standard</span>
-                <span className="text-[12px] font-medium text-white/85">{tokenInfo?.token_standard || '—'}</span>
+                {sectionLoading.info ? <span className="h-3 w-20 animate-pulse rounded bg-white/[0.09]" /> : <span className="text-[12px] font-medium text-white/85">{tokenInfo?.token_standard || '—'}</span>}
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Decimals</span>
-                <span className="font-mono text-[12px] font-medium text-white/85">{tokenInfo?.decimals == null ? '—' : tokenInfo.decimals}</span>
+                {sectionLoading.info ? <span className="h-3 w-10 animate-pulse rounded bg-white/[0.09]" /> : <span className="font-mono text-[12px] font-medium text-white/85">{tokenInfo?.decimals == null ? '—' : tokenInfo.decimals}</span>}
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Created At</span>
                 <span className="text-[12px] font-medium text-white/85">
-                  {tokenIdentity?.created_at && Number.isFinite(Date.parse(tokenIdentity.created_at))
+                  {sectionLoading.info ? <span className="inline-block h-3 w-24 animate-pulse rounded bg-white/[0.09]" /> : tokenIdentity?.created_at && Number.isFinite(Date.parse(tokenIdentity.created_at))
                     ? new Date(tokenIdentity.created_at).toLocaleString()
                     : '—'}
                 </span>
@@ -975,17 +990,11 @@ export const TokenDetailPage: React.FC = () => {
           <div className="grid w-full grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Total Holders</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
-                {holdersSnapshot?.total_count == null ? '—' : Number(holdersSnapshot.total_count).toLocaleString('en-US')}
-              </p>
+              {sectionLoading.holders ? <div className="mt-1 h-6 w-20 animate-pulse rounded bg-white/[0.09]" /> : <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">{holdersSnapshot?.total_count == null ? '—' : Number(holdersSnapshot.total_count).toLocaleString('en-US')}</p>}
             </div>
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Top 10 Ownership</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
-                {numberOrNull(holdersSnapshot?.top_10_ownership_pct) === null
-                  ? '—'
-                  : numberOrNull(holdersSnapshot?.top_10_ownership_pct)?.toFixed(2) + '%'}
-              </p>
+              {sectionLoading.holders ? <div className="mt-1 h-6 w-20 animate-pulse rounded bg-white/[0.09]" /> : <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">{numberOrNull(holdersSnapshot?.top_10_ownership_pct) === null ? '—' : numberOrNull(holdersSnapshot?.top_10_ownership_pct)?.toFixed(2) + '%'}</p>}
             </div>
           </div>
 
@@ -995,7 +1004,9 @@ export const TokenDetailPage: React.FC = () => {
               <span className="text-[10px] text-white/35">Ranked by balance</span>
             </div>
             <div className="w-full">
-              {holdersSnapshot?.largest?.length ? holdersSnapshot.largest.map((holder, index) => {
+              {sectionLoading.holders ? (
+                <div className="space-y-3 py-2">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="flex items-center gap-3 border-b border-white/[0.06] py-2"><div className="h-9 w-9 animate-pulse rounded-full bg-white/[0.08]" /><div className="flex-1 space-y-2"><div className="h-3 w-28 animate-pulse rounded bg-white/[0.09]" /><div className="h-3 w-16 animate-pulse rounded bg-white/[0.06]" /></div><div className="h-3 w-12 animate-pulse rounded bg-white/[0.08]" /></div>)}</div>
+              ) : holdersSnapshot?.largest?.length ? holdersSnapshot.largest.map((holder, index) => {
                 const share = numberOrNull(holder.supply_pct);
                 return (
                   <div key={holder.address} className="border-b border-white/[0.07] py-3.5 last:border-b-0">
