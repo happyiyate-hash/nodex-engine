@@ -408,6 +408,9 @@ export const TokenDetailPage: React.FC = () => {
     return tradeFilter === 'All' || (tradeFilter === 'Buys' ? side === 'buy' : side === 'sell');
   });
   const creatorAddress = tokenIdentity?.creator_address || tokenInfo?.creator_address || activeToken.creator_wallet || '';
+  const displayTokenName = tokenIdentity?.name || activeToken.name || activeToken.symbol || 'Unknown token';
+  const displayTokenSymbol = tokenIdentity?.symbol || activeToken.symbol || 'Token';
+  const displayTokenLogo = tokenIdentity?.logo_url || activeToken.logo_url;
   const formatCompactMarketCap = (value: number) =>
     new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -493,7 +496,7 @@ export const TokenDetailPage: React.FC = () => {
                 <ChevronLeft className="h-[29px] w-[29px]" strokeWidth={1.8} />
               </button>
               <span className="truncate text-[12px] font-medium tracking-wide text-white/65">
-                {activeToken.symbol || 'Token'}
+                {displayTokenSymbol}
               </span>
             </div>
           </div>
@@ -509,8 +512,8 @@ export const TokenDetailPage: React.FC = () => {
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <div className="relative shrink-0">
                 <TokenAvatar
-                  symbol={activeToken.symbol}
-                  logoUrl={activeToken.logo_url}
+                  symbol={displayTokenSymbol}
+                  logoUrl={displayTokenLogo}
                   size="lg"
                   className="!h-[46px] !w-[46px] shrink-0 !rounded-lg !text-lg"
                 />
@@ -527,7 +530,7 @@ export const TokenDetailPage: React.FC = () => {
               </div>
               <div className="flex min-w-0 flex-col justify-center gap-1 leading-tight">
                 <span className="truncate text-[12px] font-semibold tracking-wide text-white/90">
-                  {activeToken.symbol || 'Token'}
+                  {displayTokenSymbol}
                 </span>
                 <button
                   type="button"
@@ -573,8 +576,8 @@ export const TokenDetailPage: React.FC = () => {
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <div className="relative shrink-0">
               <TokenAvatar
-                symbol={activeToken.symbol}
-                logoUrl={activeToken.logo_url}
+                symbol={displayTokenSymbol}
+                logoUrl={displayTokenLogo}
                 size="lg"
                 className="!h-[52px] !w-[52px] shrink-0 !rounded-lg !text-xl"
               />
@@ -591,11 +594,11 @@ export const TokenDetailPage: React.FC = () => {
             </div>
             <div className="flex min-w-0 flex-col justify-center gap-1">
               <p className="truncate text-[13px] font-semibold tracking-tight text-white/95">
-                {activeToken.name || activeToken.symbol || 'Unknown token'}
+                {displayTokenName}
               </p>
               <div className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate text-[12px] font-medium tracking-wide text-white/55">
-                  {activeToken.symbol || 'Token'}
+                  {displayTokenSymbol}
                 </span>
                 <button
                   type="button"
@@ -1011,9 +1014,9 @@ export const TokenDetailPage: React.FC = () => {
             <>
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <h2 className="min-w-0 truncate text-[19px] font-semibold leading-tight tracking-tight text-white/95">
-                  {(activePosition.name || activeToken.name || '').length <= 18
-                    ? (activePosition.name || activeToken.name || activePosition.symbol || activeToken.symbol || 'Token')
-                    : (activePosition.symbol || activeToken.symbol || 'Token')}
+                  {(activePosition.name || displayTokenName || '').length <= 18
+                    ? (activePosition.name || displayTokenName || activePosition.symbol || displayTokenSymbol || 'Token')
+                    : (activePosition.symbol || displayTokenSymbol || 'Token')}
                 </h2>
                 <span className="shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/70">OPEN</span>
               </div>
