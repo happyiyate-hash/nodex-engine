@@ -102,7 +102,7 @@ export const TokenDetailPage: React.FC = () => {
   } = useTerminal();
 
   const [copiedMint, setCopiedMint] = useState(false);
-  const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('5M');
+  const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('1S');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
@@ -155,7 +155,7 @@ export const TokenDetailPage: React.FC = () => {
       trades: 'loading', holders: 'loading', info: 'loading',
     });
     setChartHistoryLoading(true);
-    setTimeframe('5M');
+    setTimeframe('1S');
     setScrubTime(null);
   }, [activeToken?.mint]);
 
@@ -188,7 +188,7 @@ export const TokenDetailPage: React.FC = () => {
       if (cancelled) return;
       const normalized = normalizeTokenDetailSnapshot(raw, mint);
       setMarketDataSnapshot((previous) => {
-        const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+        const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
         return {
           ...normalized,
           ...base,
@@ -234,7 +234,7 @@ export const TokenDetailPage: React.FC = () => {
       restSnapshotLoaded = true;
       setMarketDataBackendStatus('loading');
       try {
-        const raw = await marketDataService.getTokenSnapshot<Record<string, any>>(mint, timeframe, tokenDataSettings);
+        const raw = await marketDataService.getTokenSnapshot<Record<string, any>>(mint, '24h', tokenDataSettings);
         if (cancelled) return;
         mergeTokenDataSnapshot(raw);
       } catch {
@@ -300,7 +300,7 @@ export const TokenDetailPage: React.FC = () => {
                 const topic = String(event.topic || '');
                 if (topic === 'token.market') {
                   setMarketDataSnapshot((previous) => {
-                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
                     return { ...base, market: {
                       ...base.market, ...data,
                       market_cap_usd: base.market.market_cap_usd ?? data.market_cap_usd ?? null,
@@ -309,25 +309,25 @@ export const TokenDetailPage: React.FC = () => {
                   markSection('market', Object.entries(data).some(([key, value]) => key !== 'market_cap_usd' && value != null));
                 } else if (topic === 'token.identity' || topic === 'token.creator') {
                   setMarketDataSnapshot((previous) => {
-                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
                     return { ...base, identity: { ...base.identity, ...data, mint_address: mint } };
                   });
                   markSection('identity', Boolean(data.name || data.symbol || data.logo_url || data.creator_address || data.created_at));
                 } else if (topic === 'token.info') {
                   setMarketDataSnapshot((previous) => {
-                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
                     return { ...base, info: { ...base.info, ...data } };
                   });
                   markSection('info', Object.values(data).some((value) => value != null));
                 } else if (topic === 'token.holders') {
                   setMarketDataSnapshot((previous) => {
-                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
                     return { ...base, holders: { ...base.holders, ...data, largest: Array.isArray(data.largest) ? data.largest : [] } };
                   });
                   markSection('holders', Boolean(data.total_count != null || data.top_10_ownership_pct != null || data.largest?.length));
                 } else if (topic === 'token.trades') {
                   setMarketDataSnapshot((previous) => {
-                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
                     return { ...base, trades: { recent: Array.isArray(data.recent) ? data.recent : [] } };
                   });
                   markSection('trades', Array.isArray(data.recent) && data.recent.length > 0);
@@ -342,7 +342,7 @@ export const TokenDetailPage: React.FC = () => {
                 return;
               }
               if (event.event === 'chart_history_chunk') {
-                const chartTimeframe = String(data.timeframe || timeframe).toUpperCase();
+                const chartTimeframe = String(data.timeframe || '24H').toUpperCase();
                 const points: TokenChartPoint[] = (Array.isArray(data.points) ? data.points : []).map((point: Record<string, any>) => ({
                   timestamp_ms: Number(point.timestamp_ms),
                   open: Number(point.open),
@@ -360,7 +360,7 @@ export const TokenDetailPage: React.FC = () => {
                 return;
               }
               if (event.event === 'chart_history_completed') {
-                const chartTimeframe = String(data.timeframe || timeframe).toUpperCase();
+                const chartTimeframe = String(data.timeframe || '24H').toUpperCase();
                 setChartHistoryLoading(false);
                 markSection('chart', data.status === 'available' && Number(data.point_count || 0) > 0);
                 setTokenSnapshotLoading(false);
@@ -393,7 +393,7 @@ export const TokenDetailPage: React.FC = () => {
                     timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()),
                   };
                   setMarketDataSnapshot((previous) => {
-                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
                     const existing = base.trades.recent || [];
                     if (existing.some((trade) => trade.signature === signature && Number(trade.event_index) === eventIndex)) return base;
                     return { ...base, trades: { recent: [liveTrade, ...existing].slice(0, 100) } };
@@ -436,7 +436,7 @@ export const TokenDetailPage: React.FC = () => {
                   setLiveChartTicks((previous) => [...previous, { timestamp_ms: tickTimestamp, value: tokenMarketCap, volume: 0, source: 'marketCap' as const }].slice(-1000));
                 }
                 setMarketDataSnapshot((previous) => {
-                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                  const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
                   return {
                     ...base,
                     market: {
@@ -468,7 +468,7 @@ export const TokenDetailPage: React.FC = () => {
                 return;
               }
               if (event.event === 'resync_required' && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ command: 'request_snapshot', timeframe }));
+                socket.send(JSON.stringify({ command: 'request_snapshot', timeframe: '24h' }));
               }
             };
             socket.onclose = () => {
@@ -484,7 +484,7 @@ export const TokenDetailPage: React.FC = () => {
             socket.send(JSON.stringify({
               command: 'subscribe',
               mint,
-              timeframe,
+              timeframe: '24h',
               topics: ['token.market', 'token.chart', 'token.trades', 'token.activity', 'token.holders', 'token.info', 'token.creator'],
             }));
           } catch {
@@ -498,16 +498,8 @@ export const TokenDetailPage: React.FC = () => {
       }
     }
 
-    const serverTimeframe: Record<string, '1m' | '5m' | '15m' | '30m' | '1h' | '24h'> = {
-      '1M': '1m',
-      '5M': '5m',
-      '15M': '15m',
-      '30M': '30m',
-      '1H': '1h',
-      '24H': '24h',
-    };
-    const requestedTimeframe = serverTimeframe[timeframe];
-    wsService.subscribeToken(mint, requestedTimeframe || '5m');
+    // Subscribe once per token. UI timeframe changes are entirely local.
+    wsService.subscribeToken(mint, '24h');
 
     const unsubscribeStatus = wsService.onStatusChange((status) => {
       const connected = status === 'connected';
@@ -533,7 +525,7 @@ export const TokenDetailPage: React.FC = () => {
         if (marketCap != null) {
           setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || Date.parse(event.timestamp) || Date.now()), value: marketCap, volume: 0, source: 'marketCap' as const }].slice(-1000));
           setMarketDataSnapshot((previous) => {
-            const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+            const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, '24H');
             return { ...base, market: { ...base.market, market_cap_usd: marketCap } };
           });
           setSniperSubscriptionStatus('connected');
@@ -556,20 +548,18 @@ export const TokenDetailPage: React.FC = () => {
       unsubscribeStatus();
       wsService.unsubscribeToken(mint);
     };
-  }, [activeToken?.mint, timeframe]);
+  }, [activeToken?.mint]);
 
 
   if (!activeToken) return null;
   const activePosition = positions.find((position) => position.mint === activeToken.mint && position.status === 'OPEN');
-  const cachedChartPoints = chartSeriesByTimeframe[timeframe] || [];
+  const cachedChartPoints = chartSeriesByTimeframe[timeframe] || chartSeriesByTimeframe['24H'] || [];
   // Prefer the backend's timeframe-specific OHLC series whenever present.
   // REST provides the historical baseline for the selected timeframe.
   // Confirmed WebSocket trades update only the local candles layered over it.
   const historicalChartPoints = cachedChartPoints.length > 0
     ? cachedChartPoints
-    : (marketDataSnapshot?.chart?.timeframe === timeframe
-      ? marketDataSnapshot.chart.points || []
-      : []);
+    : (marketDataSnapshot?.chart?.points || []);
 
   const locallyAggregatedPoints = (() => {
     const intervalMs: Record<string, number> = { '1S': 1_000, '5S': 5_000, '10S': 10_000, '1M': 60_000, '5M': 300_000, '15M': 900_000, '30M': 1_800_000, '1H': 3_600_000, '24H': 86_400_000 };
@@ -876,7 +866,7 @@ export const TokenDetailPage: React.FC = () => {
           {hasChartData ? (
             <div className="relative">
               <DotMatrixChart
-                key={activeToken.mint + ':' + timeframe}
+                key={activeToken.mint}
                 currentPrice={liveTokenPrice}
                 marketCap={marketCap ?? undefined}
                 entryPrice={activePosition ? entryPriceUsd : undefined}
