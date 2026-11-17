@@ -2023,12 +2023,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       {floatingTrades.length > 0 && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] overflow-hidden">
           <div
-            className="absolute inset-y-0 left-0 w-1/4"
-            style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.025) 0%, rgba(0,0,0,0.12) 42%, rgba(0,0,0,0.48) 76%, #000000 100%)' }}
-          />
-          <div
             className="absolute inset-0 overflow-hidden"
-            style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 24%, black 76%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 24%, black 76%, transparent 100%)' }}
+            style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)' }}
           >
             <style>{`
               @keyframes nodex-money-flow { 0% { transform: translate3d(0,0,0); opacity: 0; } 10% { opacity: .92; } 76% { opacity: .78; } 100% { transform: translate3d(0,-286px,0); opacity: 0; } }
@@ -2040,7 +2036,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
                 className={`absolute whitespace-nowrap font-sans text-[11px] font-light tabular-nums tracking-[-0.02em] ${trade.side === 'buy' ? 'text-[#6CE094]' : 'text-[#FF4D4D]'}`}
                 style={{
                   left: '10px',
-                  bottom: `${20 + trade.lane * 22}px`,
+                  bottom: `${24 + trade.lane * 28}px`,
                   animation: trade.side === 'buy' ? 'nodex-money-flow 3.4s linear forwards' : 'nodex-money-flow-sell 3.4s linear forwards',
                 }}
               >
@@ -2054,24 +2050,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         </div>
       )}
 
-      {/* Layer 1.5: Subtle top and bottom edge brushes; fade gently inward without dark bands. */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div
-          className="absolute inset-x-0 top-0 h-20"
-          style={{
-            background:
-              'linear-gradient(to bottom, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
-          }}
-        />
-        <div
-          className="absolute inset-x-0 bottom-0 h-20"
-          style={{
-            background:
-              'linear-gradient(to top, rgba(0,0,0,0.07) 0%, rgba(0,0,0,0.13) 38%, rgba(0,0,0,0.08) 68%, rgba(0,0,0,0) 100%)',
-          }}
-        />
-      </div>
-
       {/* Layer 2: TradingView Lightweight Charts engine (renders line, light glow, dot & axis ticks) */}
       <div
         ref={tvContainerRef}
@@ -2083,14 +2061,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           bottom: 0,
           width: '100%',
           height: 'calc(100% - 34px)',
-          // Fade the chart itself into view over the first ~12% of its width.
-          // This is a real alpha mask, not a dark overlay or rectangular brush.
-          maskImage:
-            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
-          WebkitMaskImage:
-            'linear-gradient(to right, transparent 0%, transparent 3%, rgba(0,0,0,0.025) 7%, rgba(0,0,0,0.10) 11%, rgba(0,0,0,0.28) 15%, rgba(0,0,0,0.62) 19%, #000000 23%, #000000 100%)',
         }}
         className="z-[2] w-full min-w-0 max-w-full overflow-hidden"
+      />
+      {/* Soft tint over both the trade layer and chart; darkest at the far-left edge,
+          fading completely by one quarter of the plot. This is translucent, not a mask. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 top-[34px] bottom-[26px] z-[3] w-1/4"
+        style={{
+          background: 'linear-gradient(to right, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.12) 38%, rgba(0,0,0,0.045) 76%, rgba(0,0,0,0) 100%)',
+        }}
       />
       {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
           with chart coordinates so they emerge continuously from the right. */}
