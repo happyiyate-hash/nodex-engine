@@ -108,6 +108,7 @@ export const TokenDetailPage: React.FC = () => {
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
   const [floatingAmounts, setFloatingAmounts] = useState<FloatingTradeAmount[]>([]);
   const nextFloatingAnimationAtRef = useRef(0);
+  const processedActivityIdsRef = useRef<Set<string>>(new Set());
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
@@ -140,6 +141,9 @@ export const TokenDetailPage: React.FC = () => {
   useEffect(() => {
     setMarketDataSnapshot(null);
     setChartSeriesByTimeframe({});
+    setFloatingAmounts([]);
+    nextFloatingAnimationAtRef.current = 0;
+    processedActivityIdsRef.current.clear();
     setTokenSnapshotLoading(true);
     setSniperSubscriptionStatus('connecting');
     setMarketDataBackendStatus('connecting');
@@ -359,6 +363,60 @@ export const TokenDetailPage: React.FC = () => {
                 markSection('chart', data.status === 'available' && Number(data.point_count || 0) > 0);
                 setTokenSnapshotLoading(false);
                 setMarketDataLoading(false);
+                return;
+              }
+              // Token Data is the sole source for the live trade tape and chart-corner
+              // buy/sell activity. The backend emits both events for each confirmed swap:
+              // trade_update for the Trades tab and activity_update for the floating tape.
+              if ((event.event === 'trade_update' || event.event === 'activity_update') &&
+                  (event.topic === 'token.trades' || event.topic === 'token.activity')) {
+                const side = String(data.side || '').toLowerCase();
+                const signature = String(data.signature || '');
+                const eventIndex = Number(data.event_index ?? 0);
+                const activityId = signature ? `${signature}:${eventIndex}` : `${event.topic}:${event.sequence ?? data.timestamp_ms ?? ''}`;
+                if (event.event === 'trade_update' && (side === 'buy' || side === 'sell')) {
+                  const liveTrade = {
+                    signature,
+                    event_index: eventIndex,
+                    side,
+                    trader: data.trader ?? null,
+                    amount_sol: data.amount_sol ?? null,
+                    token_amount: data.token_amount ?? null,
+                    price_usd: data.price_usd ?? null,
+                    volume_usd: data.volume_usd ?? null,
+                    timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()),
+                  };
+                  setMarketDataSnapshot((previous) => {
+                    const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
+                    const existing = base.trades.recent || [];
+                    if (existing.some((trade) => trade.signature === signature && Number(trade.event_index) === eventIndex)) return base;
+                    return { ...base, trades: { recent: [liveTrade, ...existing].slice(0, 100) } };
+                  });
+                  markSection('trades', true);
+                }
+                if (event.event === 'activity_update' && (side === 'buy' || side === 'sell') && !processedActivityIdsRef.current.has(activityId)) {
+                  processedActivityIdsRef.current.add(activityId);
+                  if (processedActivityIdsRef.current.size > 2000) {
+                    const recentIds = Array.from(processedActivityIdsRef.current).slice(-1000);
+                    processedActivityIdsRef.current = new Set(recentIds);
+                  }
+                  const volumeUsd = Number(data.volume_usd);
+                  const amountSol = Number(data.amount_sol);
+                  const amount = Number.isFinite(volumeUsd) && volumeUsd > 0 ? volumeUsd : amountSol;
+                  const unit = Number.isFinite(volumeUsd) && volumeUsd > 0 ? 'USD' : 'SOL';
+                  if (Number.isFinite(amount) && amount > 0) {
+                    const now = Date.now();
+                    const delayMs = Math.max(0, nextFloatingAnimationAtRef.current - now);
+                    nextFloatingAnimationAtRef.current = now + delayMs + 180;
+                    setFloatingAmounts((previous) => [...previous, {
+                      id: activityId,
+                      amount,
+                      side: side as 'buy' | 'sell',
+                      unit,
+                      delayMs,
+                    }].slice(-12));
+                  }
+                }
                 return;
               }
               if (event.event === 'market_update' && event.topic === 'token.market') {
