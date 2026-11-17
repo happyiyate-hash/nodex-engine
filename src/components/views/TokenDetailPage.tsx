@@ -433,6 +433,13 @@ export const TokenDetailPage: React.FC = () => {
     return parsed === null ? '—' : formatUsd(parsed);
   };
 
+  const formatTradeVolume = (trade: TokenDataTrade) => {
+    const usd = numberOrNull(trade.volume_usd);
+    if (usd !== null) return formatUsd(usd);
+    const sol = numberOrNull(trade.amount_sol);
+    return sol === null ? '—' : sol.toFixed(4) + ' SOL';
+  };
+
   const formatCompactNumber = (value: unknown) => {
     const parsed = numberOrNull(value);
     return parsed === null ? '—' : new Intl.NumberFormat('en-US', {
@@ -1162,7 +1169,7 @@ export const TokenDetailPage: React.FC = () => {
                   </div>
                   <div className="shrink-0 text-right">
                     <p className={'font-mono text-[11px] font-medium tabular-nums ' + (side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]')}>
-                      {formatOptionalUsd(trade.volume_usd)}
+                      {formatTradeVolume(trade)}
                     </p>
                     <p className="mt-0.5 font-mono text-[9px] tabular-nums text-white/35">
                       {numberOrNull(trade.price_usd) === null ? '—' : formatUsd(numberOrNull(trade.price_usd)!, 8)}
