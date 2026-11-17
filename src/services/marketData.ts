@@ -10,6 +10,85 @@ export interface MarketDataHealth {
   providers?: Array<Record<string, unknown>>;
 }
 
+export interface TokenDataChartPoint {
+  timestamp_ms: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface TokenDataTrade {
+  signature: string;
+  event_index: number;
+  side: string;
+  trader?: string | null;
+  amount_sol?: number | null;
+  token_amount?: number | null;
+  price_usd?: number | null;
+  volume_usd?: number | null;
+  timestamp_ms: number;
+}
+
+export interface TokenDataSnapshot {
+  schema_version: number;
+  mint: string;
+  as_of: string;
+  identity: {
+    name?: string | null;
+    symbol?: string | null;
+    logo_url?: string | null;
+    mint_address: string;
+    creator_address?: string | null;
+    created_at?: string | null;
+  };
+  market: {
+    price_usd?: number | null;
+    price_sol?: number | null;
+    market_cap_usd?: number | null;
+    liquidity_usd?: number | null;
+    change_1m_pct?: number | null;
+    change_5m_pct?: number | null;
+    change_24h_pct?: number | null;
+    volume_24h_usd?: number | null;
+    transactions_24h?: number | null;
+    buy_volume_usd?: number | null;
+    sell_volume_usd?: number | null;
+    buy_pressure_pct?: number | null;
+    [key: string]: unknown;
+  };
+  chart: { timeframe: string; points: TokenDataChartPoint[] };
+  trades: { recent: TokenDataTrade[] };
+  holders: {
+    total_count?: number | null;
+    top_10_ownership_pct?: number | null;
+    largest: Array<{
+      address: string;
+      token_account?: string | null;
+      token_amount: number;
+      supply_pct?: number | null;
+      rank: number;
+    }>;
+  };
+  info: {
+    decimals?: number | null;
+    total_supply?: string | null;
+    circulating_supply?: string | null;
+    token_standard?: string | null;
+    creator_address?: string | null;
+  };
+  data_status: Record<string, string>;
+}
+
+export interface TokenDataStreamEvent {
+  event: string;
+  mint?: string;
+  topic?: string;
+  timestamp_ms?: number;
+  data?: any;
+}
+
 const STORAGE_KEY = 'nodex.market-data-connection.v1';
 
 export function normalizeMarketDataSettings(value: MarketDataConnectionSettings): MarketDataConnectionSettings {
@@ -68,6 +147,78 @@ export const marketDataService = {
       throw new Error(message);
     }
     return payload as T;
+  },
+
+  async getTokenSnapshot(
+    settings: MarketDataConnectionSettings,
+    mint: string,
+    timeframe = '1M',
+  ): Promise<TokenDataSnapshot> {
+    const normalized = normalizeMarketDataSettings(settings);
+    if (!normalized.restUrl) throw new Error('Enter the Market Data REST URL in Settings.');
+    const url = new URL(
+      `/api/v1/tokens/${encodeURIComponent(mint)}/snapshot`,
+      `${normalized.restUrl}/`,
+    );
+    url.searchParams.set('timeframe', timeframe);
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = typeof payload?.error === 'string'
+        ? payload.error
+        : typeof payload === 'string' ? payload : `Market Data snapshot failed (HTTP ${response.status}).`;
+      throw new Error(message);
+    }
+    return payload as TokenDataSnapshot;
+  },
+
+  connectTokenStream(
+    settings: MarketDataConnectionSettings,
+    mint: string,
+    timeframe: string,
+    onMessage: (message: TokenDataStreamEvent) => void,
+    onStatus?: (connected: boolean, message?: string) => void,
+  ): WebSocket {
+    const normalized = normalizeMarketDataSettings(settings);
+    if (!normalized.wsUrl) throw new Error('Enter the Market Data WebSocket URL in Settings.');
+    const socket = new WebSocket(normalized.wsUrl);
+    socket.onopen = () => {
+      try {
+        socket.send(JSON.stringify({
+          command: 'subscribe',
+          mint,
+          topics: [
+            'token.market',
+            'token.chart',
+            'token.trades',
+            'token.activity',
+            'token.holders',
+            'token.info',
+            'token.creator',
+          ],
+          timeframe,
+        }));
+        onStatus?.(true, 'Subscribed to the Token Data stream.');
+      } catch (error) {
+        onStatus?.(false, error instanceof Error ? error.message : 'Could not subscribe to Token Data.');
+        socket.close();
+      }
+    };
+    socket.onmessage = (event) => {
+      try {
+        onMessage(JSON.parse(String(event.data)) as TokenDataStreamEvent);
+      } catch {
+        // Ignore malformed frames; the next valid sequence remains usable.
+      }
+    };
+    socket.onerror = () => onStatus?.(false, 'Market Data WebSocket error.');
+    socket.onclose = (event) => {
+      onStatus?.(false, event.reason || `Market Data WebSocket closed (${event.code}).`);
+    };
+    return socket;
   },
 
   async connectWebSocket(
