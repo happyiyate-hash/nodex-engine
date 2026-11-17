@@ -1188,16 +1188,16 @@ export const TokenDetailPage: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
               {[
-                { label: 'Market Cap', value: formatCompactMarketCap(marketDataSnapshot?.market?.market_cap_usd) },
-                { label: 'Liquidity', value: formatUsd(marketDataSnapshot?.market?.liquidity_usd) },
-                { label: '24H Volume', value: formatUsd(marketDataSnapshot?.market?.volume_24h_usd) },
-                { label: '24H Transactions', value: marketDataSnapshot?.market?.transactions_24h == null ? '—' : Number(marketDataSnapshot.market.transactions_24h).toLocaleString('en-US') },
-                { label: 'Total Supply', value: marketDataSnapshot?.info?.total_supply || '—' },
-                { label: 'Circulating Supply', value: marketDataSnapshot?.info?.circulating_supply || '—' },
+                { label: 'Market Cap', value: formatCompactMarketCap(marketDataSnapshot?.market?.market_cap_usd), section: 'market' },
+                { label: 'Liquidity', value: formatUsd(marketDataSnapshot?.market?.liquidity_usd), section: 'market' },
+                { label: '24H Volume', value: formatUsd(marketDataSnapshot?.market?.volume_24h_usd), section: 'market' },
+                { label: '24H Transactions', value: marketDataSnapshot?.market?.transactions_24h == null ? '—' : Number(marketDataSnapshot.market.transactions_24h).toLocaleString('en-US'), section: 'market' },
+                { label: 'Total Supply', value: marketDataSnapshot?.info?.total_supply || '—', section: 'info' },
+                { label: 'Circulating Supply', value: marketDataSnapshot?.info?.circulating_supply || '—', section: 'info' },
               ].map((item) => (
                 <div key={item.label} className="min-w-0 space-y-1">
                   <p className="text-[11px] font-normal text-white/40">{item.label}</p>
-                  {(tokenSnapshotLoading || snapshotSections.market === 'loading') && item.value === '—' ? (
+                  {(tokenSnapshotLoading || snapshotSections[item.section] === 'loading') && item.value === '—' ? (
                     <div aria-label={`Loading ${item.label}`} className="h-[21px] w-24 max-w-full animate-pulse rounded bg-white/[0.075]" />
                   ) : (
                     <p className="truncate font-mono text-[17px] font-medium leading-tight tracking-tight text-white/95">{item.value}</p>
@@ -1270,15 +1270,15 @@ export const TokenDetailPage: React.FC = () => {
           <div className="grid w-full grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Total Holders</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
-                {marketDataSnapshot?.holders?.total_count == null ? '—' : Number(marketDataSnapshot.holders.total_count).toLocaleString('en-US')}
-              </p>
+              {snapshotSections.holders === 'loading' || tokenSnapshotLoading
+                ? <div aria-label="Loading total holders" className="mt-2 h-5 w-20 animate-pulse rounded bg-white/[0.08]" />
+                : <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">{marketDataSnapshot?.holders?.total_count == null ? '—' : Number(marketDataSnapshot.holders.total_count).toLocaleString('en-US')}</p>}
             </div>
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Top 10 Ownership</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
-                {marketDataSnapshot?.holders?.top_10_ownership_pct == null ? '—' : Number(marketDataSnapshot.holders.top_10_ownership_pct).toFixed(2) + '%'}
-              </p>
+              {snapshotSections.holders === 'loading' || tokenSnapshotLoading
+                ? <div aria-label="Loading top holder concentration" className="mt-2 h-5 w-20 animate-pulse rounded bg-white/[0.08]" />
+                : <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">{marketDataSnapshot?.holders?.top_10_ownership_pct == null ? '—' : Number(marketDataSnapshot.holders.top_10_ownership_pct).toFixed(2) + '%'}</p>}
             </div>
           </div>
           <div className="space-y-3">
@@ -1385,11 +1385,15 @@ export const TokenDetailPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Buy Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatUsd(marketDataSnapshot?.market?.buy_volume_usd)}</p>
+              {snapshotSections.market === 'loading' || tokenSnapshotLoading
+                ? <div aria-label="Loading buy volume" className="mt-2 h-5 w-24 animate-pulse rounded bg-white/[0.08]" />
+                : <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatUsd(marketDataSnapshot?.market?.buy_volume_usd)}</p>}
             </div>
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Sell Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatUsd(marketDataSnapshot?.market?.sell_volume_usd)}</p>
+              {snapshotSections.market === 'loading' || tokenSnapshotLoading
+                ? <div aria-label="Loading sell volume" className="mt-2 h-5 w-24 animate-pulse rounded bg-white/[0.08]" />
+                : <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatUsd(marketDataSnapshot?.market?.sell_volume_usd)}</p>}
             </div>
           </div>
           <div className="space-y-2">
@@ -1438,8 +1442,15 @@ export const TokenDetailPage: React.FC = () => {
                   </div>
                 );
               })}
-            {!marketDataLoading && (marketDataSnapshot?.trades?.recent || []).filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? String(trade.side).toLowerCase() === 'buy' : String(trade.side).toLowerCase() === 'sell')).length === 0 && (
-              <p className="py-8 text-center text-[11px] text-white/40">No trade data available.</p>
+            {snapshotSections.trades === 'loading' || tokenSnapshotLoading ? (
+              <div aria-label="Loading recent trades" className="space-y-3 py-4">
+                {[0, 1, 2, 3].map((item) => <div key={item} className="flex animate-pulse items-center gap-3 border-b border-white/[0.05] pb-3"><div className="h-5 w-10 rounded bg-white/[0.07]" /><div className="flex-1 space-y-2"><div className="h-2 w-28 rounded bg-white/[0.07]" /><div className="h-2 w-16 rounded bg-white/[0.045]" /></div><div className="h-3 w-14 rounded bg-white/[0.07]" /></div>)}
+              </div>
+            ) : (marketDataSnapshot?.trades?.recent || []).filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? String(trade.side).toLowerCase() === 'buy' : String(trade.side).toLowerCase() === 'sell')).length === 0 && (
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.015] px-5 py-8 text-center">
+                <p className="text-[11px] font-medium text-white/65">No recent trades returned</p>
+                <p className="max-w-[230px] text-[10px] leading-relaxed text-white/35">The provider has no trade history for this token and timeframe.</p>
+              </div>
             )}
           </div>
         </section>
