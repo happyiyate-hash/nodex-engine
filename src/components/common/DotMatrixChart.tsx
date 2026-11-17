@@ -2078,15 +2078,15 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         }}
         className="z-[2] w-full min-w-0 max-w-full overflow-hidden"
       />
-      {/* Brush 1: pure-black overlay across a narrow part of the chart pane.
-          It is darkest at the far-left edge and steadily fades to transparency
-          as it moves inward to the right. Kept beneath the plotted line/candles. */}
+      {/* Brush 1: foreground black fade over the chart and plotted line.
+          Strong black starts at the far-left edge, then feathers lighter inward.
+          Floating trade amounts remain above this layer for legibility. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-[34px] bottom-[26px] z-[1] w-[30%]"
+        className="pointer-events-none absolute left-0 top-[34px] bottom-[26px] z-[3] w-[32%]"
         style={{
           background:
-            'linear-gradient(to right, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.34) 22%, rgba(0,0,0,0.18) 52%, rgba(0,0,0,0.06) 82%, rgba(0,0,0,0) 100%)',
+            'linear-gradient(to right, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.58) 20%, rgba(0,0,0,0.32) 50%, rgba(0,0,0,0.10) 82%, rgba(0,0,0,0) 100%)',
         }}
       />
       {/* Pre-rendered timestamp labels: drawn ahead of the live point and moved
