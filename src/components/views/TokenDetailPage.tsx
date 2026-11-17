@@ -300,6 +300,7 @@ export const TokenDetailPage: React.FC = () => {
               return;
             }
             marketDataSocketRef.current = socket;
+            setMarketDataWsStatus('connected');
             socket.onmessage = (messageEvent) => {
               if (cancelled) return;
               let event: Record<string, any>;
