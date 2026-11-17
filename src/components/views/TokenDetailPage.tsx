@@ -210,7 +210,9 @@ export const TokenDetailPage: React.FC = () => {
         setFloatingAmounts((previous) => {
           const now = Date.now();
           const active = previous.filter((item) => now - item.createdAt < 3400);
-          const nextLane = active.length;
+          const occupied = new Set(active.map((item) => item.lane));
+          let nextLane = 0;
+          while (occupied.has(nextLane)) nextLane += 1;
           return [...active, {
             id: ++floatingSequenceRef.current,
             createdAt: now,
@@ -254,11 +256,6 @@ export const TokenDetailPage: React.FC = () => {
           setTokenIdentity(data as TokenDataSnapshot['identity']);
           setSectionLoading((previous) => ({ ...previous, info: false }));
         }
-        return;
-      }
-
-      if (message.event === 'chart_history_started') {
-        setSectionLoading((previous) => ({ ...previous, chart: true }));
         return;
       }
 
@@ -1109,11 +1106,11 @@ export const TokenDetailPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Buy Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatOptionalUsd(buyVolume)}</p>
+              {sectionLoading.market ? <div className="mt-2 h-6 w-28 animate-pulse rounded bg-white/[0.09]" /> : <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatOptionalUsd(buyVolume)}</p>}
             </div>
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Sell Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatOptionalUsd(sellVolume)}</p>
+              {sectionLoading.market ? <div className="mt-2 h-6 w-28 animate-pulse rounded bg-white/[0.09]" /> : <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatOptionalUsd(sellVolume)}</p>}
             </div>
           </div>
 
