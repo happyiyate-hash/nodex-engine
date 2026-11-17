@@ -104,7 +104,7 @@ export const TokenDetailPage: React.FC = () => {
   } = useTerminal();
 
   const [copiedMint, setCopiedMint] = useState(false);
-  const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('1S');
+  const [timeframe, setTimeframe] = useState<'1S' | '5S' | '10S' | '1M' | '5M' | '15M' | '30M' | '1H' | '24H'>('5M');
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
@@ -167,7 +167,7 @@ export const TokenDetailPage: React.FC = () => {
     });
     setChartHistoryLoading(true);
     setConnectionNotice('');
-    setTimeframe('1S');
+    setTimeframe('5M');
     setScrubTime(null);
   }, [activeToken?.mint]);
 
