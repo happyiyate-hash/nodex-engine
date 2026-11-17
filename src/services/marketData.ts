@@ -194,10 +194,8 @@ export const marketDataService = {
             'token.market',
             'token.chart',
             'token.trades',
-            'token.activity',
             'token.holders',
             'token.info',
-            'token.creator',
           ],
           timeframe,
         }));
