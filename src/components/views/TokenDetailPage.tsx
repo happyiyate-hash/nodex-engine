@@ -554,9 +554,10 @@ export const TokenDetailPage: React.FC = () => {
   if (!activeToken) return null;
   const activePosition = positions.find((position) => position.mint === activeToken.mint && position.status === 'OPEN');
   const cachedChartPoints = chartSeriesByTimeframe[timeframe] || chartSeriesByTimeframe['24H'] || [];
-  // Prefer the backend's timeframe-specific OHLC series whenever present.
-  // REST provides the historical baseline for the selected timeframe.
-  // Confirmed WebSocket trades update only the local candles layered over it.
+  // Keep the provider's single 24-hour history as the canonical baseline.
+  // Selected timeframe is only a local chart-resolution/viewport choice; no
+  // provider request is made when the user switches these controls.
+  // Confirmed WebSocket trades and live quotes are aggregated locally.
   const historicalChartPoints = cachedChartPoints.length > 0
     ? cachedChartPoints
     : (marketDataSnapshot?.chart?.points || []);
