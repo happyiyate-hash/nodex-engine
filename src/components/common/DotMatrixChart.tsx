@@ -116,19 +116,8 @@ const TIMEFRAME_INTERVAL_MS: Record<string, number> = {
   '24H': 24 * 60 * 60_000,
 };
 
-// Exact step interval per bar in Line mode: backward scroll advances continuously
-// at 1 bar per `stepMs` instead of stepping and pausing.
-const TIMEFRAME_LIVE_STEP_MS: Record<string, number> = {
-  '1S': 1_000,
-  '5S': 1_000,
-  '10S': 2_000,
-  '1M': 1_000,
-  '5M': 3_000,
-  '15M': 6_000,
-  '30M': 10_000,
-  '1H': 15_000,
-  '24H': 30_000,
-};
+// Each bar represents the selected timeframe; short history never changes its resolution.
+const TIMEFRAME_LIVE_STEP_MS = TIMEFRAME_INTERVAL_MS;};
 
 // Minimum vertical price span (fraction of price) per timeframe so higher
 // timeframes stay calm while scaling smoothly without discrete step jumps.
@@ -704,9 +693,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const rawTargetPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
   const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
   const subBarFractionRef = useRef<number>(0);
+  // Completed bars preserve the live tip's screen position across appends.
+  const completedBarOffsetRef = useRef<number>(0);
   const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
   const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
-  const stepMsRef = useRef<number>(TIMEFRAME_LIVE_STEP_MS[timeframe] || 30_000);
+  const stepMsRef = useRef<number>(TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H']);
   const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
 
   const isUserPannedRef = useRef<boolean>(false);
@@ -748,58 +739,16 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       .sort((a, b) => a.time - b.time);
 
     if (validRaw.length === 0) {
-      const liveStep = TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000;
-      if (Number.isFinite(currentPrice) && currentPrice > 0) {
-        const nowSec = Math.floor(Date.now() / 1000) as UTCTimestamp;
-        const nowMs = nowSec * 1000;
-        const stepSec = Math.max(1, Math.floor(liveStep / 1000));
-        return {
-          resolutionMode: chartType === 'line' ? 'live-step' : 'buckets',
-          stepMs: chartType === 'line' ? liveStep : interval,
-          seedBars: [
-            {
-              time: (nowSec - stepSec) as UTCTimestamp,
-              timestampMs: nowMs - stepSec * 1000,
-              open: currentPrice,
-              high: currentPrice,
-              low: currentPrice,
-              close: currentPrice,
-            },
-            {
-              time: nowSec,
-              timestampMs: nowMs,
-              open: currentPrice,
-              high: currentPrice,
-              low: currentPrice,
-              close: currentPrice,
-            },
-          ],
-        };
-      }
-      return {
-        resolutionMode: 'buckets',
-        stepMs: interval,
-        seedBars: [],
-      };
+      // Do not fabricate a flat historical chart from the latest quote.
+      return { resolutionMode: 'buckets', stepMs: interval, seedBars: [] };
     }
 
-    const spanMs = validRaw[validRaw.length - 1].time - validRaw[0].time;
-    const useLiveStep = chartType === 'line' && spanMs < interval * 3;
-    const activeStepMs = useLiveStep
-      ? TIMEFRAME_LIVE_STEP_MS[timeframe] || 5_000
-      : interval;
-
-    // Anchor live-step buckets to the first point's second so continuous
-    // scrolling starts right from elapsed time 0 without initial phase offset jumps.
-    const originMs = useLiveStep
-      ? Math.floor(validRaw[0].time / 1000) * 1000
-      : 0;
+    // Reaggregate cached history at the selected timeframe, even with short history.
+    const activeStepMs = interval;
 
     const buckets = new Map<number, NormalizedBar>();
     for (const point of validRaw) {
-      const bucketMs = useLiveStep
-        ? originMs + Math.max(0, Math.floor((point.time - originMs) / activeStepMs)) * activeStepMs
-        : Math.floor(point.time / activeStepMs) * activeStepMs;
+      const bucketMs = Math.floor(point.time / activeStepMs) * activeStepMs;
       const bucketSec = Math.floor(bucketMs / 1000) as UTCTimestamp;
       const open =
         Number.isFinite(point.open) && (point.open as number) > 0
@@ -868,7 +817,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     }
 
     return {
-      resolutionMode: useLiveStep ? 'live-step' : 'buckets',
+      resolutionMode: 'buckets',
       stepMs: activeStepMs,
       seedBars: ordered.slice(-2000),
     };
@@ -1548,9 +1497,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           const last = committed[committed.length - 1];
           const activeStepMs = Math.max(1_000, stepMsRef.current);
           const elapsedMs = Math.max(0, Date.now() - last.timestampMs);
-          const fraction = chartTypeRef.current === 'line'
-            ? Math.min(2000, elapsedMs / activeStepMs)
-            : Math.min(0.9999, elapsedMs / activeStepMs);
+          const fraction = Math.max(0, Math.min(0.9999, elapsedMs / activeStepMs));
           subBarFractionRef.current = fraction;
 
           if (chartTypeRef.current === 'line' && displayP > 0) {
@@ -1594,7 +1541,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             // The fractional offset is what produces the smooth pump.fun-style
             // leftward drift; repeatedly snapping to BASE_RIGHT_OFFSET froze it.
-            const scrollPosition = BASE_RIGHT_OFFSET + fraction;
+            const scrollPosition = BASE_RIGHT_OFFSET + completedBarOffsetRef.current + fraction;
             lastAppliedScrollPosRef.current = scrollPosition;
             isApplyingAutoScrollRef.current = true;
             try {
@@ -1776,6 +1723,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     if (needsFullReseed) {
       const cloned = seedBars.map((bar) => ({ ...bar }));
+      completedBarOffsetRef.current = 0;
       // Snap the new interval to its own bounds; never ease from the previous scale.
       latestVisibleBoundsRef.current = null;
       targetYRangeRef.current = null;
@@ -1861,6 +1809,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // Rebuild the ordered history rather than trying to append that older
         // timestamp through Lightweight Charts' incremental update API.
         const corrected = seedBars.map((bar) => ({ ...bar }));
+        const previousLatestTime = committed[committed.length - 1]?.time;
+        if (previousLatestTime !== undefined) {
+          completedBarOffsetRef.current += corrected.filter((bar) => bar.time > previousLatestTime).length;
+        }
         committedBarsRef.current = corrected;
         renderedCandleRef.current = corrected.length ? { ...corrected[corrected.length - 1] } : null;
         isApplyingAutoScrollRef.current = true;
@@ -1870,13 +1822,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
           })));
           if (!isUserPannedRef.current) {
-            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            chart.timeScale().scrollToPosition(
+              BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current,
+              false,
+            );
           }
         } finally {
           isApplyingAutoScrollRef.current = false;
         }
       } else if (!lastCommitted || latest.time > lastCommitted.time) {
         const nextBars = seedBars.filter((bar) => !lastCommitted || bar.time > lastCommitted.time);
+        completedBarOffsetRef.current += nextBars.length;
         for (const bar of nextBars) {
           const nextCandle = { ...bar };
           committed.push(nextCandle);
@@ -1897,7 +1853,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           isApplyingAutoScrollRef.current = true;
           try {
             lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
-            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            chart.timeScale().scrollToPosition(
+              BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current,
+              false,
+            );
           } finally {
             isApplyingAutoScrollRef.current = false;
           }
@@ -1925,6 +1884,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // Re-seed both series in chronological order and return the viewport
         // to the latest candle rather than drawing backward.
         const corrected = seedBars.map((bar) => ({ ...bar }));
+        const previousLatestTime = committed[committed.length - 1]?.time;
+        if (previousLatestTime !== undefined) {
+          completedBarOffsetRef.current += corrected.filter((bar) => bar.time > previousLatestTime).length;
+        }
         committedBarsRef.current = corrected;
         isApplyingAutoScrollRef.current = true;
         try {
@@ -1933,7 +1896,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             time: bar.time, open: bar.open, high: bar.high, low: bar.low, close: bar.close,
           })));
           if (!isUserPannedRef.current) {
-            chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+            chart.timeScale().scrollToPosition(
+              BASE_RIGHT_OFFSET + completedBarOffsetRef.current + subBarFractionRef.current,
+              false,
+            );
           }
         } finally {
           isApplyingAutoScrollRef.current = false;
@@ -1984,6 +1950,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     const chart = chartRef.current;
     const targetPos =
       BASE_RIGHT_OFFSET +
+      completedBarOffsetRef.current +
       (chartTypeRef.current === 'line' ? subBarFractionRef.current : 0);
 
     isUserPannedRef.current = false;
