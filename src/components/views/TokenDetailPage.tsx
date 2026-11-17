@@ -1045,45 +1045,6 @@ export const TokenDetailPage: React.FC = () => {
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-3 pb-6 pt-5">
-          <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/[0.07] bg-white/[0.018] p-3">
-            <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX · market-cap stream</p>
-              <p className={`mt-1 truncate text-[10px] font-medium ${sniperSubscriptionStatus === 'connected' ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
-                {sniperSubscriptionStatus === 'connected' ? 'Market cap updating' : 'Waiting for market cap'}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX WebSocket · sniper</p>
-              <p className={`mt-1 truncate text-[10px] font-medium ${sniperSubscriptionStatus === 'connected' ? 'text-emerald-300/80' : sniperSubscriptionStatus === 'rejected' || sniperSubscriptionStatus === 'disconnected' ? 'text-red-300/80' : 'text-amber-300/80'}`}>
-                {sniperSubscriptionStatus === 'connecting' ? 'Subscribing…' : sniperSubscriptionStatus === 'connected' ? 'Subscribed' : sniperSubscriptionStatus === 'rejected' ? 'Subscription rejected' : 'Disconnected'}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">Market Data · snapshot</p>
-              <p className={`mt-1 truncate text-[10px] font-medium ${marketDataBackendStatus === 'received' ? 'text-emerald-300/80' : marketDataBackendStatus === 'failed' ? 'text-red-300/80' : 'text-amber-300/80'}`}>
-                {marketDataBackendStatus === 'not_configured' ? 'Not configured' : marketDataBackendStatus === 'connecting' ? 'Connecting…' : marketDataBackendStatus === 'loading' ? 'Loading sections…' : marketDataBackendStatus === 'received' ? 'Snapshot received' : 'Request failed'}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">Market Data · live updates</p>
-              <p className={`mt-1 truncate text-[10px] font-medium ${marketDataWsStatus === 'subscribed' ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
-                {marketDataWsStatus === 'connecting' ? 'Connecting…' : marketDataWsStatus === 'connected' ? 'Connected · subscribing' : marketDataWsStatus === 'subscribed' ? 'Live subscription active' : 'Using REST data'}
-              </p>
-            </div>
-            <div className="col-span-2 grid grid-cols-3 gap-x-2 gap-y-1 border-t border-white/[0.06] pt-2">
-              {(['identity', 'market', 'chart', 'trades', 'holders', 'info'] as const).map((section) => {
-                const status = snapshotSections[section] || 'loading';
-                return (
-                  <div key={section} className="flex min-w-0 items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${status === 'available' ? 'bg-emerald-300' : status === 'loading' ? 'animate-pulse bg-amber-300' : 'bg-white/20'}`} />
-                    <span className="truncate text-[9px] capitalize text-white/45">{section}</span>
-                    <span className="ml-auto text-[8px] text-white/25">{status === 'available' ? 'OK' : status === 'loading' ? '…' : 'N/A'}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-          </div>
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
