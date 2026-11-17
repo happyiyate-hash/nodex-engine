@@ -401,10 +401,6 @@ export const TokenDetailPage: React.FC = () => {
                   markSection('trades', true);
                 }
                 if (event.event === 'activity_update' && (side === 'buy' || side === 'sell') && !processedActivityIdsRef.current.has(activityId)) {
-                  const activityPrice = Number(data.price_usd);
-                  if (Number.isFinite(activityPrice) && activityPrice > 0) {
-                    setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: activityPrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' }].slice(-1000));
-                  }
                   processedActivityIdsRef.current.add(activityId);
                   if (processedActivityIdsRef.current.size > 2000) {
                     const recentIds = Array.from(processedActivityIdsRef.current).slice(-1000);
