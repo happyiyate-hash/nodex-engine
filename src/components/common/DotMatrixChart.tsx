@@ -699,6 +699,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
   // Continuous live-motion refs (60fps smooth price, horizontal scroll, and Y scale)
   const committedBarsRef = useRef<NormalizedBar[]>([]);
+  // The candle renderer eases toward confirmed Token Data OHLC updates; it never creates trades.
+  const renderedCandleRef = useRef<NormalizedBar | null>(null);
   const rawTargetPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
   const smoothedPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
   const subBarFractionRef = useRef<number>(0);
@@ -1537,38 +1539,66 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const displayP =
           smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
 
-        // 2. Keep the viewport pinned to the newest actual data point.
-        // Do not synthesize clock-driven bars or scroll through elapsed time.
+        // 2. Glide the timeline fractionally between real market-data bars.
+        // No timer-created trades or candles are added: the line's live tip
+        // advances smoothly while the confirmed history drifts left beneath it.
         const committed = committedBarsRef.current;
         let committedNewBar = false;
-        if (chartTypeRef.current === 'line' && committed.length > 0 && displayP > 0) {
+        if (committed.length > 0) {
           const last = committed[committed.length - 1];
-          // A quote may smoothly update the live tip, but it stays on the
-          // current real data timestamp. A new horizontal bar is created
-          // only when an actual market-data tick adds a newer bucket.
-          last.close = displayP;
-          last.high = Math.max(last.high, displayP);
-          last.low = Math.min(last.low, displayP);
-          lineSeries.update({ time: last.time, value: displayP });
-          subBarFractionRef.current = 0;
+          const activeStepMs = Math.max(1_000, stepMsRef.current);
+          const elapsedMs = Math.max(0, Date.now() - last.timestampMs);
+          const fraction = chartTypeRef.current === 'line'
+            ? Math.min(2000, elapsedMs / activeStepMs)
+            : Math.min(0.9999, elapsedMs / activeStepMs);
+          subBarFractionRef.current = fraction;
+
+          if (chartTypeRef.current === 'line' && displayP > 0) {
+            // Quote interpolation changes only the live line tip, not the
+            // historical trade timestamps or the underlying data source.
+            last.close = displayP;
+            last.high = Math.max(last.high, displayP);
+            last.low = Math.min(last.low, displayP);
+            lineSeries.update({ time: last.time, value: displayP });
+          } else if (chartTypeRef.current === 'candle') {
+            // Ease the displayed active candle toward the latest confirmed OHLC.
+            // The target remains the real Token Data candle in committedBarsRef.
+            const target = last;
+            let rendered = renderedCandleRef.current;
+            if (!rendered || rendered.time !== target.time) {
+              rendered = { ...target };
+            } else {
+              const candleBlend = 1 - Math.exp(-14 * dt);
+              const close = rendered.close + (target.close - rendered.close) * candleBlend;
+              const high = rendered.high + (target.high - rendered.high) * candleBlend;
+              const low = rendered.low + (target.low - rendered.low) * candleBlend;
+              rendered = {
+                time: target.time,
+                timestampMs: target.timestampMs,
+                open: target.open,
+                high: Math.max(target.open, close, high),
+                low: Math.min(target.open, close, low),
+                close,
+              };
+            }
+            renderedCandleRef.current = rendered;
+            candleSeries.update({
+              time: rendered.time,
+              open: rendered.open,
+              high: rendered.high,
+              low: rendered.low,
+              close: rendered.close,
+            });
+          }
 
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
-            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
+            // The fractional offset is what produces the smooth pump.fun-style
+            // leftward drift; repeatedly snapping to BASE_RIGHT_OFFSET froze it.
+            const scrollPosition = BASE_RIGHT_OFFSET + fraction;
+            lastAppliedScrollPosRef.current = scrollPosition;
             isApplyingAutoScrollRef.current = true;
             try {
-              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
-            } finally {
-              isApplyingAutoScrollRef.current = false;
-            }
-            isAutoPositioningRef.current = false;
-          }
-        } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
-          subBarFractionRef.current = 0;
-          if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
-            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
-            isApplyingAutoScrollRef.current = true;
-            try {
-              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
+              chart.timeScale().scrollToPosition(scrollPosition, false);
             } finally {
               isApplyingAutoScrollRef.current = false;
             }
@@ -1751,6 +1781,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       targetYRangeRef.current = null;
       animYRangeRef.current = null;
       committedBarsRef.current = cloned;
+      renderedCandleRef.current = cloned.length ? { ...cloned[cloned.length - 1] } : null;
       isUserPannedRef.current = false;
       isPointerInteractingRef.current = false;
       pointerStartRef.current = null;
@@ -1831,6 +1862,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // timestamp through Lightweight Charts' incremental update API.
         const corrected = seedBars.map((bar) => ({ ...bar }));
         committedBarsRef.current = corrected;
+        renderedCandleRef.current = corrected.length ? { ...corrected[corrected.length - 1] } : null;
         isApplyingAutoScrollRef.current = true;
         try {
           lineSeries.setData(corrected.map((bar) => ({ time: bar.time, value: bar.close })));
@@ -1849,6 +1881,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           const nextCandle = { ...bar };
           committed.push(nextCandle);
           lineSeries.update({ time: nextCandle.time, value: nextCandle.close });
+          renderedCandleRef.current = { ...nextCandle };
           candleSeries.update({
             time: nextCandle.time,
             open: nextCandle.open,
@@ -1881,13 +1914,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           isApplyingAutoScrollRef.current = true;
           try {
             lineSeries.update({ time: updated.time, value: updated.close });
-            candleSeries.update({
-              time: updated.time,
-              open: updated.open,
-              high: updated.high,
-              low: updated.low,
-              close: updated.close,
-            });
+            // Do not snap the visible candle to a new trade price; the RAF loop
+            // interpolates this confirmed OHLC target over successive frames.
           } finally {
             isApplyingAutoScrollRef.current = false;
           }
