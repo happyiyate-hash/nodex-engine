@@ -379,7 +379,7 @@ export const TokenDetailPage: React.FC = () => {
                 if (event.event === 'trade_update' && (side === 'buy' || side === 'sell')) {
                   const tradePrice = Number(data.price_usd);
                   if (Number.isFinite(tradePrice) && tradePrice > 0) {
-                    setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: tradePrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' }].slice(-1000));
+                    setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: tradePrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' as const }].slice(-1000));
                   }
                   const liveTrade = {
                     signature,
@@ -428,7 +428,7 @@ export const TokenDetailPage: React.FC = () => {
               if (event.event === 'market_update' && event.topic === 'token.market') {
                 const tokenPrice = Number(data.price_usd);
                 if (Number.isFinite(tokenPrice) && tokenPrice > 0) {
-                  setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: tokenPrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' }].slice(-1000));
+                  setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: tokenPrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' as const }].slice(-1000));
                 }
                 setMarketDataSnapshot((previous) => {
                   const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
@@ -526,7 +526,7 @@ export const TokenDetailPage: React.FC = () => {
           if (Number.isFinite(solUsd) && solUsd > 0) marketCap = marketCapSol * solUsd;
         }
         if (marketCap != null) {
-          setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: marketCap, volume: 0, source: 'marketCap' }].slice(-1000));
+          setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || Date.parse(event.timestamp) || Date.now()), value: marketCap, volume: 0, source: 'marketCap' as const }].slice(-1000));
           setMarketDataSnapshot((previous) => {
             const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
             return { ...base, market: { ...base.market, market_cap_usd: marketCap } };
