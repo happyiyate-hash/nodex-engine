@@ -704,7 +704,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const subBarFractionRef = useRef<number>(0);
   const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
   const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
-  const lastTickWallMsRef = useRef<number>(Date.now());
   const stepMsRef = useRef<number>(TIMEFRAME_LIVE_STEP_MS[timeframe] || 30_000);
   const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
 
@@ -1095,7 +1094,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         borderVisible: false,
         entireTextOnly: true,
         minimumWidth: 44,
-        scaleMargins: { top: 0.11, bottom: 0.015 },
+        scaleMargins: { top: 0.1, bottom: 0.1 },
       },
       timeScale: {
         borderVisible: true,
@@ -1536,89 +1535,44 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const displayP =
           smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
 
-        // 2. Keep the viewport immediately positioned at the latest bar + timed bar commits in Line mode
+        // 2. Keep the viewport pinned to the newest actual data point.
+        // Do not synthesize clock-driven bars or scroll through elapsed time.
         const committed = committedBarsRef.current;
-        const activeStepMs = Math.max(1_000, stepMsRef.current);
-        const nowWall = Date.now();
-        const isFeedLive =
-          nowWall - lastTickWallMsRef.current <= Math.max(activeStepMs * 1.5, 6_000);
-
         let committedNewBar = false;
-        if (
-          chartTypeRef.current === 'line' &&
-          committed.length > 0 &&
-          displayP > 0
-        ) {
-          if (isFeedLive) {
-            let last = committed[committed.length - 1];
-            // Never replay missed intervals from the oldest historical bar.
-            // Jump directly to the current wall-clock bucket and draw the
-            // latest value there, leaving the historical series in place.
-            const currentBucketMs = Math.floor(nowWall / activeStepMs) * activeStepMs;
-            if (currentBucketMs > last.timestampMs) {
-              const nextSec = Math.floor(currentBucketMs / 1000) as UTCTimestamp;
-              const nextBar: NormalizedBar = {
-                time: nextSec,
-                timestampMs: currentBucketMs,
-                open: last.close,
-                high: Math.max(last.close, displayP),
-                low: Math.min(last.close, displayP),
-                close: displayP,
-              };
-              committed.push(nextBar);
-              if (committed.length > 2000) {
-                committed.splice(0, committed.length - 2000);
-              }
-              last = nextBar;
-              committedNewBar = true;
-            } else {
-              last.close = displayP;
-              last.high = Math.max(last.high, displayP);
-              last.low = Math.min(last.low, displayP);
-            }
-            lineSeries.update({ time: last.time, value: displayP });
-            subBarFractionRef.current = Math.max(
-              0,
-              Math.min(0.9999, (nowWall - last.timestampMs) / activeStepMs),
-            );
-          } else {
-            subBarFractionRef.current = 0;
-          }
+        if (chartTypeRef.current === 'line' && committed.length > 0 && displayP > 0) {
+          const last = committed[committed.length - 1];
+          // A quote may smoothly update the live tip, but it stays on the
+          // current real data timestamp. A new horizontal bar is created
+          // only when an actual market-data tick adds a newer bucket.
+          last.close = displayP;
+          last.high = Math.max(last.high, displayP);
+          last.low = Math.min(last.low, displayP);
+          lineSeries.update({ time: last.time, value: displayP });
+          subBarFractionRef.current = 0;
 
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
-            const targetScrollPos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
-            // Keep the viewport pinned to the newest bar. Do not animate
-            // across historical bars after initial load or timeframe changes.
-            // Price smoothing remains independent and still animates live ticks.
-            lastAppliedScrollPosRef.current = targetScrollPos;
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
             isApplyingAutoScrollRef.current = true;
             try {
-              chart.timeScale().scrollToPosition(targetScrollPos, false);
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
             } finally {
               isApplyingAutoScrollRef.current = false;
             }
             isAutoPositioningRef.current = false;
           }
         } else if (chartTypeRef.current === 'candle' && committed.length > 0) {
-          // Candles are trade-driven only. Do not apply the smoothed quote
-          // (which may come from the market-data/engine price WebSocket) to
-          // the active candle: doing so creates false highs/lows and makes
-          // the OHLC chart disagree with the confirmed trade stream.
           subBarFractionRef.current = 0;
-
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
-            const targetScrollPos = BASE_RIGHT_OFFSET;
-            // Candle mode also stays pinned to the newest confirmed trade bar.
+            lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
             isApplyingAutoScrollRef.current = true;
             try {
-              chart.timeScale().scrollToPosition(targetScrollPos, false);
+              chart.timeScale().scrollToPosition(BASE_RIGHT_OFFSET, false);
             } finally {
               isApplyingAutoScrollRef.current = false;
             }
             isAutoPositioningRef.current = false;
           }
         }
-
         // 3. Smooth Y-axis scale easing without sudden step jumps
         if (latestVisibleBoundsRef.current) {
           const nextTarget = computeTargetYRange(
@@ -1771,7 +1725,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     if (Number.isFinite(currentPrice) && currentPrice > 0) {
       rawTargetPriceRef.current = currentPrice;
-      lastTickWallMsRef.current = Date.now();
     }
 
     const firstTime = seedBars[0]?.time ?? 0;
