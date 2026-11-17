@@ -857,9 +857,11 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       return {
         resolutionMode: 'buckets',
         stepMs: activeStepMs,
+        // Keep the full provider-supplied 24-hour window. The viewport is
+        // positioned at the newest edge; do not truncate history to 24 bars.
         seedBars: ordered
           .filter((bar) => bar.timestampMs >= latestMs - 24 * 60 * 60_000)
-          .slice(-24),
+          .slice(-2000),
       };
     }
 
