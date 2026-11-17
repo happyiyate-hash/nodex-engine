@@ -153,8 +153,7 @@ export const TokenDetailPage: React.FC = () => {
     setScrubTime(null);
   }, [activeToken?.mint]);
 
-  // NodeX sniper engine is the single live source for market cap and confirmed trades.
-  // Market ticks update the market panel only; confirmed trades alone feed CandleEngine.
+  // NodeX contributes only market-cap updates. Token Data owns chart history and trades.
   useEffect(() => {
     const mint = activeToken?.mint;
     if (!mint) return;
@@ -162,9 +161,7 @@ export const TokenDetailPage: React.FC = () => {
     let currentSolUsd = 0;
     setMarketDataLoading(true);
     setTokenSnapshotLoading(true);
-    setTokenSnapshotError('');
     setChartHistoryLoading(true);
-    setMarketDataError('');
     setSniperSubscriptionStatus('connecting');
 
     // NodeX is used only for its live market-cap quote. Position state is already
@@ -789,9 +786,7 @@ export const TokenDetailPage: React.FC = () => {
               </div>
               <span className="text-[11px] font-medium text-white/65">No chart history yet</span>
               <span className="max-w-[250px] text-[10px] leading-relaxed text-white/35">
-                {tokenSnapshotError
-                  ? 'The token snapshot could not be loaded. Live confirmed trades will appear here when the stream is available.'
-                  : `No saved candles are available for ${timeframe}. Waiting for new confirmed trades.`}
+                {`No chart history is available for ${timeframe} from the Token Data service yet.`}
               </span>
             </div>
           )}
