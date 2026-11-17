@@ -409,7 +409,7 @@ export const TokenDetailPage: React.FC = () => {
                   const volumeUsd = Number(data.volume_usd);
                   const amountSol = Number(data.amount_sol);
                   const amount = Number.isFinite(volumeUsd) && volumeUsd > 0 ? volumeUsd : amountSol;
-                  const unit = Number.isFinite(volumeUsd) && volumeUsd > 0 ? 'USD' : 'SOL';
+                  const unit: 'USD' | 'SOL' = Number.isFinite(volumeUsd) && volumeUsd > 0 ? 'USD' : 'SOL';
                   if (Number.isFinite(amount) && amount > 0) {
                     const now = Date.now();
                     const delayMs = Math.max(0, nextFloatingAnimationAtRef.current - now);
