@@ -426,9 +426,14 @@ export const TokenDetailPage: React.FC = () => {
                 return;
               }
               if (event.event === 'market_update' && event.topic === 'token.market') {
+                const tickTimestamp = Number(data.timestamp_ms || event.timestamp_ms || Date.now());
                 const tokenPrice = Number(data.price_usd);
+                const tokenMarketCap = Number(data.market_cap_usd);
                 if (Number.isFinite(tokenPrice) && tokenPrice > 0) {
-                  setLiveChartTicks((previous) => [...previous, { timestamp_ms: Number(data.timestamp_ms || event.timestamp_ms || Date.now()), value: tokenPrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' as const }].slice(-1000));
+                  setLiveChartTicks((previous) => [...previous, { timestamp_ms: tickTimestamp, value: tokenPrice, volume: Math.max(0, Number(data.volume_usd || 0)), source: 'price' as const }].slice(-1000));
+                }
+                if (Number.isFinite(tokenMarketCap) && tokenMarketCap > 0) {
+                  setLiveChartTicks((previous) => [...previous, { timestamp_ms: tickTimestamp, value: tokenMarketCap, volume: 0, source: 'marketCap' as const }].slice(-1000));
                 }
                 setMarketDataSnapshot((previous) => {
                   const base = previous?.mint === mint ? previous : emptyTokenSnapshot(mint, timeframe);
@@ -570,11 +575,19 @@ export const TokenDetailPage: React.FC = () => {
     const intervalMs: Record<string, number> = { '1S': 1_000, '5S': 5_000, '10S': 10_000, '1M': 60_000, '5M': 300_000, '15M': 900_000, '30M': 1_800_000, '1H': 3_600_000, '24H': 86_400_000 };
     const bucketSize = intervalMs[timeframe] || 300_000;
     const hasHistoricalPrice = historicalChartPoints.length > 0;
-    const hasLivePrice = liveChartTicks.some((tick) => tick.source === 'price');
-    // Never mix token-price candles with market-cap values. Use market cap only
-    // when the provider has supplied no token-price history or live price ticks.
-    const selectedSource: 'price' | 'marketCap' = hasHistoricalPrice || hasLivePrice ? 'price' : 'marketCap';
-    const merged = new Map<number, TokenChartPoint>(historicalChartPoints.map((point) => [point.timestamp_ms, { ...point }]));
+    const latestPriceTick = liveChartTicks.filter((tick) => tick.source === 'price').slice(-1)[0];
+    const latestMarketCapTick = liveChartTicks.filter((tick) => tick.source === 'marketCap').slice(-1)[0];
+    // Prefer a live token-price feed. If no live price has arrived but market cap
+    // is streaming, convert the historical baseline to market-cap scale and plot it.
+    const useMarketCap = Boolean(latestMarketCapTick && !latestPriceTick);
+    const selectedSource: 'price' | 'marketCap' = useMarketCap ? 'marketCap' : 'price';
+    const lastHistoricalPrice = historicalChartPoints.length ? historicalChartPoints[historicalChartPoints.length - 1].close : 0;
+    const marketCapScale = useMarketCap && lastHistoricalPrice > 0 ? latestMarketCapTick.value / lastHistoricalPrice : 1;
+    const baselinePoints = historicalChartPoints.map((point) => {
+      if (marketCapScale === 1) return { ...point };
+      return { ...point, open: point.open * marketCapScale, high: point.high * marketCapScale, low: point.low * marketCapScale, close: point.close * marketCapScale };
+    });
+    const merged = new Map<number, TokenChartPoint>(baselinePoints.map((point) => [point.timestamp_ms, point]));
     const ticks = liveChartTicks.filter((tick) => tick.source === selectedSource && Number.isFinite(tick.value) && tick.value > 0).slice().sort((a, b) => a.timestamp_ms - b.timestamp_ms);
     for (const tick of ticks) {
       const bucketTime = Math.floor(tick.timestamp_ms / bucketSize) * bucketSize;
