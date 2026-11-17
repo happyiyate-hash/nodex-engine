@@ -912,7 +912,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       const activeBand = Math.max(0.4, 1 - topFrac - bottomFrac);
       const effectiveSpan = Math.max(tfMinSpan, rawSpan / activeBand);
 
-      const minValue = Math.max(0, visMin - effectiveSpan * bottomFrac);
+      // Keep the scale fitted to the actual positive data range; do not force a zero baseline.
+      const minValue = Math.max(Number.EPSILON, visMin - effectiveSpan * bottomFrac);
       const maxValue = minValue + effectiveSpan;
       return { minValue, maxValue };
     },
@@ -1732,6 +1733,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     isUserPannedRef.current = false;
     lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
     setIsPanned(false);
+    // Reset old interval bounds so the next interval cannot inherit its scale.
+    latestVisibleBoundsRef.current = null;
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
     chart.applyOptions({
       timeScale: {
         secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
@@ -1786,6 +1791,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     if (needsFullReseed) {
       const cloned = seedBars.map((bar) => ({ ...bar }));
+      // Snap the new interval to its own bounds; never ease from the previous scale.
+      latestVisibleBoundsRef.current = null;
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
       committedBarsRef.current = cloned;
       isUserPannedRef.current = false;
       isPointerInteractingRef.current = false;
