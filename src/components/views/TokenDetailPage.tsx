@@ -46,7 +46,7 @@ function normalizeTokenDetailSnapshot(raw: Record<string, any>, mint: string): T
       close: Number(candle.close ?? candle.close_price ?? candle.price ?? 0),
       volume: Number(candle.volume_usd ?? candle.volume_sol ?? candle.volume ?? 0),
     };
-  }).filter((point) =>
+  }).filter((point: TokenChartPoint) =>
     Number.isFinite(point.timestamp_ms) && point.timestamp_ms > 0 &&
     Number.isFinite(point.open) && point.open > 0 &&
     Number.isFinite(point.high) && point.high > 0 &&
@@ -392,7 +392,7 @@ export const TokenDetailPage: React.FC = () => {
                 low: Number(point.low),
                 close: Number(point.close),
                 volume: Number(point.volume || 0),
-              })).filter((point) => Number.isFinite(point.timestamp_ms) && point.timestamp_ms > 0 && point.close > 0);
+              })).filter((point: TokenChartPoint) => Number.isFinite(point.timestamp_ms) && point.timestamp_ms > 0 && point.close > 0);
               setChartSeriesByTimeframe((previous) => ({
                 ...previous,
                 [chartTimeframe]: [...(previous[chartTimeframe] || []), ...points],
