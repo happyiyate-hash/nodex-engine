@@ -3,8 +3,6 @@ import { useTerminal } from '../../context/TerminalContext';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
 import { wsService } from '../../services/websocket';
-import { CandleEngine, type ConfirmedTrade } from '../../services/candleEngine';
-import { apiClient } from '../../services/rest';
 import { marketDataService } from '../../services/marketData';
 import {
   ChevronLeft,
@@ -111,8 +109,6 @@ export const TokenDetailPage: React.FC = () => {
   const [floatingAmounts, setFloatingAmounts] = useState<FloatingTradeAmount[]>([]);
   const nextFloatingAnimationAtRef = useRef(0);
   const [chartSeriesByTimeframe, setChartSeriesByTimeframe] = useState<Record<string, TokenChartPoint[]>>({});
-  const tradeCandleEngineRef = useRef(new CandleEngine());
-  const lastTradeCursorRef = useRef(0);
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
     active: false,
@@ -128,20 +124,12 @@ export const TokenDetailPage: React.FC = () => {
   const [marketDataSnapshot, setMarketDataSnapshot] = useState<TokenDataSnapshot | null>(null);
   const [marketDataLoading, setMarketDataLoading] = useState(false);
   const [tokenSnapshotLoading, setTokenSnapshotLoading] = useState(true);
-  const [tokenSnapshotError, setTokenSnapshotError] = useState('');
   const [sniperSubscriptionStatus, setSniperSubscriptionStatus] = useState<'connecting' | 'connected' | 'rejected' | 'disconnected'>('connecting');
   const [marketDataBackendStatus, setMarketDataBackendStatus] = useState<'not_configured' | 'connecting' | 'loading' | 'received' | 'failed'>('not_configured');
-  const [marketDataBackendError, setMarketDataBackendError] = useState('');
   const [marketDataWsStatus, setMarketDataWsStatus] = useState<'connecting' | 'connected' | 'subscribed' | 'disconnected' | 'error'>('disconnected');
   const [snapshotSections, setSnapshotSections] = useState<Record<string, 'loading' | 'available' | 'unavailable'>>({});
   const marketDataSocketRef = useRef<WebSocket | null>(null);
-  const marketDataFallbackTimerRef = useRef<number | null>(null);
   const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
-  const [marketDataError, setMarketDataError] = useState('');
-  const [marketDataStreamConnected, setMarketDataStreamConnected] = useState(false);
-  const [latestConfirmedTradePrice, setLatestConfirmedTradePrice] = useState<number | null>(null);
-  const [marketDataStreamError, setMarketDataStreamError] = useState('');
-  const [connectionNotice, setConnectionNotice] = useState('');
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
@@ -150,35 +138,20 @@ export const TokenDetailPage: React.FC = () => {
     : null;
 
   useEffect(() => {
-    tradeCandleEngineRef.current.reset();
-    lastTradeCursorRef.current = 0;
-    setLatestConfirmedTradePrice(null);
     setMarketDataSnapshot(null);
     setChartSeriesByTimeframe({});
     setTokenSnapshotLoading(true);
-    setTokenSnapshotError('');
     setSniperSubscriptionStatus('connecting');
     setMarketDataBackendStatus('connecting');
-    setMarketDataBackendError('');
     setMarketDataWsStatus('connecting');
     setSnapshotSections({
       identity: 'loading', market: 'loading', chart: 'loading',
       trades: 'loading', holders: 'loading', info: 'loading',
     });
     setChartHistoryLoading(true);
-    setConnectionNotice('');
     setTimeframe('5M');
     setScrubTime(null);
   }, [activeToken?.mint]);
-
-  // Keep connection and loading failures visible until the user dismisses them.
-  // A successful recovery does not auto-hide an error already shown to the user.
-  useEffect(() => {
-    const message = marketDataStreamError || marketDataError;
-    if (message && !message.startsWith('Recovering confirmed trades after a stream gap')) {
-      setConnectionNotice(message);
-    }
-  }, [marketDataError, marketDataStreamError]);
 
   // NodeX sniper engine is the single live source for market cap and confirmed trades.
   // Market ticks update the market panel only; confirmed trades alone feed CandleEngine.
@@ -192,7 +165,6 @@ export const TokenDetailPage: React.FC = () => {
     setTokenSnapshotError('');
     setChartHistoryLoading(true);
     setMarketDataError('');
-    setMarketDataStreamError('');
     setSniperSubscriptionStatus('connecting');
 
     // NodeX is used only for its live market-cap quote. Position state is already
@@ -452,9 +424,7 @@ export const TokenDetailPage: React.FC = () => {
 
     const unsubscribeStatus = wsService.onStatusChange((status) => {
       const connected = status === 'connected';
-      setMarketDataStreamConnected(connected);
       setSniperSubscriptionStatus(connected ? 'connecting' : 'disconnected');
-      setMarketDataStreamError('');
     });
 
     const unsubscribeEvents = wsService.subscribe((event) => {
@@ -492,10 +462,6 @@ export const TokenDetailPage: React.FC = () => {
 
     return () => {
       cancelled = true;
-      if (marketDataFallbackTimerRef.current !== null) {
-        window.clearTimeout(marketDataFallbackTimerRef.current);
-        marketDataFallbackTimerRef.current = null;
-      }
       marketDataSocketRef.current?.close();
       marketDataSocketRef.current = null;
       unsubscribeEvents();
@@ -521,9 +487,6 @@ export const TokenDetailPage: React.FC = () => {
     const merged = new Map<number, TokenChartPoint>(
       historicalChartPoints.map((point) => [point.timestamp_ms, point])
     );
-    for (const point of tradeCandleEngineRef.current.getPoints(timeframe)) {
-      merged.set(point.timestamp_ms, point);
-    }
     return [...merged.values()]
       .sort((a, b) => a.timestamp_ms - b.timestamp_ms)
       .slice(-5000);
@@ -543,7 +506,7 @@ export const TokenDetailPage: React.FC = () => {
   const tokenLogoUrl = marketDataSnapshot?.identity?.logo_url || activeToken.logo_url;
   const creatorAddress = marketDataSnapshot?.identity?.creator_address || marketDataSnapshot?.info?.creator_address || activeToken.creator_wallet || '';
   // Chart price is the last confirmed swap, never an account/market-cap quote.
-  const liveTokenPrice = Number(latestConfirmedTradePrice ?? lastChartPoint?.close ?? 0);
+  const liveTokenPrice = Number(lastChartPoint?.close ?? 0);
   const marketCap = marketDataSnapshot?.market?.market_cap_usd ?? null;
   const marketChangePct = marketDataSnapshot?.market?.change_24h_pct ?? null;
   const isPositive = (marketChangePct ?? 0) >= 0;
@@ -670,17 +633,7 @@ export const TokenDetailPage: React.FC = () => {
         </div>
       </header>
 
-      {connectionNotice && (
-        <div className="pointer-events-none absolute inset-x-0 z-[60] px-3" style={{ top: 'calc(env(safe-area-inset-top) + 64px)' }} role="alert" aria-live="assertive">
-          <div className="pointer-events-auto flex min-w-0 animate-[nodex-toast-drop_220ms_ease-out] items-start gap-2.5 rounded-lg border border-[#F0B45A]/30 bg-[#241A0B]/95 px-3 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[#F0B45A]" aria-hidden="true" />
-            <p className="min-w-0 flex-1 break-words text-[11px] leading-relaxed text-[#F6D7A8]">{connectionNotice}</p>
-            <button type="button" onClick={() => setConnectionNotice('')} aria-label="Dismiss notification" title="Dismiss notification" className="-mr-1 -mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#F6D7A8]/70 transition-colors hover:bg-white/[0.08] hover:text-white">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
+
       <div
         className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 59px)' }}
