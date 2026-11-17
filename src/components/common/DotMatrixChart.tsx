@@ -695,7 +695,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
   const trendDirectionRef = useRef<'up' | 'down'>(isPositive ? 'up' : 'down');
   const directionAnchorPriceRef = useRef<number>(currentPrice > 0 ? currentPrice : 0);
   const stepMsRef = useRef<number>(TIMEFRAME_INTERVAL_MS[timeframe] || TIMEFRAME_INTERVAL_MS['24H']);
-  const resolutionModeRef = useRef<'live-step' | 'buckets'>('live-step');
+  const resolutionModeRef = useRef<'live-step' | 'buckets'>('buckets');
 
   const isUserPannedRef = useRef<boolean>(false);
   const isPointerInteractingRef = useRef<boolean>(false);
@@ -800,7 +800,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ];
     }
 
-    if (!useLiveStep && timeframe === '24H' && ordered.length > 24) {
+    if (timeframe === '24H' && ordered.length > 24) {
       const latestMs = ordered[ordered.length - 1].timestampMs;
       return {
         resolutionMode: 'buckets',
