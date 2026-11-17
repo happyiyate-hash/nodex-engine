@@ -160,7 +160,12 @@ const formatPrice = (price: number) => {
   if (!Number.isFinite(price)) return '—';
   if (price === 0) return '$0';
   const abs = Math.abs(price);
-  if (abs < 0.000001) return '
+  if (abs < 0.000001) return `$${price.toExponential(2)}`;
+  if (abs < 0.001) return `$${price.toFixed(8).replace(/0+$/, '').replace(/\.$/, '')}`;
+  if (abs < 1) return `$${price.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}`;
+  if (abs < 1000) return `$${price.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}`;
+  return `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+};
 
 const formatMarketCap = (value: number): string => {
   if (!Number.isFinite(value)) return '—';
