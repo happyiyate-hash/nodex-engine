@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { PricePoint } from '../../types';
 import { useTerminal } from '../../context/TerminalContext';
+import { marketDataService } from '../../services/marketData';
+import type { TokenDataSnapshot, TokenDataStreamEvent, TokenDataTrade } from '../../services/marketData';
+import { wsService } from '../../services/websocket';
 import { TokenAvatar } from '../common/TokenAvatar';
 import { DotMatrixChart } from '../common/DotMatrixChart';
 import {
@@ -9,6 +13,71 @@ import {
   ChartLine,
   ChartCandlestick,
 } from 'lucide-react';
+
+const numberOrNull = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const toPricePoint = (value: any): PricePoint | null => {
+  const time = numberOrNull(value?.timestamp_ms ?? value?.time);
+  const close = numberOrNull(value?.close ?? value?.price);
+  if (time === null || time <= 1_000_000 || close === null || close <= 0) return null;
+  const open = numberOrNull(value?.open) ?? close;
+  const high = numberOrNull(value?.high) ?? Math.max(open, close);
+  const low = numberOrNull(value?.low) ?? Math.min(open, close);
+  return {
+    time,
+    price: close,
+    open,
+    high,
+    low,
+    close,
+    volume: numberOrNull(value?.volume) ?? 0,
+  };
+};
+
+const mergePricePoints = (previous: PricePoint[], incoming: PricePoint[]): PricePoint[] => {
+  const byTime = new Map<number, PricePoint>();
+  for (const point of previous) byTime.set(point.time, point);
+  for (const point of incoming) {
+    const existing = byTime.get(point.time);
+    if (!existing) {
+      byTime.set(point.time, point);
+      continue;
+    }
+    const open = existing.open ?? point.open ?? existing.price;
+    const high = Math.max(existing.high ?? existing.price, point.high ?? point.price);
+    const low = Math.min(existing.low ?? existing.price, point.low ?? point.price);
+    const close = point.close ?? point.price;
+    byTime.set(point.time, {
+      ...existing,
+      ...point,
+      open,
+      high,
+      low,
+      close,
+      price: close,
+      volume: point.volume,
+    });
+  }
+  return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-6000);
+};
+
+const mergeTokenTrades = (previous: TokenDataTrade[], incoming: TokenDataTrade[]): TokenDataTrade[] => {
+  const byId = new Map<string, TokenDataTrade>();
+  for (const trade of [...previous, ...incoming]) {
+    const key = String(trade.signature || '') + ':' + String(trade.event_index ?? trade.timestamp_ms);
+    byId.set(key, trade);
+  }
+  return [...byId.values()]
+    .sort((a, b) => (numberOrNull(b.timestamp_ms) ?? 0) - (numberOrNull(a.timestamp_ms) ?? 0))
+    .slice(0, 100);
+};
 
 export const TokenDetailPage: React.FC = () => {
   const {
@@ -36,6 +105,19 @@ export const TokenDetailPage: React.FC = () => {
   const [scrubTime, setScrubTime] = useState<string | null>(null);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const pageScrollRef = useRef<HTMLElement>(null);
+  const [tokenPrice, setTokenPrice] = useState(0);
+  const [marketMetrics, setMarketMetrics] = useState<TokenDataSnapshot['market']>({});
+  const [snapshotMarketCap, setSnapshotMarketCap] = useState<number | null>(null);
+  const [botMarketCap, setBotMarketCap] = useState<number | null>(null);
+  const [chartHistory, setChartHistory] = useState<PricePoint[]>([]);
+  const [shortChartHistory, setShortChartHistory] = useState<PricePoint[]>([]);
+  const [recentTrades, setRecentTrades] = useState<TokenDataTrade[]>([]);
+  const [holdersSnapshot, setHoldersSnapshot] = useState<TokenDataSnapshot['holders'] | null>(null);
+  const [tokenInfo, setTokenInfo] = useState<TokenDataSnapshot['info'] | null>(null);
+  const [tokenIdentity, setTokenIdentity] = useState<TokenDataSnapshot['identity'] | null>(null);
+  const [marketDataConnected, setMarketDataConnected] = useState(false);
+  const [marketDataLoading, setMarketDataLoading] = useState(false);
+  const [marketDataError, setMarketDataError] = useState<string | null>(null);
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
@@ -49,147 +131,269 @@ export const TokenDetailPage: React.FC = () => {
     setTimeframe('1S');
   }, [activeToken?.mint]);
 
-  // Isolated Token Details demo tape. The simulated market has distinct
-  // accumulation, pump, pullback and consolidation phases for chart testing.
-  const DEMO_START_PRICE_USD = 0.0000125;
-  const DEMO_START_MARKET_CAP_USD = 42500;
-  const [demoPrice, setDemoPrice] = useState(DEMO_START_PRICE_USD);
-  const simulatedMarketCap = DEMO_START_MARKET_CAP_USD * (demoPrice / DEMO_START_PRICE_USD);
-  const [demoPriceHistory, setDemoPriceHistory] = useState<import('../../types').PricePoint[]>([]);
-
+  // Token Data owns price, historical candles, confirmed swaps, volumes and holders.
+  // Load the 1-minute 48-hour history once; the 1S/5S/10S view starts from the
+  // snapshot price and grows only from real live candle events.
   useEffect(() => {
-    if (!activeToken?.mint) return;
-    let price = DEMO_START_PRICE_USD;
-    let tick = 0;
-    let phase: 'accumulation' | 'pump' | 'pullback' | 'consolidation' = 'accumulation';
-    let phaseTicks = 0;
-    let timeout: number | undefined;
-    let cancelled = false;
-    const startedAt = Date.now();
-    const first: import('../../types').PricePoint = {
-      time: startedAt, price, open: price, high: price, low: price, close: price, volume: 0,
+    const mint = activeToken?.mint;
+    if (!mint) return;
+
+    let disposed = false;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | undefined;
+    let reconnectAttempt = 0;
+    const settings = marketDataService.normalizeMarketDataSettings(marketDataService.loadSettings());
+
+    setMarketDataLoading(true);
+    setMarketDataConnected(false);
+    setMarketDataError(null);
+    setTokenPrice(0);
+    setMarketMetrics({});
+    setSnapshotMarketCap(null);
+    setBotMarketCap(null);
+    setChartHistory([]);
+    setShortChartHistory([]);
+    setRecentTrades([]);
+    setHoldersSnapshot(null);
+    setTokenInfo(null);
+    setTokenIdentity(null);
+    setFloatingAmounts([]);
+
+    const applyMarket = (data: Record<string, any>) => {
+      setMarketMetrics((previous) => ({ ...previous, ...data }));
+      const price = numberOrNull(data.price_usd);
+      if (price !== null && price > 0) setTokenPrice(price);
+      const cap = numberOrNull(data.market_cap_usd);
+      if (cap !== null && cap > 0) setSnapshotMarketCap(cap);
     };
-    setDemoPrice(price);
-    setDemoPriceHistory([first]);
 
-    const scheduleNextTick = () => {
-      // Frequent updates make the demo responsive while leaving occasional pauses.
-      const delay = Math.random() < 0.08
-        ? 550 + Math.floor(Math.random() * 350)
-        : 140 + Math.floor(Math.random() * 220);
-      timeout = window.setTimeout(() => {
-        if (cancelled) return;
-        tick += 1;
-        phaseTicks += 1;
-        const previous = price;
+    const applyTrade = (data: TokenDataTrade) => {
+      if (!data || typeof data !== 'object') return;
+      setRecentTrades((previous) => mergeTokenTrades(previous, [data]));
+      const price = numberOrNull(data.price_usd);
+      if (price !== null && price > 0) setTokenPrice(price);
+      const side = String(data.side || '').toLowerCase();
+      const volume = numberOrNull(data.volume_usd);
+      if (volume !== null && volume > 0 && (side === 'buy' || side === 'sell')) {
+        const id = numberOrNull(data.timestamp_ms) ?? Date.now();
+        setFloatingAmounts((previous) => [
+          ...previous.filter((item) => Date.now() - item.id < 3600),
+          { id, amount: volume, side },
+        ].slice(-12));
+      }
+    };
 
-        // Cycle through visibly different market behaviours instead of a
-        // uniform random walk: flat trading, a fast pump, a retracement,
-        // then sideways consolidation before the next move.
-        if (phase === 'accumulation' && phaseTicks >= 18 + Math.floor(Math.random() * 22)) {
-          phase = 'pump';
-          phaseTicks = 0;
-        } else if (phase === 'pump' && phaseTicks >= 12 + Math.floor(Math.random() * 13)) {
-          phase = 'pullback';
-          phaseTicks = 0;
-        } else if (phase === 'pullback' && phaseTicks >= 10 + Math.floor(Math.random() * 12)) {
-          phase = 'consolidation';
-          phaseTicks = 0;
-        } else if (phase === 'consolidation' && phaseTicks >= 16 + Math.floor(Math.random() * 20)) {
-          phase = 'accumulation';
-          phaseTicks = 0;
+    const handleMessage = (message: TokenDataStreamEvent) => {
+      if (disposed || (message.mint && message.mint !== mint)) return;
+      const data = message.data && typeof message.data === 'object'
+        ? message.data as Record<string, any>
+        : {};
+
+      if (message.event === 'snapshot_section') {
+        if (message.topic === 'token.market') applyMarket(data);
+        if (message.topic === 'token.trades' && Array.isArray(data.recent)) {
+          setRecentTrades((previous) => mergeTokenTrades(previous, data.recent as TokenDataTrade[]));
         }
+        if (message.topic === 'token.holders') setHoldersSnapshot(data as TokenDataSnapshot['holders']);
+        if (message.topic === 'token.info') setTokenInfo(data as TokenDataSnapshot['info']);
+        if (message.topic === 'token.identity') setTokenIdentity(data as TokenDataSnapshot['identity']);
+        return;
+      }
 
-        let change = 0;
-        if (phase === 'pump') {
-          change = Math.random() < 0.13
-            ? 0.018 + Math.random() * 0.018
-            : 0.0035 + Math.random() * 0.0105;
-        } else if (phase === 'pullback') {
-          change = -(0.003 + Math.random() * 0.010);
-          if (Math.random() < 0.16) change += 0.006 + Math.random() * 0.008;
-        } else if (phase === 'consolidation') {
-          change = (Math.random() - 0.5) * 0.0022;
-          if (Math.random() < 0.18) change = 0;
-        } else {
-          change = (Math.random() - 0.47) * 0.0032;
-          if (Math.random() < 0.2) change = 0;
+      if (message.event === 'chart_history_chunk' && Array.isArray(data.points)) {
+        const points = data.points.map(toPricePoint).filter((point): point is PricePoint => point !== null);
+        setChartHistory((previous) => mergePricePoints(previous, points));
+        return;
+      }
+
+      if (message.event === 'market_update' && message.topic === 'token.market') {
+        applyMarket(data);
+        return;
+      }
+
+      if (message.event === 'trade_update' && message.topic === 'token.trades') {
+        applyTrade(data as unknown as TokenDataTrade);
+        return;
+      }
+
+      if (message.event === 'candle_update' && message.topic === 'token.chart') {
+        const candle = data.candle && typeof data.candle === 'object' ? data.candle : data;
+        const point = toPricePoint(candle);
+        const candleTimeframe = String(data.timeframe || candle.timeframe || '');
+        if (!point) return;
+        if (candleTimeframe === '1S') {
+          setShortChartHistory((previous) => mergePricePoints(previous, [point]));
+        } else if (candleTimeframe === '1M') {
+          setChartHistory((previous) => mergePricePoints(previous, [point]));
         }
+        return;
+      }
 
-        // Tiny oscillations keep the tape alive between larger market phases.
-        const microMove = Math.sin(tick * 0.73) * 0.00045;
-        price = Math.max(DEMO_START_PRICE_USD * 0.08, previous * (1 + change + microMove));
-        const wick = 0.001 + Math.random() * 0.004;
-        const point: import('../../types').PricePoint = {
-          time: Date.now(),
-          price,
-          open: previous,
-          high: Math.max(previous, price) * (1 + wick),
-          low: Math.min(previous, price) * (1 - wick),
-          close: price,
-          volume: phase === 'pump'
-            ? 80 + Math.floor(Math.random() * 420)
-            : 5 + Math.floor(Math.random() * 110),
-        };
-        setDemoPrice(price);
-        setDemoPriceHistory((history) => [...history, point].slice(-6000));
-        scheduleNextTick();
+      if (message.event === 'holders_update' && message.topic === 'token.holders') {
+        setHoldersSnapshot(data as TokenDataSnapshot['holders']);
+        return;
+      }
+
+      if (message.event === 'resync_required') {
+        try {
+          socket?.send(JSON.stringify({ command: 'request_snapshot', timeframe: '1M' }));
+        } catch {
+          // The reconnect handler will obtain a fresh snapshot if this socket is gone.
+        }
+        return;
+      }
+
+      if (message.event === 'snapshot_error' || message.event === 'error') {
+        const detail = String(data.message || data.code || 'Market Data returned an error.');
+        setMarketDataError(detail);
+      }
+    };
+
+    const scheduleReconnect = (reason?: string) => {
+      if (disposed || reconnectTimer !== undefined || !settings.wsUrl) return;
+      if (reason) setMarketDataError(reason);
+      const delay = Math.min(30000, 1000 * Math.pow(2, Math.min(reconnectAttempt, 5)));
+      reconnectAttempt += 1;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = undefined;
+        openSocket();
       }, delay);
     };
-    scheduleNextTick();
+
+    const openSocket = () => {
+      if (disposed || !settings.wsUrl) return;
+      try {
+        socket = marketDataService.connectTokenStream(
+          settings,
+          mint,
+          '1M',
+          handleMessage,
+          (connected, message) => {
+            if (disposed) return;
+            setMarketDataConnected(connected);
+            if (connected) {
+              reconnectAttempt = 0;
+              setMarketDataError(null);
+            } else {
+              scheduleReconnect(message || 'Market Data stream disconnected.');
+            }
+          },
+        );
+      } catch (error) {
+        scheduleReconnect(error instanceof Error ? error.message : 'Could not connect to Market Data.');
+      }
+    };
+
+    const loadSnapshotThenSubscribe = async () => {
+      try {
+        const snapshot = await marketDataService.getTokenSnapshot(settings, mint, '1M');
+        if (disposed) return;
+        setMarketMetrics(snapshot.market || {});
+        setSnapshotMarketCap(numberOrNull(snapshot.market?.market_cap_usd));
+        setTokenIdentity(snapshot.identity || null);
+        setTokenInfo(snapshot.info || null);
+        setHoldersSnapshot(snapshot.holders || null);
+        setRecentTrades(mergeTokenTrades([], snapshot.trades?.recent || []));
+
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const history = (snapshot.chart?.points || [])
+          .map(toPricePoint)
+          .filter((point): point is PricePoint => point !== null && point.time >= cutoff)
+          .sort((a, b) => a.time - b.time);
+        setChartHistory(mergePricePoints([], history));
+
+        const latestHistoryPrice = history.length ? history[history.length - 1].close ?? history[history.length - 1].price : null;
+        const snapshotPrice = numberOrNull(snapshot.market?.price_usd);
+        const initialPrice = snapshotPrice !== null && snapshotPrice > 0
+          ? snapshotPrice
+          : numberOrNull(latestHistoryPrice);
+        if (initialPrice !== null && initialPrice > 0) {
+          setTokenPrice(initialPrice);
+          const parsedAsOf = Date.parse(snapshot.as_of || '');
+          const seedTime = Math.floor((Number.isFinite(parsedAsOf) ? parsedAsOf : Date.now()) / 1000) * 1000;
+          const seed: PricePoint = {
+            time: seedTime,
+            price: initialPrice,
+            open: initialPrice,
+            high: initialPrice,
+            low: initialPrice,
+            close: initialPrice,
+            volume: 0,
+          };
+          setShortChartHistory([seed]);
+        }
+      } catch (error) {
+        if (!disposed) {
+          setMarketDataError('Snapshot: ' + (error instanceof Error ? error.message : 'Could not load Token Data snapshot.'));
+        }
+      } finally {
+        if (!disposed) {
+          setMarketDataLoading(false);
+          if (settings.wsUrl) openSocket();
+          else if (!settings.restUrl) setMarketDataError('Set the Token Data REST and WebSocket URLs in Settings.');
+          else setMarketDataError((previous) => previous || 'Token Data WebSocket URL is not configured.');
+        }
+      }
+    };
+
+    void loadSnapshotThenSubscribe();
     return () => {
-      cancelled = true;
-      if (timeout !== undefined) window.clearTimeout(timeout);
+      disposed = true;
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      socket?.close(1000, 'Token details closed');
     };
   }, [activeToken?.mint]);
 
-  // Temporary preview: one amount per beat, all moving in a fixed vertical lane.
-  // Replace this generator with verified backend swap events after visual tuning.
+  // NodeX Engine owns the live USD market-cap ticks and the actual paper position.
+  // Position events are merged into TerminalContext; this page only reads that state.
   useEffect(() => {
-    if (!activeToken) return;
-    const interval = window.setInterval(() => {
-      const now = Date.now();
-      const incoming = {
-        id: now,
-        amount: Number((0.35 + Math.random() * 34.65).toFixed(2)),
-        side: (Math.random() < 0.54 ? 'buy' : 'sell') as 'buy' | 'sell',
-      };
-      setFloatingAmounts((current) => [
-        ...current.filter((item) => now - item.id < 3600),
-        incoming,
-      ].slice(-12));
-    }, 440);
-    return () => window.clearInterval(interval);
+    const mint = activeToken?.mint;
+    if (!mint) return;
+    const unsubscribe = wsService.subscribe((event) => {
+      if (event.token_mint !== mint) return;
+      if (event.event_type === 'market_tick') {
+        const cap = numberOrNull(event.data?.market_cap_usd);
+        if (cap !== null && cap > 0) setBotMarketCap(cap);
+      }
+      if (String(event.event_type) === 'token_detail_snapshot') {
+        const cap = numberOrNull(event.data?.snapshot?.market?.market_cap_usd);
+        if (cap !== null && cap > 0) setBotMarketCap(cap);
+      }
+    });
+    wsService.subscribeTokenUpdates(mint);
+    return () => {
+      unsubscribe();
+      wsService.unsubscribeToken(mint);
+    };
   }, [activeToken?.mint]);
 
   if (!activeToken) return null;
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
-  // Design-only fallback: keep the Position tab populated while the paper
-  // engine has not opened a real position for the selected token.
-  // This object is local to the UI and is never sent to the backend.
-  const displayPosition = activePosition ?? {
-    mint: activeToken.mint,
-    symbol: activeToken.symbol,
-    logo_url: activeToken.logo_url,
-    name: activeToken.name,
-    current_position_value_usd: 125.40,
-    pnl_usd: 18.75,
-    initial_investment_usd: 106.65,
-    entry_price_usd: 0.0000105,
-    current_price_usd: 0.00001235,
-    amount_tokens: 10157142.8571,
-    entry_time: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-  };
-  const liveTokenPrice = demoPrice;
+  const liveTokenPrice = tokenPrice;
   const currentPrice = scrubPrice ?? liveTokenPrice;
-  // Keep the displayed percentage tied to the actual simulated price
-  // relative to its seed. Do not alternate the sign by animation phase:
-  // that made the header turn red while the price tape was still rising.
-  const marketChangePct = ((demoPrice / DEMO_START_PRICE_USD) - 1) * 100;
+  const marketCapForChart = botMarketCap ?? snapshotMarketCap;
+  const displayMarketCap = marketCapForChart !== null && liveTokenPrice > 0
+    ? marketCapForChart * (currentPrice / liveTokenPrice)
+    : marketCapForChart;
+  const marketChangePct = numberOrNull(marketMetrics.change_24h_pct);
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
   const hasMarketPrice = liveTokenPrice > 0;
-  const displayMarketCap = DEMO_START_MARKET_CAP_USD * (currentPrice / DEMO_START_PRICE_USD);
+  const chartHistoryForView = ['1S', '5S', '10S'].includes(timeframe)
+    ? shortChartHistory
+    : chartHistory;
+  const buyVolume = numberOrNull(marketMetrics.buy_volume_usd);
+  const sellVolume = numberOrNull(marketMetrics.sell_volume_usd);
+  const buyPressure = numberOrNull(marketMetrics.buy_pressure_pct)
+    ?? (buyVolume !== null && sellVolume !== null && buyVolume + sellVolume > 0
+      ? buyVolume / (buyVolume + sellVolume) * 100
+      : null);
+  const sellPressure = buyPressure === null ? null : Math.max(0, 100 - buyPressure);
+  const filteredTrades = recentTrades.filter((trade) => {
+    const side = String(trade.side || '').toLowerCase();
+    return tradeFilter === 'All' || (tradeFilter === 'Buys' ? side === 'buy' : side === 'sell');
+  });
+  const creatorAddress = tokenIdentity?.creator_address || tokenInfo?.creator_address || activeToken.creator_wallet || '';
   const formatCompactMarketCap = (value: number) =>
     new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -206,6 +410,33 @@ export const TokenDetailPage: React.FC = () => {
       minimumFractionDigits: 2,
       maximumFractionDigits,
     }).format(Number.isFinite(value) ? value : 0);
+
+  const formatOptionalUsd = (value: unknown) => {
+    const parsed = numberOrNull(value);
+    return parsed === null ? '—' : formatUsd(parsed);
+  };
+
+  const formatCompactNumber = (value: unknown) => {
+    const parsed = numberOrNull(value);
+    return parsed === null ? '—' : new Intl.NumberFormat('en-US', {
+      notation: 'compact',
+      maximumFractionDigits: 2,
+    }).format(parsed);
+  };
+
+  const formatSupply = (value: string | null | undefined) => {
+    if (value == null || value === '') return '—';
+    const parsed = numberOrNull(value);
+    return parsed === null ? value : formatCompactNumber(parsed);
+  };
+
+  const formatTimeAgo = (timestamp: number) => {
+    const age = Math.max(0, Date.now() - timestamp);
+    if (age < 60_000) return Math.max(1, Math.floor(age / 1000)) + 's ago';
+    if (age < 3_600_000) return Math.floor(age / 60_000) + 'm ago';
+    if (age < 86_400_000) return Math.floor(age / 3_600_000) + 'h ago';
+    return Math.floor(age / 86_400_000) + 'd ago';
+  };
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(activeToken.mint);
@@ -299,7 +530,7 @@ export const TokenDetailPage: React.FC = () => {
             </div>
             <div className="shrink-0 text-right leading-none">
               <div className="font-sans text-[14px] font-semibold tabular-nums tracking-tight text-white">
-                {hasMarketPrice ? formatCompactMarketCap(displayMarketCap) : 'MC unavailable'}
+                {displayMarketCap === null ? 'MC unavailable' : formatCompactMarketCap(displayMarketCap)}
               </div>
               <div className={`mt-1 flex items-center justify-end gap-0.5 font-mono text-[10px] font-semibold ${isPositive ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
                 <span>{marketChangePct == null ? 'Change unavailable' : `${isPositive ? '▲ +' : '▼ '}${marketChangePct.toFixed(2)}%`}</span>
@@ -367,7 +598,7 @@ export const TokenDetailPage: React.FC = () => {
           <div className="shrink-0 -mr-1.5 text-right">
             <p className="pr-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">Market Cap</p>
             <p className="mt-0.5 pr-1.5 font-sans text-[16px] font-normal tabular-nums tracking-tight text-white/95">
-              {formatCompactMarketCap(simulatedMarketCap)}
+              {displayMarketCap === null ? '—' : formatCompactMarketCap(displayMarketCap)}
             </p>
             <div className="mt-0.5 flex justify-end">
               <span
@@ -405,7 +636,7 @@ export const TokenDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Demo-only animation preview; connect verified backend swap events here later. */}
+        {/* Confirmed Token Data swap amounts use the existing chart overlay animation. */}
         <style>{`
           @keyframes nodex-money-flow {
             0% { transform: translate3d(0, 0, 0); opacity: 0; }
@@ -424,9 +655,9 @@ export const TokenDetailPage: React.FC = () => {
           <DotMatrixChart
             key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
             currentPrice={liveTokenPrice}
-            marketCap={simulatedMarketCap}
+            marketCap={marketCapForChart ?? undefined}
             entryPrice={activePosition ? entryPriceUsd : undefined}
-            priceHistory={demoPriceHistory}
+            priceHistory={chartHistoryForView}
             isPositive={isPositive}
             timeframe={timeframe}
             chartType={chartType}
@@ -619,12 +850,12 @@ export const TokenDetailPage: React.FC = () => {
             <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
               {[
-                { label: 'Market Cap', value: '$42.5K' },
-                { label: 'Liquidity', value: '$18.2K' },
-                { label: '24H Volume', value: '$126K' },
-                { label: '24H Transactions', value: '2,481' },
-                { label: 'Total Supply', value: '1B' },
-                { label: 'Circulating Supply', value: '850M' },
+                { label: 'Market Cap', value: displayMarketCap === null ? '—' : formatCompactMarketCap(displayMarketCap) },
+                { label: 'Liquidity', value: formatOptionalUsd(marketMetrics.liquidity_usd) },
+                { label: '24H Volume', value: formatOptionalUsd(marketMetrics.volume_24h_usd) },
+                { label: '24H Transactions', value: numberOrNull(marketMetrics.transactions_24h) === null ? '—' : Number(marketMetrics.transactions_24h).toLocaleString('en-US') },
+                { label: 'Total Supply', value: formatSupply(tokenInfo?.total_supply) },
+                { label: 'Circulating Supply', value: formatSupply(tokenInfo?.circulating_supply) },
               ].map((item) => (
                 <div key={item.label} className="min-w-0 space-y-1">
                   <p className="text-[11px] font-normal text-white/40">{item.label}</p>
@@ -639,28 +870,31 @@ export const TokenDetailPage: React.FC = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Token Standard</span>
-                <span className="text-[12px] font-medium text-white/85">SPL Token</span>
+                <span className="text-[12px] font-medium text-white/85">{tokenInfo?.token_standard || '—'}</span>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Decimals</span>
-                <span className="font-mono text-[12px] font-medium text-white/85">6</span>
+                <span className="font-mono text-[12px] font-medium text-white/85">{tokenInfo?.decimals == null ? '—' : tokenInfo.decimals}</span>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[12px] text-white/40">Created At</span>
-                <span className="text-[12px] font-medium text-white/85">Nov 14, 2026</span>
+                <span className="text-[12px] font-medium text-white/85">
+                  {tokenIdentity?.created_at && Number.isFinite(Date.parse(tokenIdentity.created_at))
+                    ? new Date(tokenIdentity.created_at).toLocaleString()
+                    : '—'}
+                </span>
               </div>
               <div className="space-y-4 border-t border-white/[0.10] pt-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Creator</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {activeToken.creator_wallet ? `${activeToken.creator_wallet.slice(0, 5)}...${activeToken.creator_wallet.slice(-5)}` : 'Unavailable'}
+                    {creatorAddress ? creatorAddress.slice(0, 5) + '...' + creatorAddress.slice(-5) : 'Unavailable'}
                   </span>
                   <button
                     type="button"
-                    disabled={!activeToken.creator_wallet}
+                    disabled={!creatorAddress}
                     onClick={() => {
-                      if (!activeToken.creator_wallet) return;
-                      navigator.clipboard.writeText(activeToken.creator_wallet);
+                      if (creatorAddress) navigator.clipboard.writeText(creatorAddress);
                     }}
                     aria-label="Copy creator address"
                     title="Copy creator address"
@@ -672,7 +906,7 @@ export const TokenDetailPage: React.FC = () => {
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-[104px] shrink-0 text-[12px] text-white/40">Mint Address</span>
                   <span className="min-w-0 flex-1 truncate text-right font-mono text-[10px] text-white/75">
-                    {`${activeToken.mint.slice(0, 5)}...${activeToken.mint.slice(-5)}`}
+                    {activeToken.mint.slice(0, 5) + '...' + activeToken.mint.slice(-5)}
                   </span>
                   <button
                     type="button"
@@ -687,7 +921,9 @@ export const TokenDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <p className="text-[10px] text-white/25">Preview data · Values will be connected to live token data later.</p>
+          {marketDataError && (
+            <p className="text-[10px] text-amber-300/55">{marketDataError}</p>
+          )}
         </section>
       )}
 
@@ -696,11 +932,17 @@ export const TokenDetailPage: React.FC = () => {
           <div className="grid w-full grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Total Holders</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">8,426</p>
+              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
+                {holdersSnapshot?.total_count == null ? '—' : Number(holdersSnapshot.total_count).toLocaleString('en-US')}
+              </p>
             </div>
             <div className="min-w-0 rounded-lg bg-white/[0.12] px-3 py-2.5">
               <p className="text-[11px] text-white/55">Top 10 Ownership</p>
-              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">34.8%</p>
+              <p className="mt-0.5 font-mono text-[19px] font-medium tracking-tight text-white/95">
+                {numberOrNull(holdersSnapshot?.top_10_ownership_pct) === null
+                  ? '—'
+                  : numberOrNull(holdersSnapshot?.top_10_ownership_pct)?.toFixed(2) + '%'}
+              </p>
             </div>
           </div>
 
@@ -710,157 +952,151 @@ export const TokenDetailPage: React.FC = () => {
               <span className="text-[10px] text-white/35">Ranked by balance</span>
             </div>
             <div className="w-full">
-              {[
-                { address: '7xKX9mPq2vRt4nHs8aBcDeFgHiJkLmNpQrStUvWxYz12', balance: '82.4M', share: 8.24, initials: '7X' },
-                { address: '9pLm3qRs6tUv8wXy2zAbCdEfGhJkMnPqRtUvWxYz1234', balance: '61.8M', share: 6.18, initials: '9P' },
-                { address: '4dEf7gHi2jKl5mNp8qRsTuVwXyZaBcDeFgHiJkLmN567', balance: '48.2M', share: 4.82, initials: '4D' },
-                { address: '2aBc5dEf8gHi1jKl4mNpQrStUvWxYzAbCdEfGhJkL890', balance: '36.5M', share: 3.65, initials: '2A' },
-                { address: '8wXy1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfG345', balance: '29.1M', share: 2.91, initials: '8W' },
-                { address: '5mNp8qRs1tUv4wXy7zAbCdEfGhJkLmNpQrStUvWxYz678', balance: '24.7M', share: 2.47, initials: '5M' },
-                { address: '3qRs6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbC901', balance: '19.3M', share: 1.93, initials: '3Q' },
-                { address: '6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbCdEfG234', balance: '16.8M', share: 1.68, initials: '6T' },
-                { address: '1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfGhJkL567', balance: '14.2M', share: 1.42, initials: '1Z' },
-                { address: '0xYz3aBc6dEf9gHi2jKl5mNpQrStUvWxYzAbCdEfG890', balance: '12.1M', share: 1.21, initials: '0X' },
-              ].map((holder, index) => (
-                <div key={holder.address} className="border-b border-white/[0.07] py-3.5 last:border-b-0">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10px] font-semibold tracking-wide text-white/75">
-                      {holder.initials}
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="truncate font-mono text-[11px] text-white/80">{holder.address.slice(0, 5)}...{holder.address.slice(-5)}</span>
-                      <span className="font-mono text-[11px] font-medium text-white/95">{holder.balance}</span>
-                    </div>
-                    <div className="flex w-[76px] shrink-0 flex-col items-end gap-1.5">
-                      <span className="font-mono text-[11px] text-white/65">{holder.share.toFixed(2)}%</span>
-                      <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/[0.12]">
-                        <div className="h-full rounded-full bg-white" style={{ width: `${Math.min((holder.share / 10) * 100, 100)}%` }} />
+              {holdersSnapshot?.largest?.length ? holdersSnapshot.largest.map((holder, index) => {
+                const share = numberOrNull(holder.supply_pct);
+                return (
+                  <div key={holder.address} className="border-b border-white/[0.07] py-3.5 last:border-b-0">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.12] text-[10px] font-semibold tracking-wide text-white/75">
+                        {holder.address.slice(0, 2).toUpperCase()}
                       </div>
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate font-mono text-[11px] text-white/80">{holder.address.slice(0, 5)}...{holder.address.slice(-5)}</span>
+                        <span className="font-mono text-[11px] font-medium text-white/95">{formatCompactNumber(holder.token_amount)}</span>
+                      </div>
+                      <div className="flex w-[76px] shrink-0 flex-col items-end gap-1.5">
+                        <span className="font-mono text-[11px] text-white/65">{share === null ? '—' : share.toFixed(2) + '%'}</span>
+                        <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/[0.12]">
+                          <div className="h-full rounded-full bg-white" style={{ width: share === null ? '0%' : String(Math.max(0, Math.min(100, share * 10))) + '%' }} />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={'Copy holder wallet address ' + (index + 1)}
+                        title="Copy wallet address"
+                        onClick={() => navigator.clipboard.writeText(holder.address)}
+                        className="shrink-0 rounded p-1 text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white/90"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      aria-label={`Copy holder wallet address ${index + 1}`}
-                      title="Copy wallet address"
-                      onClick={() => navigator.clipboard.writeText(holder.address)}
-                      className="shrink-0 rounded p-1 text-white/45 transition-colors hover:bg-white/[0.07] hover:text-white/90"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              }) : (
+                <p className="py-6 text-center text-[11px] text-white/35">Verified holder data is not available for this token yet.</p>
+              )}
             </div>
           </div>
-          <p className="text-[10px] text-white/25">Preview data · Wallets are illustrative and will be replaced with verified on-chain holders.</p>
+          {marketDataError && <p className="text-[10px] text-amber-300/55">{marketDataError}</p>}
         </section>
       )}
 
       {activeDetailTab === 'Position' && (
         <section aria-label="Token position" className="w-full space-y-5 px-3 pb-8 pt-5">
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <h2 className="min-w-0 truncate text-[19px] font-semibold leading-tight tracking-tight text-white/95">
-              {(displayPosition.name || activeToken.name || '').length <= 18
-                ? (displayPosition.name || activeToken.name || displayPosition.symbol || activeToken.symbol || 'Token')
-                : (displayPosition.symbol || activeToken.symbol || 'Token')}
-            </h2>
-            <span className="shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/70">
-              {activePosition ? 'OPEN' : 'DEMO'}
-            </span>
-          </div>
+          {activePosition ? (
+            <>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <h2 className="min-w-0 truncate text-[19px] font-semibold leading-tight tracking-tight text-white/95">
+                  {(activePosition.name || activeToken.name || '').length <= 18
+                    ? (activePosition.name || activeToken.name || activePosition.symbol || activeToken.symbol || 'Token')
+                    : (activePosition.symbol || activeToken.symbol || 'Token')}
+                </h2>
+                <span className="shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1 text-[9px] font-semibold tracking-[0.08em] text-white/70">OPEN</span>
+              </div>
 
-          <div className="grid grid-cols-2 items-end gap-3">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Position value</p>
-              <p className="truncate font-sans text-[27px] font-semibold leading-tight tracking-tight tabular-nums text-white">
-                {formatUsd(displayPosition.current_position_value_usd)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1 text-right">
-              <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Unrealized P&amp;L</p>
-              <p className={`truncate font-mono text-[17px] font-semibold leading-tight tabular-nums ${displayPosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]'}`}>
-                {displayPosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(displayPosition.pnl_usd))}
-              </p>
-            </div>
-          </div>
+              <div className="grid grid-cols-2 items-end gap-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Position value</p>
+                  <p className="truncate font-sans text-[27px] font-semibold leading-tight tracking-tight tabular-nums text-white">
+                    {formatUsd(activePosition.current_position_value_usd)}
+                  </p>
+                </div>
+                <div className="min-w-0 space-y-1 text-right">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.11em] text-white/40">Unrealized P&amp;L</p>
+                  <p className={'truncate font-mono text-[17px] font-semibold leading-tight tabular-nums ' + (activePosition.pnl_usd >= 0 ? 'text-[#6CE094]' : 'text-[#F06A6A]')}>
+                    {activePosition.pnl_usd >= 0 ? '+' : '−'}{formatUsd(Math.abs(activePosition.pnl_usd))}
+                  </p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-5 border-y border-white/[0.10] py-4">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Entry Price</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {formatUsd(displayPosition.entry_price_usd, 8)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Current Price</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {formatUsd(displayPosition.current_price_usd, 8)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Invested Amount</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {formatUsd(displayPosition.initial_investment_usd)}
-              </p>
-            </div>
-            <div className="min-w-0 space-y-1">
-              <p className="text-[10px] text-white/40">Total Holdings</p>
-              <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">
-                {new Intl.NumberFormat('en-US', {
-                  notation: 'compact',
-                  maximumFractionDigits: 2,
-                }).format(displayPosition.amount_tokens)}
-              </p>
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-5 border-y border-white/[0.10] py-4">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] text-white/40">Entry Price</p>
+                  <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{formatUsd(activePosition.entry_price_usd, 8)}</p>
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] text-white/40">Current Price</p>
+                  <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{formatUsd(activePosition.current_price_usd, 8)}</p>
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] text-white/40">Invested Amount</p>
+                  <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{formatUsd(activePosition.initial_investment_usd)}</p>
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[10px] text-white/40">Total Holdings</p>
+                  <p className="truncate font-mono text-[13px] font-medium tabular-nums text-white/90">{formatCompactNumber(activePosition.amount_tokens)}</p>
+                </div>
+              </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] text-white/40">Opened</span>
-            <span className="text-[10px] tabular-nums text-white/65">{new Date(displayPosition.entry_time).toLocaleString()}</span>
-          </div>
-          {!activePosition && (
-            <p className="text-[10px] text-white/25">Illustrative values only · This is not a real or recorded paper position.</p>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] text-white/40">Opened</span>
+                <span className="text-[10px] tabular-nums text-white/65">
+                  {activePosition.entry_time && Number.isFinite(Date.parse(activePosition.entry_time))
+                    ? new Date(activePosition.entry_time).toLocaleString()
+                    : '—'}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-lg bg-white/[0.06] px-4 py-5">
+              <p className="text-[12px] font-medium text-white/85">No open paper position for this token.</p>
+              <p className="mt-1 text-[10px] leading-relaxed text-white/40">When NodeX records an open position, its live balance and P&amp;L will appear here.</p>
+            </div>
           )}
         </section>
       )}
-
 
       {activeDetailTab === 'Trades' && (
         <section aria-label="Token trades" className="w-full space-y-5 px-3 pb-8 pt-5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-[16px] font-semibold tracking-tight text-white/95">Recent Trades</h2>
-              <p className="mt-1 text-[10px] text-white/40">Latest activity for this token</p>
+              <p className="mt-1 text-[10px] text-white/40">Confirmed Solana swaps for this token</p>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/[0.10] px-2 py-1 text-[9px] font-medium tracking-wide text-amber-300/80">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-300/70" />
-              DEMO DATA
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/[0.10] px-2 py-1 text-[9px] font-medium tracking-wide text-white/65">
+              <span className={'h-1.5 w-1.5 rounded-full ' + (marketDataConnected ? 'bg-[#6CE094]' : 'bg-amber-300/70')} />
+              {marketDataConnected ? 'LIVE' : marketDataLoading ? 'SYNCING' : 'OFFLINE'}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Buy Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatUsd(24.86 * 149.60)}</p>
+              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#6CE094]">{formatOptionalUsd(buyVolume)}</p>
             </div>
             <div className="min-w-0 rounded-md bg-white/[0.07] px-3 py-2.5">
               <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-white/40">Sell Volume</p>
-              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatUsd(15.32 * 149.60)}</p>
+              <p className="mt-1 font-mono text-[18px] font-medium tabular-nums text-[#F06A6A]">{formatOptionalUsd(sellVolume)}</p>
             </div>
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[10px]">
               <span className="font-medium text-white/55">Buy / Sell Pressure</span>
-              <span className="font-mono tabular-nums text-white/55">62% <span className="text-white/25">/</span> 38%</span>
+              <span className="font-mono tabular-nums text-white/55">
+                {buyPressure === null ? '—' : buyPressure.toFixed(1) + '%'}
+                <span className="text-white/25"> / </span>
+                {sellPressure === null ? '—' : sellPressure.toFixed(1) + '%'}
+              </span>
             </div>
             <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/[0.10]">
-              <div className="h-full w-[62%] bg-[#6CE094]" />
-              <div className="h-full w-[38%] bg-[#F06A6A]" />
+              <div className="h-full bg-[#6CE094]" style={{ width: buyPressure === null ? '0%' : String(Math.max(0, Math.min(100, buyPressure))) + '%' }} />
+              <div className="h-full bg-[#F06A6A]" style={{ width: sellPressure === null ? '0%' : String(Math.max(0, Math.min(100, sellPressure))) + '%' }} />
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-3 border-b border-white/[0.10] pb-3">
-            <h3 className="text-[12px] font-medium text-white/85">Trade History <span className="ml-1 text-white/35">(8)</span></h3>
+            <h3 className="text-[12px] font-medium text-white/85">Trade History <span className="ml-1 text-white/35">({recentTrades.length})</span></h3>
             <div className="flex items-center gap-1 rounded-md bg-white/[0.06] p-0.5">
               {(['All', 'Buys', 'Sells'] as const).map((filter) => (
                 <button
@@ -868,9 +1104,7 @@ export const TokenDetailPage: React.FC = () => {
                   type="button"
                   aria-pressed={tradeFilter === filter}
                   onClick={() => setTradeFilter(filter)}
-                  className={`rounded-sm px-2.5 py-1 text-[10px] font-medium transition-colors ${
-                    tradeFilter === filter ? 'bg-white/[0.14] text-white' : 'text-white/45 hover:text-white/80'
-                  }`}
+                  className={'rounded-sm px-2.5 py-1 text-[10px] font-medium transition-colors ' + (tradeFilter === filter ? 'bg-white/[0.14] text-white' : 'text-white/45 hover:text-white/80')}
                 >
                   {filter}
                 </button>
@@ -879,50 +1113,55 @@ export const TokenDetailPage: React.FC = () => {
           </div>
 
           <div className="space-y-0">
-            {[
-              { side: 'BUY', wallet: '7xKX9mPq2vRt4nHs8aBcDeFgHiJkLmNpQrStUvWxYz12', sol: '4.25', tokens: '342.8K', price: '$0.0000124', time: '2s ago' },
-              { side: 'BUY', wallet: '9pLm3qRs6tUv8wXy2zAbCdEfGhJkMnPqRtUvWxYz1234', sol: '1.80', tokens: '145.2K', price: '$0.0000124', time: '8s ago' },
-              { side: 'SELL', wallet: '4dEf7gHi2jKl5mNp8qRsTuVwXyZaBcDeFgHiJkLmN567', sol: '2.65', tokens: '214.1K', price: '$0.0000123', time: '14s ago' },
-              { side: 'BUY', wallet: '2aBc5dEf8gHi1jKl4mNpQrStUvWxYzAbCdEfGhJkL890', sol: '6.10', tokens: '493.6K', price: '$0.0000124', time: '21s ago' },
-              { side: 'SELL', wallet: '8wXy1zAb4cDe7fGh2jKl5mNpQrStUvWxYzAbCdEfG345', sol: '3.40', tokens: '275.8K', price: '$0.0000123', time: '29s ago' },
-              { side: 'BUY', wallet: '5mNp8qRs1tUv4wXy7zAbCdEfGhJkLmNpQrStUvWxYz678', sol: '5.75', tokens: '464.9K', price: '$0.0000124', time: '36s ago' },
-              { side: 'BUY', wallet: '3qRs6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbC901', sol: '2.96', tokens: '239.1K', price: '$0.0000124', time: '48s ago' },
-              { side: 'SELL', wallet: '6tUv9wXy2zAbCdEfGhJkLmNpQrStUvWxYzAbCdEfG234', sol: '9.27', tokens: '751.3K', price: '$0.0000123', time: '1m ago' },
-            ]
-              .filter((trade) => tradeFilter === 'All' || (tradeFilter === 'Buys' ? trade.side === 'BUY' : trade.side === 'SELL'))
-              .map((trade, index) => (
-                <div key={trade.wallet} className="flex min-w-0 items-center gap-2.5 border-b border-white/[0.07] py-2 last:border-b-0">
-                  <span className={`inline-flex h-5 w-[42px] shrink-0 items-center justify-center rounded-sm text-[9px] font-bold tracking-wide ${
-                    trade.side === 'BUY' ? 'bg-[#6CE094]/[0.12] text-[#6CE094]' : 'bg-[#F06A6A]/[0.12] text-[#F06A6A]'
-                  }`}>
-                    {trade.side}
+            {filteredTrades.length ? filteredTrades.map((trade) => {
+              const side = String(trade.side || '').toUpperCase();
+              const wallet = trade.trader || '';
+              const tokenAmount = numberOrNull(trade.token_amount);
+              return (
+                <div key={String(trade.signature || '') + ':' + String(trade.event_index ?? trade.timestamp_ms)} className="flex min-w-0 items-center gap-2.5 border-b border-white/[0.07] py-2 last:border-b-0">
+                  <span className={'inline-flex h-5 w-[42px] shrink-0 items-center justify-center rounded-sm text-[9px] font-bold tracking-wide ' + (side === 'BUY' ? 'bg-[#6CE094]/[0.12] text-[#6CE094]' : 'bg-[#F06A6A]/[0.12] text-[#F06A6A]')}>
+                    {side || '—'}
                   </span>
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate font-mono text-[10px] text-white/75">{trade.wallet.slice(0, 5)}...{trade.wallet.slice(-5)}</span>
+                      <span className="truncate font-mono text-[10px] text-white/75">
+                        {wallet ? wallet.slice(0, 5) + '...' + wallet.slice(-5) : 'Wallet unavailable'}
+                      </span>
                       <button
                         type="button"
+                        disabled={!wallet}
                         aria-label="Copy trader wallet"
                         title="Copy trader wallet"
-                        onClick={() => navigator.clipboard.writeText(trade.wallet)}
-                        className="shrink-0 text-white/30 transition-colors hover:text-white/80"
+                        onClick={() => wallet && navigator.clipboard.writeText(wallet)}
+                        className="shrink-0 text-white/30 transition-colors hover:text-white/80 disabled:opacity-25"
                       >
                         <Copy className="h-2.5 w-2.5" />
                       </button>
                     </div>
-                    <span className="text-[9px] text-white/35">{trade.tokens} tokens · {trade.time}</span>
+                    <span className="text-[9px] text-white/35">
+                      {tokenAmount === null ? 'Token amount unavailable' : formatCompactNumber(tokenAmount) + ' tokens'}
+                      {' · '}{formatTimeAgo(numberOrNull(trade.timestamp_ms) ?? Date.now())}
+                    </span>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className={`font-mono text-[11px] font-medium tabular-nums ${
-                      trade.side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]'
-                    }`}>{formatUsd(Number(trade.sol) * 149.60)}</p>
+                    <p className={'font-mono text-[11px] font-medium tabular-nums ' + (side === 'BUY' ? 'text-[#6CE094]' : 'text-[#F06A6A]')}>
+                      {formatOptionalUsd(trade.volume_usd)}
+                    </p>
+                    <p className="mt-0.5 font-mono text-[9px] tabular-nums text-white/35">
+                      {numberOrNull(trade.price_usd) === null ? '—' : formatUsd(numberOrNull(trade.price_usd)!, 8)}
+                    </p>
                   </div>
                 </div>
-              ))}
+              );
+            }) : (
+              <p className="py-8 text-center text-[11px] text-white/35">No confirmed swaps have been received for this token yet.</p>
+            )}
           </div>
-          <p className="pt-1 text-center text-[9px] text-amber-300/45">Illustrative sample trades · Not live Solana transactions</p>
+          {marketDataError && <p className="pt-1 text-[10px] text-amber-300/55">{marketDataError}</p>}
         </section>
       )}
+
+      
 
       </div>
 
