@@ -931,7 +931,7 @@ export const TokenDetailPage: React.FC = () => {
                 </div>
               )}
             </div>
-          ) : chartHistoryLoading || tokenSnapshotLoading ? (
+          ) : chartHistoryLoading || tokenSnapshotLoading || snapshotSections.chart === 'loading' ? (
             <div aria-label="Loading chart data" className="h-[328px] w-full animate-pulse bg-white/[0.025]">
               <div className="flex h-full flex-col justify-between p-5">
                 <div className="h-3 w-24 rounded bg-white/[0.07]" />
@@ -1132,31 +1132,58 @@ export const TokenDetailPage: React.FC = () => {
       >
       {activeDetailTab === 'Info' && (
         <section aria-label="Token information" className="w-full space-y-6 px-3 pb-6 pt-5">
-          <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/[0.07] bg-white/[0.018] p-3">
+          <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/[0.07] bg-white/[0.018] p-3">
             <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX REST snapshot</p>
+              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX REST · engine</p>
               <p className={`mt-1 truncate text-[10px] font-medium ${tokenSnapshotLoading ? 'text-amber-300/80' : tokenSnapshotError ? 'text-red-300/80' : 'text-emerald-300/80'}`}>
-                {tokenSnapshotLoading ? 'Requesting token state…' : tokenSnapshotError ? 'Request failed' : 'Received'}
+                {tokenSnapshotLoading ? 'Requesting token state…' : tokenSnapshotError ? 'Request failed' : 'Response received'}
               </p>
             </div>
             <div className="min-w-0">
-              <p className="text-[9px] uppercase tracking-wider text-white/35">Sniper WebSocket</p>
+              <p className="text-[9px] uppercase tracking-wider text-white/35">NodeX WebSocket · sniper</p>
               <p className={`mt-1 truncate text-[10px] font-medium ${sniperSubscriptionStatus === 'connected' ? 'text-emerald-300/80' : sniperSubscriptionStatus === 'rejected' || sniperSubscriptionStatus === 'disconnected' ? 'text-red-300/80' : 'text-amber-300/80'}`}>
-                {sniperSubscriptionStatus === 'connecting' ? 'Connecting / subscribing…' : sniperSubscriptionStatus === 'connected' ? 'Subscribed' : sniperSubscriptionStatus === 'rejected' ? 'Subscription rejected' : 'Disconnected'}
+                {sniperSubscriptionStatus === 'connecting' ? 'Subscribing…' : sniperSubscriptionStatus === 'connected' ? 'Subscribed' : sniperSubscriptionStatus === 'rejected' ? 'Subscription rejected' : 'Disconnected'}
               </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] uppercase tracking-wider text-white/35">Market Data · snapshot</p>
+              <p className={`mt-1 truncate text-[10px] font-medium ${marketDataBackendStatus === 'received' ? 'text-emerald-300/80' : marketDataBackendStatus === 'failed' ? 'text-red-300/80' : 'text-amber-300/80'}`}>
+                {marketDataBackendStatus === 'not_configured' ? 'Not configured' : marketDataBackendStatus === 'connecting' ? 'Connecting…' : marketDataBackendStatus === 'loading' ? 'Loading sections…' : marketDataBackendStatus === 'received' ? 'Snapshot received' : 'Request failed'}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[9px] uppercase tracking-wider text-white/35">Market Data · live stream</p>
+              <p className={`mt-1 truncate text-[10px] font-medium ${marketDataWsStatus === 'subscribed' ? 'text-emerald-300/80' : marketDataWsStatus === 'error' || marketDataWsStatus === 'disconnected' ? 'text-red-300/80' : 'text-amber-300/80'}`}>
+                {marketDataWsStatus === 'connecting' ? 'Connecting…' : marketDataWsStatus === 'connected' ? 'Connected · subscribing' : marketDataWsStatus === 'subscribed' ? 'Subscribed' : marketDataWsStatus === 'error' ? 'Stream error' : 'Disconnected'}
+              </p>
+            </div>
+            <div className="col-span-2 grid grid-cols-3 gap-x-2 gap-y-1 border-t border-white/[0.06] pt-2">
+              {(['identity', 'market', 'chart', 'trades', 'holders', 'info'] as const).map((section) => {
+                const status = snapshotSections[section] || 'loading';
+                return (
+                  <div key={section} className="flex min-w-0 items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${status === 'available' ? 'bg-emerald-300' : status === 'loading' ? 'animate-pulse bg-amber-300' : 'bg-white/20'}`} />
+                    <span className="truncate text-[9px] capitalize text-white/45">{section}</span>
+                    <span className="ml-auto text-[8px] text-white/25">{status === 'available' ? 'OK' : status === 'loading' ? '…' : 'N/A'}</span>
+                  </div>
+                );
+              })}
             </div>
             {tokenSnapshotError && (
-              <p className="col-span-2 break-words text-[10px] leading-relaxed text-red-300/70">{tokenSnapshotError}</p>
+              <p className="col-span-2 break-words text-[10px] leading-relaxed text-red-300/70">NodeX: {tokenSnapshotError}</p>
+            )}
+            {marketDataBackendError && (
+              <p className="col-span-2 break-words text-[10px] leading-relaxed text-amber-200/65">Market Data: {marketDataBackendError}</p>
             )}
             {marketDataStreamError && (
-              <p className="col-span-2 break-words text-[10px] leading-relaxed text-amber-200/65">{marketDataStreamError}</p>
+              <p className="col-span-2 break-words text-[10px] leading-relaxed text-amber-200/65">Sniper stream: {marketDataStreamError}</p>
             )}
           </div>
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-[13px] font-medium tracking-[0.01em] text-white/90">Market Statistics</h2>
               <span className="text-[9px] font-mono text-white/30">
-                {tokenSnapshotLoading ? 'FETCHING SNAPSHOT' : tokenSnapshotError ? 'SNAPSHOT UNAVAILABLE' : 'SNAPSHOT RECEIVED'}
+                {snapshotSections.market === 'loading' || tokenSnapshotLoading ? 'FETCHING MARKET DATA' : snapshotSections.market === 'available' ? 'MARKET DATA RECEIVED' : 'MARKET DATA UNAVAILABLE'}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
@@ -1170,7 +1197,7 @@ export const TokenDetailPage: React.FC = () => {
               ].map((item) => (
                 <div key={item.label} className="min-w-0 space-y-1">
                   <p className="text-[11px] font-normal text-white/40">{item.label}</p>
-                  {tokenSnapshotLoading && item.value === '—' ? (
+                  {(tokenSnapshotLoading || snapshotSections.market === 'loading') && item.value === '—' ? (
                     <div aria-label={`Loading ${item.label}`} className="h-[21px] w-24 max-w-full animate-pulse rounded bg-white/[0.075]" />
                   ) : (
                     <p className="truncate font-mono text-[17px] font-medium leading-tight tracking-tight text-white/95">{item.value}</p>
@@ -1288,8 +1315,16 @@ export const TokenDetailPage: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {!marketDataLoading && (marketDataSnapshot?.holders?.largest || []).length === 0 && (
-                <p className="py-8 text-center text-[11px] text-white/40">No holder data available.</p>
+              {snapshotSections.holders === 'loading' || tokenSnapshotLoading ? (
+                <div className="space-y-3 py-3" aria-label="Loading holder data">
+                  {[0, 1, 2, 3].map((item) => <div key={item} className="flex items-center gap-3 animate-pulse"><div className="h-9 w-9 rounded-full bg-white/[0.07]" /><div className="flex-1 space-y-2"><div className="h-2 w-28 rounded bg-white/[0.07]" /><div className="h-2 w-16 rounded bg-white/[0.045]" /></div><div className="h-2 w-12 rounded bg-white/[0.06]" /></div>)}
+                </div>
+              ) : (marketDataSnapshot?.holders?.largest || []).length === 0 && (
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.015] px-5 py-8 text-center">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.025]"><Copy className="h-4 w-4 text-white/25" /></div>
+                  <p className="text-[11px] font-medium text-white/65">Holder data unavailable</p>
+                  <p className="max-w-[230px] text-[10px] leading-relaxed text-white/35">A complete holder index is not available from the current data provider.</p>
+                </div>
               )}
             </div>
           </div>
