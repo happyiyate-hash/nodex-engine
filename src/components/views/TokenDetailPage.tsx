@@ -182,9 +182,10 @@ export const TokenDetailPage: React.FC = () => {
       setRecentTrades((previous) => mergeTokenTrades(previous, [data]));
       const price = numberOrNull(data.price_usd);
       if (price !== null && price > 0) setTokenPrice(price);
-      const side = String(data.side || '').toLowerCase();
+      const rawSide = String(data.side || '').toLowerCase();
+      const side: 'buy' | 'sell' | null = rawSide === 'buy' ? 'buy' : rawSide === 'sell' ? 'sell' : null;
       const volume = numberOrNull(data.volume_usd);
-      if (volume !== null && volume > 0 && (side === 'buy' || side === 'sell')) {
+      if (volume !== null && volume > 0 && side !== null) {
         const id = numberOrNull(data.timestamp_ms) ?? Date.now();
         setFloatingAmounts((previous) => [
           ...previous.filter((item) => Date.now() - item.id < 3600),
