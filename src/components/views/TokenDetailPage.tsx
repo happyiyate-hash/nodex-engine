@@ -879,7 +879,7 @@ export const TokenDetailPage: React.FC = () => {
           {hasChartData ? (
             <div className="relative">
               <DotMatrixChart
-                key={activeToken.mint}
+                key={`${activeToken.mint}:${timeframe}`}
                 currentPrice={liveTokenPrice}
                 marketCap={marketCap ?? undefined}
                 entryPrice={activePosition ? entryPriceUsd : undefined}
