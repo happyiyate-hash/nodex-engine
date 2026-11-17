@@ -76,7 +76,6 @@ const emptyStatus: EngineStatus = {
 };
 // Fallback form values used until the persisted backend configuration loads.
 const emptyStrategy: StrategyConfig = {
-  entry_horizon_mode: 'both',
   min_liquidity_usd: 5000, max_entry_price_usd: 0,
   max_investment_per_token_usd: 15,
   max_simultaneous_positions: 3, min_safety_score: 80, max_slippage_pct: 10,

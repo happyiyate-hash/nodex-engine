@@ -331,7 +331,6 @@ export interface CreatorIntelligence {
 }
 
 export interface StrategyConfig {
-  entry_horizon_mode: 'short_term' | 'long_term' | 'both';
   min_liquidity_usd: number;
   max_entry_price_usd: number;
   max_investment_per_token_usd: number;

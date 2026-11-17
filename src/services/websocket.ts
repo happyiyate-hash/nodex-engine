@@ -140,6 +140,7 @@ export class NodeXWebSocketService {
         // Restore page-level subscriptions after every successful reconnect.
         for (const [mint,timeframe] of this.tokenSubscriptions) {
           this.send({command:'subscribe_token',mint});
+          this.send({command:'set_chart_timeframe',mint,timeframe});
         }
       };
       socket.onmessage=(message)=>{
@@ -227,9 +228,10 @@ export class NodeXWebSocketService {
     this.tokenSubscriptions.set(normalized,timeframe);
     if(this.ws?.readyState===WebSocket.OPEN){
       this.send({command:'subscribe_token',mint:normalized});
+      this.send({command:'set_chart_timeframe',mint:normalized,timeframe});
     }
   }
-  public setChartTimeframe(mint:string,timeframe:'1m'|'5m'|'15m'|'30m'|'1h'|'24h'):void {
+  public setChartTimeframe(mint:string,timeframe:'1m'|'5m'|'15m'|'1h'|'24h'):void {
     const normalized=mint.trim();
     if(!normalized)return;
     this.tokenSubscriptions.set(normalized,timeframe);

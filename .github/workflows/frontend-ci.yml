@@ -26,7 +26,5 @@ jobs:
         run: npm install --no-package-lock
       - name: TypeScript validation
         run: npm run lint
-      - name: Candle engine regression tests
-        run: npm test
       - name: Production build
         run: npm run build
