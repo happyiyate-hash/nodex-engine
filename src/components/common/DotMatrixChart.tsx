@@ -1803,9 +1803,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // Rebuild the ordered history rather than trying to append that older
         // timestamp through Lightweight Charts' incremental update API.
         const corrected = seedBars.map((bar) => ({ ...bar }));
-        const previousLatestTime = committed[committed.length - 1]?.time;
-        if (previousLatestTime !== undefined) {
-        }
         const correctedLatest = corrected[corrected.length - 1];
         if (correctedLatest) {
           subBarFractionRef.current = chartType === 'line'
@@ -1822,6 +1819,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           })));
           if (!isUserPannedRef.current) {
             chart.timeScale().scrollToPosition(
+              BASE_RIGHT_OFFSET + subBarFractionRef.current,
               false,
             );
           }
@@ -1884,9 +1882,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         // Re-seed both series in chronological order and return the viewport
         // to the latest candle rather than drawing backward.
         const corrected = seedBars.map((bar) => ({ ...bar }));
-        const previousLatestTime = committed[committed.length - 1]?.time;
-        if (previousLatestTime !== undefined) {
-        }
         const correctedLatest = corrected[corrected.length - 1];
         if (correctedLatest) {
           subBarFractionRef.current = chartType === 'line'
