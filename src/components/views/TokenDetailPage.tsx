@@ -144,6 +144,7 @@ export const TokenDetailPage: React.FC = () => {
     let socket: WebSocket | null = null;
     let reconnectTimer: number | undefined;
     let reconnectAttempt = 0;
+    let snapshotFallbackTimer: number | undefined;
     const settings = marketDataService.normalizeMarketDataSettings(marketDataService.loadSettings());
 
     setMarketDataLoading(true);
@@ -231,6 +232,7 @@ export const TokenDetailPage: React.FC = () => {
         : {};
 
       if (message.event === 'snapshot_completed') {
+        if (snapshotFallbackTimer !== undefined) window.clearTimeout(snapshotFallbackTimer);
         setSectionLoading({ market: false, info: false, holders: false, trades: false, chart: false });
         return;
       }
@@ -400,6 +402,7 @@ export const TokenDetailPage: React.FC = () => {
       } finally {
         if (!disposed) {
           setMarketDataLoading(false);
+          if (!settings.wsUrl) setSectionLoading({ market: false, info: false, holders: false, trades: false, chart: false });
           if (!settings.wsUrl && !settings.restUrl) setMarketDataError('Set the Token Data REST and WebSocket URLs in Settings.');
           else if (!settings.wsUrl) setMarketDataError((previous) => previous || 'Token Data WebSocket URL is not configured.');
         }
@@ -408,11 +411,17 @@ export const TokenDetailPage: React.FC = () => {
 
     // Subscribe immediately: Token Data sends its progressive initial snapshot as
     // part of the subscribe command, so a slow REST request cannot delay the stream.
-    if (settings.wsUrl) openSocket();
+    if (settings.wsUrl) {
+      openSocket();
+      snapshotFallbackTimer = window.setTimeout(() => {
+        if (!disposed) setSectionLoading({ market: false, info: false, holders: false, trades: false, chart: false });
+      }, 12000);
+    }
     void loadSnapshotThenSubscribe();
     return () => {
       disposed = true;
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (snapshotFallbackTimer !== undefined) window.clearTimeout(snapshotFallbackTimer);
       socket?.close(1000, 'Token details closed');
     };
   }, [activeToken?.mint]);
@@ -1117,11 +1126,7 @@ export const TokenDetailPage: React.FC = () => {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[10px]">
               <span className="font-medium text-white/55">Buy / Sell Pressure</span>
-              <span className="font-mono tabular-nums text-white/55">
-                {buyPressure === null ? '—' : buyPressure.toFixed(1) + '%'}
-                <span className="text-white/25"> / </span>
-                {sellPressure === null ? '—' : sellPressure.toFixed(1) + '%'}
-              </span>
+              {sectionLoading.market ? <span className="h-3 w-20 animate-pulse rounded bg-white/[0.09]" /> : <span className="font-mono tabular-nums text-white/55">{buyPressure === null ? '—' : buyPressure.toFixed(1) + '%'}<span className="text-white/25"> / </span>{sellPressure === null ? '—' : sellPressure.toFixed(1) + '%'}</span>}
             </div>
             <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-white/[0.10]">
               <div className="h-full bg-[#6CE094]" style={{ width: buyPressure === null ? '0%' : String(Math.max(0, Math.min(100, buyPressure))) + '%' }} />
@@ -1147,7 +1152,9 @@ export const TokenDetailPage: React.FC = () => {
           </div>
 
           <div className="space-y-0">
-            {filteredTrades.length ? filteredTrades.map((trade) => {
+            {sectionLoading.trades ? (
+              <div className="space-y-3 py-2">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="flex items-center gap-3 border-b border-white/[0.06] py-2"><div className="h-5 w-10 animate-pulse rounded-sm bg-white/[0.08]" /><div className="flex-1 space-y-2"><div className="h-3 w-24 animate-pulse rounded bg-white/[0.09]" /><div className="h-2.5 w-16 animate-pulse rounded bg-white/[0.06]" /></div><div className="h-3 w-16 animate-pulse rounded bg-white/[0.08]" /></div>)}</div>
+            ) : filteredTrades.length ? filteredTrades.map((trade) => {
               const side = String(trade.side || '').toUpperCase();
               const wallet = trade.trader || '';
               const tokenAmount = numberOrNull(trade.token_amount);
