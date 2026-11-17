@@ -147,6 +147,8 @@ export const TokenDetailPage: React.FC = () => {
     setMarketDataLoading(true);
     setMarketDataConnected(false);
     setMarketDataError(null);
+    setScrubPrice(null);
+    setScrubTime(null);
     setTokenPrice(0);
     setMarketMetrics({});
     setSnapshotMarketCap(null);
@@ -160,7 +162,15 @@ export const TokenDetailPage: React.FC = () => {
     setFloatingAmounts([]);
 
     const applyMarket = (data: Record<string, any>) => {
-      setMarketMetrics((previous) => ({ ...previous, ...data }));
+      setMarketMetrics((previous) => {
+        const next = { ...previous, ...data };
+        for (const [key, value] of Object.entries(data)) {
+          if (value === null && previous[key] !== undefined && previous[key] !== null) {
+            next[key] = previous[key];
+          }
+        }
+        return next;
+      });
       const price = numberOrNull(data.price_usd);
       if (price !== null && price > 0) setTokenPrice(price);
       const cap = numberOrNull(data.market_cap_usd);
@@ -201,7 +211,10 @@ export const TokenDetailPage: React.FC = () => {
       }
 
       if (message.event === 'chart_history_chunk' && Array.isArray(data.points)) {
-        const points = data.points.map(toPricePoint).filter((point): point is PricePoint => point !== null);
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        const points = data.points
+          .map(toPricePoint)
+          .filter((point): point is PricePoint => point !== null && point.time >= cutoff);
         setChartHistory((previous) => mergePricePoints(previous, points));
         return;
       }
@@ -245,6 +258,7 @@ export const TokenDetailPage: React.FC = () => {
 
       if (message.event === 'snapshot_error' || message.event === 'error') {
         const detail = String(data.message || data.code || 'Market Data returned an error.');
+        if (message.event === 'error') setMarketDataConnected(false);
         setMarketDataError(detail);
       }
     };
@@ -378,7 +392,6 @@ export const TokenDetailPage: React.FC = () => {
   const marketChangePct = numberOrNull(marketMetrics.change_24h_pct);
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
-  const hasMarketPrice = liveTokenPrice > 0;
   const chartHistoryForView = ['1S', '5S', '10S'].includes(timeframe)
     ? shortChartHistory
     : chartHistory;
