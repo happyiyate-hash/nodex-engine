@@ -172,7 +172,21 @@ export const TokenDetailPage: React.FC = () => {
         return next;
       });
       const price = numberOrNull(data.price_usd);
-      if (price !== null && price > 0) setTokenPrice(price);
+      if (price !== null && price > 0) {
+        setTokenPrice(price);
+        const seedTime = Math.floor(Date.now() / 1000) * 1000;
+        const seed: PricePoint = {
+          time: seedTime,
+          price,
+          open: price,
+          high: price,
+          low: price,
+          close: price,
+          volume: 0,
+        };
+        setShortChartHistory((previous) => previous.length ? previous : [seed]);
+        setChartHistory((previous) => previous.length ? previous : [seed]);
+      }
       const cap = numberOrNull(data.market_cap_usd);
       if (cap !== null && cap > 0) setSnapshotMarketCap(cap);
     };
@@ -315,8 +329,6 @@ export const TokenDetailPage: React.FC = () => {
           .map(toPricePoint)
           .filter((point): point is PricePoint => point !== null && point.time >= cutoff)
           .sort((a, b) => a.time - b.time);
-        setChartHistory(mergePricePoints([], history));
-
         const latestHistoryPrice = history.length ? history[history.length - 1].close ?? history[history.length - 1].price : null;
         const snapshotPrice = numberOrNull(snapshot.market?.price_usd);
         const initialPrice = snapshotPrice !== null && snapshotPrice > 0
@@ -336,6 +348,9 @@ export const TokenDetailPage: React.FC = () => {
             volume: 0,
           };
           setShortChartHistory([seed]);
+          setChartHistory(mergePricePoints(history, [seed]));
+        } else {
+          setChartHistory(mergePricePoints([], history));
         }
       } catch (error) {
         if (!disposed) {
@@ -393,7 +408,7 @@ export const TokenDetailPage: React.FC = () => {
   const marketChangePct = numberOrNull(marketMetrics.change_24h_pct);
   const isPositive = (marketChangePct ?? 0) >= 0;
   const entryPriceUsd = activePosition?.entry_price_usd;
-  const chartHistoryForView = ['1S', '5S', '10S'].includes(timeframe)
+  const chartHistoryForView = ['1S', '5S', '10S'].includes(timeframe) || chartHistory.length === 0
     ? shortChartHistory
     : chartHistory;
   const buyVolume = numberOrNull(marketMetrics.buy_volume_usd);
