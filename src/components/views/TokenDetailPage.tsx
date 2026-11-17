@@ -132,12 +132,24 @@ export const TokenDetailPage: React.FC = () => {
   const [snapshotSections, setSnapshotSections] = useState<Record<string, 'loading' | 'available' | 'unavailable'>>({});
   const marketDataSocketRef = useRef<WebSocket | null>(null);
   const [chartHistoryLoading, setChartHistoryLoading] = useState(false);
+  const [timeframeSwitching, setTimeframeSwitching] = useState(false);
 
   // Resolve the selected token from the shared registry on every render so live
   // token merges are reflected immediately instead of displaying a stale snapshot.
   const activeToken = selectedToken
     ? (tokens.find((token) => token.mint === selectedToken.mint) || selectedToken)
     : null;
+
+  const handleTimeframeChange = (nextTimeframe: typeof timeframe) => {
+    if (nextTimeframe === timeframe) return;
+    setTimeframeSwitching(true);
+    setTimeframe(nextTimeframe);
+    // The timeframe is recalculated from the cached 24-hour data locally.
+    // Keep a brief skeleton over the chart while the new viewport is seeded.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setTimeframeSwitching(false));
+    });
+  };
 
   useEffect(() => {
     setMarketDataSnapshot(null);
@@ -880,6 +892,15 @@ export const TokenDetailPage: React.FC = () => {
                   setScrubTime(t);
                 }}
               />
+              {timeframeSwitching && (
+                <div role="status" aria-label="Updating chart view" className="pointer-events-none absolute inset-0 z-40 animate-pulse bg-black/95 p-5">
+                  <div className="flex h-full flex-col justify-between">
+                    <div className="h-3 w-24 rounded bg-white/[0.08]" />
+                    <div className="h-24 w-full rounded bg-white/[0.055]" />
+                    <div className="h-3 w-32 rounded bg-white/[0.08]" />
+                  </div>
+                </div>
+              )}
               {chartHistoryLoading && (
                 <div role="status" aria-live="polite" className="pointer-events-none absolute left-3 top-3 z-30 rounded border border-white/[0.10] bg-black/75 px-2 py-1 text-[9px] text-white/55 backdrop-blur-sm">
                   Loading chart history…
@@ -1001,7 +1022,7 @@ export const TokenDetailPage: React.FC = () => {
                 type="button"
                 onClick={(e) => {
                   if (suppressTimeframeClickRef.current) return;
-                  setTimeframe(tf);
+                  handleTimeframeChange(tf);
                 }}
                 className={`inline-flex h-7 min-w-[2.75rem] shrink-0 touch-auto items-center justify-center rounded-[5px] px-2 font-sans text-[13px] font-medium leading-none tracking-[0.02em] transition-colors ${
                   timeframe === tf ? 'bg-white/[0.12] text-white' : 'text-white/65 hover:text-white/90'
