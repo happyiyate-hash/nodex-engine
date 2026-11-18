@@ -425,8 +425,13 @@ export const TokenDetailPage: React.FC = () => {
         }
       }
       if (String(event.event_type) === 'token_detail_snapshot') {
-        const cap = numberOrNull(event.data?.snapshot?.market?.market_cap_usd);
-        if (cap !== null && cap > 0) setBotMarketCap(cap);
+        const market = event.data?.snapshot?.market;
+        const cap = numberOrNull(market?.market_cap_usd);
+        const price = numberOrNull(market?.price_usd);
+        if (cap !== null && cap > 0 && price !== null && price > 0) {
+          setBotMarketCap(cap);
+          setBotMarketPrice(price);
+        }
       }
     });
     wsService.subscribeTokenUpdates(mint);
