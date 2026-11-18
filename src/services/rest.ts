@@ -1,4 +1,4 @@
-import { CreatorIntelligence, EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot, PositionRiskSettings } from '../types';
+import { CreatorIntelligence, CreatorReputation, CreatorTrainingToken, EngineStatus, DiscoveredToken, NodeXEvent, StrategyConfig, StrategyDecision, TokenLaunchRecord, PaperWalletSnapshot, PositionRiskSettings } from '../types';
 
 function websocketUrlFor(backendUrl: string): string {
   if (!backendUrl) return '';
@@ -359,6 +359,12 @@ export class NodeXRestClient {
   public async getPaperWallet(): Promise<PaperWalletSnapshot> { return this.request<PaperWalletSnapshot>('/api/v1/paper-wallet'); }
   public async getCreatorIntelligence(limit = 100): Promise<CreatorIntelligence[]> {
     return this.request<CreatorIntelligence[]>(`/api/v1/creators/intelligence?limit=${Math.min(500, Math.max(1, limit))}`);
+  }
+  public async getCreatorReputation(limit = 100): Promise<CreatorReputation[]> {
+    return this.request<CreatorReputation[]>(`/api/v1/creators/reputation?limit=${Math.min(500, Math.max(1, limit))}`);
+  }
+  public async getCreatorTraining(creatorAddress: string, limit = 100): Promise<{ creator_address: string; token_count: number; tokens: CreatorTrainingToken[] }> {
+    return this.request(`/api/v1/creators/${encodeURIComponent(creatorAddress)}/training?limit=${Math.min(500, Math.max(1, limit))}`);
   }
   public async getRecentTokens(limit=100): Promise<TokenLaunchRecord[]> {
     return this.request<any[]>(`/api/v1/tokens/recent?limit=${Math.min(500,Math.max(1,limit))}`);
