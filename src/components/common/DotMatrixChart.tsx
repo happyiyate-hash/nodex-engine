@@ -1591,6 +1591,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const displayP =
           smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
 
+        const previousMcapScale = mcapScaleRef.current;
         const scaleTarget = mcapScaleTargetRef.current;
         if (Number.isFinite(scaleTarget) && scaleTarget > 0) {
           const scaleBlend = 1 - Math.exp(-3.2 * dt);
@@ -1604,13 +1605,39 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const nowWall = Date.now();
 
         let committedNewBar = false;
+        const marketCapScaleChanged =
+          Math.abs(mcapScaleRef.current - previousMcapScale) /
+            Math.max(Math.abs(previousMcapScale), 1e-10) >
+          0.00005;
+        if (
+          marketCapScaleChanged &&
+          committed.length > 0
+        ) {
+          const lastBar = committed[committed.length - 1];
+          isApplyingAutoScrollRef.current = true;
+          try {
+            if (chartTypeRef.current === 'line') {
+              lineSeries.update({ time: lastBar.time, value: lastBar.close });
+            } else {
+              candleSeries.update({
+                time: lastBar.time,
+                open: lastBar.open,
+                high: lastBar.high,
+                low: lastBar.low,
+                close: lastBar.close,
+              });
+            }
+          } finally {
+            isApplyingAutoScrollRef.current = false;
+          }
+        }
+
         if (
           chartTypeRef.current === 'line' &&
           committed.length > 0 &&
           displayP > 0
         ) {
-          {
-            let last = committed[committed.length - 1];
+          let last = committed[committed.length - 1];
             let catchupGuard = 0;
             while (
               nowWall - last.timestampMs >= activeStepMs &&
@@ -1633,13 +1660,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
               lineSeries.update({ time: nextSec, value: displayP });
               last = nextBar;
               committedNewBar = true;
-              catchupGuard += 1;
-            }
-            subBarFractionRef.current = Math.max(
-              0,
-              Math.min(0.9999, (nowWall - last.timestampMs) / activeStepMs),
-            );
+            catchupGuard += 1;
           }
+          subBarFractionRef.current = Math.max(
+            0,
+            Math.min(0.9999, (nowWall - last.timestampMs) / activeStepMs),
+          );
 
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
             const targetScrollPos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
