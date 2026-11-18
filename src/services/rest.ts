@@ -17,6 +17,20 @@ function websocketUrlFor(backendUrl: string): string {
 const CONNECTION_STORAGE_KEY = 'nodex.connection-settings.v1';
 
 
+export interface DeveloperTrainingRecord {
+  creator_address: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  total_launches: number;
+  token_count: number;
+  observation_count: number;
+  trade_count: number;
+  overall_score: number | null;
+  confidence_pct: number | null;
+  sample_status: string | null;
+  intelligence_observations: number;
+}
+
 export interface StorageOverview {
   disk: null | {
     filesystem: string;
@@ -429,6 +443,14 @@ export class NodeXRestClient {
       headers: { 'X-NodeX-Admin-Key': key },
     });
   }
+  public async getDeveloperTrainingRecords(limit = 5000): Promise<DeveloperTrainingRecord[]> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings before viewing developer training records.');
+    return this.request<DeveloperTrainingRecord[]>(`/api/v1/admin/storage/developer-training?limit=${Math.min(10000, Math.max(1, limit))}`, {
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
+
   public async clearDeveloperTraining(): Promise<{
     status: string;
     category: 'developer_training';
