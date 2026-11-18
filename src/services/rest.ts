@@ -39,7 +39,10 @@ export interface StorageOverview {
     tokens: number;
     observations: number;
     trades: number;
+    reputation_records: number;
+    intelligence_records: number;
     allocated_bytes: number | null;
+    measurement: 'sqlite_page_allocation' | 'payload_byte_estimate';
   };
   system_journal: {
     available: boolean;
