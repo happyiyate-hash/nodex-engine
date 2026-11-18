@@ -1638,28 +1638,28 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           displayP > 0
         ) {
           let last = committed[committed.length - 1];
-            let catchupGuard = 0;
-            while (
-              nowWall - last.timestampMs >= activeStepMs &&
-              catchupGuard < 1200
-            ) {
-              const nextMs = last.timestampMs + activeStepMs;
-              const nextSec = (last.time + stepSec) as UTCTimestamp;
-              const nextBar: NormalizedBar = {
-                time: nextSec,
-                timestampMs: nextMs,
-                open: displayP,
-                high: displayP,
-                low: displayP,
-                close: displayP,
-              };
-              committed.push(nextBar);
-              if (committed.length > 2000) {
-                committed.splice(0, committed.length - 2000);
-              }
-              lineSeries.update({ time: nextSec, value: displayP });
-              last = nextBar;
-              committedNewBar = true;
+          let catchupGuard = 0;
+          while (
+            nowWall - last.timestampMs >= activeStepMs &&
+            catchupGuard < 1200
+          ) {
+            const nextMs = last.timestampMs + activeStepMs;
+            const nextSec = (last.time + stepSec) as UTCTimestamp;
+            const nextBar: NormalizedBar = {
+              time: nextSec,
+              timestampMs: nextMs,
+              open: displayP,
+              high: displayP,
+              low: displayP,
+              close: displayP,
+            };
+            committed.push(nextBar);
+            if (committed.length > 2000) {
+              committed.splice(0, committed.length - 2000);
+            }
+            lineSeries.update({ time: nextSec, value: displayP });
+            last = nextBar;
+            committedNewBar = true;
             catchupGuard += 1;
           }
           subBarFractionRef.current = Math.max(
