@@ -330,6 +330,36 @@ export interface CreatorIntelligence {
   updated_at: string;
 }
 
+export interface CreatorReputation {
+  creator_address: string;
+  total_launches: number;
+  observed_tokens: number;
+  total_observations: number;
+  graduated_tokens: number;
+  longevity_score: number | null;
+  growth_score: number | null;
+  graduation_score: number | null;
+  activity_score: number | null;
+  stability_score: number | null;
+  risk_score: number | null;
+  overall_score: number | null;
+  confidence_pct: number;
+  sample_status: 'insufficient_data' | 'developing' | 'established' | string;
+  updated_at: string;
+}
+
+export interface CreatorTrainingToken {
+  mint_address: string;
+  creator_address: string;
+  source: string;
+  launched_at: string;
+  last_observed_at: string | null;
+  lifecycle_status: string;
+  graduated_at: string | null;
+  peak_market_cap_usd: number | null;
+  observation_count: number;
+}
+
 export interface StrategyConfig {
   entry_horizon_mode: 'short_term' | 'long_term' | 'both';
   min_liquidity_usd: number;
