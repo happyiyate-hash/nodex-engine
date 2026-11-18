@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  AlertTriangle, Archive, ArrowLeft, Database, HardDrive, KeyRound,
+  AlertTriangle, Archive, ArrowLeft, Database, HardDrive, KeyRound, Users,
   RefreshCw, Signal, Terminal, Trash2, X,
 } from 'lucide-react';
 import { apiClient, StorageOverview } from '../../services/rest';
@@ -44,6 +44,16 @@ const categories: StorageCategory[] = [
     tint: 'bg-emerald-400',
     cleanable: true,
     note: 'Clean unused token records from SQLite. Tokens with any open or closed paper-trading position, paper balances, ledger entries, schema and the database file itself are preserved.',
+  },
+  {
+    id: 'developer_training',
+    title: 'Developer training records',
+    description: 'Learned developers, token history, observations, trades and reputation',
+    icon: Users,
+    accent: 'text-sky-300',
+    tint: 'bg-sky-400',
+    cleanable: true,
+    note: 'Clean all learned developer records, token training history, market observations, confirmed trade evidence and calculated developer scores. Manual preferred-owner settings, paper positions, wallet balances and ledger entries are preserved.',
   },
   {
     id: 'system_logs',
@@ -114,13 +124,24 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
     setShowCleanupConfirmation(false);
     const categoryId = selected.id;
     const toastId = showToast({
-      title: categoryId === 'database' ? 'Cleaning SQLite storage…' : categoryId === 'system_logs' ? 'Cleaning system journal…' : 'Clearing browser storage…',
+      title: categoryId === 'developer_training' ? 'Cleaning developer training records…' : categoryId === 'database' ? 'Cleaning SQLite storage…' : categoryId === 'system_logs' ? 'Cleaning system journal…' : 'Clearing browser storage…',
       description: 'The operation is running. Please wait for the backend or browser to confirm completion.',
       tone: 'loading',
     });
 
     try {
-      if (categoryId === 'database') {
+      if (categoryId === 'developer_training') {
+        const result = await apiClient.clearDeveloperTraining();
+        setServerStorage(result.overview);
+        const d = result.deleted;
+        updateToast(toastId, {
+          title: 'Developer training cleanup completed',
+          description: `${d.developers} developers, ${d.tokens} tokens, ${d.observations} observations, ${d.trades} trades and ${d.reputation_records + d.intelligence_records} score records removed. Freed ${formatMegabytes(result.bytes_freed)} from SQLite. Paper positions, wallet and ledger were preserved.`,
+          tone: 'success',
+          duration: 8000,
+        });
+        await refresh(false);
+      } else if (categoryId === 'database') {
         const result = await apiClient.clearEngineHistory(apiClient.loadSettings().adminApiKey);
         removeTokensByMint(result.deleted_mints || []);
         const stateRecords = result.deleted_token_state_records ?? result.deleted_token_records ?? 0;
@@ -226,7 +247,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
       }
     } catch (error) {
       updateToast(toastId, {
-        title: categoryId === 'database' ? 'SQLite cleanup failed' : categoryId === 'system_logs' ? 'System journal cleanup failed' : 'Browser storage cleanup incomplete',
+        title: categoryId === 'developer_training' ? 'Developer training cleanup failed' : categoryId === 'database' ? 'SQLite cleanup failed' : categoryId === 'system_logs' ? 'System journal cleanup failed' : 'Browser storage cleanup incomplete',
         description: error instanceof Error ? error.message : 'The operation could not be completed. The result has not been confirmed.',
         tone: 'error',
         duration: 7000,
@@ -291,7 +312,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
             <h2 className="text-[14px] font-semibold text-white">Storage details</h2>
             <p className="mt-1 text-[10px] text-white/40">Measured files and browser storage; these are subsets, not extra disk capacity.</p>
           </div>
-          <span className="text-[9px] text-white/30">2 server · 1 browser</span>
+          <span className="text-[9px] text-white/30">3 server · 1 browser</span>
         </div>
 
         <div className="divide-y divide-white/[0.075]">
@@ -302,7 +323,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               ? browserStorage.usage
               : id === 'database'
                 ? serverStorage?.database.total_file_bytes ?? null
-                : serverStorage?.system_journal.reported_size_bytes ?? null;
+                : id === 'developer_training'
+                  ? serverStorage?.developer_training.allocated_bytes ?? null
+                  : serverStorage?.system_journal.reported_size_bytes ?? null;
             const progress = isLocalStorage
               ? localStorageProgress
               : categoryBytes !== null && categoryBytes !== undefined && serverStorage?.disk
@@ -312,7 +335,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               ? category.note
               : id === 'database'
                 ? 'Physical SQLite database, WAL and SHM files. Included in root filesystem used space.'
-                : serverStorage?.system_journal.note || category.note;
+                : id === 'developer_training'
+                  ? `${serverStorage?.developer_training.developers ?? 0} developers · ${serverStorage?.developer_training.tokens ?? 0} tokens · ${serverStorage?.developer_training.observations ?? 0} observations · ${serverStorage?.developer_training.trades ?? 0} trades`
+                  : serverStorage?.system_journal.note || category.note;
             return (
               <button
                 key={id}
@@ -390,7 +415,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                     ? (browserStorage.usage === null ? 'Unavailable' : formatMegabytes(localStorageBytes))
                     : selected.id === 'database'
                       ? serverStorage ? formatMegabytes(serverStorage.database.total_file_bytes) : 'Not reported'
-                      : serverStorage?.system_journal.reported_size_bytes == null
+                      : selected.id === 'developer_training'
+                        ? serverStorage?.developer_training.allocated_bytes == null ? 'Not reported' : formatMegabytes(serverStorage.developer_training.allocated_bytes)
+                        : serverStorage?.system_journal.reported_size_bytes == null
                         ? 'Not reported'
                         : formatMegabytes(serverStorage.system_journal.reported_size_bytes)}
                 </span>
@@ -412,6 +439,14 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   </p>
                 </>
               )}
+              {selected.id === 'developer_training' && serverStorage && (
+                <div className="mt-3 space-y-1.5 border-t border-white/[0.07] pt-3 text-[10px] text-white/45">
+                  <div className="flex justify-between gap-3"><span>Developer records</span><span className="tabular-nums">{serverStorage.developer_training.developers.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Token training records</span><span className="tabular-nums">{serverStorage.developer_training.tokens.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Market observations</span><span className="tabular-nums">{serverStorage.developer_training.observations.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Confirmed trade events</span><span className="tabular-nums">{serverStorage.developer_training.trades.toLocaleString()}</span></div>
+                </div>
+              )}
               {selected.id === 'database' && serverStorage && (
                 <div className="mt-3 space-y-1.5 border-t border-white/[0.07] pt-3 text-[10px] text-white/45">
                   <div className="flex justify-between gap-3"><span>Main database</span><span className="tabular-nums">{formatMegabytes(serverStorage.database.database_bytes)}</span></div>
@@ -427,7 +462,11 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   ? 'This is one combined SQLite file measurement. It is already counted inside the EC2 root filesystem usage above.'
                   : serverStorage?.system_journal.note || selected.note}
             </p>
-            {selected.id === 'database' ? (
+            {selected.id === 'developer_training' ? (
+              <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-red-400/25 bg-red-500/[0.08] text-[11px] font-bold text-red-200 transition-transform active:scale-[0.98]">
+                <Trash2 className="h-3.5 w-3.5" /> Clean developer records
+              </button>
+            ) : selected.id === 'database' ? (
               <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-white text-[11px] font-bold text-black transition-transform active:scale-[0.98]">
                 <Trash2 className="h-3.5 w-3.5" /> Clean unused tokens
               </button>
@@ -460,8 +499,10 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-400/[0.12] bg-amber-400/[0.05]"><Trash2 className="h-4 w-4 text-amber-200/80" /></span>
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} aria-label="Close cleanup confirmation" className="rounded-full p-2 text-white/45 hover:bg-white/[0.06]"><X className="h-4 w-4" /></button>
             </div>
-            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">{selected.id === 'database' ? 'Clean unused token records?' : selected.id === 'system_logs' ? 'Clean system journal?' : localStorageCleanupMode === 'safe' ? 'Run Safe Clean?' : 'Wipe all app storage?'}</h2>
-            <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.id === 'database'
+            <h2 id="storage-clean-title" className="text-[15px] font-semibold text-white">{selected.id === 'developer_training' ? 'Delete all learned developer records?' : selected.id === 'database' ? 'Clean unused token records?' : selected.id === 'system_logs' ? 'Clean system journal?' : localStorageCleanupMode === 'safe' ? 'Run Safe Clean?' : 'Wipe all app storage?'}</h2>
+            <p className="mt-2 text-[11px] leading-relaxed text-white/50">{selected.id === 'developer_training'
+              ? 'This permanently deletes every learned developer training record, its associated token records, saved market observations, confirmed trade events and calculated developer reputation/intelligence scores. The database schema remains. Manual preferred-owner settings, token market cache, all paper positions (open and closed), paper wallet balances, ledger entries and runtime configuration are preserved. SQLite is vacuumed afterward to reclaim free pages.'
+              : selected.id === 'database'
               ? 'This sends an authenticated request to SQLite cleanup. It removes rejected, failed-scan, failed-metadata and other tokens that have never entered paper trading, plus their launch and chart history. Any token with an open or closed paper position is preserved. Paper wallet, ledger, balances, schema, active discovery and the SQLite file itself are not deleted.'
               : selected.id === 'system_logs'
                 ? 'This sends an authenticated request to the backend to rotate and vacuum archived system-wide journal files. It does not clean SQLite token records, paper-trading data or browser storage. The server may reject the request if cleanup is disabled or OS permissions are insufficient.'
@@ -470,7 +511,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   : 'This permanently removes all app-origin local and session storage, every IndexedDB database, cached files, service worker registrations, saved API keys and REST/WebSocket URLs. The app will need to be configured again. Server-side data and browser-managed cookies are not included.'}</p>
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={() => setShowCleanupConfirmation(false)} className="min-h-11 flex-1 rounded-full border border-white/[0.12] bg-white/[0.035] text-[11px] font-semibold text-white/70">Cancel</button>
-              <button type="button" onClick={confirmCleanup} disabled={cleanupBusy} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black disabled:opacity-50">{cleanupBusy ? 'Cleaning…' : selected.id === 'database' ? 'Clean unused tokens' : selected.id === 'system_logs' ? 'Clean journal' : localStorageCleanupMode === 'safe' ? 'Safe Clean' : 'Wipe Clean'}</button>
+              <button type="button" onClick={confirmCleanup} disabled={cleanupBusy} className="min-h-11 flex-1 rounded-full bg-white text-[11px] font-bold text-black disabled:opacity-50">{cleanupBusy ? 'Cleaning…' : selected.id === 'developer_training' ? 'Delete developer records' : selected.id === 'database' ? 'Clean unused tokens' : selected.id === 'system_logs' ? 'Clean journal' : localStorageCleanupMode === 'safe' ? 'Safe Clean' : 'Wipe Clean'}</button>
             </div>
           </section>
         </div>
