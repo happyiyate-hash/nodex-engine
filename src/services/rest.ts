@@ -372,6 +372,9 @@ export class NodeXRestClient {
   public async getTokenState(mint: string): Promise<Record<string, any>> {
     return this.request(`/api/v1/tokens/${encodeURIComponent(mint)}/state`);
   }
+  public async getCreatorTokenObservations(mint: string, limit = 500): Promise<CreatorTokenObservation[]> {
+    return this.request<CreatorTokenObservation[]>(`/api/v1/training/tokens/${encodeURIComponent(mint)}/observations?limit=${Math.min(5000, Math.max(1, limit))}`);
+  }
 
   public async refreshTokenMetadata(mint: string): Promise<{
     status: string; mint_address: string; metadata_status: string; logo_url?: string | null;
