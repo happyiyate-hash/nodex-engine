@@ -48,7 +48,7 @@ export const FloatingTradeOverlay: React.FC<FloatingTradeOverlayProps> = ({ mint
 
     const appendTrade = (data: Record<string, unknown>) => {
       const rawSide = String(data.side || '').toLowerCase();
-      const side = rawSide === 'buy' ? 'buy' : rawSide === 'sell' ? 'sell' : null;
+      const side: FloatingTrade['side'] | null = rawSide === 'buy' ? 'buy' : rawSide === 'sell' ? 'sell' : null;
       const volume = numberOrNull(data.volume_usd);
       if (!side || volume === null || volume <= 0) return;
 
