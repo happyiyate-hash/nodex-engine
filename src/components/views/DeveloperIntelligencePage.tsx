@@ -169,8 +169,11 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
               const tokenStateData = detail?.data && typeof detail.data === 'object' ? detail.data : detail || {};
               const identity = tokenStateData.identity || {};
               const security = tokenStateData.security || {};
-              const rawScore = security.safety_score ?? security.security_score ?? security.overall_score ?? security.score;
-              const score = typeof rawScore === 'number' && Number.isFinite(rawScore) ? Math.max(0, Math.min(100, rawScore)) : null;
+              const rawSecurityScore = security.safety_score ?? security.security_score ?? security.overall_score ?? security.score;
+              const securityScore = typeof rawSecurityScore === 'number' && Number.isFinite(rawSecurityScore) ? Math.max(0, Math.min(100, rawSecurityScore)) : null;
+              const marketStrength = token.market_strength;
+              const score = typeof marketStrength?.score === 'number' && Number.isFinite(marketStrength.score) ? Math.max(0, Math.min(100, marketStrength.score)) : null;
+              const strengthBreakdown = marketStrength?.breakdown;
               const tokenName = token.name || (typeof identity.name === 'string' ? identity.name : '') || `Token ${shortAddress(token.mint_address)}`;
               const symbol = token.symbol || (typeof identity.symbol === 'string' ? identity.symbol : '');
               const logo = token.logo_url || (typeof identity.logo_url === 'string' ? identity.logo_url : '') || (typeof identity.image === 'string' ? identity.image : '') || '/assets/token-fallbacks/solana-logo.png';
@@ -209,7 +212,7 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="block text-[14px] font-bold tabular-nums text-white">{score === null ? '—' : score.toFixed(0)}</span>
-                      <span className="block text-[8px] uppercase tracking-wider text-white/40">Security</span>
+                      <span className="block text-[8px] uppercase tracking-wider text-white/40">Strength</span>
                     </span>
                     <ChevronDown className={`h-4 w-4 shrink-0 text-white/45 transition-transform ${expanded ? 'rotate-180' : ''}`} />
                   </button>
@@ -219,7 +222,27 @@ export const DeveloperIntelligencePage: React.FC<{ onBack: () => void }> = ({ on
                       <button type="button" onClick={(event) => { event.stopPropagation(); void copyAddress(token.mint_address); }} className="inline-flex items-center gap-1 text-[9px] text-white/65"><Copy className="h-3 w-3" /> Copy contract</button>
                     </div>
                     <p className="break-all font-mono text-[9px] leading-relaxed text-white/55">{token.mint_address}</p>
+                    <section className="mb-3 rounded-sm border border-white/[0.08] bg-black/30 p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div><p className="text-[9px] font-semibold uppercase tracking-wider text-white/55">Market strength</p><p className="mt-1 text-[8px] text-white/35">{marketStrength?.sample_status ? marketStrength.sample_status.replace(/_/g, ' ') : 'Score not supplied by backend'} · {marketStrength?.evidence_count ?? 0} scoring observations</p></div>
+                        <div className="text-right"><p className="text-[17px] font-bold tabular-nums text-white">{score === null ? '—' : score.toFixed(1) + '/100'}</p><p className="text-[8px] text-white/35">{marketStrength?.confidence_pct == null ? 'Confidence unavailable' : marketStrength.confidence_pct.toFixed(0) + '% confidence'}</p></div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
+                        {([
+                          ['Market cap', strengthBreakdown?.market_cap],
+                          ['Market cap growth', strengthBreakdown?.market_cap_growth],
+                          ['Trading activity', strengthBreakdown?.trading_activity],
+                          ['Liquidity health', strengthBreakdown?.liquidity_health],
+                          ['Market stability', strengthBreakdown?.market_stability],
+                          ['Trading continuity', strengthBreakdown?.trading_continuity],
+                          ['Holder health', strengthBreakdown?.holder_health],
+                        ] as Array<[string, number | null | undefined]>).map(([label, value]) => (
+                          <div key={label} className="flex items-center justify-between gap-2 text-[8px]"><span className="text-white/40">{label}</span><span className="font-semibold tabular-nums text-white/70">{value == null ? 'Unavailable' : value.toFixed(0) + '/100'}</span></div>
+                        ))}
+                      </div>
+                    </section>
                     <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-sm bg-black/35 p-2"><p className="text-[8px] text-white/40">Security scan score</p><p className="mt-1 text-[12px] font-semibold text-white">{securityScore == null ? 'Unavailable' : securityScore.toFixed(0) + '/100'}</p></div>
                       <div className="rounded-sm bg-black/35 p-2"><p className="text-[8px] text-white/40">Current market cap</p><p className="mt-1 text-[12px] font-semibold text-white">{marketCap == null ? '—' : '$' + marketCap.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p></div>
                       <div className="rounded-sm bg-black/35 p-2"><p className="text-[8px] text-white/40">Peak market cap</p><p className="mt-1 text-[12px] font-semibold text-white">{peakCap == null ? '—' : '$' + peakCap.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p></div>
                       <div className="rounded-sm bg-black/35 p-2"><p className="text-[8px] text-white/40">Observed trading span</p><p className="mt-1 text-[12px] font-semibold text-white">{observationLoading === token.mint_address ? 'Loading…' : spanLabel}</p></div>
