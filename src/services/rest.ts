@@ -34,6 +34,13 @@ export interface StorageOverview {
     shm_bytes: number;
     total_file_bytes: number;
   };
+  developer_training: {
+    developers: number;
+    tokens: number;
+    observations: number;
+    trades: number;
+    allocated_bytes: number | null;
+  };
   system_journal: {
     available: boolean;
     reported_size_bytes: number | null;
