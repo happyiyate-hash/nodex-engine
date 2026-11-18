@@ -327,8 +327,8 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               : id === 'database'
                 ? serverStorage?.database.total_file_bytes ?? null
                 : id === 'developer_training'
-                  ? serverStorage?.developer_training.allocated_bytes ?? null
-                  : serverStorage?.system_journal.reported_size_bytes ?? null;
+                  ? serverStorage?.developer_training?.allocated_bytes ?? null
+                  : serverStorage?.system_journal?.reported_size_bytes ?? null;
             const progress = isLocalStorage
               ? localStorageProgress
               : categoryBytes !== null && categoryBytes !== undefined && serverStorage?.disk
@@ -339,8 +339,8 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               : id === 'database'
                 ? 'Physical SQLite database, WAL and SHM files. Included in root filesystem used space.'
                 : id === 'developer_training'
-                  ? `${serverStorage?.developer_training.developers ?? 0} developers · ${serverStorage?.developer_training.tokens ?? 0} tokens · ${serverStorage?.developer_training.observations ?? 0} observations · ${serverStorage?.developer_training.trades ?? 0} trades`
-                  : serverStorage?.system_journal.note || category.note;
+                  ? `${serverStorage?.developer_training?.developers ?? 0} developers · ${serverStorage?.developer_training?.tokens ?? 0} tokens · ${serverStorage?.developer_training?.observations ?? 0} observations · ${serverStorage?.developer_training?.trades ?? 0} trades`
+                  : serverStorage?.system_journal?.note || category.note;
             return (
               <button
                 key={id}
@@ -351,7 +351,10 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                     setDeveloperRecordsLoading(true);
                     setDeveloperRecordsError('');
                     void apiClient.getDeveloperTrainingRecords(10000)
-                      .then(setDeveloperRecords)
+                      .then((records) => {
+                        if (!Array.isArray(records)) throw new Error('The backend returned an unexpected developer-record response.');
+                        setDeveloperRecords(records);
+                      })
                       .catch((error) => setDeveloperRecordsError(error instanceof Error ? error.message : 'Could not load developer records.'))
                       .finally(() => setDeveloperRecordsLoading(false));
                   }
@@ -427,10 +430,10 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   {selected.id === 'local-storage'
                     ? (browserStorage.usage === null ? 'Unavailable' : formatMegabytes(localStorageBytes))
                     : selected.id === 'database'
-                      ? serverStorage ? formatMegabytes(serverStorage.database.total_file_bytes) : 'Not reported'
+                      ? serverStorage ? formatMegabytes(serverStorage.database?.total_file_bytes ?? 0) : 'Not reported'
                       : selected.id === 'developer_training'
-                        ? serverStorage?.developer_training.allocated_bytes == null ? 'Not reported' : formatMegabytes(serverStorage.developer_training.allocated_bytes)
-                        : serverStorage?.system_journal.reported_size_bytes == null
+                        ? serverStorage?.developer_training?.allocated_bytes == null ? 'Not reported' : formatMegabytes(serverStorage.developer_training.allocated_bytes)
+                        : serverStorage?.system_journal?.reported_size_bytes == null
                         ? 'Not reported'
                         : formatMegabytes(serverStorage.system_journal.reported_size_bytes)}
                 </span>
@@ -454,20 +457,20 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               )}
               {selected.id === 'developer_training' && serverStorage && (
                 <div className="mt-3 space-y-1.5 border-t border-white/[0.07] pt-3 text-[10px] text-white/45">
-                  <div className="flex justify-between gap-3"><span>Developer records</span><span className="tabular-nums">{serverStorage.developer_training.developers.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Token training records</span><span className="tabular-nums">{serverStorage.developer_training.tokens.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Market observations</span><span className="tabular-nums">{serverStorage.developer_training.observations.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Confirmed trade events</span><span className="tabular-nums">{serverStorage.developer_training.trades.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Reputation records</span><span className="tabular-nums">{serverStorage.developer_training.reputation_records.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Intelligence records</span><span className="tabular-nums">{serverStorage.developer_training.intelligence_records.toLocaleString()}</span></div>
-                  <p className="pt-1 text-[9px] text-white/35">{serverStorage.developer_training.measurement === 'sqlite_page_allocation' ? 'SQLite table and index page allocation' : 'Estimated persisted payload bytes; SQLite page allocation unavailable'}</p>
+                  <div className="flex justify-between gap-3"><span>Developer records</span><span className="tabular-nums">{serverStorage.developer_training?.developers ?? 0.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Token training records</span><span className="tabular-nums">{serverStorage.developer_training?.tokens ?? 0.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Market observations</span><span className="tabular-nums">{serverStorage.developer_training?.observations ?? 0.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Confirmed trade events</span><span className="tabular-nums">{serverStorage.developer_training?.trades ?? 0.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Reputation records</span><span className="tabular-nums">{serverStorage.developer_training?.reputation_records ?? 0.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Intelligence records</span><span className="tabular-nums">{serverStorage.developer_training?.intelligence_records ?? 0.toLocaleString()}</span></div>
+                  <p className="pt-1 text-[9px] text-white/35">{serverStorage.developer_training?.measurement === 'sqlite_page_allocation' ? 'SQLite table and index page allocation' : 'Estimated persisted payload bytes; SQLite page allocation unavailable'}</p>
                 </div>
               )}
               {selected.id === 'database' && serverStorage && (
                 <div className="mt-3 space-y-1.5 border-t border-white/[0.07] pt-3 text-[10px] text-white/45">
-                  <div className="flex justify-between gap-3"><span>Main database</span><span className="tabular-nums">{formatMegabytes(serverStorage.database.database_bytes)}</span></div>
-                  <div className="flex justify-between gap-3"><span>Write-ahead log</span><span className="tabular-nums">{formatMegabytes(serverStorage.database.wal_bytes)}</span></div>
-                  <div className="flex justify-between gap-3"><span>Shared memory</span><span className="tabular-nums">{formatMegabytes(serverStorage.database.shm_bytes)}</span></div>
+                  <div className="flex justify-between gap-3"><span>Main database</span><span className="tabular-nums">{formatMegabytes(serverStorage.database?.database_bytes ?? 0)}</span></div>
+                  <div className="flex justify-between gap-3"><span>Write-ahead log</span><span className="tabular-nums">{formatMegabytes(serverStorage.database?.wal_bytes ?? 0)}</span></div>
+                  <div className="flex justify-between gap-3"><span>Shared memory</span><span className="tabular-nums">{formatMegabytes(serverStorage.database?.shm_bytes ?? 0)}</span></div>
                 </div>
               )}
             </div>
@@ -508,7 +511,7 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 ? selected.note
                 : selected.id === 'database'
                   ? 'This is one combined SQLite file measurement. It is already counted inside the EC2 root filesystem usage above.'
-                  : serverStorage?.system_journal.note || selected.note}
+                  : serverStorage?.system_journal?.note || selected.note}
             </p>
             {selected.id === 'developer_training' ? (
               <button type="button" onClick={() => setShowCleanupConfirmation(true)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-red-400/25 bg-red-500/[0.08] text-[11px] font-bold text-red-200 transition-transform active:scale-[0.98]">
