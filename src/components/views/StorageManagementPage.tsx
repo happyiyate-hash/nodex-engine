@@ -457,12 +457,12 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               )}
               {selected.id === 'developer_training' && serverStorage && (
                 <div className="mt-3 space-y-1.5 border-t border-white/[0.07] pt-3 text-[10px] text-white/45">
-                  <div className="flex justify-between gap-3"><span>Developer records</span><span className="tabular-nums">{serverStorage.developer_training?.developers ?? 0.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Token training records</span><span className="tabular-nums">{serverStorage.developer_training?.tokens ?? 0.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Market observations</span><span className="tabular-nums">{serverStorage.developer_training?.observations ?? 0.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Confirmed trade events</span><span className="tabular-nums">{serverStorage.developer_training?.trades ?? 0.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Reputation records</span><span className="tabular-nums">{serverStorage.developer_training?.reputation_records ?? 0.toLocaleString()}</span></div>
-                  <div className="flex justify-between gap-3"><span>Intelligence records</span><span className="tabular-nums">{serverStorage.developer_training?.intelligence_records ?? 0.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Developer records</span><span className="tabular-nums">{(serverStorage.developer_training?.developers ?? 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Token training records</span><span className="tabular-nums">{(serverStorage.developer_training?.tokens ?? 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Market observations</span><span className="tabular-nums">{(serverStorage.developer_training?.observations ?? 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Confirmed trade events</span><span className="tabular-nums">{(serverStorage.developer_training?.trades ?? 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Reputation records</span><span className="tabular-nums">{(serverStorage.developer_training?.reputation_records ?? 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Intelligence records</span><span className="tabular-nums">{(serverStorage.developer_training?.intelligence_records ?? 0).toLocaleString()}</span></div>
                   <p className="pt-1 text-[9px] text-white/35">{serverStorage.developer_training?.measurement === 'sqlite_page_allocation' ? 'SQLite table and index page allocation' : 'Estimated persisted payload bytes; SQLite page allocation unavailable'}</p>
                 </div>
               )}
