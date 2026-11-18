@@ -96,7 +96,9 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
   const { showToast, updateToast } = useToast();
   const paperMode = engineStatus.operating_mode.toLowerCase() !== 'real';
   const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig, entry_horizon_mode: 'both' });
-  const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig, entry_horizon_mode: 'both' });
+  // Keep the previous backend value as the applied baseline so legacy short/long
+  // settings show an Apply action that migrates them to automatic "both" mode.
+  const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
   const [customValue, setCustomValue] = useState('');
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
@@ -112,7 +114,7 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
 
   useEffect(() => {
     setForm({ ...strategyConfig, entry_horizon_mode: 'both' });
-    setAppliedConfig({ ...strategyConfig, entry_horizon_mode: 'both' });
+    setAppliedConfig({ ...strategyConfig });
   }, [strategyConfig]);
 
   useEffect(() => {
