@@ -109,6 +109,7 @@ export const TokenDetailPage: React.FC = () => {
   const [marketMetrics, setMarketMetrics] = useState<TokenDataSnapshot['market']>({});
   const [snapshotMarketCap, setSnapshotMarketCap] = useState<number | null>(null);
   const [botMarketCap, setBotMarketCap] = useState<number | null>(null);
+  const [botMarketPrice, setBotMarketPrice] = useState<number | null>(null);
   const [chartHistory, setChartHistory] = useState<PricePoint[]>([]);
   const [shortChartHistory, setShortChartHistory] = useState<PricePoint[]>([]);
   const [recentTrades, setRecentTrades] = useState<TokenDataTrade[]>([]);
@@ -155,6 +156,7 @@ export const TokenDetailPage: React.FC = () => {
     setMarketMetrics({});
     setSnapshotMarketCap(null);
     setBotMarketCap(null);
+    setBotMarketPrice(null);
     setChartHistory([]);
     setShortChartHistory([]);
     setRecentTrades([]);
@@ -412,8 +414,15 @@ export const TokenDetailPage: React.FC = () => {
     const unsubscribe = wsService.subscribe((event) => {
       if (event.token_mint !== mint) return;
       if (event.event_type === 'market_tick') {
+        // The engine emits price and market cap from the same market observation.
+        // Use them as a pair so two independent WebSocket clocks cannot skew
+        // the chart's price-to-market-cap conversion.
         const cap = numberOrNull(event.data?.market_cap_usd);
-        if (cap !== null && cap > 0) setBotMarketCap(cap);
+        const price = numberOrNull(event.data?.price_usd);
+        if (cap !== null && cap > 0 && price !== null && price > 0) {
+          setBotMarketCap(cap);
+          setBotMarketPrice(price);
+        }
       }
       if (String(event.event_type) === 'token_detail_snapshot') {
         const cap = numberOrNull(event.data?.snapshot?.market?.market_cap_usd);
@@ -429,7 +438,7 @@ export const TokenDetailPage: React.FC = () => {
 
   if (!activeToken) return null;
   const activePosition = positions.find((p) => p.mint === activeToken.mint && p.status === 'OPEN');
-  const liveTokenPrice = tokenPrice;
+  const liveTokenPrice = botMarketPrice ?? tokenPrice;
   const currentPrice = scrubPrice ?? liveTokenPrice;
   const marketCapForChart = botMarketCap ?? snapshotMarketCap;
   const displayMarketCap = marketCapForChart !== null && liveTokenPrice > 0
