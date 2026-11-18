@@ -1822,6 +1822,13 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
     isUserPannedRef.current = false;
     lastAppliedScrollPosRef.current = BASE_RIGHT_OFFSET;
     setIsPanned(false);
+
+    // A timeframe or series-mode change creates a different visible data range.
+    // Never carry the previous mode's smoothed Y target into the new scale.
+    targetYRangeRef.current = null;
+    animYRangeRef.current = null;
+    latestVisibleBoundsRef.current = null;
+
     chart.applyOptions({
       timeScale: {
         secondsVisible: ['1S', '5S', '10S', '1M'].includes(timeframe),
@@ -1875,6 +1882,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       Math.abs(seedBars.length - prev.length) > 4;
 
     if (needsFullReseed) {
+      // The new seed may have a very different price range. Reset all cached
+      // autoscale bounds before setData so the axis is rebuilt from this dataset.
+      targetYRangeRef.current = null;
+      animYRangeRef.current = null;
+      latestVisibleBoundsRef.current = null;
+
       const cloned = seedBars.map((bar) => ({ ...bar }));
       committedBarsRef.current = cloned;
       isUserPannedRef.current = false;
