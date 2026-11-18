@@ -445,6 +445,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                   <div className="flex justify-between gap-3"><span>Token training records</span><span className="tabular-nums">{serverStorage.developer_training.tokens.toLocaleString()}</span></div>
                   <div className="flex justify-between gap-3"><span>Market observations</span><span className="tabular-nums">{serverStorage.developer_training.observations.toLocaleString()}</span></div>
                   <div className="flex justify-between gap-3"><span>Confirmed trade events</span><span className="tabular-nums">{serverStorage.developer_training.trades.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Reputation records</span><span className="tabular-nums">{serverStorage.developer_training.reputation_records.toLocaleString()}</span></div>
+                  <div className="flex justify-between gap-3"><span>Intelligence records</span><span className="tabular-nums">{serverStorage.developer_training.intelligence_records.toLocaleString()}</span></div>
+                  <p className="pt-1 text-[9px] text-white/35">{serverStorage.developer_training.measurement === 'sqlite_page_allocation' ? 'SQLite table and index page allocation' : 'Estimated persisted payload bytes; SQLite page allocation unavailable'}</p>
                 </div>
               )}
               {selected.id === 'database' && serverStorage && (
