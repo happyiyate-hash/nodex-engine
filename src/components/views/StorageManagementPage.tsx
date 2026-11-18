@@ -3,7 +3,7 @@ import {
   AlertTriangle, Archive, ArrowLeft, Database, HardDrive, KeyRound, Users,
   RefreshCw, Signal, Terminal, Trash2, X,
 } from 'lucide-react';
-import { apiClient, StorageOverview } from '../../services/rest';
+import { apiClient, DeveloperTrainingRecord, StorageOverview } from '../../services/rest';
 import { useTerminal } from '../../context/TerminalContext';
 import { useToast } from '../ui/ToastProvider';
 
@@ -88,6 +88,9 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
   const [browserStorage, setBrowserStorage] = useState<BrowserStorageEstimate>({ usage: null, quota: null });
   const [serverStorage, setServerStorage] = useState<StorageOverview | null>(null);
   const [serverStorageError, setServerStorageError] = useState('');
+  const [developerRecords, setDeveloperRecords] = useState<DeveloperTrainingRecord[]>([]);
+  const [developerRecordsLoading, setDeveloperRecordsLoading] = useState(false);
+  const [developerRecordsError, setDeveloperRecordsError] = useState('');
   const localStorageBytes = browserStorage.usage ?? 0;
   const localStorageProgress = browserStorage.usage !== null && browserStorage.quota !== null
     ? Math.min(100, (browserStorage.usage / browserStorage.quota) * 100)
@@ -342,7 +345,17 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
               <button
                 key={id}
                 type="button"
-                onClick={() => { setSelected(category); }}
+                onClick={() => {
+                  setSelected(category);
+                  if (category.id === 'developer_training') {
+                    setDeveloperRecordsLoading(true);
+                    setDeveloperRecordsError('');
+                    void apiClient.getDeveloperTrainingRecords(10000)
+                      .then(setDeveloperRecords)
+                      .catch((error) => setDeveloperRecordsError(error instanceof Error ? error.message : 'Could not load developer records.'))
+                      .finally(() => setDeveloperRecordsLoading(false));
+                  }
+                }}
                 className="block w-full py-2.5 text-left transition-colors active:bg-white/[0.025]"
                 aria-label={`View ${title} storage details`}
               >
@@ -458,6 +471,38 @@ export const StorageManagementPage: React.FC<{ onBack: () => void }> = ({ onBack
                 </div>
               )}
             </div>
+            {selected.id === 'developer_training' && (
+              <div className="mt-4 border-t border-white/[0.08] pt-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-[11px] font-semibold text-white/80">Saved developer records</h3>
+                  <span className="text-[9px] text-white/35">{developerRecords.length.toLocaleString()} listed</span>
+                </div>
+                {developerRecordsLoading ? (
+                  <p className="py-4 text-center text-[10px] text-white/40">Loading developer records…</p>
+                ) : developerRecordsError ? (
+                  <p className="rounded-md border border-red-400/15 bg-red-400/[0.05] p-3 text-[10px] text-red-200/75">{developerRecordsError}</p>
+                ) : developerRecords.length === 0 ? (
+                  <p className="rounded-md border border-white/[0.07] bg-white/[0.025] p-3 text-[10px] text-white/40">No learned developer records are currently stored.</p>
+                ) : (
+                  <div className="max-h-[34vh] space-y-1.5 overflow-y-auto overscroll-contain pr-1">
+                    {developerRecords.map((record) => (
+                      <div key={record.creator_address} className="rounded-md border border-white/[0.07] bg-black/25 p-2.5">
+                        <p className="break-all font-mono text-[9px] leading-relaxed text-white/75">{record.creator_address}</p>
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-[9px]">
+                          <div><p className="text-white/35">Launches</p><p className="mt-0.5 font-semibold tabular-nums text-white/80">{record.total_launches}</p></div>
+                          <div><p className="text-white/35">Tokens</p><p className="mt-0.5 font-semibold tabular-nums text-white/80">{record.token_count}</p></div>
+                          <div><p className="text-white/35">Observations</p><p className="mt-0.5 font-semibold tabular-nums text-white/80">{record.observation_count}</p></div>
+                          <div><p className="text-white/35">Trades</p><p className="mt-0.5 font-semibold tabular-nums text-white/80">{record.trade_count}</p></div>
+                          <div><p className="text-white/35">Reputation</p><p className="mt-0.5 font-semibold tabular-nums text-white/80">{record.overall_score == null ? '—' : record.overall_score.toFixed(1) + '/100'}</p></div>
+                          <div><p className="text-white/35">Evidence</p><p className="mt-0.5 font-semibold text-white/80">{record.sample_status || 'Unknown'}{record.confidence_pct == null ? '' : ' · ' + record.confidence_pct.toFixed(0) + '%'}</p></div>
+                        </div>
+                        <p className="mt-2 text-[8px] text-white/30">Last seen {new Date(record.last_seen_at).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <p className="mt-3 text-[10px] leading-relaxed text-white/45">
               {selected.id === 'local-storage'
                 ? selected.note
