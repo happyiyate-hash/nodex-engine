@@ -2023,7 +2023,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       {/* Layer 1.25: Floating trade labels stay above the chart so candles and
           the price line never cover the amounts. All labels share one bottom origin. */}
       {floatingTrades.length > 0 && (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[4] overflow-hidden">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[2] overflow-hidden">
           <div
             className="absolute inset-0 overflow-hidden"
             style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 13%, black 87%, transparent 100%)' }}
@@ -2076,7 +2076,7 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           width: '100%',
           height: 'calc(100% - 34px)',
         }}
-        className="z-[2] w-full min-w-0 max-w-full overflow-hidden"
+        className="z-[1] w-full min-w-0 max-w-full overflow-hidden"
       />
       {/* Brush 1: foreground black fade over the chart and plotted line.
           Strong black starts at the far-left edge, then feathers lighter inward.
