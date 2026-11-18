@@ -419,6 +419,30 @@ export class NodeXRestClient {
       headers: { 'X-NodeX-Admin-Key': key },
     });
   }
+  public async clearDeveloperTraining(): Promise<{
+    status: string;
+    category: 'developer_training';
+    deleted: {
+      developers: number;
+      tokens: number;
+      observations: number;
+      trades: number;
+      reputation_records: number;
+      intelligence_records: number;
+    };
+    storage_before_bytes: number;
+    storage_after_bytes: number;
+    bytes_freed: number;
+    overview: StorageOverview;
+  }> {
+    const key = this.settings.adminApiKey.trim();
+    if (!key) throw new Error('Save the operator API key in Settings before cleaning developer training data.');
+    return this.request('/api/v1/admin/storage/developer-training/cleanup', {
+      method: 'POST',
+      headers: { 'X-NodeX-Admin-Key': key },
+    });
+  }
+
   public async cleanupSystemJournal(): Promise<{
     status: string; category: 'system_logs'; cleanup_output: string;
     storage_before_bytes: number | null; storage_after_bytes: number | null;
