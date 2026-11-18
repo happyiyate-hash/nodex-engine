@@ -363,6 +363,26 @@ export interface CreatorTrainingToken {
   logo_url?: string | null;
   metadata_uri?: string | null;
   metadata_status?: string | null;
+  market_strength: TokenMarketStrength;
+}
+
+export interface TokenMarketStrengthBreakdown {
+  market_cap: number | null;
+  market_cap_growth: number | null;
+  trading_activity: number | null;
+  liquidity_health: number | null;
+  market_stability: number | null;
+  trading_continuity: number | null;
+  holder_health: number | null;
+}
+
+export interface TokenMarketStrength {
+  score: number | null;
+  confidence_pct: number;
+  sample_status: 'insufficient_data' | 'developing' | 'established' | string;
+  evidence_count: number;
+  observed_span_hours: number | null;
+  breakdown: TokenMarketStrengthBreakdown;
 }
 
 export interface CreatorTokenObservation {
