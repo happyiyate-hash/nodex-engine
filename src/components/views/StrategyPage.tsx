@@ -95,8 +95,8 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
   const { strategyConfig, strategyDecisions, openTokenDetailByMint, saveStrategyConfig, engineStatus } = useTerminal();
   const { showToast, updateToast } = useToast();
   const paperMode = engineStatus.operating_mode.toLowerCase() !== 'real';
-  const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig });
-  const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig });
+  const [form, setForm] = useState<StrategyConfig>({ ...strategyConfig, entry_horizon_mode: 'both' });
+  const [appliedConfig, setAppliedConfig] = useState<StrategyConfig>({ ...strategyConfig, entry_horizon_mode: 'both' });
   const [activeTarget, setActiveTarget] = useState<RiskTarget | null>(null);
   const [customValue, setCustomValue] = useState('');
   const [showAdvancedExit, setShowAdvancedExit] = useState(false);
@@ -111,8 +111,8 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
   const [savingEntryPermission, setSavingEntryPermission] = useState(false);
 
   useEffect(() => {
-    setForm({ ...strategyConfig });
-    setAppliedConfig({ ...strategyConfig });
+    setForm({ ...strategyConfig, entry_horizon_mode: 'both' });
+    setAppliedConfig({ ...strategyConfig, entry_horizon_mode: 'both' });
   }, [strategyConfig]);
 
   useEffect(() => {
@@ -168,9 +168,11 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
       tone: 'loading',
     });
     try {
-      const saved = await saveStrategyConfig(form);
+      const configToSave = { ...form, entry_horizon_mode: 'both' as const };
+      const saved = await saveStrategyConfig(configToSave);
       if (saved) {
-        setAppliedConfig({ ...form });
+        setForm(configToSave);
+        setAppliedConfig(configToSave);
         updateToast(toastId, {
           title: 'Trading configuration saved',
           description: 'The backend accepted the updated settings and returned the saved configuration.',
@@ -278,38 +280,6 @@ export const StrategyPage: React.FC<{ embedded?: boolean; onOpenDeveloperIntelli
           disabled={!paperMode || saving}
           Icon={ShieldCheck}
         />
-        <div className="border-b border-white/[0.08] py-4">
-          <div className="mb-3">
-            <h3 className="text-[13px] font-semibold text-white/90">Entry Horizon</h3>
-            <p className="mt-1 text-[10px] leading-relaxed text-white/40">
-              Choose whether the paper strategy targets newly launched tokens, proven ongoing tokens, or both.
-              Developer reputation can qualify an established creator for the rapid path, but never bypasses market or security checks.
-            </p>
-          </div>
-          <div className="grid grid-cols-3 gap-2" role="group" aria-label="Token entry horizon">
-            {([
-              { value: 'short_term', label: 'Short-term', detail: 'Fresh launches' },
-              { value: 'long_term', label: 'Long-term', detail: 'Proven activity' },
-              { value: 'both', label: 'Both', detail: 'Automatic' },
-            ] as const).map((option) => {
-              const selected = (form.entry_horizon_mode || 'both') === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={selected}
-                  disabled={!paperMode || saving}
-                  onClick={() => update('entry_horizon_mode', option.value)}
-                  className={`min-w-0 rounded-xl border px-2 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${selected ? 'border-white/60 bg-white/[0.10]' : 'border-white/[0.10] bg-white/[0.025] hover:border-white/25'}`}
-                >
-                  <span className={`block text-[11px] font-semibold ${selected ? 'text-white' : 'text-white/65'}`}>{option.label}</span>
-                  <span className="mt-1 block text-[9px] text-white/35">{option.detail}</span>
-                </button>
-              );
-            })}
-          </div>
-          {!paperMode && <p className="mt-2 text-[10px] text-amber-300/80">Entry horizon changes are available in paper mode only.</p>}
-        </div>
         <div className="border-b border-white/[0.08] pb-2">
           <h3 className="text-[13px] font-semibold text-white/90">Exit Settings</h3>
           <p className="mt-1 text-[10px] text-white/40">Manage how your paper positions exit automatically.</p>
