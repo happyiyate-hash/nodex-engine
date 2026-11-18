@@ -839,6 +839,47 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
 
     let ordered = Array.from(buckets.values()).sort((a, b) => a.time - b.time);
 
+    // Candlesticks use a continuous time grid. When no trades arrive in a
+    // bucket, carry forward the previous close as a flat, zero-range candle.
+    // This preserves elapsed time without fabricating price movement.
+    if (chartType === 'candle' && ordered.length > 1) {
+      const maxBars = 2000;
+      const stepSec = Math.max(1, Math.round(activeStepMs / 1000));
+      const latestTime = ordered[ordered.length - 1].time;
+      const windowStart = latestTime - (maxBars - 1) * stepSec;
+      const firstVisibleIndex = ordered.findIndex((bar) => bar.time >= windowStart);
+      const startIndex = firstVisibleIndex >= 0 ? firstVisibleIndex : ordered.length - 1;
+      let previous = startIndex > 0 ? ordered[startIndex - 1] : null;
+      const filled: NormalizedBar[] = [];
+
+      for (let i = startIndex; i < ordered.length; i++) {
+        const current = ordered[i];
+
+        if (previous) {
+          const firstMissingTime = Math.max(windowStart, previous.time + stepSec);
+          for (
+            let missingTime = firstMissingTime;
+            missingTime < current.time;
+            missingTime += stepSec
+          ) {
+            filled.push({
+              time: missingTime as UTCTimestamp,
+              timestampMs: missingTime * 1000,
+              open: previous.close,
+              high: previous.close,
+              low: previous.close,
+              close: previous.close,
+            });
+          }
+        }
+
+        filled.push(current);
+        previous = current;
+      }
+
+      ordered = filled.slice(-maxBars);
+    }
+
     // Ensure a 1-bar line session immediately renders a baseline segment.
     if (chartType === 'line' && ordered.length === 1) {
       const only = ordered[0];
