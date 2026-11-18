@@ -671,17 +671,18 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
       ? marketCap / currentPrice
       : 1,
   );
+  const mcapScaleTargetRef = useRef<number>(mcapScaleRef.current);
   const hasMarketCapRef = useRef<boolean>(
     marketCap != null && Number.isFinite(marketCap) && marketCap > 0,
   );
   if (marketCap != null && Number.isFinite(marketCap) && marketCap > 0) {
     hasMarketCapRef.current = true;
     if (currentPrice > 0 && Number.isFinite(currentPrice)) {
-      mcapScaleRef.current = marketCap / currentPrice;
+      mcapScaleTargetRef.current = marketCap / currentPrice;
     }
   } else {
     hasMarketCapRef.current = false;
-    mcapScaleRef.current = 1;
+    mcapScaleTargetRef.current = 1;
   }
 
   const formatDisplayValue = useCallback(
@@ -1579,7 +1580,8 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
               trendDirectionRef.current = 'down';
             }
             const diff = targetP - curP;
-            const priceRate = 9.5;
+            const relativeMove = Math.abs(diff) / Math.max(curP, 1e-10);
+            const priceRate = relativeMove > 0.08 ? 7 : 5;
             const blend = 1 - Math.exp(-priceRate * dt);
             smoothedPriceRef.current =
               Math.abs(diff) <= targetP * 1e-7 ? targetP : curP + diff * blend;
@@ -1589,13 +1591,17 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
         const displayP =
           smoothedPriceRef.current > 0 ? smoothedPriceRef.current : targetP;
 
+        const scaleTarget = mcapScaleTargetRef.current;
+        if (Number.isFinite(scaleTarget) && scaleTarget > 0) {
+          const scaleBlend = 1 - Math.exp(-3.2 * dt);
+          mcapScaleRef.current += (scaleTarget - mcapScaleRef.current) * scaleBlend;
+        }
+
         // 2. Smooth continuous horizontal backward motion + timed bar commits in Line mode
         const committed = committedBarsRef.current;
         const activeStepMs = Math.max(1_000, stepMsRef.current);
         const stepSec = Math.max(1, Math.floor(activeStepMs / 1000));
         const nowWall = Date.now();
-        const isFeedLive =
-          nowWall - lastTickWallMsRef.current <= Math.max(activeStepMs * 1.5, 6_000);
 
         let committedNewBar = false;
         if (
@@ -1603,12 +1609,12 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           committed.length > 0 &&
           displayP > 0
         ) {
-          if (isFeedLive) {
+          {
             let last = committed[committed.length - 1];
             let catchupGuard = 0;
             while (
               nowWall - last.timestampMs >= activeStepMs &&
-              catchupGuard < 8
+              catchupGuard < 1200
             ) {
               const nextMs = last.timestampMs + activeStepMs;
               const nextSec = (last.time + stepSec) as UTCTimestamp;
@@ -1633,8 +1639,6 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
               0,
               Math.min(0.9999, (nowWall - last.timestampMs) / activeStepMs),
             );
-          } else {
-            subBarFractionRef.current = 0;
           }
 
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
@@ -1659,17 +1663,60 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
           committed.length > 0 &&
           displayP > 0
         ) {
-          // Smoothly move the active candle body/wick in lockstep with the line & card;
-          // candle mode stays horizontally still until a new candle is created.
-          subBarFractionRef.current = 0;
-          const activeCandle = committed[committed.length - 1];
+          // Candle boundaries are clock-driven. A quiet market still gets a
+          // new flat candle at each elapsed timeframe boundary.
+          let activeCandle = committed[committed.length - 1];
+          let catchupGuard = 0;
+          while (
+            nowWall - activeCandle.timestampMs >= activeStepMs &&
+            catchupGuard < 1200
+          ) {
+            const nextMs = activeCandle.timestampMs + activeStepMs;
+            const nextSec = Math.floor(nextMs / 1000) as UTCTimestamp;
+            const carryPrice = activeCandle.close;
+            const nextCandle: NormalizedBar = {
+              time: nextSec,
+              timestampMs: nextMs,
+              open: carryPrice,
+              high: Math.max(carryPrice, displayP),
+              low: Math.min(carryPrice, displayP),
+              close: displayP,
+            };
+            committed.push(nextCandle);
+            if (committed.length > 2000) {
+              committed.splice(0, committed.length - 2000);
+            }
+            isApplyingAutoScrollRef.current = true;
+            try {
+              candleSeries.update({
+                time: nextCandle.time,
+                open: nextCandle.open,
+                high: nextCandle.high,
+                low: nextCandle.low,
+                close: nextCandle.close,
+              });
+            } finally {
+              isApplyingAutoScrollRef.current = false;
+            }
+            activeCandle = nextCandle;
+            committedNewBar = true;
+            catchupGuard += 1;
+          }
+
+          const elapsedInBar = Math.max(0, nowWall - activeCandle.timestampMs);
+          subBarFractionRef.current = Math.max(
+            0,
+            Math.min(0.9999, elapsedInBar / activeStepMs),
+          );
+
+          // Smoothly update the active candle with the interpolated live price.
           const nextHigh = Math.max(activeCandle.high, activeCandle.open, displayP);
           const nextLow = Math.min(activeCandle.low, activeCandle.open, displayP);
           const relChange =
             Math.abs(displayP - activeCandle.close) /
             Math.max(1e-10, activeCandle.close);
           if (
-            relChange > 1e-6 ||
+            relChange > 1e-7 ||
             nextHigh !== activeCandle.high ||
             nextLow !== activeCandle.low
           ) {
@@ -1691,8 +1738,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
             committedNewBar = true;
           }
 
+          // The candle stream glides left continuously during the interval;
+          // a new candle simply enters when the clock reaches its boundary.
           if (!isUserPannedRef.current && !isPointerInteractingRef.current) {
-            const targetScrollPos = BASE_RIGHT_OFFSET;
+            const targetScrollPos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
             const currentScrollPos = chart.timeScale().scrollPosition();
             const scrollBlend = 1 - Math.exp(-8 * dt);
             const nextScrollPos =
@@ -1921,10 +1970,10 @@ export const DotMatrixChart: React.FC<DotMatrixChartProps> = ({
               currentPrice > 0 ? currentPrice : lastBar.close;
           }
           const activeStepMs = Math.max(1_000, stepMsRef.current);
-          subBarFractionRef.current =
-            chartType === 'line'
-              ? Math.max(0, Math.min(0.9999, (Date.now() - lastBar.timestampMs) / activeStepMs))
-              : 0;
+          subBarFractionRef.current = Math.max(
+            0,
+            Math.min(0.9999, (Date.now() - lastBar.timestampMs) / activeStepMs),
+          );
 
           isUserPannedRef.current = false;
           const pos = BASE_RIGHT_OFFSET + subBarFractionRef.current;
