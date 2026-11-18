@@ -92,20 +92,6 @@ export const TokenDetailPage: React.FC = () => {
   const [chartType, setChartType] = useState<'line' | 'candle'>('line');
   const [activeDetailTab, setActiveDetailTab] = useState<'Info' | 'Holders' | 'Position' | 'Trades'>('Info');
   const [tradeFilter, setTradeFilter] = useState<'All' | 'Buys' | 'Sells'>('All');
-  const [floatingAmounts, setFloatingAmounts] = useState<Array<{ id: number; createdAt: number; delayMs: number; amount: number; side: 'buy' | 'sell' }>>([]);
-  const floatingSequenceRef = useRef(0);
-  const nextFloatingStartRef = useRef(0);
-
-  // Remove each floating trade only after its queued 3.4s journey has completed.
-  useEffect(() => {
-    if (floatingAmounts.length === 0) return;
-    const nextExpiry = Math.min(...floatingAmounts.map((item) => item.createdAt + item.delayMs + 3400));
-    const timer = window.setTimeout(() => {
-      const now = Date.now();
-      setFloatingAmounts((previous) => previous.filter((item) => item.createdAt + item.delayMs + 3400 > now));
-    }, Math.max(0, nextExpiry - Date.now()));
-    return () => window.clearTimeout(timer);
-  }, [floatingAmounts]);
   const [sectionLoading, setSectionLoading] = useState({ market: true, info: true, holders: true, trades: true, chart: true });
   const timeframeScrollRef = useRef<HTMLDivElement>(null);
   const tfDragStateRef = useRef<{ active: boolean; startX: number; startScrollLeft: number; moved: boolean }>({
@@ -175,8 +161,6 @@ export const TokenDetailPage: React.FC = () => {
     setHoldersSnapshot(null);
     setTokenInfo(null);
     setTokenIdentity(null);
-    setFloatingAmounts([]);
-    nextFloatingStartRef.current = 0;
 
     const applyMarket = (data: Record<string, any>) => {
       const normalized = { ...data };
@@ -217,27 +201,6 @@ export const TokenDetailPage: React.FC = () => {
       setRecentTrades((previous) => mergeTokenTrades(previous, [data]));
       const price = numberOrNull(data.price_usd);
       if (price !== null && price > 0) setTokenPrice(price);
-      const rawSide = String(data.side || '').toLowerCase();
-      const side: 'buy' | 'sell' | null = rawSide === 'buy' ? 'buy' : rawSide === 'sell' ? 'sell' : null;
-      const volume = numberOrNull(data.volume_usd);
-      if (volume !== null && volume > 0 && side !== null) {
-        setFloatingAmounts((previous) => {
-          const now = Date.now();
-          const active = previous.filter((item) => item.createdAt + item.delayMs + 3400 > now);
-          // Every label starts at the same bottom edge. Queue the next start
-          // 360ms later so the previous label has already risen ~29px.
-          const startAt = Math.max(now, nextFloatingStartRef.current);
-          const delayMs = startAt - now;
-          nextFloatingStartRef.current = startAt + 360;
-          return [...active, {
-            id: ++floatingSequenceRef.current,
-            createdAt: now,
-            delayMs,
-            amount: volume,
-            side,
-          }].slice(-24);
-        });
-      }
     };
 
     const handleMessage = (message: TokenDataStreamEvent) => {
@@ -746,7 +709,7 @@ export const TokenDetailPage: React.FC = () => {
         <div className="relative z-0 -mx-3 -mt-3 w-[calc(100%+1.5rem)]">
           <DotMatrixChart
             key={`${activeToken.mint.slice(0, 7)}..${activeToken.mint.slice(-5)}`}
-            floatingTrades={floatingAmounts.map((item) => ({ id: item.id, label: formatUsd(item.amount), side: item.side, delayMs: item.delayMs }))}
+            tokenMint={activeToken.mint}
             currentPrice={liveTokenPrice}
             marketCap={marketCapForChart ?? undefined}
             entryPrice={activePosition ? entryPriceUsd : undefined}
