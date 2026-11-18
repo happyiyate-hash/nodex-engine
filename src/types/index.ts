@@ -358,6 +358,28 @@ export interface CreatorTrainingToken {
   graduated_at: string | null;
   peak_market_cap_usd: number | null;
   observation_count: number;
+  name?: string | null;
+  symbol?: string | null;
+  logo_url?: string | null;
+  metadata_uri?: string | null;
+  metadata_status?: string | null;
+}
+
+export interface CreatorTokenObservation {
+  mint_address: string;
+  observation_key: string;
+  observed_at: string;
+  market_cap_usd: number | null;
+  price_usd: number | null;
+  liquidity_usd: number | null;
+  volume_5m_usd: number | null;
+  buy_count_5m: number;
+  sell_count_5m: number;
+  unique_buyers_5m: number;
+  holder_concentration_pct: number | null;
+  graduated: boolean;
+  trading_active: boolean;
+  evidence_json: string;
 }
 
 export interface StrategyConfig {
